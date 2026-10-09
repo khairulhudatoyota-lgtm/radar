@@ -1437,6 +1437,11 @@ function autoStatusHtml(){
 }
 function updateAutoStatus(){ const el = document.getElementById("autoStatus"); if(el) el.innerHTML = autoStatusHtml(); }
 
+function absenManual(){
+  if(!confirm("Absen manual tidak mengecek lokasi dan akan ditandai 'MANUAL' di antrian. Lanjutkan?")) return;
+  absenState = {verified:true, distanceKm:null, manual:true};
+  render();
+}
 function checkAbsenLocation(){
   const data = DB.get();
   const msgEl = document.getElementById("absenMsg");
@@ -1473,14 +1478,14 @@ function renderOrderStall(){
       <div style="display:flex; justify-content:space-between;">
         <div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>
       </div>
-      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">📍 Absen ${q.absenDistKm.toFixed(1)} km dari yard</div>` : ""}
+      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">📍 Absen ${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
     </div>
   `).join("");
 
   const absenBlock = absenState.verified ? `
     <div class="card">
       <h3>📝 Form Registrasi Antrian CC</h3>
-      <div class="msg ok" style="margin-bottom:12px;">✔ Absen berhasil — ${absenState.distanceKm.toFixed(1)} km dari yard.</div>
+      <div class="msg ok" style="margin-bottom:12px;">✔ Absen berhasil — ${absenState.distanceKm!=null ? absenState.distanceKm.toFixed(1)+" km dari yard." : "mode MANUAL (tanpa GPS)."}</div>
       <div id="orderMsg"></div>
       <div class="field">
         <label>Nomor Polisi Truk</label>
@@ -1511,6 +1516,7 @@ function renderOrderStall(){
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Absen cuma bisa dilakukan kalau posisi kamu udah dalam radius ${data.yardLocation.radiusKm} km dari lokasi loading unit.</p>
       <div id="absenMsg"></div>
       <button class="btn btn-primary" style="margin-bottom:8px;" onclick="checkAbsenLocation()">📍 Cek Lokasi & Absen Sekarang</button>
+      <button class="btn btn-outline" style="margin-bottom:8px;" onclick="absenManual()">✍ Absen Manual (tanpa GPS / uji coba)</button>
       <button class="btn ${autoWatchId?'btn-danger':'btn-outline'}" onclick="toggleAutoWatch()">${autoWatchId? '⏹ Matikan Pantau Otomatis' : '🔔 Aktifkan Pantau Otomatis (bunyi kalau udah masuk radius)'}</button>
     </div>
   `;
@@ -1546,7 +1552,7 @@ function ccCardsHtml(data){
   return html;
 }
 /* Daftarkan truk ke stall kosong / antrian. Return {stall:n} | {queue:n} | {dup:true} */
-function registerCC(plat, lp, dist, auto){
+function registerCC(plat, lp, dist, auto, manual){
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
     if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k)){ res = {dup:true}; return; }
@@ -1554,8 +1560,8 @@ function registerCC(plat, lp, dist, auto){
     CONFIG.CC_EMERGENCY.forEach(n=>{ if(d.ccOpen[n]) order.push(n); });
     let assigned = null;
     for(const n of order){ if(!d.cc[n]){ assigned = n; break; } }
-    if(assigned){ d.cc[assigned] = {plat, lp, ts: Date.now(), absenDistKm: dist, auto:!!auto}; res = {stall:assigned}; }
-    else{ d.queue.push({plat, lp, ts: Date.now(), absenDistKm: dist, auto:!!auto}); res = {queue:d.queue.length}; }
+    if(assigned){ d.cc[assigned] = {plat, lp, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual}; res = {stall:assigned}; }
+    else{ d.queue.push({plat, lp, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual}); res = {queue:d.queue.length}; }
   });
   return res;
 }
@@ -1565,7 +1571,7 @@ function submitOrderStall(){
   const msgEl = document.getElementById("orderMsg");
   if(!plat || !lp){ msgEl.innerHTML = `<div class="msg err">Nomor polisi & nama LP wajib diisi.</div>`; return; }
 
-  const res = registerCC(plat, lp, absenState.distanceKm, false);
+  const res = registerCC(plat, lp, absenState.distanceKm, false, !!absenState.manual);
   if(res.dup) msgEl.innerHTML = `<div class="msg info">Truk ${plat} sudah terdaftar di stall / antrian.</div>`;
   else if(res.stall) msgEl.innerHTML = `<div class="msg ok">✔ Truk ${plat} masuk STALL ${res.stall}. Silakan masuk area.</div>`;
   else msgEl.innerHTML = `<div class="msg info">⏳ Semua stall penuh. Truk ${plat} masuk antrian nomor ${res.queue}.</div>`;
@@ -1886,7 +1892,7 @@ function renderKoordinator(){
   const queueCards = data.queue.map((q,idx)=>`
     <div class="card" style="margin-bottom:10px;">
       <b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${new Date(q.ts).toLocaleTimeString('id-ID')}</span>
-      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">📍 Absen ${q.absenDistKm.toFixed(1)} km dari yard</div>` : ""}
+      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">📍 Absen ${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
     </div>`).join("");
 
   return `
@@ -4105,7 +4111,7 @@ function renderDisplay(){
         data.queue.map((q,i)=>`
           <div style="padding:10px 0; border-bottom:1px solid var(--border);">
             <b>#${i+1} · ${q.plat}</b> <span style="font-size:11px; color:var(--text-dim);">· ${new Date(q.ts).toLocaleTimeString('id-ID')}</span>
-            ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">📍 Absen ${q.absenDistKm.toFixed(1)} km dari yard</div>` : ""}
+            ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">📍 Absen ${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
           </div>
         `).join("")}
       </div>
