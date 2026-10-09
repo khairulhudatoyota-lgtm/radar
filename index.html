@@ -1171,7 +1171,7 @@ function toggleScanner(){
   }
   area.innerHTML = `<div class="scanbox"><video id="scanVideo" playsinline muted></video><div class="frame"></div></div>
     <div id="scanStat" style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Menyalakan kamera…</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><button type="button" class="btn btn-outline" id="torchBtn" style="display:none" onclick="toggleTorch()">🔦 Senter</button>${scanPhotoBtn()}</div>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><button type="button" class="btn btn-outline" id="torchBtn" onclick="toggleTorch()">🔦 Flash: Mati</button>${scanPhotoBtn()}</div>`;
   const video = document.getElementById("scanVideo");
   const tryGet = c => navigator.mediaDevices.getUserMedia(c);
   tryGet({video:{facingMode:{ideal:"environment"}, width:{ideal:1920}, height:{ideal:1080}}})
@@ -1185,7 +1185,7 @@ function toggleScanner(){
       const tr = stream.getVideoTracks()[0];
       const cap = tr.getCapabilities ? tr.getCapabilities() : {};
       if(cap.focusMode && cap.focusMode.includes("continuous")) tr.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{});
-      if(cap.torch){ const tb=document.getElementById("torchBtn"); if(tb) tb.style.display=""; }
+      setTimeout(()=>{ if(scanStream) toggleTorch(true); }, 700);
     }catch(e){}
     document.getElementById("scanToggleBtn").textContent = "✕ Tutup Kamera";
     const eng = makeDetector() ? "pembaca bawaan" : (typeof jsQR==="function" ? "jsQR" : "TIDAK ADA PEMBACA");
@@ -1210,12 +1210,22 @@ async function scanFromPhoto(inp){
   }catch(e){ alert("Gagal membaca foto: "+e.message); }
   inp.value = "";
 }
-async function toggleTorch(){
+async function toggleTorch(on){
+  const tb=document.getElementById("torchBtn");
   try{
+    if(!scanStream) return;
     const tr = scanStream.getVideoTracks()[0];
-    scanTorch = !scanTorch;
-    await tr.applyConstraints({advanced:[{torch:scanTorch}]});
-  }catch(e){ scanStatus("Senter tidak didukung perangkat ini."); }
+    const want = (typeof on==="boolean") ? on : !scanTorch;
+    await tr.applyConstraints({advanced:[{torch:want}]});
+    const st = tr.getSettings ? tr.getSettings() : {};
+    if(want && st.torch===false) throw new Error("torch off");
+    scanTorch = want;
+    if(tb) tb.textContent = scanTorch ? "🔦 Flash: Nyala" : "🔦 Flash: Mati";
+  }catch(e){
+    scanTorch = false;
+    if(tb) tb.textContent = "🔦 Flash: Mati";
+    scanStatus("Flash tidak bisa dinyalakan dari browser ini (iPhone/Safari tidak mendukung). Coba Chrome di Android, atau nyalakan senter dari panel HP.");
+  }
 }
 let scanTorch = false;
 function stopScanner(){
