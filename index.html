@@ -3488,6 +3488,26 @@ function renderAdmin(){
         </div>
         <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
       </div>
+      <div class="card">
+        <h3>👥 Buat Akun Massal</h3>
+        <p style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">Buat banyak akun sekaligus. Contoh: Role Dispatcher, jumlah 10, awalan <b>dispatcher</b> → dispatcher01 … dispatcher10. Username yang sudah ada dilewati.</p>
+        <div class="field"><label>Role</label>
+          <select id="bkRole" onchange="bulkRoleChange()">${ROLES.map(r=>`<option value="${r.key}">${r.label}</option>`).join("")}</select>
+        </div>
+        <div class="field"><label>Jumlah akun (maks 100)</label><input id="bkCount" type="number" min="1" max="100" value="10"></div>
+        <div class="field"><label>Awalan username</label><input id="bkPrefix" type="text" value="${ROLES[0].key}"></div>
+        <div class="field"><label>Awalan nama</label><input id="bkName" type="text" value="${ROLES[0].label}"></div>
+        <div class="field"><label>Password</label>
+          <select id="bkMode"><option value="rand">Acak berbeda tiap akun (disarankan)</option><option value="same">Sama untuk semua</option></select>
+        </div>
+        <div class="field"><label>Password (jika sama untuk semua)</label><input id="bkPass" type="text" placeholder="isi hanya jika pilih 'Sama untuk semua'"></div>
+        <button class="btn btn-primary" onclick="bulkAddUsers()">Buat Akun</button>
+        ${bulkResult?`<div style="margin-top:14px;">
+          <div class="msg ok">✔ ${bulkResult.made.length} akun dibuat${bulkResult.skipped.length?`, ${bulkResult.skipped.length} dilewati (username sudah ada)`:''}. <b>Catat/unduh daftar ini sekarang</b>, password tidak ditampilkan lagi.</div>
+          <div style="display:flex; gap:8px; margin:8px 0;"><button class="btn btn-outline btn-sm" onclick="bulkDownload()">⬇ Unduh CSV</button><button class="btn btn-outline btn-sm" onclick="bulkCopy()">📋 Salin</button><button class="btn btn-outline btn-sm" onclick="bulkResult=null;render()">Tutup</button></div>
+          <table><thead><tr><th>Username</th><th>Password</th><th>Nama</th></tr></thead><tbody>${bulkResult.made.map(x=>`<tr><td class="mono">${x.username}</td><td class="mono">${x.password}</td><td>${x.name}</td></tr>`).join("")}</tbody></table>
+        </div>`:''}
+      </div>
       <div class="card"><h3>Daftar User</h3>
         <table><thead><tr><th>Username</th><th>Nama</th><th>Role</th><th></th></tr></thead><tbody>${rows}</tbody></table>
       </div>`;
@@ -3665,12 +3685,55 @@ function saveYardLocation(){
 function deleteLP(i){
   DB.set(d=>{ d.lpList.splice(i,1); });
 }
+let bulkResult = null;
+function bulkRoleChange(){
+  const r = ROLES.find(x=>x.key===document.getElementById("bkRole").value);
+  document.getElementById("bkPrefix").value = r.key; document.getElementById("bkName").value = r.label;
+}
+function genPass(){
+  const c = "abcdefghjkmnpqrstuvwxyz23456789", a = new Uint32Array(6); crypto.getRandomValues(a);
+  let s = ""; a.forEach(x=>{ s += c[x % c.length]; }); return s;
+}
+function bulkAddUsers(){
+  const role = document.getElementById("bkRole").value;
+  const n = parseInt(document.getElementById("bkCount").value, 10);
+  const pref = document.getElementById("bkPrefix").value.trim().toLowerCase().replace(/[^a-z0-9._-]/g,"");
+  const nameP = document.getElementById("bkName").value.trim();
+  const mode = document.getElementById("bkMode").value, fixed = document.getElementById("bkPass").value.trim();
+  if(!(n>=1 && n<=100)){ alert("Jumlah akun harus 1 sampai 100."); return; }
+  if(!pref || !nameP){ alert("Awalan username dan awalan nama wajib diisi."); return; }
+  if(mode==="same" && !fixed){ alert("Isi password, atau pilih 'Acak berbeda tiap akun'."); return; }
+  const exist = new Set(DB.get().users.map(u=>u.username));
+  const made = [], skipped = [];
+  for(let i=1;i<=n;i++){
+    const uname = pref + String(i).padStart(2,"0");
+    if(exist.has(uname)){ skipped.push(uname); continue; }
+    made.push({username:uname, name:nameP+" "+String(i).padStart(2,"0"), password: mode==="same"?fixed:genPass(), role});
+  }
+  if(!made.length){ alert("Semua username itu sudah ada. Ganti awalan username."); return; }
+  bulkResult = {made, skipped};
+  DB.set(d=>{ const have = new Set(d.users.map(u=>u.username)); made.forEach(u=>{ if(!have.has(u.username)) d.users.push({username:u.username, name:u.name, password:u.password, role:u.role}); }); });
+}
+function bulkCsv(){
+  return "role,username,password,nama\n" + bulkResult.made.map(u=>[u.role,u.username,u.password,'"'+u.name.replace(/"/g,'""')+'"'].join(",")).join("\n");
+}
+function bulkDownload(){
+  if(!bulkResult) return;
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bulkCsv()], {type:"text/csv"})); a.download = "akun-radar.csv"; a.click();
+}
+function bulkCopy(){
+  if(!bulkResult) return;
+  const t = bulkCsv();
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>alert("Daftar akun disalin.")).catch(()=>alert("Gagal menyalin, gunakan Unduh CSV."));
+  else alert("Salin tidak didukung, gunakan Unduh CSV.");
+}
 function addUser(){
   const u = document.getElementById("newUname").value.trim();
   const n = document.getElementById("newName").value.trim();
   const p = document.getElementById("newPass").value.trim();
   const r = document.getElementById("newRole").value;
   if(!u||!n||!p){ alert("Lengkapi semua field."); return; }
+  if(DB.get().users.some(x=>x.username===u)){ alert("Username sudah dipakai. Pilih username lain."); return; }
   DB.set(d=>{ d.users.push({username:u, name:n, password:p, role:r}); });
 }
 function deleteUser(i){
