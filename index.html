@@ -3638,7 +3638,8 @@ function renderAdmin(){
         <div class="field"><label>Role</label>
           <select id="bkRole" onchange="bulkRoleChange()">${ROLES.map(r=>`<option value="${r.key}">${r.label}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>Jumlah akun (maks 100)</label><input id="bkCount" type="number" min="1" max="100" value="10"></div>
+        <div class="field"><label>Daftar nama orang (opsional — satu nama per baris)</label><textarea id="bkNames" rows="5" placeholder="Contoh:&#10;Budi Santoso&#10;Andi Wijaya&#10;Siti Rahma&#10;(kalau diisi, jumlah &amp; awalan di bawah diabaikan; username dibuat dari nama depan)" style="width:100%;"></textarea></div>
+        <div class="field"><label>Jumlah akun</label><input id="bkCount" type="number" min="1" value="10"></div>
         <div class="field"><label>Awalan username</label><input id="bkPrefix" type="text" value="${ROLES[0].key}"></div>
         <div class="field"><label>Awalan nama</label><input id="bkName" type="text" value="${ROLES[0].label}"></div>
         <div class="field"><label>Password</label>
@@ -3849,7 +3850,23 @@ function bulkAddUsers(){
   const pref = document.getElementById("bkPrefix").value.trim().toLowerCase().replace(/[^a-z0-9._-]/g,"");
   const nameP = document.getElementById("bkName").value.trim();
   const mode = document.getElementById("bkMode").value, fixed = document.getElementById("bkPass").value.trim();
-  if(!(n>=1 && n<=100)){ alert("Jumlah akun harus 1 sampai 100."); return; }
+  const names = (document.getElementById("bkNames").value||"").split("\n").map(x=>x.trim().replace(/\s+/g," ")).filter(Boolean);
+  if(names.length){
+    if(mode==="same" && !fixed){ alert("Isi password, atau pilih 'Acak berbeda tiap akun'."); return; }
+    const have0 = new Set(DB.get().users.map(u=>u.username)), made0 = [];
+    names.forEach(nm=>{
+      const parts = nm.toLowerCase().replace(/[^a-z0-9 ]/g,"").split(" ").filter(Boolean);
+      let base = parts[0] || "user", uname = base;
+      if(have0.has(uname) && parts.length>1) uname = base + parts[parts.length-1][0];
+      let k = 2; while(have0.has(uname)){ uname = base + k; k++; }
+      have0.add(uname);
+      made0.push({username:uname, name:nm, password: mode==="same"?fixed:genPass(), role});
+    });
+    bulkResult = {made:made0, skipped:[]};
+    DB.set(d=>{ const have = new Set(d.users.map(u=>u.username)); made0.forEach(u=>{ if(!have.has(u.username)) d.users.push({username:u.username, name:u.name, password:u.password, role:u.role}); }); });
+    return;
+  }
+  if(!(n>=1)){ alert("Jumlah akun minimal 1."); return; }
   if(!pref || !nameP){ alert("Awalan username dan awalan nama wajib diisi."); return; }
   if(mode==="same" && !fixed){ alert("Isi password, atau pilih 'Acak berbeda tiap akun'."); return; }
   const exist = new Set(DB.get().users.map(u=>u.username));
