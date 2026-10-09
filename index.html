@@ -509,6 +509,7 @@ function seedDB(){
     units,
     cc,
     ccOpen: {4:false, 5:false}, // stall darurat, default tertutup
+    logClearTs: 0, // waktu terakhir 'Bersihkan Data Uji' (disinkron ke semua perangkat)
     queue: [], // {plat, lp, ts}
     ils: [], // {id, ccNum, ccPlat, lp, units:[{slot,frame,model}], mp, ts, status}
     models: {
@@ -2545,7 +2546,10 @@ function syncUnitLog(d){
   }
   /* Retensi: data unit yang sudah TERKIRIM / dikeluarkan + manifest ILS selesai disimpan 26 jam saja, lalu dihapus otomatis */
   const cut = now - RETAIN_MS;
-  d.unitLog = log.filter(e=> !((e.status==="sent" && (e.sentTs||e.ilsTs||0) < cut) || (e.status==="removed" && (e.removedTs||0) < cut)));
+  const clr = d.logClearTs||0;
+  d.unitLog = log.filter(e=> !((e.status==="sent" && (e.sentTs||e.ilsTs||0) < cut) || (e.status==="removed" && (e.removedTs||0) < cut)))
+    .filter(e=> present.has(e) || !clr || Math.max(e.parkedTs||0,e.ilsTs||0,e.sentTs||0,e.removedTs||0) > clr);
+  if(clr) d.ils = (d.ils||[]).filter(b=> !(b.status==="done" && (b.doneTs||b.ts||0) <= clr));
   d.ils = (d.ils||[]).filter(b=> !(b.status==="done" && (b.doneTs||b.ts||0) < cut));
 }
 
@@ -3760,6 +3764,11 @@ function renderAdmin(){
         <button class="btn btn-danger" onclick="resetData()">⚠ Reset Semua Data</button>
       </div>
       <div class="card">
+        <h3>🧹 Bersihkan Data Uji (grafik &amp; riwayat)</h3>
+        <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Menghapus riwayat unit yang sudah dikeluarkan/terkirim dan ILS selesai dari <b>semua perangkat</b>, sehingga grafik Dashboard kembali bersih. Unit yang <b>sedang parkir di stall tidak dihapus</b>, ILS yang masih berjalan, user, plan, dan pengaturan juga tetap aman.</p>
+        <button class="btn btn-outline" onclick="clearTestData()">🧹 Bersihkan Riwayat Uji</button>
+      </div>
+      <div class="card">
         <h3>📋 Laporan Defect / NG (${allDefects.length})</h3>
         <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Riwayat lengkap, termasuk yang sudah dikonfirmasi (tidak pernah dihapus otomatis).</p>
         <table><thead><tr><th>No. Rangka</th><th>Defect</th><th>Lapor</th><th>Status</th></tr></thead><tbody>${defectRows}</tbody></table>
@@ -3924,6 +3933,12 @@ function exportData(){
   a.href = URL.createObjectURL(blob);
   a.download = "radar-data.json";
   a.click();
+}
+function clearTestData(){
+  if(!confirm("Hapus riwayat unit (terkirim/dikeluarkan) dan ILS selesai di semua perangkat? Unit yang sedang di stall tetap aman.")) return;
+  DB.set(d=>{ d.logClearTs = Date.now(); });
+  alert("Riwayat uji dibersihkan.");
+  render();
 }
 function resetData(){
   if(!confirm("Yakin reset semua data? Tindakan ini tidak bisa dibatalkan.")) return;
