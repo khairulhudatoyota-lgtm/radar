@@ -19,6 +19,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
 <style>
@@ -399,6 +402,10 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .kitem .steps{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; font-size:11px; font-weight:700;}
 .kitem .steps span{padding:3px 8px; border-radius:999px; background:#fff; border:1px solid var(--border); color:var(--text-dim);}
 .kitem .steps span.ok{background:var(--green); color:#fff; border-color:var(--green);}
+.syncb{font-size:10px; font-weight:700; padding:3px 8px; border-radius:999px; border:1px solid var(--border); background:var(--panel2); color:var(--text-dim); white-space:nowrap;}
+.syncb.sync-on{color:#fff; background:var(--green); border-color:var(--green);}
+.syncb.sync-wait{color:#9a6a00; background:#FFF6E5; border-color:#E8A33A;}
+.syncb.sync-off{color:#fff; background:#D64545; border-color:#D64545;}
 </style>
 </head>
 <body>
@@ -450,7 +457,7 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
   <!-- ============ MAIN APP (after login) ============ -->
   <div id="mainView" class="hidden" style="display:flex; flex-direction:column; min-height:100vh;">
     <div class="topbar">
-      <div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMEYyQTRBIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDgxNzJCIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTE2IiBmaWxsPSJ1cmwoI2cpIi8+CjxnIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CjxwYXRoIGQ9Ik0xNzAgMzkyVjEzMkgyNjJBNzggNzggMCAwIDEgMjYyIDI4OEgxNzAiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI1NCIvPgo8cGF0aCBkPSJNMjU4IDI5MkwzNDYgMzkyIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iNTQiLz4KPHBhdGggZD0iTTI1OCAzMDZMMzMwIDM4NiIgc3Ryb2tlPSIjMEYyQTRBIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1kYXNoYXJyYXk9IjIgMTYiLz4KPHBhdGggZD0iTTMzNiAxMThBNjYgNjYgMCAwIDEgNDAyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2Ii8+CjxwYXRoIGQ9Ik0zMzYgNzhBMTA2IDEwNiAwIDAgMSA0NDIgMTg0IiBzdHJva2U9IiNGRkIwMjAiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1vcGFjaXR5PSIuNyIvPgo8cGF0aCBkPSJNMzM2IDM4QTE0NiAxNDYgMCAwIDEgNDgyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2IiBzdHJva2Utb3BhY2l0eT0iLjQiIC8+CjwvZz4KPHBhdGggZD0iTTI0MCAyMzhDMjIyIDIxNCAyMTYgMjA0IDIxNiAxOTJBMjQgMjQgMCAwIDEgMjY0IDE5MkMyNjQgMjA0IDI1OCAyMTQgMjQwIDIzOFoiIGZpbGw9IiNGRkIwMjAiLz4KPGNpcmNsZSBjeD0iMjQwIiBjeT0iMTkyIiByPSI5IiBmaWxsPSIjMDgxNzJCIi8+Cjwvc3ZnPg==" alt="" style="width:28px;height:28px;border-radius:7px;display:block"><h1>RADAR</h1></div>
+      <div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMEYyQTRBIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDgxNzJCIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTE2IiBmaWxsPSJ1cmwoI2cpIi8+CjxnIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CjxwYXRoIGQ9Ik0xNzAgMzkyVjEzMkgyNjJBNzggNzggMCAwIDEgMjYyIDI4OEgxNzAiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI1NCIvPgo8cGF0aCBkPSJNMjU4IDI5MkwzNDYgMzkyIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iNTQiLz4KPHBhdGggZD0iTTI1OCAzMDZMMzMwIDM4NiIgc3Ryb2tlPSIjMEYyQTRBIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1kYXNoYXJyYXk9IjIgMTYiLz4KPHBhdGggZD0iTTMzNiAxMThBNjYgNjYgMCAwIDEgNDAyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2Ii8+CjxwYXRoIGQ9Ik0zMzYgNzhBMTA2IDEwNiAwIDAgMSA0NDIgMTg0IiBzdHJva2U9IiNGRkIwMjAiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1vcGFjaXR5PSIuNyIvPgo8cGF0aCBkPSJNMzM2IDM4QTE0NiAxNDYgMCAwIDEgNDgyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2IiBzdHJva2Utb3BhY2l0eT0iLjQiIC8+CjwvZz4KPHBhdGggZD0iTTI0MCAyMzhDMjIyIDIxNCAyMTYgMjA0IDIxNiAxOTJBMjQgMjQgMCAwIDEgMjY0IDE5MkMyNjQgMjA0IDI1OCAyMTQgMjQwIDIzOFoiIGZpbGw9IiNGRkIwMjAiLz4KPGNpcmNsZSBjeD0iMjQwIiBjeT0iMTkyIiByPSI5IiBmaWxsPSIjMDgxNzJCIi8+Cjwvc3ZnPg==" alt="" style="width:28px;height:28px;border-radius:7px;display:block"><h1>RADAR</h1><span id="syncBadge" class="syncb sync-local">● Lokal</span></div>
       <div class="sub">Real-time Arrival, Dispatch &amp; Release</div>
       <div class="userchip">
         <div class="who">Login sebagai <b id="curUserName">-</b> · <span id="curUserRole" class="badge gold">ROLE</span></div>
@@ -531,19 +538,122 @@ function seedDB(){
   };
 }
 
+/* ======================================================================
+   DATA LAYER + SINKRONISASI FIREBASE (Realtime Database)
+   - DB.get()/DB.set() tetap sinkron (membaca cache memori) sehingga seluruh kode lama tidak berubah.
+   - Tiap perubahan ditulis ke Firebase PER KUNCI (units, cc, queue, ils, ...) lewat transaction,
+     jadi dua HP yang mengubah data bersamaan tidak saling menimpa.
+   - Cache lokal (localStorage) tetap dipakai sebagai cadangan kalau sinyal putus.
+   - unitLog hanya lokal (diturunkan otomatis dari units + ils).
+====================================================================== */
+const FB_CONFIG = {
+  apiKey: "AIzaSyAkLYZ6voYE2rpH6F5feRV3MJf1r8bC6YA",
+  authDomain: "radar-tam.firebaseapp.com",
+  databaseURL: "https://radar-tam-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "radar-tam",
+  storageBucket: "radar-tam.firebasestorage.app",
+  messagingSenderId: "4334079340",
+  appId: "1:4334079340:web:7d0a856c605eedd1667749"
+};
+const FB_ROOT = "radar";
+const LOCAL_ONLY = ["unitLog","unitLogMigrated","migAvanzaBY"];
+const FBS = { enabled:false, authed:false, conn:false, ready:false, db:null, q:[] };
+let _mem = null;
+function cloneJ(o){ return JSON.parse(JSON.stringify(o)); }
+function dbKeys(d){ return Object.keys(d).filter(k=>LOCAL_ONLY.indexOf(k)<0); }
+/* Firebase membuang array/objek kosong & mengubah objek ber-kunci angka jadi array → kembalikan ke bentuk yang dipakai aplikasi */
+function normalizeData(raw){
+  const seed = seedDB(), d = (raw && typeof raw==="object") ? raw : {};
+  for(const k of Object.keys(seed)){ if(d[k]===undefined || d[k]===null) d[k] = seed[k]; }
+  ["queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users"].forEach(k=>{
+    if(!Array.isArray(d[k])) d[k] = (d[k] && typeof d[k]==="object") ? Object.values(d[k]) : [];
+  });
+  const toObj = v=>{ if(Array.isArray(v)){ const o={}; v.forEach((x,i)=>{ if(x!==null && x!==undefined) o[i]=x; }); return o; } return v || {}; };
+  d.cc = toObj(d.cc); for(let i=1;i<=CONFIG.CC_TOTAL;i++){ if(d.cc[i]===undefined) d.cc[i] = null; }
+  d.ccOpen = toObj(d.ccOpen);
+  d.units = d.units || {};
+  for(const k of Object.keys(seed.units)){ if(d.units[k]===undefined) d.units[k] = null; }
+  (d.ils||[]).forEach(b=>{ if(b && !Array.isArray(b.units)) b.units = b.units ? Object.values(b.units) : []; });
+  return d;
+}
+/* Jalankan mutator dengan waktu & random yang DIBEKUKAN → hasil identik di setiap percobaan ulang transaction */
+function runMut(d, fn, T, seed){
+  const rn = Date.now, rr = Math.random; let s = seed>>>0;
+  Date.now = ()=>T;
+  Math.random = ()=>{ s=(s+0x6D2B79F5)>>>0; let t=s; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
+  try{ fn(d); syncUnitLog(d); } finally { Date.now = rn; Math.random = rr; }
+}
+function fbState(s){
+  const el = document.getElementById("syncBadge"); if(!el) return;
+  const map = {online:["sync-on","● Online"], connecting:["sync-wait","◌ Menyambung…"], offline:["sync-off","○ Offline"], off:["sync-local","● Lokal"]};
+  const m = map[s] || map.off; el.className = "syncb "+m[0]; el.textContent = m[1];
+}
+function fbCurrentState(){ return !FBS.enabled ? "off" : (!FBS.authed ? "connecting" : (FBS.conn ? (FBS.ready?"online":"connecting") : "offline")); }
+function fbPush(k, pre, fn, T, seed){
+  if(!FBS.enabled) return;
+  if(!FBS.ready){ FBS.q.push([k,pre,fn,T,seed]); return; }
+  FBS.db.ref(FB_ROOT+"/"+k).transaction(cur=>{
+    const tmp = cloneJ(pre);
+    if(cur!==null && cur!==undefined) tmp[k] = cur;
+    const nt = normalizeData(tmp);
+    runMut(nt, fn, T, seed);
+    const v = cloneJ(nt[k]);
+    return v===undefined ? null : v;
+  }, (err)=>{ if(err) console.warn("sync gagal:", k, err); }, true);
+}
+function fbStart(){
+  if(typeof firebase === "undefined" || !/^https?:/.test(location.protocol)){ fbState("off"); return; }
+  try{
+    firebase.initializeApp(FB_CONFIG);
+    FBS.db = firebase.database(); FBS.enabled = true; fbState("connecting");
+    FBS.db.ref(".info/connected").on("value", s=>{ FBS.conn = !!s.val(); fbState(fbCurrentState()); });
+    firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); })
+      .catch(e=>{ console.warn("login anonim gagal", e); fbState("offline"); });
+  }catch(e){ console.warn(e); fbState("off"); }
+}
+function fbAttach(){
+  const ref = FBS.db.ref(FB_ROOT);
+  ref.on("value", snap=>{
+    const v = snap.val(), local = DB.load();
+    if(v === null){
+      // database masih kosong → data perangkat ini jadi data awal
+      const o = {}; dbKeys(local).forEach(k=>{ o[k] = cloneJ(local[k]); });
+      FBS.ready = true; ref.set(o).catch(e=>console.warn(e)); fbState(fbCurrentState()); return;
+    }
+    const d = normalizeData(v);
+    LOCAL_ONLY.forEach(k=>{ if(local[k]!==undefined) d[k] = local[k]; });
+    syncUnitLog(d);
+    DB.save(d);
+    const wasReady = FBS.ready; FBS.ready = true; fbState(fbCurrentState());
+    if(!wasReady && FBS.q.length){ const q = FBS.q; FBS.q = []; q.forEach(a=>fbPush.apply(null,a)); }
+    fbRender();
+  }, err=>{ console.warn("listener ditolak:", err); fbState("offline"); });
+}
+function fbRender(){
+  const mv = document.getElementById("mainView"); if(!mv || mv.classList.contains("hidden")) return;
+  const a = document.activeElement, typing = a && (a.tagName==="INPUT" || a.tagName==="TEXTAREA" || a.tagName==="SELECT");
+  if(typing || (typeof scanStream!=="undefined" && scanStream) || activeTab==="defect" || (typeof dccpEditIdx!=="undefined" && dccpEditIdx!==null)) return;
+  _autoRender = true; try{ render(); } finally { _autoRender = false; }
+}
 const DB = {
   load(){
-    let raw = localStorage.getItem(LS_KEY);
-    if(!raw){ const seed = seedDB(); localStorage.setItem(LS_KEY, JSON.stringify(seed)); return seed; }
-    try{ return JSON.parse(raw); }catch(e){ const seed = seedDB(); localStorage.setItem(LS_KEY, JSON.stringify(seed)); return seed; }
+    if(_mem) return _mem;
+    let raw = null; try{ raw = localStorage.getItem(LS_KEY); }catch(e){}
+    let d = null; if(raw){ try{ d = JSON.parse(raw); }catch(e){ d = null; } }
+    _mem = normalizeData(d || seedDB());
+    try{ localStorage.setItem(LS_KEY, JSON.stringify(_mem)); }catch(e){}
+    return _mem;
   },
-  save(data){ localStorage.setItem(LS_KEY, JSON.stringify(data)); },
+  save(data){ _mem = data; try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){} },
   get(){ return this.load(); },
   set(mutatorFn){
     const data = this.load();
-    mutatorFn(data);
-    syncUnitLog(data);
+    const pre = cloneJ(data);
+    const T = Date.now(), seed = (T ^ 0x9e3779b9) >>> 0;
+    runMut(data, mutatorFn, T, seed);
+    const keys = dbKeys(data).filter(k=> JSON.stringify(data[k]) !== JSON.stringify(pre[k]));
     this.save(data);
+    keys.forEach(k=> fbPush(k, pre, mutatorFn, T, seed));
     render();
   }
 };
@@ -1683,9 +1793,23 @@ function handleDefectPhoto(evt){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = function(e){
-    defectPhotoDataUrl = e.target.result;
-    const preview = document.getElementById("defectPhotoPreview");
-    if(preview) preview.innerHTML = `<img src="${defectPhotoDataUrl}" style="width:100%; max-width:220px; border-radius:10px; margin-top:8px; display:block;">`;
+    const show = url=>{
+      defectPhotoDataUrl = url;
+      const preview = document.getElementById("defectPhotoPreview");
+      if(preview) preview.innerHTML = `<img src="${defectPhotoDataUrl}" style="width:100%; max-width:220px; border-radius:10px; margin-top:8px; display:block;">`;
+    };
+    // kecilkan foto (maks 800px, JPEG 0.6) supaya ringan disinkronkan ke semua HP
+    const img = new Image();
+    img.onload = function(){
+      try{
+        const sc = Math.min(1, 800/Math.max(img.width, img.height));
+        const c = document.createElement("canvas"); c.width = Math.round(img.width*sc); c.height = Math.round(img.height*sc);
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+        show(c.toDataURL("image/jpeg",0.6));
+      }catch(err){ show(e.target.result); }
+    };
+    img.onerror = function(){ show(e.target.result); };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -2010,7 +2134,10 @@ function registerCarZonePick(zone, px, py){
     ctx.lineWidth = 3*scaleX;
     ctx.strokeStyle = "#fff";
     ctx.stroke();
-    defectFormState.diagramSnapshot = snap.toDataURL('image/png');
+    { const sc = Math.min(1, 480/Math.max(snap.width, snap.height)), sm = document.createElement('canvas');
+      sm.width = Math.max(1,Math.round(snap.width*sc)); sm.height = Math.max(1,Math.round(snap.height*sc));
+      const sx = sm.getContext('2d'); sx.fillStyle = '#eef1f6'; sx.fillRect(0,0,sm.width,sm.height); sx.drawImage(snap,0,0,sm.width,sm.height);
+      defectFormState.diagramSnapshot = sm.toDataURL('image/jpeg',0.65); }
   }catch(e){ defectFormState.diagramSnapshot = null; }
 
   const labelEl = document.getElementById('carZoneLabel3d');
@@ -3604,7 +3731,9 @@ function exportData(){
 function resetData(){
   if(!confirm("Yakin reset semua data? Tindakan ini tidak bisa dibatalkan.")) return;
   localStorage.removeItem(LS_KEY);
-  DB.get();
+  _mem = null;
+  const fresh = DB.load();
+  if(FBS.enabled && FBS.ready){ const o = {}; dbKeys(fresh).forEach(k=>{ o[k] = cloneJ(fresh[k]); }); FBS.db.ref(FB_ROOT).set(o).catch(e=>console.warn(e)); }
   render();
 }
 
@@ -3809,6 +3938,7 @@ if(existingSession){
   enterApp();
 }
 let _lastRaw = null, _lastMinute = -1;
+fbStart();
 setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); }catch(e){} }, 3000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
