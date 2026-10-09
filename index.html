@@ -169,7 +169,7 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 
 .scanbox{position:relative; border-radius:14px; overflow:hidden; border:2px solid var(--gold-dim); margin-bottom:12px; background:#000;}
 .scanbox video{width:100%; display:block;}
-.scanbox .frame{position:absolute; inset:20%; border:2px solid var(--gold); border-radius:12px; box-shadow:0 0 0 999px rgba(0,0,0,0.35);}
+.scanbox .frame{position:absolute; inset:20%; border:3px solid var(--gold); border-radius:12px; box-shadow:0 0 0 999px rgba(0,0,0,0.35);}
 
 /* ===== Login ===== */
 .loginwrap{flex:1; display:flex; flex-direction:column; justify-content:center; padding:24px;}
@@ -513,7 +513,7 @@ function seedDB(){
     ils: [], // {id, ccNum, ccPlat, lp, units:[{slot,frame,model}], mp, ts, status}
     models: {
       AGYA:  {vin_codes:["BC"], color:"#3C86D4"},
-      AVANZA:{vin_codes:["AY","BY"], color:"#2CA85B"},
+      AVANZA:{vin_codes:["AY","BY"], color:"#8E5BD6"},
       CALYA: {vin_codes:["J3","K6","J6"], color:"#E3B23C"},
       RAIZE: {vin_codes:["BA"], color:"#DE4B4B"},
       RUSH:  {vin_codes:["TH"], color:"#B8860B"},
@@ -1122,13 +1122,12 @@ function confirmPark(){
 let scanDet = null, scanBusy = false, scanLast = 0, scanFrames = 0;
 function vinFromScan(t){
   t = String(t||"").trim().toUpperCase();
-  const m = t.match(/[A-HJ-NPR-Z0-9]{17}/);
-  if(m) return m[0];
-  return t.replace(/\s+/g,"");
+  const m = t.match(/(?:^|[^A-Z0-9])([A-HJ-NPR-Z0-9]{17})(?:[^A-Z0-9]|$)/);
+  return m ? m[1] : null;   // hanya No. Rangka 17 karakter yang diterima
 }
 function scanStatus(msg){ const e=document.getElementById("scanStat"); if(e) e.textContent=msg; }
 function onScanned(txt){
-  const v = vinFromScan(txt);
+  const v = vinFromScan(txt) || String(txt||"").trim().toUpperCase();
   const inp = document.getElementById("vinInput");
   if(inp) inp.value = v;
   vinDraft = v;
@@ -1140,15 +1139,24 @@ function makeDetector(){
   if(scanDet) return scanDet;
   try{
     if("BarcodeDetector" in window){
-      scanDet = new BarcodeDetector({formats:["qr_code","data_matrix","code_128","code_39","pdf417","itf"]});
+      scanDet = new BarcodeDetector({formats:["qr_code"]});
     }
   }catch(e){ scanDet = null; }
   return scanDet;
 }
+let jsqrTried = false;
+function ensureJsQR(){
+  if(typeof jsQR==="function" || jsqrTried) return;
+  jsqrTried = true;
+  const sc = document.createElement("script");
+  sc.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+  document.head.appendChild(sc);
+}
 async function decodeSource(src, w, h){
+  ensureJsQR();
   const det = makeDetector();
   if(det){
-    try{ const r = await det.detect(src); if(r && r.length) return r[0].rawValue; }catch(e){}
+    try{ const r = await det.detect(src); for(const x of (r||[])){ if(vinFromScan(x.rawValue)) return x.rawValue; } }catch(e){}
   }
   if(typeof jsQR === "function"){
     const c = document.createElement("canvas");
@@ -1158,7 +1166,7 @@ async function decodeSource(src, w, h){
     x.drawImage(src,0,0,c.width,c.height);
     const img = x.getImageData(0,0,c.width,c.height);
     const code = jsQR(img.data, img.width, img.height, {inversionAttempts:"attemptBoth"});
-    if(code && code.data) return code.data;
+    if(code && code.data && vinFromScan(code.data)) return code.data;
   }
   return null;
 }
@@ -1171,7 +1179,7 @@ function toggleScanner(){
   }
   area.innerHTML = `<div class="scanbox"><video id="scanVideo" playsinline muted></video><div class="frame"></div></div>
     <div id="scanStat" style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Menyalakan kamera…</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><button type="button" class="btn btn-outline" id="torchBtn" onclick="toggleTorch()">🔦 Flash: Mati</button>${scanPhotoBtn()}</div>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><button type="button" class="btn btn-outline" id="torchBtn" onclick="toggleTorch()">🔦 Flash: Mati</button><button type="button" class="btn btn-outline" onclick="scanZoom(-0.5)">🔍−</button><button type="button" class="btn btn-outline" id="zoomBtn" onclick="scanZoom(0.5)">🔍+ 1x</button><button type="button" class="btn btn-outline" onclick="scanShot()">📷 Ambil &amp; Baca</button>${scanPhotoBtn()}</div>`;
   const video = document.getElementById("scanVideo");
   const tryGet = c => navigator.mediaDevices.getUserMedia(c);
   tryGet({video:{facingMode:{ideal:"environment"}, width:{ideal:1920}, height:{ideal:1080}}})
@@ -1186,10 +1194,11 @@ function toggleScanner(){
       const cap = tr.getCapabilities ? tr.getCapabilities() : {};
       if(cap.focusMode && cap.focusMode.includes("continuous")) tr.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{});
       setTimeout(()=>{ if(scanStream) toggleTorch(true); }, 700);
+      scanZ = 1; if(cap.zoom){ scanZ = Math.min(cap.zoom.max||1, Math.max(cap.zoom.min||1, 1.5)); tr.applyConstraints({advanced:[{zoom:scanZ}]}).catch(()=>{}); const zb=document.getElementById("zoomBtn"); if(zb) zb.textContent="🔍+ "+scanZ.toFixed(1)+"x"; }
     }catch(e){}
     document.getElementById("scanToggleBtn").textContent = "✕ Tutup Kamera";
     const eng = makeDetector() ? "pembaca bawaan" : (typeof jsQR==="function" ? "jsQR" : "TIDAK ADA PEMBACA");
-    scanStatus("Arahkan ke kode di bingkai, jarak ±15–25 cm, tahan stabil. (" + eng + ")");
+    scanStatus("Taruh QR tepat di dalam bingkai kuning (hanya QR yang dibaca), jarak ±15–25 cm, tahan stabil. (" + eng + ")");
     requestAnimationFrame(scanLoop);
   }).catch(err=>{
     area.innerHTML = `<div class="msg err">Tidak bisa akses kamera: ${err.name||""} ${err.message||""}. Izinkan kamera di pengaturan browser, atau pakai tombol Foto / ketik manual.</div>${scanPhotoBtn()}`;
@@ -1227,7 +1236,31 @@ async function toggleTorch(on){
     scanStatus("Flash tidak bisa dinyalakan dari browser ini (iPhone/Safari tidak mendukung). Coba Chrome di Android, atau nyalakan senter dari panel HP.");
   }
 }
-let scanTorch = false;
+let scanTorch = false, scanZ = 1;
+async function scanZoom(d){
+  try{
+    const tr = scanStream.getVideoTracks()[0];
+    const cap = tr.getCapabilities ? tr.getCapabilities() : {};
+    if(!cap.zoom){ scanStatus("Zoom tidak didukung browser ini. Jauhkan HP ±25 cm lalu pakai Ambil & Baca."); return; }
+    scanZ = Math.min(cap.zoom.max, Math.max(cap.zoom.min, scanZ + d));
+    await tr.applyConstraints({advanced:[{zoom:scanZ}]});
+    const zb=document.getElementById("zoomBtn"); if(zb) zb.textContent="🔍+ "+scanZ.toFixed(1)+"x";
+  }catch(e){ scanStatus("Zoom gagal: "+e.message); }
+}
+async function scanShot(){
+  scanStatus("Mengambil foto…");
+  try{
+    const tr = scanStream.getVideoTracks()[0];
+    let bmp = null;
+    if("ImageCapture" in window){
+      try{ const blob = await new ImageCapture(tr).takePhoto(); bmp = await createImageBitmap(blob); }catch(e){}
+    }
+    if(!bmp){ const v=document.getElementById("scanVideo"); bmp = await createImageBitmap(v); }
+    const txt = await decodeSource(bmp, bmp.width, bmp.height);
+    if(txt){ onScanned(txt); return; }
+    scanStatus("Belum terbaca. Jauhkan sedikit (±20–30 cm) sampai QR tajam, lalu ulangi.");
+  }catch(e){ scanStatus("Gagal ambil foto: "+e.message); }
+}
 function stopScanner(){
   if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
   scanTorch = false;
@@ -1236,14 +1269,25 @@ function stopScanner(){
   const area = document.getElementById("scanArea");
   if(area) area.innerHTML = "";
 }
+let scanPrev = "", scanCan = null;
 async function scanLoop(ts){
   if(!scanStream) return;
   const video = document.getElementById("scanVideo");
   if(video && video.readyState>=2 && video.videoWidth && !scanBusy && (ts||0)-scanLast>140){
     scanBusy = true; scanLast = ts||0; scanFrames++;
     try{
-      const txt = await decodeSource(video, video.videoWidth, video.videoHeight);
-      if(txt && scanStream){ scanBusy=false; onScanned(txt); return; }
+      // baca hanya area di dalam bingkai (tengah 60%)
+      const vw = video.videoWidth, vh = video.videoHeight;
+      const cw = Math.round(vw*0.6), ch = Math.round(vh*0.6);
+      if(!scanCan) scanCan = document.createElement("canvas");
+      scanCan.width = cw; scanCan.height = ch;
+      scanCan.getContext("2d",{willReadFrequently:true}).drawImage(video, Math.round(vw*0.2), Math.round(vh*0.2), cw, ch, 0, 0, cw, ch);
+      const txt = await decodeSource(scanCan, cw, ch);
+      const v = txt ? vinFromScan(txt) : null;
+      if(v){
+        if(v===scanPrev && scanStream){ scanBusy=false; scanPrev=""; onScanned(v); return; }   // harus terbaca 2x berturut-turut
+        scanPrev = v; scanStatus("Terbaca "+v+" — tahan sebentar…");
+      } else { scanPrev = ""; }
       if(scanFrames===40 && !makeDetector() && typeof jsQR!=="function") scanStatus("Pembaca kode gagal dimuat (internet?). Pakai tombol Foto atau ketik manual.");
     }catch(e){}
     scanBusy = false;
@@ -2471,6 +2515,7 @@ function syncUnitLog(d){
   d.unitLog = d.unitLog || [];
   const log = d.unitLog, now = Date.now();
   if(!d.migAvanzaBY){ d.migAvanzaBY = true; const a = d.models && d.models.AVANZA; if(a && Array.isArray(a.vin_codes) && !a.vin_codes.includes("BY")) a.vin_codes.push("BY"); }   // Avanza baru (W100RE) berkode BY
+  { const a2 = d.models && d.models.AVANZA; if(a2 && /^#(2CA85B|1E9E5A)$/i.test(a2.color||"")) a2.color = "#8E5BD6"; }   // Avanza ungu (hijau = stall kosong)
   if(!d.unitLogMigrated){
     d.unitLogMigrated = true;
     (d.ils||[]).filter(b=>b.status==="done").forEach(b=>{
