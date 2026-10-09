@@ -1118,46 +1118,125 @@ function confirmPark(){
   render();
 }
 
-/* QR Scanner pakai jsQR */
+/* Scanner: BarcodeDetector bawaan browser (QR, Data Matrix, Code128/39, PDF417) + cadangan jsQR */
+let scanDet = null, scanBusy = false, scanLast = 0, scanFrames = 0;
+function vinFromScan(t){
+  t = String(t||"").trim().toUpperCase();
+  const m = t.match(/[A-HJ-NPR-Z0-9]{17}/);
+  if(m) return m[0];
+  return t.replace(/\s+/g,"");
+}
+function scanStatus(msg){ const e=document.getElementById("scanStat"); if(e) e.textContent=msg; }
+function onScanned(txt){
+  const v = vinFromScan(txt);
+  const inp = document.getElementById("vinInput");
+  if(inp) inp.value = v;
+  vinDraft = v;
+  try{ navigator.vibrate && navigator.vibrate(120); }catch(e){}
+  onVinInput();
+  stopScanner();
+}
+function makeDetector(){
+  if(scanDet) return scanDet;
+  try{
+    if("BarcodeDetector" in window){
+      scanDet = new BarcodeDetector({formats:["qr_code","data_matrix","code_128","code_39","pdf417","itf"]});
+    }
+  }catch(e){ scanDet = null; }
+  return scanDet;
+}
+async function decodeSource(src, w, h){
+  const det = makeDetector();
+  if(det){
+    try{ const r = await det.detect(src); if(r && r.length) return r[0].rawValue; }catch(e){}
+  }
+  if(typeof jsQR === "function"){
+    const c = document.createElement("canvas");
+    const sc = Math.min(1, 1400/Math.max(w,h));
+    c.width = Math.round(w*sc); c.height = Math.round(h*sc);
+    const x = c.getContext("2d", {willReadFrequently:true});
+    x.drawImage(src,0,0,c.width,c.height);
+    const img = x.getImageData(0,0,c.width,c.height);
+    const code = jsQR(img.data, img.width, img.height, {inversionAttempts:"attemptBoth"});
+    if(code && code.data) return code.data;
+  }
+  return null;
+}
 function toggleScanner(){
   const area = document.getElementById("scanArea");
   if(scanStream){ stopScanner(); return; }
-  area.innerHTML = `<div class="scanbox"><video id="scanVideo" playsinline></video><div class="frame"></div></div><canvas id="scanCanvas" class="hidden"></canvas>`;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    area.innerHTML = `<div class="msg err">Browser ini tidak mengizinkan kamera (harus lewat https). Pakai tombol Foto di bawah atau ketik manual.</div>${scanPhotoBtn()}`;
+    return;
+  }
+  area.innerHTML = `<div class="scanbox"><video id="scanVideo" playsinline muted></video><div class="frame"></div></div>
+    <div id="scanStat" style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Menyalakan kamera…</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><button type="button" class="btn btn-outline" id="torchBtn" style="display:none" onclick="toggleTorch()">🔦 Senter</button>${scanPhotoBtn()}</div>`;
   const video = document.getElementById("scanVideo");
-  navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}).then(stream=>{
-    scanStream = stream;
+  const tryGet = c => navigator.mediaDevices.getUserMedia(c);
+  tryGet({video:{facingMode:{ideal:"environment"}, width:{ideal:1920}, height:{ideal:1080}}})
+  .catch(()=>tryGet({video:true}))
+  .then(stream=>{
+    scanStream = stream; scanFrames = 0;
     video.srcObject = stream;
     video.setAttribute("playsinline", true);
     video.play();
+    try{
+      const tr = stream.getVideoTracks()[0];
+      const cap = tr.getCapabilities ? tr.getCapabilities() : {};
+      if(cap.focusMode && cap.focusMode.includes("continuous")) tr.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{});
+      if(cap.torch){ const tb=document.getElementById("torchBtn"); if(tb) tb.style.display=""; }
+    }catch(e){}
     document.getElementById("scanToggleBtn").textContent = "✕ Tutup Kamera";
+    const eng = makeDetector() ? "pembaca bawaan" : (typeof jsQR==="function" ? "jsQR" : "TIDAK ADA PEMBACA");
+    scanStatus("Arahkan ke kode di bingkai, jarak ±15–25 cm, tahan stabil. (" + eng + ")");
     requestAnimationFrame(scanLoop);
   }).catch(err=>{
-    area.innerHTML = `<div class="msg err">Tidak bisa akses kamera: ${err.message}. Gunakan input manual di bawah.</div>`;
+    area.innerHTML = `<div class="msg err">Tidak bisa akses kamera: ${err.name||""} ${err.message||""}. Izinkan kamera di pengaturan browser, atau pakai tombol Foto / ketik manual.</div>${scanPhotoBtn()}`;
   });
 }
+function scanPhotoBtn(){
+  return `<label class="btn btn-outline" style="cursor:pointer;display:inline-block;">📸 Foto Kode<input type="file" accept="image/*" capture="environment" style="display:none" onchange="scanFromPhoto(this)"></label>`;
+}
+async function scanFromPhoto(inp){
+  const f = inp.files && inp.files[0]; if(!f) return;
+  scanStatus("Membaca foto…");
+  try{
+    const bmp = await createImageBitmap(f);
+    const txt = await decodeSource(bmp, bmp.width, bmp.height);
+    if(txt){ onScanned(txt); return; }
+    const area = document.getElementById("scanArea");
+    if(area) area.insertAdjacentHTML("beforeend", `<div class="msg err">Kode tidak terbaca di foto. Dekatkan, pastikan tajam dan tidak silau, lalu ulangi. Atau ketik No. Rangka manual.</div>`);
+  }catch(e){ alert("Gagal membaca foto: "+e.message); }
+  inp.value = "";
+}
+async function toggleTorch(){
+  try{
+    const tr = scanStream.getVideoTracks()[0];
+    scanTorch = !scanTorch;
+    await tr.applyConstraints({advanced:[{torch:scanTorch}]});
+  }catch(e){ scanStatus("Senter tidak didukung perangkat ini."); }
+}
+let scanTorch = false;
 function stopScanner(){
   if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
+  scanTorch = false;
   const btn = document.getElementById("scanToggleBtn");
   if(btn) btn.textContent = "📷 Buka Kamera Scan QR";
   const area = document.getElementById("scanArea");
   if(area) area.innerHTML = "";
 }
-function scanLoop(){
+async function scanLoop(ts){
   if(!scanStream) return;
   const video = document.getElementById("scanVideo");
-  const canvas = document.getElementById("scanCanvas");
-  if(video && canvas && video.readyState===video.HAVE_ENOUGH_DATA){
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video,0,0,canvas.width,canvas.height);
-    const img = ctx.getImageData(0,0,canvas.width,canvas.height);
-    const code = jsQR(img.data, img.width, img.height);
-    if(code && code.data){
-      document.getElementById("vinInput").value = code.data.toUpperCase(); vinDraft = code.data.toUpperCase();
-      onVinInput();
-      stopScanner();
-      return;
-    }
+  if(video && video.readyState>=2 && video.videoWidth && !scanBusy && (ts||0)-scanLast>140){
+    scanBusy = true; scanLast = ts||0; scanFrames++;
+    try{
+      const txt = await decodeSource(video, video.videoWidth, video.videoHeight);
+      if(txt && scanStream){ scanBusy=false; onScanned(txt); return; }
+      if(scanFrames===40 && !makeDetector() && typeof jsQR!=="function") scanStatus("Pembaca kode gagal dimuat (internet?). Pakai tombol Foto atau ketik manual.");
+    }catch(e){}
+    scanBusy = false;
   }
   requestAnimationFrame(scanLoop);
 }
