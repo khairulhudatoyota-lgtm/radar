@@ -509,6 +509,7 @@ function seedDB(){
     units,
     cc,
     ccOpen: {4:false, 5:false}, // stall darurat, default tertutup
+    mapPoints: {adm:null, nvdc:null}, // titik rute CC: ADM KAP & NVDC {lat,lng}
     logClearTs: 0, // waktu terakhir 'Bersihkan Data Uji' (disinkron ke semua perangkat)
     queue: [], // {plat, lp, ts}
     ils: [], // {id, ccNum, ccPlat, lp, units:[{slot,frame,model}], mp, ts, status}
@@ -608,7 +609,7 @@ function fbStart(){
     firebase.initializeApp(FB_CONFIG);
     FBS.db = firebase.database(); FBS.enabled = true; fbState("connecting");
     FBS.db.ref(".info/connected").on("value", s=>{ FBS.conn = !!s.val(); fbState(fbCurrentState()); });
-    firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); })
+    firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); trackAttach(); })
       .catch(e=>{ console.warn("login anonim gagal", e); fbState("offline"); });
   }catch(e){ console.warn(e); fbState("off"); }
 }
@@ -706,10 +707,10 @@ const ROLES = [
 const TABS_BY_ROLE = {
   dispatcher:  [{key:"dispatcher", label:"Scan Unit"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   cc:          [{key:"orderstall", label:"Order Stall"}, {key:"display", label:"Display"}],
-  delivery:    [{key:"delivery", label:"Delivery"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
-  koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
-  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
-  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
+  delivery:    [{key:"delivery", label:"Delivery"}, {key:"ccmap", label:"Peta CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
+  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
+  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
 let selectedRole = null;
@@ -868,6 +869,7 @@ function renderInner(){
   else if(activeTab==="dashboard") setVP(vp, renderLeaderDashboard());
   else if(activeTab==="dccp") setVP(vp, renderDccpUpload());
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
+  else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
   else if(activeTab==="admin") setVP(vp, renderAdmin());
   else if(activeTab==="display") setVP(vp, renderDisplay());
 }
@@ -1523,6 +1525,7 @@ function renderOrderStall(){
 
   return `
     ${absenBlock}
+    ${shareCardHtml()}
 
     <div class="card">
       <h3>📡 Live Monitoring Stall CC</h3>
@@ -3607,6 +3610,7 @@ function renderAdmin(){
       <button class="tabbtn ${adminTab==='models'?'active':''}" onclick="adminTab='models';render()">🚗 Model Unit</button>
       <button class="tabbtn ${adminTab==='ccstall'?'active':''}" onclick="adminTab='ccstall';render()">🚦 Stall CC</button>
       <button class="tabbtn ${adminTab==='defectcfg'?'active':''}" onclick="adminTab='defectcfg';render()">🔧 Defect</button>
+      <button class="tabbtn ${adminTab==='rute'?'active':''}" onclick="adminTab='rute';render()">🗺 Rute CC</button>
       <button class="tabbtn ${adminTab==='plan'?'active':''}" onclick="adminTab='plan';render()">🏭 Plan</button>
       <button class="tabbtn ${adminTab==='batam'?'active':''}" onclick="adminTab='batam';render()">🟠 Batam</button>
       <button class="tabbtn ${adminTab==='prio'?'active':''}" onclick="adminTab='prio';render()">⭐ Prioritas</button>
@@ -3658,6 +3662,24 @@ function renderAdmin(){
       </div>`;
   }
 
+  if(adminTab==="rute"){
+    const mp = data.mapPoints || {}, f = p => p ? (p.lat.toFixed(6)+", "+p.lng.toFixed(6)) : "";
+    const blk = (id,label,p) => `<div class="field"><label>${label} (lat, lng)</label>
+        <input id="mp_${id}" type="text" placeholder="-6.xxxxx, 107.xxxxx" value="${f(p)}">
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="mapUseMyLoc('${id}')">📍 Pakai lokasi saya sekarang</button>
+          ${p?`<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${p.lat},${p.lng}">🗺 Cek di Google Maps</a>`:""}
+        </div></div>`;
+    return `${tabsHtml}
+      <div class="card">
+        <h3>🗺 Titik Rute CC (ADM KAP – NVDC Karawang)</h3>
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Tentukan dua titik. Peta CC akan menampilkan posisi truk di antara keduanya. Cara termudah: berdiri di lokasi, tekan <b>Pakai lokasi saya sekarang</b>. Atau di Google Maps tekan lama titiknya, salin koordinat, tempel di sini.</p>
+        <div id="mpMsg"></div>
+        ${blk("adm","ADM KAP (Karawang Assy Plant)",mp.adm)}
+        ${blk("nvdc","NVDC Karawang",mp.nvdc)}
+        <button class="btn btn-primary" onclick="saveMapPoints()">💾 Simpan Titik</button>
+      </div>`;
+  }
   if(adminTab==="models"){
     const rows = Object.entries(data.models).map(([mdl,cfg])=>`
       <tr><td><b>${mdl}</b></td><td class="mono">${cfg.vin_codes.join(", ")}</td>
@@ -3803,6 +3825,165 @@ function addLP(){
   if(!v){ return; }
   DB.set(d=>{ if(!d.lpList.includes(v)) d.lpList.push(v); });
 }
+/* ===== Peta CC: titik ADM KAP – NVDC + posisi truk langsung ===== */
+function mapParse(txt){
+  const m = String(txt||"").match(/-?\d+(?:\.\d+)?/g);
+  if(!m || m.length<2) return null;
+  const lat = parseFloat(m[0]), lng = parseFloat(m[1]);
+  if(!(lat>=-90 && lat<=90 && lng>=-180 && lng<=180)) return null;
+  return {lat, lng};
+}
+function mapUseMyLoc(id){
+  const msg = document.getElementById("mpMsg");
+  if(!navigator.geolocation){ msg.innerHTML = `<div class="msg err">HP ini tidak mendukung GPS.</div>`; return; }
+  msg.innerHTML = `<div class="msg info">📍 Mengambil lokasi…</div>`;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    document.getElementById("mp_"+id).value = pos.coords.latitude.toFixed(6)+", "+pos.coords.longitude.toFixed(6);
+    msg.innerHTML = `<div class="msg ok">✔ Lokasi terisi (akurasi ±${Math.round(pos.coords.accuracy)} m). Tekan Simpan Titik.</div>`;
+  }, err=>{ msg.innerHTML = `<div class="msg err">Gagal ambil lokasi: ${err.message}</div>`; }, {enableHighAccuracy:true, timeout:15000});
+}
+function saveMapPoints(){
+  const a = mapParse(document.getElementById("mp_adm").value), n = mapParse(document.getElementById("mp_nvdc").value);
+  const msg = document.getElementById("mpMsg");
+  if(!a || !n){ msg.innerHTML = `<div class="msg err">Isi kedua titik dengan format: -6.xxxxx, 107.xxxxx</div>`; return; }
+  DB.set(d=>{ d.mapPoints = {adm:a, nvdc:n}; });
+}
+const TRK_PATH = "radar_track";
+let TRACK = {}, TRKERR = "", ccMapObj = null, ccMapLayer = null, _leafP = null;
+function escH(t){ return String(t==null?"":t).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function trackAttach(){
+  try{
+    FBS.db.ref(TRK_PATH).on("value", snap=>{ TRACK = snap.val() || {}; TRKERR = ""; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); },
+      err=>{ TRKERR = "Peta CC belum diizinkan oleh aturan Firebase (tambahkan node radar_track)."; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); });
+  }catch(e){}
+}
+function trkKey(plat){ return String(plat||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
+/* --- driver: bagikan posisi --- */
+let shareTrk = {on:false, id:null, wake:null, last:0, key:"", msg:""};
+async function shareWake(){ try{ if('wakeLock' in navigator && !shareTrk.wake){ shareTrk.wake = await navigator.wakeLock.request('screen'); shareTrk.wake.addEventListener('release',()=>{ shareTrk.wake=null; }); } }catch(e){} }
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && shareTrk.on) shareWake(); });
+function startShare(){
+  const prof = getCcProfile();
+  if(!prof.plat || !prof.lp){ alert("Simpan dulu nomor polisi & LP truk kamu (kartu Absen Otomatis)."); return; }
+  if(!FBS.enabled || !FBS.authed){ alert("Perangkat belum Online. Tunggu tanda hijau 'Online' di pojok atas."); return; }
+  if(!navigator.geolocation){ alert("HP ini tidak mendukung GPS."); return; }
+  shareTrk = {on:true, id:null, wake:null, last:0, key:trkKey(prof.plat), msg:"Mencari sinyal GPS…"};
+  shareWake();
+  shareTrk.id = navigator.geolocation.watchPosition(onSharePos, err=>{ shareTrk.msg = err && err.code===1 ? "Izin lokasi ditolak. Aktifkan izin lokasi lalu ulangi." : "GPS error: "+(err&&err.message||""); shareStatusUpdate(); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
+  render();
+}
+function stopShare(silent){
+  if(shareTrk.id!=null){ try{ navigator.geolocation.clearWatch(shareTrk.id); }catch(e){} }
+  try{ if(shareTrk.wake) shareTrk.wake.release(); }catch(e){}
+  try{ if(shareTrk.key && FBS.db) FBS.db.ref(TRK_PATH+"/"+shareTrk.key).remove(); }catch(e){}
+  shareTrk = {on:false, id:null, wake:null, last:0, key:"", msg:""};
+  if(!silent) render();
+}
+function onSharePos(pos){
+  if(!shareTrk.on) return;
+  const now = Date.now(); if(now - shareTrk.last < 15000) return;
+  shareTrk.last = now;
+  const prof = getCcProfile(), ref = FBS.db.ref(TRK_PATH+"/"+shareTrk.key);
+  const rec = {plat:prof.plat, lp:prof.lp, lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), acc:Math.round(pos.coords.accuracy||0), spd:Math.round((pos.coords.speed||0)*3.6), ts:now};
+  ref.set(rec).then(()=>{ try{ ref.onDisconnect().remove(); }catch(e){} shareTrk.msg = "✔ Posisi terkirim "+new Date(now).toLocaleTimeString("id-ID")+" (±"+rec.acc+" m)"; shareStatusUpdate(); })
+    .catch(e=>{ shareTrk.msg = "Gagal kirim posisi: "+(e&&e.message||e)+" — minta Admin menambah aturan Firebase 'radar_track'."; shareStatusUpdate(); });
+}
+function shareStatusUpdate(){ const el = document.getElementById("shareStat"); if(el) el.innerHTML = shareStatusHtml(); }
+function shareStatusHtml(){
+  if(!shareTrk.on) return `<div class="msg info">Pembagian posisi belum aktif.</div>`;
+  const bad = /Gagal|ditolak|error/i.test(shareTrk.msg);
+  return `<div class="msg ${bad?'err':'ok'}"><b>📡 Aktif</b> — ${escH(shareTrk.msg)}</div>`;
+}
+function shareCardHtml(){
+  return `<div class="card">
+    <h3>📡 Bagikan Posisi (Peta CC)</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Aktifkan saat berangkat supaya Koordinator bisa melihat posisi truk di peta (ADM KAP – NVDC). <b>Biarkan aplikasi terbuka</b> dan layar menyala. Matikan kalau sudah tiba.</p>
+    <div id="shareStat" style="margin:8px 0;">${shareStatusHtml()}</div>
+    <button class="btn ${shareTrk.on?'btn-danger':'btn-primary'}" onclick="${shareTrk.on?'stopShare()':'startShare()'}">${shareTrk.on?'⏹ Hentikan Bagikan Posisi':'📡 Mulai Bagikan Posisi'}</button>
+  </div>`;
+}
+/* --- viewer: peta --- */
+function renderCcMap(){
+  return `<div class="card">
+    <h3>🗺 Peta CC — ADM KAP ⇄ NVDC Karawang</h3>
+    <div id="ccmapMsg"></div>
+    <div id="ccmap" style="height:55vh;min-height:320px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#e8eef5;"></div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Posisi diperbarui saat aplikasi driver terbuka. Garis menghubungkan kedua titik (bukan rute jalan).</div>
+  </div>
+  <div class="card"><h3>🚚 CC di perjalanan</h3><div id="trkList"></div></div>`;
+}
+function ensureLeaflet(){
+  if(window.L) return Promise.resolve();
+  if(_leafP) return _leafP;
+  _leafP = new Promise((res,rej)=>{
+    const css = document.createElement("link"); css.rel="stylesheet"; css.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(css);
+    const sc = document.createElement("script"); sc.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+    sc.onload = ()=>res(); sc.onerror = ()=>{ _leafP=null; rej(new Error("gagal muat peta")); };
+    document.head.appendChild(sc);
+  });
+  return _leafP;
+}
+function initCcMap(){
+  const el = document.getElementById("ccmap"); if(!el) return;
+  updateTrackUI();
+  ensureLeaflet().then(()=>{
+    if(!document.getElementById("ccmap")) return;
+    try{ if(ccMapObj) ccMapObj.remove(); }catch(e){}
+    const mp = DB.get().mapPoints || {};
+    const c = mp.adm || mp.nvdc || {lat:-6.33, lng:107.34};
+    ccMapObj = L.map("ccmap", {zoomControl:true}).setView([c.lat, c.lng], 12);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(ccMapObj);
+    ccMapLayer = L.layerGroup().addTo(ccMapObj);
+    const ic = (t,bg)=>L.divIcon({className:"", html:`<div style="background:${bg};color:#fff;border-radius:8px;padding:3px 7px;font:700 11px sans-serif;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4);">${t}</div>`, iconAnchor:[0,0]});
+    const pts = [];
+    if(mp.adm){ L.marker([mp.adm.lat,mp.adm.lng],{icon:ic("🏭 ADM KAP","#0F2A4A")}).addTo(ccMapObj); pts.push([mp.adm.lat,mp.adm.lng]); }
+    if(mp.nvdc){ L.marker([mp.nvdc.lat,mp.nvdc.lng],{icon:ic("📦 NVDC","#C77700")}).addTo(ccMapObj); pts.push([mp.nvdc.lat,mp.nvdc.lng]); }
+    if(pts.length===2){ L.polyline(pts,{color:"#0F2A4A",weight:3,dashArray:"6 8",opacity:.7}).addTo(ccMapObj); }
+    ccMapObj._fitPts = pts;
+    if(pts.length) ccMapObj.fitBounds(pts, {padding:[50,50], maxZoom:15});
+    updateTrackUI();
+  }).catch(()=>{ const m=document.getElementById("ccmapMsg"); if(m) m.innerHTML = `<div class="msg err">Peta tidak bisa dimuat (butuh internet). Daftar posisi tetap tampil di bawah.</div>`; });
+}
+function trkCompute(r, mp){
+  const o = {plat:r.plat, lp:r.lp, lat:r.lat, lng:r.lng, spd:r.spd||0, age:Math.max(0,Date.now()-(r.ts||0))};
+  if(mp && mp.adm && mp.nvdc){
+    o.dA = haversineKm(r.lat,r.lng,mp.adm.lat,mp.adm.lng); o.dB = haversineKm(r.lat,r.lng,mp.nvdc.lat,mp.nvdc.lng);
+    const k = Math.cos(mp.adm.lat*Math.PI/180);
+    const ax = mp.adm.lng*k, ay = mp.adm.lat, bx = mp.nvdc.lng*k, by = mp.nvdc.lat, px = r.lng*k, py = r.lat;
+    const L2 = (bx-ax)*(bx-ax)+(by-ay)*(by-ay);
+    o.t = L2>0 ? Math.max(0, Math.min(1, ((px-ax)*(bx-ax)+(py-ay)*(by-ay))/L2)) : 0;   // 0 = di ADM KAP, 1 = di NVDC
+    o.total = haversineKm(mp.adm.lat,mp.adm.lng,mp.nvdc.lat,mp.nvdc.lng);
+  }
+  return o;
+}
+function updateTrackUI(){
+  const list = document.getElementById("trkList"), mp = DB.get().mapPoints || {};
+  const rows = Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0) < 15*60000).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
+  if(list){
+    let h = "";
+    if(TRKERR) h += `<div class="msg err">${escH(TRKERR)}</div>`;
+    if(!(mp.adm && mp.nvdc)) h += `<div class="msg info">Admin belum mengatur titik ADM KAP & NVDC (Admin Panel → 🗺 Rute CC).</div>`;
+    if(!rows.length) h += `<div style="font-size:13px;color:var(--text-dim);">Belum ada CC yang membagikan posisi.</div>`;
+    h += rows.map(o=>{
+      const mins = Math.round(o.age/60000), stale = o.age > 3*60000;
+      const prog = o.t!=null ? `<div style="position:relative;height:10px;background:var(--border);border-radius:6px;margin:8px 0 2px;"><div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(o.t*100)}%;background:var(--gold);border-radius:6px;"></div><div style="position:absolute;top:-4px;left:calc(${Math.round(o.t*100)}% - 9px);font-size:16px;">🚚</div></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);"><span>🏭 ADM KAP</span><span>NVDC 📦</span></div>` : "";
+      return `<div style="border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px;${stale?'opacity:.6;':''}">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b>${escH(o.plat)}</b><span style="font-size:11px;color:var(--text-dim);">${escH(o.lp||"")} · ${stale?'⚠ ':''}${mins<1?'baru saja':mins+' mnt lalu'}${o.spd?` · ${o.spd} km/j`:''}</span></div>
+        ${o.dA!=null ? `<div style="font-size:13px;margin-top:4px;">${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km dari NVDC</div>` : ""}
+        ${prog}</div>`;
+    }).join("");
+    list.innerHTML = h;
+  }
+  if(ccMapObj && ccMapLayer && window.L && document.getElementById("ccmap")){
+    ccMapLayer.clearLayers();
+    rows.forEach(o=>{
+      L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div style="background:#E60012;color:#fff;border-radius:8px;padding:3px 7px;font:700 11px sans-serif;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4);">🚚 ${escH(o.plat)}</div>`, iconAnchor:[0,0]})}).addTo(ccMapLayer);
+    });
+  }
+}
+setInterval(()=>{ if(activeTab==="ccmap") updateTrackUI(); }, 15000);
+
 function haversineKm(lat1,lng1,lat2,lng2){
   const R = 6371;
   const dLat = (lat2-lat1) * Math.PI/180;
@@ -3964,12 +4145,20 @@ function clearTestData(){
   render();
 }
 function resetData(){
-  if(!confirm("Yakin reset semua data? Tindakan ini tidak bisa dibatalkan.")) return;
-  localStorage.removeItem(LS_KEY);
-  _mem = null;
-  const fresh = DB.load();
-  if(FBS.enabled && FBS.ready){ const o = {}; dbKeys(fresh).forEach(k=>{ o[k] = cloneJ(fresh[k]); }); FBS.db.ref(FB_ROOT).set(o).catch(e=>console.warn(e)); }
-  render();
+  if(!confirm("Yakin reset semua data di SEMUA perangkat? Tindakan ini tidak bisa dibatalkan.")) return;
+  const fresh = normalizeData(seedDB());
+  if(FBS.enabled){
+    if(!(FBS.authed && FBS.conn && FBS.ready)){ alert("Reset DIBATALKAN: perangkat ini belum Online (lihat tanda di pojok kiri atas). Tunggu sampai hijau 'Online', lalu ulangi, supaya semua HP ikut ter-reset."); return; }
+    const o = {}; dbKeys(fresh).forEach(k=>{ o[k] = cloneJ(fresh[k]); });
+    FBS.db.ref(FB_ROOT).set(o).then(()=>{
+      try{ localStorage.removeItem(LS_KEY); }catch(e){}
+      _mem = null; DB.load();
+      alert("Reset berhasil di semua perangkat."); render();
+    }).catch(e=>alert("Reset GAGAL: "+(e&&e.message||e)+". Data tidak berubah."));
+    return;
+  }
+  try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  _mem = null; DB.load(); render();
 }
 
 /* ======================================================================
