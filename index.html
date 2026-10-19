@@ -205,6 +205,13 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 #spdChip{position:fixed;left:12px;bottom:12px;z-index:60;padding:8px 12px;border-radius:999px;font-weight:800;font-size:13px;background:#16213E;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.3);display:none;}
 #spdChip.over{background:#D64545;animation:spdBlink .6s infinite alternate;}
 @keyframes spdBlink{from{opacity:1}to{opacity:.55}}
+#spdToast{position:fixed;top:10px;left:10px;right:10px;z-index:9998;max-width:460px;margin:0 auto;background:#fff;color:#16213E;border-left:6px solid #D64545;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:10px 12px;display:flex;gap:10px;align-items:center;animation:spdIn .25s ease-out;}
+@keyframes spdIn{from{transform:translateY(-20px);opacity:0}to{transform:none;opacity:1}}
+#spdToast .tt{flex:1;min-width:0;font-size:13px;line-height:1.35;}
+#spdToast .tt b{font-weight:800;}
+#spdToast button{border:0;border-radius:9px;padding:8px 10px;font-size:12px;font-weight:800;}
+#spdToast .go{background:#16213E;color:#fff;}
+#spdToast .x{background:#EEF1F6;color:#16213E;}
 #spdOv{position:fixed;inset:0;z-index:9999;background:rgba(150,10,10,.96);color:#fff;display:flex;align-items:center;justify-content:center;padding:20px;animation:spdBg .7s infinite alternate;}
 @keyframes spdBg{from{background:rgba(150,10,10,.96)}to{background:rgba(214,40,40,.96)}}
 #spdOv .box{background:#fff;color:#16213E;border-radius:18px;padding:22px 18px;max-width:420px;width:100%;text-align:center;border-top:8px solid #D64545;}
@@ -1124,7 +1131,37 @@ function spdSendWa(id){
 let _spdSirenTimer = null;
 function spdCloseOverlay(){ const o = document.getElementById("spdOv"); if(o) o.remove(); if(_spdSirenTimer){ clearInterval(_spdSirenTimer); _spdSirenTimer=null; } }
 function spdDev(){ try{ let d=localStorage.getItem("radar_dev"); if(!d){ d=Math.random().toString(36).slice(2,10); localStorage.setItem("radar_dev",d); } return d; }catch(e){ return "x"; } }
+/* Notifikasi (tanpa sirene) untuk Leader / Admin / Delivery */
+let _spdToastT = null, _spdToastN = 0;
+function spdPing(){
+  try{ spdUnlock(); const ctx = SPD.ac; if(!ctx) return; const t = ctx.currentTime+0.02;
+    [[880,0],[1175,0.16]].forEach(([f,d])=>{ const o=ctx.createOscillator(), g=ctx.createGain(); o.type="sine"; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,t+d); g.gain.exponentialRampToValueAtTime(0.18,t+d+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+d+0.2);
+      o.connect(g); g.connect(ctx.destination); o.start(t+d); o.stop(t+d+0.22); }); }catch(e){}
+}
+function spdToastClose(){ const o=document.getElementById("spdToast"); if(o) o.remove(); if(_spdToastT){ clearTimeout(_spdToastT); _spdToastT=null; } _spdToastN=0; }
+function spdOpenLog(){
+  spdToastClose();
+  try{
+    if(currentUser.role==="admin"){ adminTab="speed"; switchTab("admin"); render(); }
+    else switchTab("speedlog");
+  }catch(e){}
+}
+function spdToast(a){
+  const had = !!document.getElementById("spdToast"); _spdToastN = had ? _spdToastN+1 : 1;
+  const old = document.getElementById("spdToast"); if(old) old.remove(); if(_spdToastT) clearTimeout(_spdToastT);
+  const roleL = (ROLES.find(r=>r.key===a.role)||{label:a.role}).label;
+  const o = document.createElement("div"); o.id = "spdToast";
+  o.innerHTML = `<div class="tt">🚨 <b>${escH(a.name)}</b> (${escH(roleL)}) melebihi batas kecepatan<br><b style="color:#D64545;">${a.spd} km/j</b> · batas ${a.limit} · Shift ${rsShift(a.shift)} · ${new Date(a.ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}${a.lat!=null?` · <a href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank" style="color:#1a5fd0;font-weight:700;">Lokasi</a>`:""}${_spdToastN>1?`<br><small>+${_spdToastN-1} pelanggaran lain</small>`:""}</div>
+    <button class="go" onclick="spdOpenLog()">Riwayat</button><button class="x" onclick="spdToastClose()" aria-label="Tutup">✕</button>`;
+  document.body.appendChild(o);
+  spdPing();
+  try{ navigator.vibrate && navigator.vibrate(200); }catch(e){}
+  try{ if('Notification' in window && Notification.permission==='granted') new Notification("🚨 Kecepatan melebihi batas", {body:`${a.name} · ${a.spd} km/j (batas ${a.limit})`}); }catch(e){}
+  _spdToastT = setTimeout(spdToastClose, 25000);
+}
 function spdShowOverlay(a, mine){
+  if(!mine){ spdToast(a); return; }
   spdCloseOverlay(); window._spdCur = a; window._spdMine = !!mine;
   const o = document.createElement("div"); o.id = "spdOv";
   const roleL = (ROLES.find(r=>r.key===a.role)||{label:a.role}).label;
@@ -1164,7 +1201,7 @@ function spdCheckIncoming(){
   const fresh = list.filter(a=>a && a.ts>seen && Date.now()-a.ts<10*60000 && a.dev!==me && (currentUser.role==="admin" || !currentUser.shift || a.shift===currentUser.shift));
   const mx = list.reduce((m,a)=>Math.max(m,a&&a.ts||0), seen);
   if(mx>seen){ try{ localStorage.setItem("radar_spd_seen", String(mx)); }catch(e){} }
-  if(fresh.length && !document.getElementById("spdOv")) spdShowOverlay(fresh[fresh.length-1], false);
+  fresh.forEach(a=>spdShowOverlay(a, false));
 }
 let spdF = {period:"7", shift:"all"};
 function spdSetF(k,v){ spdF[k]=v; render(); }
@@ -1205,7 +1242,7 @@ function renderAdminSpeed(){
     <div class="field"><label>No. WhatsApp (08xx / 62xx) atau link grup (chat.whatsapp.com/…)</label><input id="spd_${k}_wa" type="text" value="${escH(c[k].wa)}" placeholder="08123456789"></div></div>`;
   return `<div id="spdAdmMsg"></div>
     <div class="card"><h3>🏎 Batas Kecepatan</h3>
-      <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Pengemudi yang kecepatannya (dari GPS HP) melebihi batas: HP-nya berbunyi alarm sampai OK ditekan, dan tercatat di riwayat. Akun Leader, Admin, dan Delivery yang sedang login (shift yang sama; Admin semua shift) ikut dapat alarm berisi nama pengemudi.</p>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Pengemudi yang kecepatannya (dari GPS HP) melebihi batas: HP-nya berbunyi alarm sampai OK ditekan, dan tercatat di riwayat. Akun Leader, Admin, dan Delivery yang sedang login (shift yang sama; Admin semua shift) hanya mendapat notifikasi kecil (tanpa sirene) berisi nama pengemudi, plus riwayat.</p>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:10px;"><input type="checkbox" id="spdOn" ${ck(c.on)}> Aktifkan pemantauan kecepatan</label>
       <div class="field"><label>Batas kecepatan (km/jam)</label><input id="spdLimit" type="text" inputmode="numeric" value="${c.limit}"></div>
       <div class="field"><label>Jeda antar alarm per orang (menit)</label><input id="spdCool" type="text" inputmode="numeric" value="${c.cool}"></div>
@@ -3364,7 +3401,7 @@ function renderLeaderDashboard(){
   const modelRows = R.models.map(m=>{ const x=R.byModel[m]||{inp:0,out:0,wip:0}; return {m,...x}; }).sort((a,b)=>b.inp-a.inp);
   const mxModel = Math.max(1,...modelRows.map(r=>Math.max(r.inp,r.out,r.wip)));
   return `
-  ${spdLogHtml(10,true)}
+  ${spdLogHtml(10,false)}
   <div class="card">
     <h3>🔎 Cari No. Rangka</h3>
     <input id="ldrSearchInput" type="search" placeholder="Ketik No. Rangka (min. 3 karakter)" value="${ldrSearch.replace(/"/g,'&quot;')}" oninput="ldrOnSearch(this.value)" style="width:100%;margin-top:8px;font-size:16px;" autocomplete="off" autocapitalize="characters">
@@ -4232,6 +4269,7 @@ function renderAdmin(){
       <button class="tabbtn ${adminTab==='plan'?'active':''}" onclick="adminTab='plan';render()">🏭 Plan</button>
       <button class="tabbtn ${adminTab==='batam'?'active':''}" onclick="adminTab='batam';render()">🟠 Batam</button>
       <button class="tabbtn ${adminTab==='prio'?'active':''}" onclick="adminTab='prio';render()">⭐ Prioritas</button>
+      <button class="tabbtn ${adminTab==='areastall'?'active':''}" onclick="adminTab='areastall';render()">📍 Area Stall Unit</button>
       <button class="tabbtn ${adminTab==='speed'?'active':''}" onclick="adminTab='speed';render()">🏎 Kecepatan</button>
       <button class="tabbtn ${adminTab==='dccp'?'active':''}" onclick="adminTab='dccp';render()">📋 DCCP</button>
       <button class="tabbtn ${adminTab==='data'?'active':''}" onclick="adminTab='data';render()">🗄 Data</button>
@@ -4357,8 +4395,11 @@ function renderAdmin(){
         <div class="field"><label>Radius (km)</label><input id="yardRadius" type="text" value="${data.yardLocation.radiusKm}"></div>
         <button class="btn btn-outline" style="margin-bottom:10px;" onclick="useCurrentLocForYard()">📍 Pakai Lokasi Saya Sekarang (harus berdiri di yard)</button>
         <button class="btn btn-primary" onclick="saveYardLocation()">💾 Simpan Lokasi Yard</button>
-      </div>
-      ${recCardHtml(data)}
+      </div>`;
+  }
+
+  if(adminTab==="areastall"){
+    return `${tabsHtml}${recCardHtml(data)}
       <div class="card">
         <h3>⭕ Area Cadangan: Lingkaran</h3>
         <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Dipakai hanya kalau belum ada hasil rekam jalan keliling di kartu atas. Berdirilah di tengah area stall lalu tekan "Pakai Lokasi Saya".</p>
@@ -4719,7 +4760,7 @@ function recCardHtml(data){
   const saved = has ? `<div class="msg ok" style="margin-bottom:10px;">✔ Area tersimpan: <b>${a.poly.length} titik</b> · luas ± <b>${(a.polyArea||Math.round(geoPolyArea(a.poly))).toLocaleString("id-ID")} m²</b> · keliling jalan ${a.polyLen||"-"} m${a.polyTs?`<br><small>direkam ${new Date(a.polyTs).toLocaleString("id-ID")}${a.polyBy?" oleh "+escH(a.polyBy):""}</small>`:""}</div>${recSvg(a.poly)}`
     : `<div class="msg info" style="margin-bottom:10px;">Belum ada hasil rekam. Batas lokasi memakai lingkaran cadangan di kartu bawah.</div>`;
   return `<div class="card" style="border-left:5px solid #2E86DE;">
-    <h3>🚶 Kalibrasi Area Stall (Jalan Keliling)</h3>
+    <h3>🚶 Kalibrasi Area Stall Unit (Jalan Keliling)</h3>
     <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Admin berjalan pelan mengelilingi tepi luar area stall sambil membawa HP. Aplikasi merekam jejaknya dan otomatis membentuk batas area sesuai kondisi aktual. Setelah kembali ke titik awal, tekan <b>Selesai</b>. Pakai HP dengan GPS bagus, di tempat terbuka, dan biarkan layar menyala.</p>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:10px;"><input type="checkbox" ${a.on?"checked":""} onchange="recToggleOn(this.checked)"> Aktifkan batas lokasi Dispatcher</label>
     ${saved}
