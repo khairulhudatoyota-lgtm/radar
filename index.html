@@ -198,6 +198,25 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 /* ===== Display mode ===== */
 .dispgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px;}
 @media(min-width:700px){.dispgrid{grid-template-columns:repeat(8,1fr);}}
+.shiftrow{display:flex;gap:10px;margin:2px 0 14px;}
+.shiftchip{flex:1;padding:13px 8px;border-radius:12px;border:2px solid var(--border,#d5dbe5);background:var(--panel,#fff);font-weight:800;font-size:14px;letter-spacing:.04em;color:var(--text,#16213E);cursor:pointer;}
+.shiftchip.red.on{background:#D64545;border-color:#D64545;color:#fff;box-shadow:0 4px 14px rgba(214,69,69,.35);}
+.shiftchip.white.on{background:#fff;border-color:#16213E;color:#16213E;box-shadow:0 0 0 3px rgba(22,33,62,.18);}
+#spdChip{position:fixed;left:12px;bottom:12px;z-index:60;padding:8px 12px;border-radius:999px;font-weight:800;font-size:13px;background:#16213E;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.3);display:none;}
+#spdChip.over{background:#D64545;animation:spdBlink .6s infinite alternate;}
+@keyframes spdBlink{from{opacity:1}to{opacity:.55}}
+#spdOv{position:fixed;inset:0;z-index:9999;background:rgba(150,10,10,.96);color:#fff;display:flex;align-items:center;justify-content:center;padding:20px;animation:spdBg .7s infinite alternate;}
+@keyframes spdBg{from{background:rgba(150,10,10,.96)}to{background:rgba(214,40,40,.96)}}
+#spdOv .box{background:#fff;color:#16213E;border-radius:18px;padding:22px 18px;max-width:420px;width:100%;text-align:center;border-top:8px solid #D64545;}
+#spdOv .big{font-size:56px;font-weight:900;color:#D64545;line-height:1;}
+#spdOv .row{font-size:13px;margin-top:6px;}
+#spdOv .okbtn{width:100%;margin-top:16px;padding:16px;border:0;border-radius:12px;background:#25D366;color:#073b1d;font-size:16px;font-weight:900;}
+.geolocked .stallgrid{opacity:.35;pointer-events:none;filter:grayscale(.7);}
+.geobar{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.45;border:2px solid;}
+.geobar b{font-weight:800;}
+.geobar.in{background:#EAF7EE;border-color:#2E9E5B;color:#14532d;}
+.geobar.out{background:#FDECEA;border-color:#D64545;color:#7a1d1d;}
+.geobar.wait{background:#FFF8E1;border-color:#E0A800;color:#5c4400;}
 .dispcell{border-radius:10px; padding:8px 4px; text-align:center; border:1.5px solid var(--border); min-height:70px;}
 .dispcell.filled{background:var(--red-bg); border-color:#5A2020;}
 .dispcell.empty{background:var(--green-bg); border-color:#1E5C36;}
@@ -677,6 +696,9 @@ window.RSnd=(function(){
           style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button>
       </div>
     </div>
+    <div class="field"><label>Shift (wajib)</label>
+      <div class="shiftrow"><button type="button" id="shiftRed" class="shiftchip red" onclick="setLoginShift('red')">🔴 SHIFT RED</button><button type="button" id="shiftWhite" class="shiftchip white" onclick="setLoginShift('white')">⚪ SHIFT WHITE</button></div>
+    </div>
     <button class="btn btn-primary" onclick="doLogin()">➜ Masuk</button>
 
     <div style="text-align:center; margin-top:18px;">
@@ -903,8 +925,9 @@ function getSession(){
     return s;
   }catch(e){ return null; }
 }
+let loginShift = (function(){ try{ const v=localStorage.getItem("radar_shift"); return (v==="red"||v==="white")?v:""; }catch(e){ return ""; } })();
 function setSession(user){
-  const s = { username:user.username, name:user.name, role:user.role, expiry: Date.now() + CONFIG.SESSION_HOURS*3600*1000 };
+  const s = { username:user.username, name:user.name, role:user.role, shift:loginShift||"", expiry: Date.now() + CONFIG.SESSION_HOURS*3600*1000 };
   localStorage.setItem(SESS_KEY, JSON.stringify(s));
   return s;
 }
@@ -940,9 +963,9 @@ const ROLES = [
 const TABS_BY_ROLE = {
   dispatcher:  [{key:"dispatcher", label:"Scan Unit"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   cc:          [{key:"orderstall", label:"Order Stall"}, {key:"display", label:"Display"}],
-  delivery:    [{key:"delivery", label:"Delivery"}, {key:"ccmap", label:"Peta CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  delivery:    [{key:"delivery", label:"Delivery"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
-  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
+  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
   admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
@@ -989,10 +1012,226 @@ function togglePassVisibility(){
   else{ inp.type = "password"; btn.textContent = "👁"; }
 }
 
+/* ======================================================================
+   SHIFT (Red / White) + BATAS KECEPATAN
+   - Shift dipilih di layar login, disimpan di sesi.
+   - Admin mengatur batas km/jam, role yang dipantau, serta No. WA / link grup pimpinan tiap shift.
+   - Melewati batas: alarm di HP pengemudi + tercatat ke database (pimpinan shift yang login ikut dapat
+     alarm layar penuh) + tombol kirim WhatsApp ke pimpinan shift tsb (WhatsApp tetap perlu ditekan Kirim).
+====================================================================== */
+function rsShift(s){ return s==="red"?"RED":(s==="white"?"WHITE":"-"); }
+function setLoginShift(s){
+  loginShift = s; try{ localStorage.setItem("radar_shift", s); }catch(e){}
+  const r=document.getElementById("shiftRed"), w=document.getElementById("shiftWhite");
+  if(r) r.classList.toggle("on", s==="red"); if(w) w.classList.toggle("on", s==="white");
+}
+function speedCfg(){
+  const c = DB.get().speedCfg || {};
+  return {
+    on: !!c.on, limit: +c.limit>0 ? +c.limit : 30, cool: +c.cool>0 ? +c.cool : 2,
+    roles: {dispatcher:true},   // pemantauan kecepatan hanya untuk Dispatcher
+    red: Object.assign({label:"", wa:""}, c.red||{}), white: Object.assign({label:"", wa:""}, c.white||{})
+  };
+}
+const SPD = {id:null, last:null, cur:null, hits:0, lastAlert:0, ac:null, sirenT:null};
+function spdNeeded(){ const c = speedCfg(); return !!(currentUser && c.on && c.roles[currentUser.role]); }
+function spdUnlock(){
+  try{ const C = window.AudioContext||window.webkitAudioContext; if(!C) return; if(!SPD.ac) SPD.ac = new C(); if(SPD.ac.state==="suspended") SPD.ac.resume(); }catch(e){}
+}
+document.addEventListener("pointerdown", spdUnlock);
+function spdSiren(times){
+  try{
+    spdUnlock(); const ctx = SPD.ac; if(!ctx) return;
+    let t = ctx.currentTime + 0.05;
+    for(let i=0;i<(times||4);i++){
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "square"; o.frequency.setValueAtTime(700, t); o.frequency.linearRampToValueAtTime(1150, t+0.35); o.frequency.linearRampToValueAtTime(700, t+0.7);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.28, t+0.03); g.gain.setValueAtTime(0.28, t+0.62); g.gain.exponentialRampToValueAtTime(0.0001, t+0.7);
+      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.72); t += 0.75;
+    }
+  }catch(e){}
+  try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){}
+}
+function spdSync(){
+  if(spdNeeded()){ spdStart(); } else { spdStop(); }
+}
+function spdStart(){
+  if(SPD.id!=null || !navigator.geolocation) return;
+  SPD.last = null; SPD.hits = 0;
+  SPD.id = navigator.geolocation.watchPosition(onSpdPos, ()=>{}, {enableHighAccuracy:true, maximumAge:1000, timeout:30000});
+  spdChipUpdate();
+}
+function spdStop(){
+  if(SPD.id!=null){ try{ navigator.geolocation.clearWatch(SPD.id); }catch(e){} SPD.id=null; }
+  SPD.cur = null; SPD.last = null; SPD.hits = 0;
+  spdChipUpdate();
+}
+function spdChipUpdate(){
+  let el = document.getElementById("spdChip");
+  if(!el){ el = document.createElement("div"); el.id = "spdChip"; document.body.appendChild(el); }
+  if(SPD.id==null){ el.style.display = "none"; return; }
+  const lim = speedCfg().limit, v = SPD.cur;
+  el.style.display = "block";
+  el.classList.toggle("over", v!=null && v>lim);
+  el.textContent = `🏎 ${v==null?"--":Math.round(v)} km/j · batas ${lim}`;
+}
+function onSpdPos(pos){
+  const c = pos.coords, cfg = speedCfg(); if(!cfg.on) return;
+  const now = pos.timestamp || Date.now();
+  let v = (typeof c.speed==="number" && !isNaN(c.speed)) ? c.speed*3.6 : null;
+  if(v==null && SPD.last && (c.accuracy||99)<=25){
+    const dt = (now-SPD.last.t)/1000;
+    if(dt>=2 && dt<=30){
+      const m = haversineKm(SPD.last.lat, SPD.last.lng, c.latitude, c.longitude)*1000;
+      v = m < (c.accuracy||0) ? 0 : m/dt*3.6;
+    }
+  }
+  SPD.last = {lat:c.latitude, lng:c.longitude, t:now};
+  if(v==null || v>200 || (c.accuracy||0)>40){ return; }
+  SPD.cur = v; spdChipUpdate();
+  if(v > cfg.limit){ SPD.hits++; if(SPD.hits>=2) spdTrigger(v, c.latitude, c.longitude); } else { SPD.hits = 0;  }
+}
+function spdTrigger(v, lat, lng, force){
+  const cfg = speedCfg();
+  if(!force && Date.now()-SPD.lastAlert < cfg.cool*60000) return;
+  SPD.lastAlert = Date.now();
+  const isCC = !!(currentUser && currentUser.role==="cc");
+  const prof = (isCC && typeof getCcProfile==="function") ? getCcProfile() : {};
+  const unit = "";
+  const a = {id:Date.now()+"-"+Math.floor(Math.random()*1000), ts:Date.now(), name:(currentUser&&currentUser.name)||"", username:(currentUser&&currentUser.username)||"",
+    dev:spdDev(), role:(currentUser&&currentUser.role)||"", shift:(currentUser&&currentUser.shift)||"", plat:prof.plat||"", lp:prof.lp||"", unit:unit, spd:Math.round(v), limit:cfg.limit,
+    lat:lat!=null?+(+lat).toFixed(6):null, lng:lng!=null?+(+lng).toFixed(6):null};
+  try{ DB.set(d=>{ d.speedAlerts = (d.speedAlerts||[]).concat([a]).slice(-100); }); }catch(e){}
+  spdShowOverlay(a, true);
+}
+function spdMsgText(a){
+  return `⚠️ *PELANGGARAN KECEPATAN — RADAR EKY*\nShift: ${rsShift(a.shift)}\nNama: ${a.name} (${(ROLES.find(r=>r.key===a.role)||{label:a.role}).label})${a.plat?`\nPlat: ${a.plat}${a.lp?" / "+a.lp:""}`:""}\nKecepatan: *${a.spd} km/j* (batas ${a.limit} km/j)\nWaktu: ${new Date(a.ts).toLocaleString("id-ID")}${a.lat!=null?`\nLokasi: https://maps.google.com/?q=${a.lat},${a.lng}`:""}`;
+}
+function spdWaTarget(shift, text){
+  const c = speedCfg()[shift==="white"?"white":"red"], raw = String(c.wa||"").trim();
+  if(!raw) return null;
+  if(/chat\.whatsapp\.com/i.test(raw)) return {group:true, url:raw.startsWith("http")?raw:"https://"+raw, label:c.label||"Grup"};
+  let n = raw.replace(/[^0-9]/g,""); if(n.startsWith("0")) n = "62"+n.slice(1); if(!n) return null;
+  return {group:false, url:`https://wa.me/${n}?text=${encodeURIComponent(text)}`, label:c.label||("+"+n)};
+}
+function spdSendWa(id){
+  const a = (window._spdCur && window._spdCur.id===id) ? window._spdCur : ((DB.get().speedAlerts||[]).find(x=>x.id===id)); if(!a) return;
+  const text = spdMsgText(a), t = spdWaTarget(a.shift, text);
+  if(!t){ alert("Nomor/grup pimpinan untuk shift "+rsShift(a.shift)+" belum diisi Admin."); return; }
+  if(t.group){ try{ navigator.clipboard.writeText(text); }catch(e){} alert("Pesan sudah disalin. Di grup WhatsApp, tempel (paste) lalu kirim."); }
+  window.open(t.url, "_blank");
+}
+let _spdSirenTimer = null;
+function spdCloseOverlay(){ const o = document.getElementById("spdOv"); if(o) o.remove(); if(_spdSirenTimer){ clearInterval(_spdSirenTimer); _spdSirenTimer=null; } }
+function spdDev(){ try{ let d=localStorage.getItem("radar_dev"); if(!d){ d=Math.random().toString(36).slice(2,10); localStorage.setItem("radar_dev",d); } return d; }catch(e){ return "x"; } }
+function spdShowOverlay(a, mine){
+  spdCloseOverlay(); window._spdCur = a; window._spdMine = !!mine;
+  const o = document.createElement("div"); o.id = "spdOv";
+  const roleL = (ROLES.find(r=>r.key===a.role)||{label:a.role}).label;
+  o.innerHTML = `<div class="box">
+    <div style="font-size:13px;font-weight:800;color:#D64545;letter-spacing:.08em;">${mine?"⚠️ KAMU MELEBIHI BATAS KECEPATAN":"🚨 BAWA UNIT DI ATAS BATAS KECEPATAN"}</div>
+    <div class="big">${a.spd}<span style="font-size:20px;"> km/j</span></div>
+    <div class="row">Batas: <b>${a.limit} km/j</b> · Shift <b>${rsShift(a.shift)}</b></div>
+    <div class="row" style="font-size:16px;margin-top:10px;"><b>${escH(a.name)}</b></div>
+    <div class="row">${escH(roleL)}${a.plat?` · ${escH(a.plat)}`:""}${a.lp?` · ${escH(a.lp)}`:""}</div>
+    ${a.unit?`<div class="row">Unit dibawa: <b>${escH(a.unit)}</b></div>`:""}
+    <div class="row" style="color:#6b7488;">${new Date(a.ts).toLocaleString("id-ID")}</div>
+    ${mine?`<div class="row" style="margin-top:10px;font-weight:700;">PERLAMBAT SEKARANG. Utamakan keselamatan.</div>`
+      :(a.lat!=null?`<a href="https://maps.google.com/?q=${a.lat},${a.lng}" target="_blank" style="display:block;margin-top:10px;color:#1a5fd0;font-weight:700;">🗺 Lihat Lokasi</a>`:"")}
+    <div class="row" style="color:#6b7488;">Alarm berbunyi sampai OK ditekan. Tercatat di Riwayat Kecepatan.</div>
+    <button type="button" class="okbtn" style="background:#16213E;color:#fff;" onclick="spdOk('${a.id}')">✔ OK</button>
+  </div>`;
+  document.body.appendChild(o);
+  spdSiren(3);
+  _spdSirenTimer = setInterval(()=>{ if(!document.getElementById("spdOv")){ clearInterval(_spdSirenTimer); _spdSirenTimer=null; return; } spdSiren(3); }, 2400);
+  if(!mine){ try{ if('Notification' in window && Notification.permission==='granted') new Notification("🚨 Kecepatan melebihi batas", {body:`${a.name} · ${a.spd} km/j (batas ${a.limit})`}); }catch(e){} }
+}
+/* OK = hentikan alarm. Untuk pengemudi, OK dicatat di riwayat sebagai tanda sudah melihat peringatan. */
+function spdOk(id){
+  const a = (window._spdCur && window._spdCur.id===id) ? window._spdCur : null;
+  const mine = !!window._spdMine;
+  spdCloseOverlay();
+  if(!a || !mine) return;
+  try{ DB.set(d=>{ const x=(d.speedAlerts||[]).find(y=>y.id===id); if(x) x.ack=Date.now(); }); }catch(e){}
+}
+/* Leader / Admin / Delivery: popup alarm saat ada pelanggaran dari shift-nya */
+function spdCheckIncoming(){
+  if(!currentUser || !["leader","admin","delivery"].includes(currentUser.role)) return;
+  const list = DB.get().speedAlerts || []; let seen = 0;
+  try{ seen = +localStorage.getItem("radar_spd_seen")||0; }catch(e){}
+  if(!seen){ try{ localStorage.setItem("radar_spd_seen", String(Date.now())); }catch(e){} return; }
+  const me = spdDev();
+  const fresh = list.filter(a=>a && a.ts>seen && Date.now()-a.ts<10*60000 && a.dev!==me && (currentUser.role==="admin" || !currentUser.shift || a.shift===currentUser.shift));
+  const mx = list.reduce((m,a)=>Math.max(m,a&&a.ts||0), seen);
+  if(mx>seen){ try{ localStorage.setItem("radar_spd_seen", String(mx)); }catch(e){} }
+  if(fresh.length && !document.getElementById("spdOv")) spdShowOverlay(fresh[fresh.length-1], false);
+}
+let spdF = {period:"7", shift:"all"};
+function spdSetF(k,v){ spdF[k]=v; render(); }
+function spdRows(){
+  let list = (DB.get().speedAlerts||[]).slice().reverse();
+  const now = Date.now(), p = spdF.period;
+  if(p==="1"){ const d=new Date(); d.setHours(0,0,0,0); list = list.filter(a=>a.ts>=d.getTime()); }
+  else if(p!=="all"){ list = list.filter(a=>now-a.ts <= (+p)*86400000); }
+  if(spdF.shift!=="all") list = list.filter(a=>a.shift===spdF.shift);
+  return list;
+}
+function renderSpeedLog(){
+  const list = spdRows(), cnt = {};
+  list.forEach(a=>{ const k=a.name||"-"; (cnt[k]=cnt[k]||{n:0,mx:0}); cnt[k].n++; cnt[k].mx=Math.max(cnt[k].mx,a.spd); });
+  const top = Object.entries(cnt).sort((a,b)=>b[1].n-a[1].n).slice(0,5);
+  const chip = (k,v,l)=>`<button type="button" class="linechip ${spdF[k]===v?'on':''}" onclick="spdSetF('${k}','${v}')">${l}</button>`;
+  const rows = list.length ? list.slice(0,200).map(a=>`<tr><td>${new Date(a.ts).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td><td>${rsShift(a.shift)}</td><td><b>${escH(a.name)}</b>${(a.plat||a.unit)?`<br><small>${a.plat?escH(a.plat)+(a.lp?" · "+escH(a.lp):""):""}${a.unit?"Unit setelahnya: "+escH(a.unit):""}</small>`:""}</td><td><b style="color:#D64545;">${a.spd}</b> / ${a.limit}</td><td>${a.ack?`<span style="color:#2E7D32;font-weight:800;">✔ ${new Date(a.ack).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</span>`:`<span style="color:#D64545;font-weight:800;">✖</span>`}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="emptystate">Tidak ada pelanggaran pada filter ini.</td></tr>`;
+  return `<div class="card"><h3>🏎 Riwayat Kecepatan</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">${chip("period","1","Hari ini")}${chip("period","7","7 hari")}${chip("period","30","30 hari")}${chip("period","all","Semua")}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${chip("shift","all","Semua shift")}${chip("shift","red","🔴 Red")}${chip("shift","white","⚪ White")}</div>
+    <div style="font-size:13px;margin-bottom:10px;"><b>${list.length}</b> pelanggaran${top.length?` · terbanyak: ${top.map(([n,v])=>`<b>${escH(n)}</b> (${v.n}×, maks ${v.mx})`).join(", ")}`:""}</div>
+    <div style="overflow-x:auto;"><table><thead><tr><th>Waktu</th><th>Shift</th><th>Pengemudi</th><th>km/j</th><th>OK</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function spdLogHtml(n, onlyMyShift){
+  let list = (DB.get().speedAlerts||[]).slice().reverse();
+  if(onlyMyShift && currentUser && currentUser.shift && currentUser.role!=="admin") list = list.filter(a=>a.shift===currentUser.shift);
+  list = list.slice(0, n||30);
+  const rows = list.length ? list.map(a=>`<tr><td>${new Date(a.ts).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td><td>${rsShift(a.shift)}</td><td>${escH(a.name)}${(a.plat||a.unit)?`<br><small>${a.plat?escH(a.plat):""}${a.unit?"Unit setelahnya: "+escH(a.unit):""}</small>`:""}</td><td><b style="color:#D64545;">${a.spd}</b> / ${a.limit}</td><td>${a.ack?`<span style="color:#2E7D32;font-weight:800;">✔ ${new Date(a.ack).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</span>`:`<span style="color:#D64545;font-weight:800;">✖ belum</span>`}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="emptystate">Belum ada pelanggaran kecepatan.</td></tr>`;
+  return `<div class="card"><h3>🏎 Pelanggaran Kecepatan</h3><div style="overflow-x:auto;"><table><thead><tr><th>Waktu</th><th>Shift</th><th>Pengemudi</th><th>km/j</th><th>OK</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function renderAdminSpeed(){
+  const c = speedCfg(), ck = (b)=>b?"checked":"";
+  const roleRow = (k,l)=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="spdRole_${k}" ${ck(c.roles[k])}> ${l}</label>`;
+  const sh = (k,t)=>`<div class="card" style="border-left:5px solid ${k==="red"?"#D64545":"#16213E"};"><h3>${t}</h3>
+    <div class="field"><label>Nama pimpinan / grup (label)</label><input id="spd_${k}_label" type="text" value="${escH(c[k].label)}" placeholder="Contoh: Pak Budi / Grup Leader Red"></div>
+    <div class="field"><label>No. WhatsApp (08xx / 62xx) atau link grup (chat.whatsapp.com/…)</label><input id="spd_${k}_wa" type="text" value="${escH(c[k].wa)}" placeholder="08123456789"></div></div>`;
+  return `<div id="spdAdmMsg"></div>
+    <div class="card"><h3>🏎 Batas Kecepatan</h3>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Pengemudi yang kecepatannya (dari GPS HP) melebihi batas: HP-nya berbunyi alarm sampai OK ditekan, dan tercatat di riwayat. Akun Leader, Admin, dan Delivery yang sedang login (shift yang sama; Admin semua shift) ikut dapat alarm berisi nama pengemudi.</p>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:10px;"><input type="checkbox" id="spdOn" ${ck(c.on)}> Aktifkan pemantauan kecepatan</label>
+      <div class="field"><label>Batas kecepatan (km/jam)</label><input id="spdLimit" type="text" inputmode="numeric" value="${c.limit}"></div>
+      <div class="field"><label>Jeda antar alarm per orang (menit)</label><input id="spdCool" type="text" inputmode="numeric" value="${c.cool}"></div>
+      <div class="msg info" style="margin-bottom:12px;">Yang dipantau: <b>Dispatcher</b> saja (membawa unit dari pabrik ke stall). Kecepatan umum 10–30 km/jam, jadi isi batas sesuai kebijakan, misalnya 30.</div>
+    </div>
+        <button class="btn btn-primary" onclick="saveSpeedCfg()">💾 Simpan Pengaturan</button>
+    <button class="btn btn-outline" style="margin-top:8px;" onclick="spdTrigger(${c.limit+10},null,null,true)">🔔 Tes Alarm di HP Ini</button>
+    <div style="margin-top:14px;">${renderSpeedLog()}</div>`;
+}
+function saveSpeedCfg(){
+  const g = id=>{ const e=document.getElementById(id); return e?e.value.trim():""; };
+  const limit = parseFloat(g("spdLimit")), cool = parseFloat(g("spdCool"));
+  const m = document.getElementById("spdAdmMsg");
+  if(!(limit>=5 && limit<=120)){ m.innerHTML = `<div class="msg err">Batas kecepatan harus 5–120 km/jam.</div>`; return; }
+  const cfg = {on:document.getElementById("spdOn").checked, limit, cool:(cool>0?cool:2),
+    roles:{dispatcher:true},
+    red:speedCfg().red, white:speedCfg().white};
+  DB.set(d=>{ d.speedCfg = cfg; });
+  m.innerHTML = `<div class="msg ok">✔ Pengaturan kecepatan tersimpan.</div>`;
+}
+
 function loginEnter(acc){
   if(!TABS_BY_ROLE[acc.role]){ document.getElementById("loginMsg").innerHTML = `<div class="msg err">Akun ini belum punya otoritas yang valid. Hubungi Admin.</div>`; return; }
   selectedRole = acc.role;
   currentUser = setSession(acc);
+  spdUnlock();
   try{ RSnd.login(); }catch(e){}
   document.getElementById("loginMsg").innerHTML = "";
   document.getElementById("loginPass").value = "";
@@ -1010,6 +1249,7 @@ function doLogin(){
   const data = DB.get();
   const msgEl = document.getElementById("loginMsg");
   if(!u || !p){ msgEl.innerHTML = `<div class="msg err">Isi username dan password.</div>`; return; }
+  if(!loginShift){ msgEl.innerHTML = `<div class="msg err">Pilih shift dulu (Red atau White).</div>`; try{RSnd.err();}catch(e){} return; }
   const users = data.users || [];
   let same = users.filter(x=>x.username===u);
   if(!same.length) same = users.filter(x=>String(x.username).toLowerCase()===u.toLowerCase());
@@ -1024,6 +1264,8 @@ function doLogin(){
       return `<button class="rolebtn" type="button" onclick="loginPickRole('${r}')"><span class="ic">${o.icon}</span><span class="rtext"><b>${o.label.toUpperCase()}</b><span>${o.desc}</span></span></button>`; }).join("") + `</div>`;
 }
 function doLogout(){
+  spdStop(); spdCloseOverlay();
+  geoStop();
   stopScanner();
   disposeCar3D();
   if(autoWatchId){ navigator.geolocation.clearWatch(autoWatchId); autoWatchId=null; }
@@ -1047,7 +1289,7 @@ function enterApp(forceTab){
   document.getElementById("credScreen").classList.add("hidden");
   document.getElementById("mainView").classList.remove("hidden");
   document.getElementById("curUserName").textContent = currentUser.name;
-  document.getElementById("curUserRole").textContent = (ROLES.find(r=>r.key===currentUser.role)||{label:"DISPLAY"}).label || "DISPLAY";
+  document.getElementById("curUserRole").textContent = ((ROLES.find(r=>r.key===currentUser.role)||{label:"DISPLAY"}).label || "DISPLAY") + (currentUser.shift?" · SHIFT "+rsShift(currentUser.shift):"");
   const isDisplay = currentUser.role==="display";
   const tabbarEl = document.getElementById("tabbar");
   if(isDisplay){
@@ -1072,6 +1314,7 @@ function switchTab(t){
    RENDER ROUTER
 ====================================================================== */
 function render(){
+  try{ spdSync(); }catch(e){}
   // Simpan posisi scroll (geser kiri/kanan & atas/bawah) agar tidak lompat saat auto-refresh
   const vpEl = document.getElementById("viewport");
   const saved = [];
@@ -1109,6 +1352,7 @@ function renderInner(){
   else if(activeTab==="batam") setVP(vp, renderBatamPage());
   else if(activeTab==="prio") setVP(vp, renderPrioPage());
   else if(activeTab==="dashboard") setVP(vp, renderLeaderDashboard());
+  else if(activeTab==="speedlog") setVP(vp, renderSpeedLog());
   else if(activeTab==="dccp") setVP(vp, renderDccpUpload());
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
@@ -1119,7 +1363,113 @@ function renderInner(){
 /* ======================================================================
    1) DISPATCHER VIEW
 ====================================================================== */
+/* ======================================================================
+   GEOFENCE DISPATCHER — input ke stall hanya boleh dari dalam area stall
+   Titik pusat + radius diatur Admin (data.stallArea). Di luar area / GPS mati: stall terkunci,
+   hanya boleh "Parkir di Luar Stall" dengan lokasi ketik manual (bukan nama stall).
+====================================================================== */
+const GEO = {state:"unknown", dist:null, acc:null, ts:0, id:null, poll:null, err:""};
+/* ---- geometri area (poligon hasil rekam jalan keliling) ---- */
+function geoProj(lat0,lng0){ const kx = 111320*Math.cos(lat0*Math.PI/180), ky = 110574; return (lat,lng)=>[(lng-lng0)*kx,(lat-lat0)*ky]; }
+function geoPolyDist(poly, lat, lng){
+  const P = geoProj(poly[0][0], poly[0][1]), pts = poly.map(p=>P(p[0],p[1])), q = P(lat,lng);
+  let inside = false, best = Infinity;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const [xi,yi]=pts[i], [xj,yj]=pts[j];
+    if(((yi>q[1])!==(yj>q[1])) && (q[0] < (xj-xi)*(q[1]-yi)/(yj-yi)+xi)) inside = !inside;
+    const dx=xj-xi, dy=yj-yi, L=dx*dx+dy*dy;
+    let t = L? ((q[0]-xi)*dx+(q[1]-yi)*dy)/L : 0; t = Math.max(0,Math.min(1,t));
+    const d = Math.hypot(q[0]-(xi+t*dx), q[1]-(yi+t*dy)); if(d<best) best=d;
+  }
+  return {inside, d:best};
+}
+function geoPolyArea(poly){
+  const P = geoProj(poly[0][0], poly[0][1]), pts = poly.map(p=>P(p[0],p[1])); let s=0;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++) s += pts[j][0]*pts[i][1]-pts[i][0]*pts[j][1];
+  return Math.abs(s)/2;
+}
+function geoSimplify(poly, eps){
+  if(poly.length<=3) return poly;
+  const P = geoProj(poly[0][0], poly[0][1]), pts = poly.map(p=>P(p[0],p[1]));
+  const keep = new Array(pts.length).fill(false); keep[0]=keep[pts.length-1]=true;
+  (function rdp(a,b){
+    let md=0, mi=-1; const [x1,y1]=pts[a], [x2,y2]=pts[b], dx=x2-x1, dy=y2-y1, L=Math.hypot(dx,dy)||1e-9;
+    for(let i=a+1;i<b;i++){ const d=Math.abs(dy*pts[i][0]-dx*pts[i][1]+x2*y1-y2*x1)/L; if(d>md){ md=d; mi=i; } }
+    if(md>eps && mi>0){ keep[mi]=true; rdp(a,mi); rdp(mi,b); }
+  })(0, pts.length-1);
+  return poly.filter((_,i)=>keep[i]);
+}
+function stallArea(){ const a = (DB.get().stallArea)||{}; if(!a.on) return null; const hasPoly = Array.isArray(a.poly) && a.poly.length>=3, hasCirc = a.lat!=null && a.lng!=null && a.radiusM>0; return (hasPoly||hasCirc) ? a : null; }
+function geoNeeded(){ return !!(currentUser && currentUser.role==="dispatcher" && stallArea()); }
+function geoIsIn(){ if(!geoNeeded()) return true; return GEO.state==="in" && (Date.now()-GEO.ts)<120000; }
+function geoStart(){
+  if(!geoNeeded() || GEO.id!=null) return;
+  if(!navigator.geolocation){ GEO.state="nogps"; GEO.err="HP/browser ini tidak mendukung GPS."; return; }
+  GEO.id = navigator.geolocation.watchPosition(geoOnPos, geoOnErr, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
+  GEO.poll = setInterval(()=>{ if(!geoNeeded()){ geoStop(); return; } try{ navigator.geolocation.getCurrentPosition(geoOnPos, geoOnErr, {enableHighAccuracy:true, maximumAge:10000, timeout:15000}); }catch(e){} geoApply(); }, 20000);
+}
+function geoStop(){
+  if(GEO.id!=null){ try{ navigator.geolocation.clearWatch(GEO.id); }catch(e){} GEO.id=null; }
+  if(GEO.poll){ clearInterval(GEO.poll); GEO.poll=null; }
+  GEO.state="unknown"; GEO.ts=0;
+}
+function geoOnPos(pos){
+  const a = stallArea(); if(!a) return;
+  const acc = pos.coords.accuracy||0, la = pos.coords.latitude, ln = pos.coords.longitude;
+  let ok, m, lim;
+  if(Array.isArray(a.poly) && a.poly.length>=3){ const r = geoPolyDist(a.poly, la, ln); ok = r.inside || r.d <= (a.buf!=null?a.buf:10); m = r.inside ? 0 : r.d; lim = 60; GEO.poly = true; }
+  else { m = haversineKm(la, ln, a.lat, a.lng)*1000; ok = m <= a.radiusM; lim = Math.max(100, a.radiusM); GEO.poly = false; }
+  GEO.dist = m; GEO.acc = acc; GEO.ts = Date.now(); GEO.err = "";
+  GEO.state = acc > lim ? "weak" : (ok ? "in" : "out");
+  geoApply();
+}
+function geoOnErr(e){
+  GEO.ts = Date.now(); GEO.err = (e&&e.message)||"";
+  GEO.state = (e && e.code===1) ? "denied" : "nogps";
+  geoApply();
+}
+function geoBannerHtml(){
+  if(!geoNeeded()) return "";
+  const a = stallArea(), d = GEO.dist!=null ? Math.round(GEO.dist) : null, fresh = (Date.now()-GEO.ts)<120000;
+  if(GEO.state==="in" && fresh) return GEO.poly ? `<div class="geobar in">📍 <b>Kamu di area stall.</b> Input & pilih stall aktif.</div>` : `<div class="geobar in">📍 <b>Kamu di area stall</b> (${d} m dari titik pusat, batas ${a.radiusM} m). Input & pilih stall aktif.</div>`;
+  if(GEO.state==="out" && fresh) return `<div class="geobar out">🔒 <b>Kamu di luar area stall</b> — ${GEO.poly?`${d} m dari batas area`:`${d} m dari titik pusat (batas ${a.radiusM} m)`}.<br>Input otomatis, pilih slot & sentuh stall dikunci. Unit hanya bisa dicatat lewat <b>Parkir di Luar Stall</b> (ketik lokasi manual, bukan nama stall).</div>`;
+  if(GEO.state==="denied") return `<div class="geobar out">🔒 <b>Izin lokasi ditolak.</b> Stall terkunci. Aktifkan izin Lokasi/GPS untuk Chrome (ikon gembok di address bar → Izin → Lokasi), lalu muat ulang halaman.</div>`;
+  if(GEO.state==="nogps") return `<div class="geobar out">🔒 <b>GPS tidak tersedia.</b> Nyalakan Lokasi di HP lalu muat ulang. Stall terkunci selama posisi belum terbaca.${GEO.err?`<br><small>${GEO.err}</small>`:""}</div>`;
+  if(GEO.state==="weak" && fresh) return `<div class="geobar wait">📡 <b>Sinyal GPS lemah</b> (±${Math.round(GEO.acc)} m). Tunggu sebentar / keluar ke tempat terbuka. Stall terkunci sampai posisi akurat.</div>`;
+  return `<div class="geobar wait">⏳ <b>Mencari posisi GPS…</b> Stall terkunci sampai lokasi terbaca. Izinkan akses lokasi jika diminta.</div>`;
+}
+function geoApply(){
+  if(!geoNeeded()){ if(GEO.id!=null) geoStop(); return; }
+  const inside = geoIsIn();
+  const b = document.getElementById("geoBanner"); if(b) b.innerHTML = geoBannerHtml();
+  const card = document.querySelector(".d-slots"); if(card) card.classList.toggle("geolocked", !inside);
+  document.querySelectorAll(".geo-need").forEach(x=>{ x.disabled = !inside; });
+  if(!inside){ pickedSlot = null; pickedAuto = false; }
+  refreshSlotSelection();
+  const vi = document.getElementById("vinInput"); if(vi && vi.value) onVinInput();
+}
+function geoGuard(){
+  if(geoIsIn()) return true;
+  alert("🔒 Kamu berada di luar area stall (atau lokasi belum terbaca).\nInput ke stall hanya bisa dari dalam area stall.\nDi luar area, pakai 'Parkir di Luar Stall' dan ketik lokasi manual.");
+  return false;
+}
+/* Lokasi luar stall: bebas diketik, tapi tidak boleh berupa nama stall / slot yang ada */
+function offLocError(loc){
+  const raw = String(loc||"").toUpperCase();
+  const compact = raw.replace(/[^A-Z0-9]/g,"");
+  const slots = []; PARK_ORDER.forEach(g=>{ slots.push(g); for(let i=1;i<=CONFIG.SLOTS_PER_STALL;i++) slots.push(g+i); });
+  const bare = compact.replace(/^(STALL|STAL|SLOT)/,"");
+  if(slots.includes(bare)) return true;
+  if(raw.split(/[^A-Z0-9]+/).some(t=>slots.includes(t))) return true;
+  return slots.some(s=>compact.indexOf("STALL"+s)>=0 || compact.indexOf("STAL"+s)>=0 || compact.indexOf("SLOT"+s)>=0);
+}
+function offLocCheck(loc){
+  if(offLocError(loc)){ alert("Lokasi luar stall tidak boleh memakai nama stall/slot yang ada ("+PARK_ORDER.join(", ")+").\nTulis nama tempat lain, contoh: depan audit, lahan kosong sebelah gudang."); return false; }
+  return true;
+}
+
 function renderDispatcher(){
+  geoStart();
   const data = DB.get();
   let slotsHtml = PARK_ORDER.map(g=>{
     let cells = "";
@@ -1137,6 +1487,7 @@ function renderDispatcher(){
   }).join("");
 
   return `
+    <div id="geoBanner">${geoBannerHtml()}</div>
     <div class="card d-scan">
       <h3>📷 Scan / Input No. Rangka</h3>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
@@ -1158,11 +1509,11 @@ function renderDispatcher(){
         <label>No. Rangka (VIN)</label>
         <input id="vinInput" type="text" placeholder="Ketik / hasil scan muncul di sini" value="${vinDraft.replace(/"/g,'&quot;')}" oninput="vinDraft=this.value;onVinInput()">
       </div>
-      <button class="btn btn-primary" onclick="quickParkOK()">✔ OK — Parkir Otomatis ke Stall Kosong</button>
+      <button class="btn btn-primary geo-need" ${geoIsIn()?"":"disabled"} onclick="quickParkOK()">✔ OK — Parkir Otomatis ke Stall Kosong</button>
       <div id="detectResult"></div>
     </div>
 
-    <div class="card d-slots">
+    <div class="card d-slots ${geoIsIn()?'':'geolocked'}">
       <h3>🅿️ Pilih Slot Stall Tujuan (Opsional)</h3>
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Ketuk slot kosong (hijau) kalau mau pilih posisi manual. Ketuk slot terisi (merah) buat keluarkan/edit unit.</p>
       <div class="stallgrid">${slotsHtml}</div>
@@ -1170,15 +1521,15 @@ function renderDispatcher(){
 
     <div class="card d-offin">
       <h3>📍 Parkir di Luar Stall</h3>
-      <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Pakai kalau stall penuh (misal CC terlambat) dan unit terpaksa diparkir di area kosong. Isi No. Rangka di atas, ketik lokasinya, lalu tekan tombol di bawah.</p>
+      <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Pakai kalau stall penuh (misal CC terlambat) dan unit terpaksa diparkir di area kosong. Isi No. Rangka di atas, ketik lokasinya, lalu tekan tombol di bawah. Nama lokasi bebas, <b>tapi bukan nama stall</b> (${PARK_ORDER.join(", ")}).</p>
       <div class="field"><label>Lokasi parkir (ketik manual)</label>
-        <input id="offLocInput" type="text" placeholder="Contoh: Lahan kosong sebelah gudang B" value="${offLocDraft.replace(/"/g,'&quot;')}" oninput="offLocDraft=this.value"></div>
+        <input id="offLocInput" type="text" placeholder="Contoh: Depan audit" value="${offLocDraft.replace(/"/g,'&quot;')}" oninput="offLocDraft=this.value"></div>
       <button class="btn btn-outline" onclick="parkOffStall()">📍 Parkirkan di Luar Stall</button>
     </div>
 
     <div class="d-offlist">${offListHtml(data,true)}</div>
 
-    <button class="btn btn-primary d-confirm" id="confirmParkBtn" onclick="confirmPark()" ${(!pickedSlot)?'disabled':''}>
+    <button class="btn btn-primary d-confirm" id="confirmParkBtn" onclick="confirmPark()" ${(!pickedSlot||!geoIsIn())?'disabled':''}>
       ✔ Parkirkan Unit di ${pickedSlot||'...'}
     </button>
   `;
@@ -1191,6 +1542,7 @@ function findVinSlot(vin, data, excludeSlot){
 }
 function quickParkOK(){
   if(!requireLine()) return;
+  if(!geoGuard()) return;
   const vin = document.getElementById("vinInput").value.trim().toUpperCase();
   const data = DB.get();
   if(!vin){ alert("Isi No. Rangka dulu."); return; }
@@ -1215,6 +1567,7 @@ function quickParkOK(){
 }
 
 function openDispatcherSlotEdit(id){
+  if(!geoGuard()) return;
   const data = DB.get();
   const v = data.units[id];
   if(!v) return;
@@ -1228,6 +1581,7 @@ function openDispatcherSlotEdit(id){
   `);
 }
 function saveSlotEdit(id){
+  if(!geoGuard()) return;
   const newVin = document.getElementById("editSlotFrame").value.trim().toUpperCase();
   const data = DB.get();
   const dupSlot = findVinSlot(newVin, data, id);
@@ -1238,6 +1592,7 @@ function saveSlotEdit(id){
   closeModal();
 }
 function clearSlotForRepair(id){
+  if(!geoGuard()) return;
   if(!confirm(`Keluarkan unit dari slot ${id}? Slot ini akan kosong lagi dan siap diisi unit lain.`)) return;
   DB.set(d=>{ d.units[id] = null; });
   closeModal();
@@ -1248,7 +1603,7 @@ function refreshSlotSelection(){
   });
   const btn = document.getElementById('confirmParkBtn');
   if(btn){
-    btn.disabled = !pickedSlot;
+    btn.disabled = !pickedSlot || !geoIsIn();
     btn.textContent = `✔ Parkirkan Unit di ${pickedSlot||'...'}`;
   }
 }
@@ -1263,6 +1618,7 @@ function findFirstEmptySlot(data, batam){
   return null;
 }
 function onPickSlot(id){
+  if(!geoGuard()) return;
   const data = DB.get();
   if(data.units[id]){ return; }
   pickedSlot = id; pickedAuto = false;
@@ -1312,7 +1668,10 @@ function onVinInput(){
   { const ok = findVinSlot(normVin(vin).length>=8?vin.trim().toUpperCase():"", data); if(ok && isOffKey(ok)) banner += `<div style="background:#FFF3E0;border:2px solid #E8833A;border-radius:12px;padding:10px;text-align:center;font-size:13px;margin-bottom:8px;">📍 Unit ini tercatat parkir di luar stall: <b>${data.units[ok].loc||"-"}</b><br>Tekan OK / pilih slot untuk <b>memindahkan datanya ke stall</b>.</div>`; }
   if(isB) banner += `<div style="background:#E8833A;color:#fff;border-radius:12px;padding:14px;text-align:center;font-size:20px;font-weight:800;margin-bottom:8px;">🟠 UNIT BATAM${cat&&cat.dest?`<div style="font-size:12px;font-weight:600;">Tujuan: ${cat.dest}</div>`:""}${restricted?`<div style="font-size:12px;font-weight:600;">Parkir di stall khusus Batam: ${batamStallList(data).join(", ")}</div>`:""}</div>`;
   if((cat && cat.prio) || prioManual) banner += `<div style="background:#F5B800;color:#3a2a00;border-radius:12px;padding:12px;text-align:center;font-size:18px;font-weight:800;margin-bottom:8px;">⭐ UNIT PRIORITAS</div>`;
-  if(model){
+  if(model && !geoIsIn()){
+    pickedSlot = null; pickedAuto = false; refreshSlotSelection();
+    el.innerHTML = banner + `<div class="msg ok">Model terdeteksi: <b>${model}</b></div><div class="msg err">🔒 Stall terkunci (di luar area stall / lokasi belum terbaca). Gunakan <b>Parkir di Luar Stall</b> di bawah dan ketik lokasi manual.</div>`;
+  }else if(model){
     // slot terpilih otomatis yang jenisnya salah → ganti
     if(pickedSlot && pickedAuto && !slotAllowed(data, pickedSlot, isB)){ pickedSlot = null; }
     if(!pickedSlot){
@@ -1341,6 +1700,7 @@ function onVinInput(){
 }
 function confirmPark(){
   if(!requireLine()) return;
+  if(!geoGuard()) return;
   const vin = document.getElementById("vinInput").value.trim().toUpperCase();
   const data = DB.get();
   const model = detectModel(vin, data.models);
@@ -3004,6 +3364,7 @@ function renderLeaderDashboard(){
   const modelRows = R.models.map(m=>{ const x=R.byModel[m]||{inp:0,out:0,wip:0}; return {m,...x}; }).sort((a,b)=>b.inp-a.inp);
   const mxModel = Math.max(1,...modelRows.map(r=>Math.max(r.inp,r.out,r.wip)));
   return `
+  ${spdLogHtml(10,true)}
   <div class="card">
     <h3>🔎 Cari No. Rangka</h3>
     <input id="ldrSearchInput" type="search" placeholder="Ketik No. Rangka (min. 3 karakter)" value="${ldrSearch.replace(/"/g,'&quot;')}" oninput="ldrOnSearch(this.value)" style="width:100%;margin-top:8px;font-size:16px;" autocomplete="off" autocapitalize="characters">
@@ -3460,6 +3821,7 @@ function openOffEdit(k){
 function saveOffEdit(k){
   const loc = document.getElementById("offEditLoc").value.trim();
   if(!loc){ alert("Lokasi tidak boleh kosong."); return; }
+  if(!offLocCheck(loc)) return;
   DB.set(d=>{ if(d.units[k]) d.units[k].loc = loc; });
   closeModal();
 }
@@ -3474,7 +3836,8 @@ function parkOffStall(){
   const loc = document.getElementById("offLocInput").value.trim();
   const data = DB.get();
   if(!vin){ alert("Isi No. Rangka dulu."); return; }
-  if(!loc){ alert("Ketik lokasi parkir di luar stall dulu (contoh: lahan kosong sebelah gudang)."); return; }
+  if(!loc){ alert("Ketik lokasi parkir di luar stall dulu (contoh: depan audit)."); return; }
+  if(!offLocCheck(loc)) return;
   const dup = findVinSlot(vin, data);
   if(dup){ alert(isOffKey(dup) ? `No. Rangka ini sudah tercatat parkir di luar stall: ${data.units[dup].loc}. Ketuk unitnya di daftar untuk ubah lokasi.` : `No. Rangka ini masih terparkir di stall ${dup}.`); return; }
   const model = detectModel(vin, data.models);
@@ -3512,6 +3875,7 @@ function unitTagsHtml(u, small){
   return `${u.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">BATAM</span>`:""}${u.prio?`<span style="background:#F5B800;color:#3a2a00;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">⭐ PRIO</span>`:""}`;
 }
 function makeUnitRecord(vin, model, d){
+  try{ const L=d.speedAlerts||[]; for(let i=L.length-1;i>=0;i--){ const x=L[i]; if(x && x.dev===spdDev() && x.role==="dispatcher" && !x.unit && Date.now()-x.ts<15*60000){ x.unit=(model?model+" · ":"")+vin; break; } } }catch(e){}
   const cat = lookupUnitCat(d, vin);
   const batam = !!(cat && cat.batam) || batamManual;
   const prio = !!(cat && cat.prio) || prioManual;
@@ -3520,7 +3884,7 @@ function makeUnitRecord(vin, model, d){
     const old = d.unitCat[normVin(vin)] || {};
     d.unitCat[normVin(vin)] = {...old, batam: batam, prio: prio, src: old.src||"manual", by:(currentUser&&currentUser.name)||"", ts:Date.now()};
   }
-  return { frame:vin, model, driver: currentUser.name, line: dispLine||"", batam, prio, ts: Date.now() };
+  return { frame:vin, model, driver: currentUser.name, line: dispLine||"", batam, prio, ts: Date.now(), geo: geoNeeded()?(geoIsIn()?"in":"out"):"" };
 }
 function batamIssues(data){
   const groups = {}, misplaced = [];
@@ -3868,6 +4232,7 @@ function renderAdmin(){
       <button class="tabbtn ${adminTab==='plan'?'active':''}" onclick="adminTab='plan';render()">🏭 Plan</button>
       <button class="tabbtn ${adminTab==='batam'?'active':''}" onclick="adminTab='batam';render()">🟠 Batam</button>
       <button class="tabbtn ${adminTab==='prio'?'active':''}" onclick="adminTab='prio';render()">⭐ Prioritas</button>
+      <button class="tabbtn ${adminTab==='speed'?'active':''}" onclick="adminTab='speed';render()">🏎 Kecepatan</button>
       <button class="tabbtn ${adminTab==='dccp'?'active':''}" onclick="adminTab='dccp';render()">📋 DCCP</button>
       <button class="tabbtn ${adminTab==='data'?'active':''}" onclick="adminTab='data';render()">🗄 Data</button>
     </div>`;
@@ -3992,7 +4357,22 @@ function renderAdmin(){
         <div class="field"><label>Radius (km)</label><input id="yardRadius" type="text" value="${data.yardLocation.radiusKm}"></div>
         <button class="btn btn-outline" style="margin-bottom:10px;" onclick="useCurrentLocForYard()">📍 Pakai Lokasi Saya Sekarang (harus berdiri di yard)</button>
         <button class="btn btn-primary" onclick="saveYardLocation()">💾 Simpan Lokasi Yard</button>
+      </div>
+      ${recCardHtml(data)}
+      <div class="card">
+        <h3>⭕ Area Cadangan: Lingkaran</h3>
+        <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Dipakai hanya kalau belum ada hasil rekam jalan keliling di kartu atas. Berdirilah di tengah area stall lalu tekan "Pakai Lokasi Saya".</p>
+        <div id="stallLocMsg"></div>
+        <div class="field"><label>Latitude</label><input id="stallLat" type="text" value="${(data.stallArea&&data.stallArea.lat)??''}" placeholder="Belum diatur"></div>
+        <div class="field"><label>Longitude</label><input id="stallLng" type="text" value="${(data.stallArea&&data.stallArea.lng)??''}" placeholder="Belum diatur"></div>
+        <div class="field"><label>Radius (meter)</label><input id="stallRadius" type="text" value="${(data.stallArea&&data.stallArea.radiusM)||150}"></div>
+        <button class="btn btn-outline" style="margin-bottom:10px;" onclick="useCurrentLocForStall()">📍 Pakai Lokasi Saya Sekarang (berdiri di tengah area stall)</button>
+        <button class="btn btn-primary" onclick="saveStallArea()">💾 Simpan Area Stall</button>
       </div>`;
+  }
+
+  if(adminTab==="speed"){
+    return `${tabsHtml}${renderAdminSpeed()}`;
   }
 
   if(adminTab==="dccp"){
@@ -4268,6 +4648,110 @@ function saveYardLocation(){
   const msgEl = document.getElementById("yardLocMsg");
   if(isNaN(lat) || isNaN(lng)){ msgEl.innerHTML = `<div class="msg err">Latitude/Longitude belum valid.</div>`; return; }
   DB.set(d=>{ d.yardLocation = {lat, lng, radiusKm: isNaN(radius)?5:radius}; });
+}
+/* ---- Kalibrasi area stall: Admin berjalan keliling, aplikasi merekam jejak GPS ---- */
+const REC = {on:false, id:null, pts:[], cur:null, acc:null, wake:null, msg:""};
+function recMeters(a,b){ return haversineKm(a[0],a[1],b[0],b[1])*1000; }
+function recLen(pts){ let s=0; for(let i=1;i<pts.length;i++) s+=recMeters(pts[i-1],pts[i]); return s; }
+async function recWake(){ try{ if('wakeLock' in navigator && !REC.wake){ REC.wake = await navigator.wakeLock.request('screen'); REC.wake.addEventListener('release',()=>{ REC.wake=null; }); } }catch(e){} }
+function recStart(){
+  if(!navigator.geolocation){ alert("HP ini tidak mendukung GPS."); return; }
+  if(REC.on) return;
+  REC.on = true; REC.pts = []; REC.cur = null; REC.acc = null; REC.msg = "Mencari sinyal GPS… tunggu sampai akurasi ≤ 20 m, lalu mulai berjalan.";
+  recWake();
+  REC.id = navigator.geolocation.watchPosition(recOnPos, e=>{ REC.msg = e && e.code===1 ? "Izin lokasi ditolak. Aktifkan izin lokasi lalu ulangi." : "GPS error: "+(e&&e.message||""); recUI(); }, {enableHighAccuracy:true, maximumAge:0, timeout:30000});
+  render();
+}
+function recOnPos(pos){
+  if(!REC.on) return;
+  const c = pos.coords, p = [c.latitude, c.longitude]; REC.acc = c.accuracy||0; REC.cur = p;
+  if(REC.acc > 20){ REC.msg = `Akurasi GPS ±${Math.round(REC.acc)} m — menunggu ≤ 20 m (cari tempat terbuka).`; recUI(); return; }
+  const last = REC.pts[REC.pts.length-1];
+  if(!last || recMeters(last,p) >= 4){ REC.pts.push(p); }
+  REC.msg = "Merekam… jalan pelan mengikuti tepi luar area stall, kembali ke titik awal.";
+  recUI();
+}
+function recCancel(){
+  if(REC.id!=null){ try{ navigator.geolocation.clearWatch(REC.id); }catch(e){} REC.id=null; }
+  try{ if(REC.wake) REC.wake.release(); }catch(e){}
+  REC.on=false; REC.pts=[]; REC.cur=null; REC.wake=null; REC.msg="";
+  render();
+}
+function recFinish(){
+  const raw = REC.pts.slice();
+  if(raw.length < 8){ alert("Titik rekaman masih terlalu sedikit ("+raw.length+"). Jalan lebih jauh mengelilingi area, lalu tekan Selesai."); return; }
+  const gap = recMeters(raw[0], raw[raw.length-1]);
+  if(gap > 30 && !confirm("Titik akhir "+Math.round(gap)+" m dari titik awal (belum kembali ke awal). Batas akan ditutup lurus dari titik akhir ke titik awal. Lanjut simpan?")) return;
+  const poly = geoSimplify(raw, 2).map(p=>[+p[0].toFixed(6), +p[1].toFixed(6)]);
+  const area = geoPolyArea(poly);
+  if(poly.length < 3 || area < 200){ alert("Area hasil rekam terlalu kecil ("+Math.round(area)+" m²). Ulangi dengan berjalan mengelilingi seluruh area stall."); return; }
+  let la=0, ln=0; poly.forEach(p=>{ la+=p[0]; ln+=p[1]; }); la/=poly.length; ln/=poly.length;
+  let rad = 0; poly.forEach(p=>{ rad = Math.max(rad, recMeters([la,ln],p)); });
+  const buf = Math.max(0, Math.min(100, parseFloat((document.getElementById("recBuf")||{}).value) || 10));
+  DB.set(d=>{ const o = d.stallArea || {}; d.stallArea = Object.assign({}, o, {poly, buf, lat:+la.toFixed(6), lng:+ln.toFixed(6), radiusM:Math.max(20,Math.round(rad)), polyTs:Date.now(), polyBy:(currentUser&&currentUser.name)||"", polyLen:Math.round(recLen(raw)), polyArea:Math.round(area)}); });
+  recCancel();
+}
+function recClear(){
+  if(!confirm("Hapus hasil rekam area? Batas lokasi kembali memakai lingkaran cadangan.")) return;
+  DB.set(d=>{ if(d.stallArea){ delete d.stallArea.poly; delete d.stallArea.polyTs; delete d.stallArea.polyBy; delete d.stallArea.polyLen; delete d.stallArea.polyArea; } });
+  render();
+}
+function recToggleOn(v){ DB.set(d=>{ d.stallArea = Object.assign({}, d.stallArea||{}, {on:!!v}); }); render(); }
+function recSetBuf(v){ const b = Math.max(0, Math.min(100, parseFloat(v)||0)); DB.set(d=>{ if(d.stallArea) d.stallArea.buf = b; }); }
+function recSvg(pts, cur){
+  if(!pts || !pts.length) return "";
+  const P = geoProj(pts[0][0], pts[0][1]), xy = pts.map(p=>P(p[0],p[1])); if(cur) xy.push(P(cur[0],cur[1]));
+  const xs = xy.map(a=>a[0]), ys = xy.map(a=>a[1]), x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
+  const W=300, H=170, pad=14, sc = Math.min((W-2*pad)/Math.max(10,x1-x0), (H-2*pad)/Math.max(10,y1-y0));
+  const T = a=>[(pad+(a[0]-x0)*sc).toFixed(1), (H-pad-(a[1]-y0)*sc).toFixed(1)];
+  const line = xy.slice(0,pts.length).map(a=>T(a).join(",")).join(" "), s = T(xy[0]), e = cur?T(xy[xy.length-1]):null;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:340px;background:#F4F7FB;border:1px solid var(--border);border-radius:10px;"><polyline points="${line}" fill="none" stroke="#2E86DE" stroke-width="2.5" stroke-linejoin="round"/><circle cx="${s[0]}" cy="${s[1]}" r="5" fill="#2E9E5B"/>${e?`<circle cx="${e[0]}" cy="${e[1]}" r="5" fill="#D64545"/>`:""}</svg>`;
+}
+function recStatHtml(){
+  const n = REC.pts.length, len = Math.round(recLen(REC.pts)), gap = n>1 ? Math.round(recMeters(REC.pts[0], REC.pts[n-1])) : 0;
+  return `<div class="msg ${REC.acc!=null&&REC.acc<=20?'ok':'info'}"><b>🔴 Merekam</b> — ${escH(REC.msg)}</div>
+    <div style="font-size:13px;margin:6px 0;"><b>${n}</b> titik · jalan <b>${len} m</b>${n>1?` · jarak ke titik awal <b>${gap} m</b>`:""}${REC.acc!=null?` · akurasi ±${Math.round(REC.acc)} m`:""}</div>
+    ${recSvg(REC.pts, REC.cur)}`;
+}
+function recUI(){ const el = document.getElementById("recStat"); if(el) el.innerHTML = recStatHtml(); }
+function recCardHtml(data){
+  const a = data.stallArea || {}, has = Array.isArray(a.poly) && a.poly.length>=3;
+  const saved = has ? `<div class="msg ok" style="margin-bottom:10px;">✔ Area tersimpan: <b>${a.poly.length} titik</b> · luas ± <b>${(a.polyArea||Math.round(geoPolyArea(a.poly))).toLocaleString("id-ID")} m²</b> · keliling jalan ${a.polyLen||"-"} m${a.polyTs?`<br><small>direkam ${new Date(a.polyTs).toLocaleString("id-ID")}${a.polyBy?" oleh "+escH(a.polyBy):""}</small>`:""}</div>${recSvg(a.poly)}`
+    : `<div class="msg info" style="margin-bottom:10px;">Belum ada hasil rekam. Batas lokasi memakai lingkaran cadangan di kartu bawah.</div>`;
+  return `<div class="card" style="border-left:5px solid #2E86DE;">
+    <h3>🚶 Kalibrasi Area Stall (Jalan Keliling)</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Admin berjalan pelan mengelilingi tepi luar area stall sambil membawa HP. Aplikasi merekam jejaknya dan otomatis membentuk batas area sesuai kondisi aktual. Setelah kembali ke titik awal, tekan <b>Selesai</b>. Pakai HP dengan GPS bagus, di tempat terbuka, dan biarkan layar menyala.</p>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin-bottom:10px;"><input type="checkbox" ${a.on?"checked":""} onchange="recToggleOn(this.checked)"> Aktifkan batas lokasi Dispatcher</label>
+    ${saved}
+    <div class="field" style="margin-top:10px;"><label>Toleransi tepi (meter) — jarak di luar batas yang masih dianggap di dalam</label><input id="recBuf" type="text" inputmode="numeric" value="${a.buf!=null?a.buf:10}" onchange="recSetBuf(this.value)"></div>
+    <div id="recStat" style="margin:8px 0;">${REC.on?recStatHtml():""}</div>
+    ${REC.on?`<button class="btn btn-primary" onclick="recFinish()">⏹ Selesai & Simpan Area</button><button class="btn btn-outline" style="margin-top:8px;" onclick="recCancel()">Batal</button>`
+      :`<button class="btn btn-primary" onclick="recStart()">▶ Mulai Rekam Area</button>${has?`<button class="btn btn-danger" style="margin-top:8px;" onclick="recClear()">🗑 Hapus Hasil Rekam</button>`:""}`}
+  </div>`;
+}
+function useCurrentLocForStall(){
+  const msgEl = document.getElementById("stallLocMsg");
+  msgEl.innerHTML = `<div class="msg info">📍 Mengambil lokasi...</div>`;
+  if(!navigator.geolocation){ msgEl.innerHTML = `<div class="msg err">Browser tidak mendukung GPS.</div>`; return; }
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      document.getElementById("stallLat").value = pos.coords.latitude.toFixed(6);
+      document.getElementById("stallLng").value = pos.coords.longitude.toFixed(6);
+      msgEl.innerHTML = `<div class="msg ok">✔ Lokasi terisi (akurasi ±${Math.round(pos.coords.accuracy)} m). Atur radius lalu klik "Simpan Area Stall".</div>`;
+    },
+    err=>{ msgEl.innerHTML = `<div class="msg err">Gagal ambil lokasi: ${err.message}. Pastikan izin GPS diaktifkan.</div>`; },
+    {enableHighAccuracy:true, timeout:15000}
+  );
+}
+function saveStallArea(){
+  const lat = parseFloat(document.getElementById("stallLat").value);
+  const lng = parseFloat(document.getElementById("stallLng").value);
+  const rad = parseFloat(document.getElementById("stallRadius").value);
+  const msgEl = document.getElementById("stallLocMsg");
+  if(isNaN(lat) || isNaN(lng)){ msgEl.innerHTML = `<div class="msg err">Latitude/Longitude belum valid.</div>`; return; }
+  if(isNaN(rad) || rad<20){ msgEl.innerHTML = `<div class="msg err">Radius minimal 20 meter.</div>`; return; }
+  DB.set(d=>{ d.stallArea = Object.assign({}, d.stallArea||{}, {lat, lng, radiusM:rad}); });
+  const m = document.getElementById("stallLocMsg"); if(m) m.innerHTML = `<div class="msg ok">✔ Area cadangan tersimpan.</div>`;
 }
 function deleteLP(i){
   DB.set(d=>{ d.lpList.splice(i,1); });
@@ -4624,8 +5108,9 @@ if(existingSession){
   enterApp();
 }
 let _lastRaw = null, _lastMinute = -1;
+if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); }catch(e){} }, 3000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
 }, 1000);
