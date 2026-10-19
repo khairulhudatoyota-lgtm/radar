@@ -406,21 +406,278 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .syncb.sync-on{color:#fff; background:var(--green); border-color:var(--green);}
 .syncb.sync-wait{color:#9a6a00; background:#FFF6E5; border-color:#E8A33A;}
 .syncb.sync-off{color:#fff; background:#D64545; border-color:#D64545;}
+
+/* ===== SPLASH: logo RADAR EKY beranimasi ===== */
+#splash{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% 38%,#17406e 0%,#0b2240 52%,#06122a 100%);overflow:hidden;
+  animation:spOut .55s ease-in 3.35s forwards;touch-action:manipulation;}
+#splash.gone{display:none;}
+#splash .spot{position:absolute;left:50%;top:38%;width:130vmin;height:130vmin;margin:-65vmin 0 0 -65vmin;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,176,32,.20),rgba(255,176,32,0) 58%);opacity:0;animation:spSpot 1.2s ease-out .2s forwards;}
+#splash .stage{position:relative;width:min(46vmin,210px);height:min(46vmin,210px);}
+#splash svg{width:100%;height:100%;overflow:visible;display:block;}
+#splash .tile{transform-origin:50% 100%;transform-box:fill-box;animation:spDrop 1.05s cubic-bezier(.3,.1,.3,1) .25s both;}
+#splash .shadow{position:absolute;left:50%;bottom:-16px;width:60%;height:12px;margin-left:-30%;border-radius:50%;background:rgba(0,0,0,.45);filter:blur(5px);
+  opacity:0;animation:spShadow 1.05s ease-in .25s forwards;}
+#splash .stroke{fill:none;stroke:#fff;stroke-width:54;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1000;stroke-dashoffset:1000;}
+#splash .r1{animation:spDraw .75s ease-out 1.15s forwards;}
+#splash .r2{animation:spDraw .4s ease-out 1.75s forwards;}
+#splash .dots{fill:none;stroke:#0F2A4A;stroke-width:5;stroke-linecap:round;stroke-dasharray:2 16;opacity:0;animation:spFade .3s ease-out 2.1s forwards;}
+#splash .pin{transform-box:fill-box;transform-origin:50% 100%;opacity:0;animation:spPin .6s cubic-bezier(.2,1.6,.4,1) 1.75s forwards;}
+#splash .arc{fill:none;stroke:#FFB020;stroke-width:16;stroke-linecap:round;opacity:0;}
+#splash .a1{animation:spArc .45s ease-out 2.0s forwards;}
+#splash .a2{animation:spArc .45s ease-out 2.15s forwards;--o:.7}
+#splash .a3{animation:spArc .45s ease-out 2.3s forwards;--o:.4}
+#splash .ring{fill:none;stroke:#FFB020;stroke-width:4;opacity:0;transform-box:fill-box;transform-origin:50% 50%;}
+#splash .ring{animation:spRing 1.5s ease-out 2.05s 2 forwards;}
+#splash .ring.b{animation-delay:2.45s;}
+#splash .word{display:flex;gap:.04em;margin-top:34px;font:900 clamp(34px,11vw,58px)/1 "Inter","Segoe UI",system-ui,sans-serif;color:#fff;letter-spacing:.06em;}
+#splash .word span{display:inline-block;opacity:0;transform:translateY(40px) scale(.6);animation:spLetter .55s cubic-bezier(.2,1.7,.4,1) forwards;}
+#splash .eky{margin-top:12px;display:inline-block;background:#FFB020;color:#0b2240;font:900 clamp(15px,4.6vw,22px)/1 "Inter","Segoe UI",system-ui,sans-serif;
+  letter-spacing:.35em;padding:8px 14px 8px 20px;border-radius:999px;opacity:0;transform:translateX(-30px) scale(.85);animation:spEky .6s cubic-bezier(.2,1.5,.4,1) 2.75s forwards;position:relative;overflow:hidden;}
+#splash .eky::after{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.75),transparent);animation:spShine .8s ease-out 3.15s both;}
+#splash .tag{margin-top:14px;color:rgba(255,255,255,.65);font:600 clamp(10px,3vw,13px)/1.3 "Inter",system-ui,sans-serif;letter-spacing:.08em;opacity:0;animation:spFade .6s ease-out 3.0s forwards;text-align:center;padding:0 20px;}
+#splash .skip.hint{color:#FFB020;font-size:13px;animation:spHint 1.2s ease-in-out infinite;}
+@keyframes spHint{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+#splash .skip{position:absolute;right:14px;bottom:14px;color:rgba(255,255,255,.4);font:600 11px "Inter",system-ui,sans-serif;}
+@keyframes spOut{to{opacity:0;visibility:hidden}}
+@keyframes spSpot{to{opacity:1}}
+@keyframes spDrop{
+  0%{transform:translateY(-70vh) scale(.9,1.2);opacity:0}
+  12%{opacity:1}
+  46%{transform:translateY(0) scale(1,1)}
+  56%{transform:translateY(0) scale(1.22,.74)}
+  72%{transform:translateY(-9%) scale(.93,1.08)}
+  86%{transform:translateY(0) scale(1.06,.94)}
+  100%{transform:translateY(0) scale(1,1);opacity:1}}
+@keyframes spShadow{0%{opacity:0;transform:scale(.3)}46%{opacity:.5;transform:scale(1)}56%{opacity:.6;transform:scale(1.2)}72%{opacity:.35;transform:scale(.8)}100%{opacity:.5;transform:scale(1)}}
+@keyframes spDraw{to{stroke-dashoffset:0}}
+@keyframes spFade{to{opacity:1}}
+@keyframes spPin{0%{opacity:0;transform:translateY(-60px) scale(.2)}60%{opacity:1;transform:translateY(0) scale(1.25,.8)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes spArc{0%{opacity:0;transform:scale(.8)}60%{opacity:1}100%{opacity:var(--o,1)}}
+@keyframes spRing{0%{opacity:.8;transform:scale(.2)}100%{opacity:0;transform:scale(5.5)}}
+@keyframes spLetter{to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes spEky{to{opacity:1;transform:translateX(0) scale(1)}}
+@keyframes spShine{from{left:-60%}to{left:140%}}
+@media (prefers-reduced-motion:reduce){#splash{animation-duration:.01s;animation-delay:.8s}#splash *{animation-duration:.01s!important;animation-delay:0s!important}}
+
+/* ===== logo login: radar bergerak terus ===== */
+.lgo{width:84px;height:84px;display:block;border-radius:20px;box-shadow:0 6px 20px rgba(0,0,0,.35);animation:lgFloat 4.2s ease-in-out infinite;overflow:visible;}
+.lgo .tl{transform-box:fill-box;}
+.lgo .ar{fill:none;stroke:#FFB020;stroke-width:16;stroke-linecap:round;opacity:.25;animation:lgArc 2.4s ease-in-out infinite;}
+.lgo .ar.x2{animation-delay:.3s}.lgo .ar.x3{animation-delay:.6s}
+.lgo .pn{transform-box:fill-box;transform-origin:50% 100%;animation:lgPin 2.4s ease-in-out infinite;}
+.lgo .rg{fill:none;stroke:#FFB020;stroke-width:5;opacity:0;transform-box:fill-box;transform-origin:50% 50%;animation:lgRing 2.4s ease-out infinite;}
+.lgo .rg.y{animation-delay:1.2s}
+.lgo .sw{transform-box:fill-box;transform-origin:50% 50%;}
+@keyframes lgFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-4px) rotate(-1.2deg)}}
+@keyframes lgArc{0%,100%{opacity:.2}30%{opacity:1}60%{opacity:.35}}
+@keyframes lgPin{0%,100%{transform:translateY(0) scale(1)}35%{transform:translateY(-14px) scale(.96,1.05)}55%{transform:translateY(0) scale(1.1,.9)}75%{transform:translateY(-3px) scale(1)}}
+@keyframes lgRing{0%{opacity:.7;transform:scale(.3)}100%{opacity:0;transform:scale(4.2)}}
+@media (prefers-reduced-motion:reduce){.lgo,.lgo *{animation:none!important}.lgo .ar{opacity:1}}
+
+/* ===== logo: sesekali tumbuh roda, jalan ke kanan, muncul lagi dari kiri ===== */
+#roleSelectScreen{overflow-x:clip;}
+.lgride{display:inline-block;animation:lgRide 18s linear 1.6s infinite;will-change:transform;}
+.lgo .wp{transform-box:fill-box;transform-origin:50% 50%;transform:scale(0);animation:lgWheel 18s linear 1.6s infinite;}
+.lgo .ws{transform-box:fill-box;transform-origin:50% 50%;animation:lgSpin .55s linear infinite;}
+.lgo .sl{stroke:#9fc3ee;stroke-width:12;stroke-linecap:round;opacity:0;animation:lgSpeed 18s linear 1.6s infinite;}
+@keyframes lgRide{
+  0%,6%{transform:translateX(0)}
+  9%{transform:translateX(0);animation-timing-function:cubic-bezier(.55,0,.9,.5)}
+  25%{transform:translateX(112vw)}
+  25.01%{transform:translateX(-112vw);animation-timing-function:cubic-bezier(.15,.6,.3,1)}
+  41%,100%{transform:translateX(0)}}
+@keyframes lgWheel{
+  0%,6%{transform:scale(0)}
+  8%{transform:scale(1.3)}
+  9.5%{transform:scale(.92)}
+  11%,41%{transform:scale(1)}
+  44%,100%{transform:scale(0)}}
+@keyframes lgSpeed{
+  0%,10%{opacity:0}
+  13%{opacity:.9}
+  24.9%{opacity:.9}
+  25%{opacity:0}
+  25.01%,28%{opacity:0}
+  30%{opacity:.8}
+  38%{opacity:.6}
+  41%,100%{opacity:0}}
+@keyframes lgSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.lgride{animation:none!important}.lgo .wp{animation:none!important;transform:scale(0)}}
 </style>
 </head>
 <body>
+<div id="splash" onclick="skipSplash()" aria-hidden="true">
+  <div class="spot"></div>
+  <div class="stage">
+    <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+      <defs><linearGradient id="spg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B4A80"/><stop offset="1" stop-color="#08172B"/></linearGradient></defs>
+      <g class="tile"><rect width="512" height="512" rx="116" fill="url(#spg)"/></g>
+      <path class="stroke r1" d="M170 392V132H262A78 78 0 0 1 262 288H170"/>
+      <path class="stroke r2" d="M258 292L346 392"/>
+      <path class="dots" d="M258 306L330 386"/>
+      <path class="arc a3" d="M336 38A146 146 0 0 1 482 184"/>
+      <path class="arc a2" d="M336 78A106 106 0 0 1 442 184"/>
+      <path class="arc a1" d="M336 118A66 66 0 0 1 402 184"/>
+      <circle class="ring" cx="240" cy="192" r="26"/><circle class="ring b" cx="240" cy="192" r="26"/>
+      <g class="pin"><path d="M240 238C222 214 216 204 216 192A24 24 0 0 1 264 192C264 204 258 214 240 238Z" fill="#FFB020"/><circle cx="240" cy="192" r="9" fill="#08172B"/></g>
+    </svg>
+    <div class="shadow"></div>
+  </div>
+  <div class="word" id="spWord"></div>
+  <div class="eky">EKY</div>
+  <div class="tag">Real-time Arrival, Dispatch &amp; Release</div>
+  <div class="skip">ketuk untuk lewati</div>
+</div>
+<script>
+/* ===== suara RADAR (sintesis Web Audio, tanpa file) ===== */
+window.RSnd=(function(){
+  var ctx=null, master=null, muted=false, t0=performance.now(), played=false, splashOn=true, rideTimer=null;
+  try{ muted=localStorage.getItem("radar_mute")==="1"; }catch(e){}
+  function ac(){
+    if(ctx) return ctx;
+    var C=window.AudioContext||window.webkitAudioContext; if(!C) return null;
+    try{ ctx=new C(); }catch(e){ return null; }
+    var comp=ctx.createDynamicsCompressor(); comp.threshold.value=-18; comp.ratio.value=6;
+    master=ctx.createGain(); master.gain.value=0.5; master.connect(comp); comp.connect(ctx.destination);
+    return ctx;
+  }
+  function env(g,t,a,d,peak){ g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+a); g.gain.exponentialRampToValueAtTime(0.0001,t+a+d); }
+  function osc(type,f,t,a,d,peak,f2){
+    var o=ctx.createOscillator(), g=ctx.createGain(); o.type=type; o.frequency.setValueAtTime(f,t);
+    if(f2) o.frequency.exponentialRampToValueAtTime(f2,t+a+d);
+    env(g,t,a,d,peak); o.connect(g); g.connect(master); o.start(t); o.stop(t+a+d+0.05);
+  }
+  function bell(f,t,peak,d){ d=d||0.9; osc("sine",f,t,0.005,d,peak); osc("sine",f*2.01,t,0.003,d*.6,peak*.35); osc("sine",f*3.02,t,0.003,d*.35,peak*.15); }
+  function pluck(f,t,peak){ osc("triangle",f,t,0.006,0.28,peak); osc("sine",f*2,t,0.004,0.16,peak*.3); }
+  function thud(t,peak){ osc("sine",150,t,0.004,0.24,peak,45); }
+  function whoosh(t){
+    var n=Math.floor(ctx.sampleRate*0.5), b=ctx.createBuffer(1,n,ctx.sampleRate), d=b.getChannelData(0);
+    for(var i=0;i<n;i++) d[i]=Math.random()*2-1;
+    var s=ctx.createBufferSource(); s.buffer=b; var f=ctx.createBiquadFilter(); f.type="bandpass"; f.Q.value=1.2;
+    f.frequency.setValueAtTime(2200,t); f.frequency.exponentialRampToValueAtTime(260,t+0.45);
+    var g=ctx.createGain(); env(g,t,0.05,0.4,0.16); s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t+0.5);
+  }
+  function chord(freqs,t,peak,d){ freqs.forEach(function(f){ osc("sine",f,t,0.25,d,peak); osc("triangle",f,t,0.25,d,peak*.25); }); }
+  var EV=[
+    [0.25,function(t){ whoosh(t); }],
+    [0.73,function(t){ thud(t,0.9); }],[0.98,function(t){ thud(t,0.45); }],[1.15,function(t){ thud(t,0.22); }],
+    [1.15,function(t){ osc("sine",380,t,0.2,0.6,0.07,760); }],
+    [1.75,function(t){ osc("triangle",700,t,0.01,0.12,0.35,1150); }],
+    [1.95,function(t){ pluck(523.25,t,0.4); }],[2.04,function(t){ pluck(587.33,t,0.4); }],[2.13,function(t){ pluck(659.25,t,0.4); }],
+    [2.22,function(t){ pluck(783.99,t,0.4); }],[2.31,function(t){ pluck(880,t,0.45); }],
+    [2.0,function(t){ bell(1318.5,t,0.1,0.8); }],[2.15,function(t){ bell(1568,t,0.1,0.8); }],[2.3,function(t){ bell(1975.5,t,0.1,0.9); }],
+    [2.75,function(t){ chord([523.25,659.25,783.99,1046.5],t,0.13,1.2); bell(1046.5,t,0.22,1.4); }],
+    [3.15,function(t){ bell(2093,t,0.1,0.9); bell(2637,t+0.08,0.08,0.9); }]
+  ];
+  function playFrom(elapsed){
+    if(played||!ctx||muted) return; played=true;
+    var base=ctx.currentTime-elapsed;
+    EV.forEach(function(e){ if(e[0]>=elapsed-0.04) e[1](Math.max(base+e[0],ctx.currentTime)); });
+  }
+  function startSplash(){
+    if(muted) return; var c=ac(); if(!c) return;
+    function go(){ if(c.state==="running") playFrom((performance.now()-t0)/1000); }
+    if(c.state==="running") go(); else { try{ c.resume().then(go).catch(function(){}); }catch(e){} }
+  }
+  function unlock(){
+    var c=ac(); if(!c||muted) return;
+    var go=function(){ if(!played && !splashOn) chimeSmall(); };
+    if(c.state==="running") go(); else { try{ c.resume().then(go).catch(function(){}); }catch(e){} }
+  }
+  function chimeSmall(){ if(muted||!ctx||ctx.state!=="running") return; played=true; var t=ctx.currentTime+0.02; chord([523.25,659.25,783.99],t,0.1,0.9); bell(1046.5,t,0.2,1.1); }
+  ["pointerdown","touchstart","keydown"].forEach(function(ev){ document.addEventListener(ev,function once(){ document.removeEventListener(ev,once,true); unlock(); },true); });
+  function ready(){ var c=ac(); return !!(c&&!muted&&c.state==="running"); }
+  function login(){   // sukses masuk: arpeggio naik yang menyemangati
+    if(!ready()) return; var t=ctx.currentTime+0.02;
+    [[523.25,0],[659.25,.09],[783.99,.18],[1046.5,.27]].forEach(function(n){ pluck(n[0],t+n[1],0.38); bell(n[0]*2,t+n[1],0.07,0.6); });
+    chord([523.25,659.25,783.99,1046.5],t+0.36,0.11,1.0); bell(2093,t+0.38,0.1,1.0);
+  }
+  function err(){ if(!ready()) return; var t=ctx.currentTime+0.02; osc("triangle",330,t,0.01,0.14,0.22,260); osc("triangle",294,t+0.17,0.01,0.2,0.22,220); }
+  function ride(){   // klakson kecil saat logo mulai jalan
+    if(!ready()||document.visibilityState!=="visible") return; var lg=document.querySelector(".lgo"); if(!lg||!lg.offsetParent) return;
+    var t=ctx.currentTime+0.02; osc("triangle",523,t,0.01,0.1,0.18); osc("triangle",523,t+0.16,0.01,0.12,0.18);
+    osc("sine",90,t+0.5,0.3,1.8,0.05,140);
+  }
+  function ping(){ if(!ready()) return; var t=ctx.currentTime+0.02; bell(1318.5,t,0.12,0.7); }
+  function setMuted(m){ muted=m; try{ localStorage.setItem("radar_mute",m?"1":"0"); }catch(e){} var b=document.getElementById("sndBtn"); if(b) b.textContent=m?"🔇":"🔊"; }
+  function toggle(){ setMuted(!muted); if(!muted){ ac(); if(ctx&&ctx.state!=="running"){ try{ ctx.resume().then(ping); }catch(e){} } else ping(); } }
+  function splashDone(){ splashOn=false; }
+  function needsGesture(){ return !muted && !played && !!AC0(); }
+  function AC0(){ return window.AudioContext||window.webkitAudioContext; }
+  function replay(){   // diputar ulang dari awal setelah pengguna menyentuh layar (izin suara)
+    if(muted) return; var c=ac(); if(!c) return;
+    var go=function(){ played=false; t0=performance.now(); playFrom(0); };
+    if(c.state==="running") go(); else { try{ c.resume().then(go).catch(function(){}); }catch(e){} }
+  }
+  function isPlayed(){ return played; }
+  function startRide(){ if(rideTimer) return; setTimeout(function(){ ride(); rideTimer=setInterval(ride,18000); },1600+1620+2500); }
+  document.addEventListener("DOMContentLoaded",function(){ var b=document.getElementById("sndBtn"); if(b) b.textContent=muted?"🔇":"🔊"; startRide(); });
+  return {needsGesture:needsGesture,replay:replay,isPlayed:isPlayed,startSplash:startSplash,login:login,err:err,toggle:toggle,splashDone:splashDone,_ac:ac,_ev:EV,_setCtx:function(c,m){ctx=c;master=m;}};
+})();
+</script>
+<script>
+(function(){
+  var sp=document.getElementById("splash"); if(!sp) return;
+  var hideT=null;
+  function letters(){ var w=document.getElementById("spWord"); w.innerHTML=""; "RADAR".split("").forEach(function(ch,i){ var s=document.createElement("span"); s.textContent=ch; s.style.animationDelay=(1.95+i*0.09)+"s"; w.appendChild(s); }); }
+  function arm(){ clearTimeout(hideT); hideT=setTimeout(function(){ sp.className="gone"; try{RSnd.splashDone();}catch(e){} },3950); }
+  letters(); arm();
+  try{ RSnd.startSplash(); }catch(e){}
+  // jika browser memblokir suara otomatis, beri petunjuk ketuk
+  setTimeout(function(){ try{ if(RSnd.needsGesture()){ var k=sp.querySelector(".skip"); if(k){ k.textContent="🔊 ketuk layar untuk suara"; k.className="skip hint"; } } }catch(e){} },500);
+  function restart(){
+    var n=sp.cloneNode(true); sp.parentNode.replaceChild(n,sp); sp=n;
+    var k=sp.querySelector(".skip"); if(k){ k.textContent="ketuk untuk lewati"; k.className="skip"; }
+    letters(); arm(); RSnd.replay();
+  }
+  window.skipSplash=function(){
+    try{ if(RSnd.needsGesture()){ restart(); return; } }catch(e){}
+    try{RSnd.splashDone();}catch(e){}
+    sp.style.transition="opacity .25s"; sp.style.opacity="0"; setTimeout(function(){ sp.className="gone"; },260);
+  };
+})();
+</script>
+
 
 <div id="app">
   <!-- ============ SCREEN 1: ROLE SELECT ============ -->
   <div id="roleSelectScreen" class="loginwrap">
+    <button id="sndBtn" type="button" onclick="RSnd.toggle()" aria-label="Suara" style="position:fixed;top:12px;right:12px;z-index:50;width:38px;height:38px;border-radius:50%;background:var(--panel,#fff);border:1px solid var(--border,#d5dbe5);font-size:17px;line-height:1;">🔊</button>
+
     <div class="logo">
-      <div class="icon"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMEYyQTRBIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDgxNzJCIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTE2IiBmaWxsPSJ1cmwoI2cpIi8+CjxnIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CjxwYXRoIGQ9Ik0xNzAgMzkyVjEzMkgyNjJBNzggNzggMCAwIDEgMjYyIDI4OEgxNzAiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI1NCIvPgo8cGF0aCBkPSJNMjU4IDI5MkwzNDYgMzkyIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iNTQiLz4KPHBhdGggZD0iTTI1OCAzMDZMMzMwIDM4NiIgc3Ryb2tlPSIjMEYyQTRBIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1kYXNoYXJyYXk9IjIgMTYiLz4KPHBhdGggZD0iTTMzNiAxMThBNjYgNjYgMCAwIDEgNDAyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2Ii8+CjxwYXRoIGQ9Ik0zMzYgNzhBMTA2IDEwNiAwIDAgMSA0NDIgMTg0IiBzdHJva2U9IiNGRkIwMjAiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1vcGFjaXR5PSIuNyIvPgo8cGF0aCBkPSJNMzM2IDM4QTE0NiAxNDYgMCAwIDEgNDgyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2IiBzdHJva2Utb3BhY2l0eT0iLjQiIC8+CjwvZz4KPHBhdGggZD0iTTI0MCAyMzhDMjIyIDIxNCAyMTYgMjA0IDIxNiAxOTJBMjQgMjQgMCAwIDEgMjY0IDE5MkMyNjQgMjA0IDI1OCAyMTQgMjQwIDIzOFoiIGZpbGw9IiNGRkIwMjAiLz4KPGNpcmNsZSBjeD0iMjQwIiBjeT0iMTkyIiByPSI5IiBmaWxsPSIjMDgxNzJCIi8+Cjwvc3ZnPg==" alt="RADAR" style="width:84px;height:84px;display:block;border-radius:20px;box-shadow:0 6px 20px rgba(0,0,0,.35)"></div>
+      <div class="icon"><span class="lgride"><svg class="lgo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="RADAR">
+        <defs><linearGradient id="lgg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0F2A4A"/><stop offset="1" stop-color="#08172B"/></linearGradient><clipPath id="lgc"><rect width="512" height="512" rx="116"/></clipPath></defs>
+        <rect width="512" height="512" rx="116" fill="url(#lgg)"/>
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M170 392V132H262A78 78 0 0 1 262 288H170" stroke="#fff" stroke-width="54"/>
+          <path d="M258 292L346 392" stroke="#fff" stroke-width="54"/>
+          <path d="M258 306L330 386" stroke="#0F2A4A" stroke-width="5" stroke-dasharray="2 16"/>
+        </g>
+        <path class="ar x3" d="M336 38A146 146 0 0 1 482 184"/><path class="ar x2" d="M336 78A106 106 0 0 1 442 184"/><path class="ar x1" d="M336 118A66 66 0 0 1 402 184"/>
+        <g clip-path="url(#lgc)"><circle class="rg" cx="240" cy="192" r="26"/><circle class="rg y" cx="240" cy="192" r="26"/></g>
+        <g class="sl"><path d="M-30 150H-110"/><path d="M-30 250H-150"/><path d="M-30 350H-100"/></g><g class="wp"><g class="ws"><circle cx="135" cy="500" r="62" fill="#111827"/><circle cx="135" cy="500" r="34" fill="#FFB020"/><circle cx="135" cy="500" r="9" fill="#08172B"/><path d="M135 466V534M 101 500H 169" stroke="#08172B" stroke-width="7" stroke-linecap="round"/></g></g><g class="wp"><g class="ws"><circle cx="377" cy="500" r="62" fill="#111827"/><circle cx="377" cy="500" r="34" fill="#FFB020"/><circle cx="377" cy="500" r="9" fill="#08172B"/><path d="M377 466V534M 343 500H 411" stroke="#08172B" stroke-width="7" stroke-linecap="round"/></g></g><g class="pn"><path d="M240 238C222 214 216 204 216 192A24 24 0 0 1 264 192C264 204 258 214 240 238Z" fill="#FFB020"/><circle cx="240" cy="192" r="9" fill="#08172B"/></g>
+      </svg></span></div>
       <h1>RADAR</h1>
       <p>Real-time Arrival, Dispatch &amp; Release</p>
     </div>
 
-    <div class="rolesectitle">Pilih Otoritas</div>
-    <div class="rolegrid" id="roleGrid"></div>
+    <div class="rolesectitle">Masuk</div>
+    <div id="loginMsg"></div>
+    <div class="field">
+      <label>Username</label>
+      <input id="loginUser" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <div style="position:relative;">
+        <input id="loginPass" type="password" autocomplete="current-password" placeholder="••••••••" style="padding-right:44px;" onkeydown="if(event.key==='Enter')doLogin()">
+        <button type="button" onclick="togglePassVisibility()" id="passEyeBtn"
+          style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()">➜ Masuk</button>
 
     <div style="text-align:center; margin-top:18px;">
       <button class="btn-outline btn btn-sm" style="width:auto; padding:10px 18px;" onclick="enterDisplay()">📺 Buka Display (tanpa login)</button>
@@ -428,31 +685,7 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
   </div>
 
   <!-- ============ SCREEN 2: LOGIN FORM (halaman terpisah) ============ -->
-  <div id="credScreen" class="loginwrap hidden">
-    <button onclick="backToRoleSelect()" style="background:none; color:var(--text-dim); font-size:13px; font-weight:700; margin-bottom:22px; align-self:flex-start; display:flex; align-items:center; gap:4px;">‹ Kembali</button>
-
-    <div class="logo" style="text-align:left; margin-bottom:24px;">
-      <div class="ic" id="credRoleIcon" style="font-size:34px; width:56px; height:56px; border-radius:14px; background:var(--panel2); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; margin-bottom:12px;">🔐</div>
-      <h1 id="credRoleLabel" style="font-size:24px;">-</h1>
-      <p>Masukkan username & password kamu</p>
-    </div>
-
-    <div id="loginMsg"></div>
-
-    <div class="field">
-      <label>Username</label>
-      <input id="loginUser" type="text" autocomplete="off" placeholder="username">
-    </div>
-    <div class="field">
-      <label>Password</label>
-      <div style="position:relative;">
-        <input id="loginPass" type="password" placeholder="••••••••" style="padding-right:44px;">
-        <button type="button" onclick="togglePassVisibility()" id="passEyeBtn"
-          style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button>
-      </div>
-    </div>
-    <button class="btn btn-primary" onclick="doLogin()">➜ Masuk</button>
-  </div>
+  <div id="credScreen" class="hidden"></div>
 
   <!-- ============ MAIN APP (after login) ============ -->
   <div id="mainView" class="hidden" style="display:flex; flex-direction:column; min-height:100vh;">
@@ -725,7 +958,7 @@ let scanStream = null;
    INIT
 ====================================================================== */
 function initRoleGrid(){
-  const el = document.getElementById("roleGrid");
+  const el = document.getElementById("roleGrid"); if(!el) return;
   el.innerHTML = ROLES.map(r=>`
     <button class="rolebtn ${r.key===selectedRole?'active':''}" onclick="pickRole('${r.key}')">
       <span class="ic">${r.icon}</span>
@@ -756,31 +989,39 @@ function togglePassVisibility(){
   else{ inp.type = "password"; btn.textContent = "👁"; }
 }
 
+function loginEnter(acc){
+  if(!TABS_BY_ROLE[acc.role]){ document.getElementById("loginMsg").innerHTML = `<div class="msg err">Akun ini belum punya otoritas yang valid. Hubungi Admin.</div>`; return; }
+  selectedRole = acc.role;
+  currentUser = setSession(acc);
+  try{ RSnd.login(); }catch(e){}
+  document.getElementById("loginMsg").innerHTML = "";
+  document.getElementById("loginPass").value = "";
+  enterApp();   // langsung ke menu sesuai role akun
+}
+function loginPickRole(role){
+  const u = document.getElementById("loginUser").value.trim(), p = document.getElementById("loginPass").value;
+  const users = DB.get().users || [];
+  const acc = users.find(x=>String(x.username).toLowerCase()===u.toLowerCase() && x.password===p && x.role===role);
+  if(acc) loginEnter(acc);
+}
 function doLogin(){
   const u = document.getElementById("loginUser").value.trim();
   const p = document.getElementById("loginPass").value;
   const data = DB.get();
   const msgEl = document.getElementById("loginMsg");
-  const roleLabel = ROLES.find(r=>r.key===selectedRole).label;
-
-  const sameRole = data.users.find(x=>x.username===u && x.role===selectedRole);
-  if(sameRole){
-    if(sameRole.password !== p){
-      msgEl.innerHTML = `<div class="msg err">Password salah.</div>`;
-      return;
-    }
-    currentUser = setSession(sameRole);
-    msgEl.innerHTML = "";
-    enterApp();
-    return;
-  }
-
-  const anyRole = data.users.find(x=>x.username===u);
-  if(!anyRole){
-    msgEl.innerHTML = `<div class="msg err">Username tidak ditemukan.</div>`;
-  }else{
-    msgEl.innerHTML = `<div class="msg err">Username ini terdaftar untuk role "${ROLES.find(r=>r.key===anyRole.role).label}", bukan "${roleLabel}". Pilih role yang sesuai.</div>`;
-  }
+  if(!u || !p){ msgEl.innerHTML = `<div class="msg err">Isi username dan password.</div>`; return; }
+  const users = data.users || [];
+  let same = users.filter(x=>x.username===u);
+  if(!same.length) same = users.filter(x=>String(x.username).toLowerCase()===u.toLowerCase());
+  if(!same.length){ msgEl.innerHTML = `<div class="msg err">Username tidak ditemukan.</div>`; try{RSnd.err();}catch(e){} return; }
+  const ok = same.filter(x=>x.password===p);
+  if(!ok.length){ msgEl.innerHTML = `<div class="msg err">Password salah.</div>`; try{RSnd.err();}catch(e){} return; }
+  if(ok.length===1){ loginEnter(ok[0]); return; }
+  // satu username terdaftar untuk beberapa peran: pengguna memilih menu tujuan
+  const roles = [...new Set(ok.map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
+  msgEl.innerHTML = `<div class="rolesectitle" style="margin:6px 0 8px;">Pilih menu tujuan</div><div class="rolegrid">` +
+    roles.map(r=>{ const o = ROLES.find(x=>x.key===r) || {label:r, icon:"•", desc:""};
+      return `<button class="rolebtn" type="button" onclick="loginPickRole('${r}')"><span class="ic">${o.icon}</span><span class="rtext"><b>${o.label.toUpperCase()}</b><span>${o.desc}</span></span></button>`; }).join("") + `</div>`;
 }
 function doLogout(){
   stopScanner();
@@ -822,6 +1063,7 @@ function enterApp(forceTab){
   if(currentUser.role==="cc"){ try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){} }
 }
 function switchTab(t){
+  if(currentUser && TABS_BY_ROLE[currentUser.role] && !TABS_BY_ROLE[currentUser.role].some(x=>x.key===t)) return;   // menu di luar otoritas role ditolak
   if(activeTab==="defect" && t!=="defect"){ disposeCar3D(); }
   activeTab = t; deliverySelUnits=[]; deliverySelCC=null; pickedSlot=null; stopScanner(); render();
 }
