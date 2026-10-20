@@ -769,6 +769,10 @@ window.RSnd=(function(){
     <div style="text-align:center; margin-top:18px;">
       <button class="btn-outline btn btn-sm" style="width:auto; padding:10px 18px;" onclick="enterDisplay()">📺 Buka Display (tanpa login)</button>
     </div>
+    <div id="appCtl" style="display:none;gap:8px;justify-content:center;margin-top:14px;">
+      <button type="button" class="btn-outline btn btn-sm" style="width:auto;padding:10px 16px;" onclick="appMinimize()">⬇ Minimize</button>
+      <button type="button" class="btn-outline btn btn-sm" style="width:auto;padding:10px 16px;color:var(--red);border-color:var(--red);" onclick="appExit()">⏻ Keluar Aplikasi</button>
+    </div>
     <div class="credit"><small>Dibuat oleh</small><b>Khairul Huda</b></div>
     </div></div>
   </div>
@@ -828,6 +832,7 @@ function seedDB(){
   for(let i=1;i<=CONFIG.CC_TOTAL;i++){ cc[i] = null; }
 
   return {
+    sigs:{gh:{},mp:{},names:{}},
     units,
     cc,
     ccOpen: {4:false, 5:false}, // stall darurat, default tertutup
@@ -845,7 +850,7 @@ function seedDB(){
     },
     users: [
       {username:"user", password:"user", role:"dispatcher", name:"Dispatcher"},
-      {username:"user", password:"user", role:"cc",         name:"Order Stall CC"},
+      {username:"user", password:"user", role:"cc",         name:"Driver CC"},
       {username:"user", password:"user", role:"delivery",   name:"MP Delivery"},
       {username:"user", password:"user", role:"koordinator",name:"Koordinator"},
       {username:"user", password:"user", role:"leader",     name:"Leader"},
@@ -1021,7 +1026,7 @@ function getModelColor(model, data){
 ====================================================================== */
 const ROLES = [
   {key:"dispatcher",  label:"Dispatcher", icon:"🚙", desc:"Parkir unit, scan No. Rangka"},
-  {key:"cc",          label:"Order Stall CC", icon:"🚚", desc:"Atur antrian car carrier"},
+  {key:"cc",          label:"Driver CC", icon:"🚚", desc:"Absen & antrian car carrier"},
   {key:"delivery",    label:"Delivery", icon:"📦", desc:"Kirim unit, buat ILS"},
   {key:"koordinator", label:"Koordinator", icon:"🧭", desc:"Kosongkan stall CC"},
   {key:"leader",      label:"Leader", icon:"👔", desc:"Lihat & konfirmasi data defect"},
@@ -1372,6 +1377,7 @@ function doLogout(){
   disposeCar3D();
   if(autoWatchId){ navigator.geolocation.clearWatch(autoWatchId); autoWatchId=null; }
   stopAutoAbsen(true);
+  try{ if(window.AndroidTLS && AndroidTLS.keepStop) AndroidTLS.keepStop(); }catch(e){}
   clearSession();
   currentUser = null;
   selectedRole = null;
@@ -1385,7 +1391,20 @@ function enterDisplay(){
   currentUser = {username:"public", name:"Display", role:"display"};
   enterApp("display");
 }
+function syncCcProfileFromAccount(){
+  try{
+    if(!currentUser||currentUser.role!=="cc") return;
+    const u=(DB.get().users||[]).find(x=>x.username===currentUser.username&&x.role==="cc");
+    if(!u||(!u.lp&&!u.drvCode)) return;
+    const pr=getCcProfile();
+    localStorage.setItem(CCP_KEY, JSON.stringify({plat:pr.plat||"", lp:u.lp||pr.lp||"", drvCode:u.drvCode||pr.drvCode||""}));
+  }catch(e){}
+}
+function appExit(){ if(!window.AndroidTLS||!AndroidTLS.exitApp) return; if(confirm("Keluar dari aplikasi?\n\nRADAR akan berhenti di latar belakang dan absen otomatis tidak jalan. Pakai Minimize kalau mau tetap online.")) { try{AndroidTLS.exitApp();}catch(e){} } }
+function appMinimize(){ try{ if(window.AndroidTLS&&AndroidTLS.minimizeApp) AndroidTLS.minimizeApp(); }catch(e){} }
 function enterApp(forceTab){
+  syncCcProfileFromAccount();
+  try{ if(window.AndroidTLS && AndroidTLS.keepAlive && currentUser && currentUser.role!=="display") AndroidTLS.keepAlive(); }catch(e){}
   requestNotifPermission();
   document.getElementById("roleSelectScreen").classList.add("hidden");
   document.getElementById("credScreen").classList.add("hidden");
@@ -2071,12 +2090,14 @@ function toggleAutoWatch(){
    truk otomatis didaftarkan ke stall kosong / antrian — tanpa klik. */
 const CCP_KEY = "apcc_ccprofile", CCAUTO_KEY = "apcc_ccauto";
 let autoAbsen = { on:false, id:null, wake:null, state:"armed", hits:0, dist:null, acc:null, ts:0, msg:"", err:"" };
-function getCcProfile(){ try{ const o = JSON.parse(localStorage.getItem(CCP_KEY)||"null"); return o && typeof o==="object" ? o : {plat:"",lp:""}; }catch(e){ return {plat:"",lp:""}; } }
+function getCcProfile(){ try{ const o = JSON.parse(localStorage.getItem(CCP_KEY)||"null"); return o && typeof o==="object" ? o : {plat:"",lp:"",drvCode:""}; }catch(e){ return {plat:"",lp:"",drvCode:""}; } }
 function saveCcProfile(){
   const plat = (document.getElementById("ccpPlat").value||"").trim().toUpperCase();
   const lp = (document.getElementById("ccpLP").value||"").trim();
+  const drvCode = ((document.getElementById("ccpDrv")||{}).value||"").trim().toUpperCase();
   if(!plat || !lp){ alert("Isi nomor polisi dan LP dulu."); return; }
-  try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp})); }catch(e){}
+  if(!drvCode){ alert("Isi Kode Driver dulu (contoh: KMDCCDRV302). Kode ini dipakai untuk mengisi driver di TLS karena nama bisa sama."); return; }
+  try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode})); }catch(e){}
   render();
 }
 async function acquireWake(){
@@ -2228,6 +2249,7 @@ function renderOrderStall(){
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Aktifkan sekali. Begitu HP-mu masuk radius ${data.yardLocation.radiusKm} km dari yard, truk <b>otomatis terdaftar</b> ke stall kosong / antrian tanpa klik. <b>Biarkan aplikasi terbuka</b> selama perjalanan (layar dijaga tetap menyala).</p>
       ${(()=>{ const pr = getCcProfile(); return `
       <div class="field"><label>Nomor Polisi Truk</label><input id="ccpPlat" type="text" placeholder="B 1234 ABC" value="${pr.plat||""}"></div>
+      <div class="field"><label>Kode Driver (sesuai TLS)</label><input id="ccpDrv" type="text" placeholder="KMDCCDRV302" value="${pr.drvCode||""}" style="text-transform:uppercase;"></div>
       <div class="field"><label>Nama LP / Perusahaan</label><select id="ccpLP"><option value="">-- pilih LP --</option>${data.lpList.map(lp=>`<option value="${lp}" ${pr.lp===lp?"selected":""}>${lp}</option>`).join("")}</select></div>
       <button class="btn btn-outline" style="margin-bottom:8px;" onclick="saveCcProfile()">💾 Simpan Data Truk (tersimpan di HP ini)</button>`; })()}
       <div id="autoStatus" style="margin:8px 0;">${autoStatusHtml()}</div>
@@ -2278,12 +2300,13 @@ function registerCC(plat, lp, dist, auto, manual){
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
     if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k)){ res = {dup:true}; return; }
+    const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
     let order = [...CONFIG.CC_ACTIVE_DEFAULT];
     CONFIG.CC_EMERGENCY.forEach(n=>{ if(d.ccOpen[n]) order.push(n); });
     let assigned = null;
     for(const n of order){ if(!d.cc[n]){ assigned = n; break; } }
-    if(assigned){ d.cc[assigned] = {plat, lp, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual}; res = {stall:assigned}; }
-    else{ d.queue.push({plat, lp, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual}); res = {queue:d.queue.length}; }
+    if(assigned){ d.cc[assigned] = {plat, lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual}; res = {stall:assigned}; }
+    else{ d.queue.push({plat, lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual}); res = {queue:d.queue.length}; }
   });
   return res;
 }
@@ -2371,7 +2394,7 @@ function renderDelivery(){
     </button>
     </div>
 
-    <div class="dl-right">${manifestCardHtml(data)}<div class="dlbatches">
+    <div class="dl-right">${deliverySjHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}<div class="dlbatches">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
     </div></div>
   `;
@@ -2407,7 +2430,7 @@ function createILS(ccNum, slots){
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
   DB.set(d=>{
     const id = Date.now();
-    d.ils.push({id, ccNum, ccPlat: ccInfo.plat, lp: ccInfo.lp, units, batam: units.every(u=>u.batam), mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
+    d.ils.push({id, ccNum, ccPlat: ccInfo.plat, lp: ccInfo.lp, drvCode: ccInfo.drvCode||"", units, batam: units.every(u=>u.batam), mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
     units.forEach(u=>{ d.units[u.slot].ilsId = id; });
   });
   notifyILSCreated(ccInfo.plat, units.length);
@@ -2533,7 +2556,7 @@ function tlsCopy(txt,btn){
   try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(fb); else fb(); }catch(e){ fb(); }
 }
 function tlsVal(i,k){ const b=window._tlsB; if(!b) return ""; if(k==="all-frame") return b.units.map(u=>u.frame).join("\n"); if(k==="all-stall") return b.units.map(u=>u.loc?u.loc:groupOf(u.slot)).join("\n"); const u=b.units[i]; return k==="frame"?u.frame:(u.loc?u.loc:groupOf(u.slot)); }
-function tlsDriver(b){ try{ const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(b.ccPlat)); return (r&&r.driver)||""; }catch(e){ return ""; } }
+function tlsDriver(b){ try{ if(b.drvCode) return String(b.drvCode).toUpperCase(); const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(b.ccPlat)); return String((r&&(r.drvCode||r.driver))||"").toUpperCase(); }catch(e){ return ""; } }
 function tlsHeadVal(k){ const b=window._tlsB; return k==="vendor"?(b.lp||""):k==="plat"?(b.ccPlat||""):k==="driver"?tlsDriver(b):""; }
 function markTLS(id){
   DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.tlsTs=Date.now(); b.tlsBy=(currentUser&&currentUser.name)||""; } });
@@ -2604,7 +2627,7 @@ function tlsCopyPackage(btn){
   if(b.batam){ alert("ILS Batam diinput manual di TLS."); return; }
   if(b.units.length>6){ alert("Maksimal 6 unit per ILS."); return; }
   if((b.moda||"CC")==="SC" && b.units.length!==1){ alert("Moda SC hanya untuk 1 unit."); return; }
-  if(!tlsDriver(b) && !confirm("Driver belum ada di jadwal DCCP. Script akan memakai driver yang terisi otomatis di TLS (kalau ada). Lanjut salin?")) return;
+  if(!tlsDriver(b) && !confirm("Kode driver belum ada (profil CC / jadwal DCCP). Script akan memakai driver yang terisi otomatis di TLS (kalau ada). Lanjut salin?")) return;
   tlsCopy(tlsPayload(b), btn);
 }
 function tlsCopyUs(btn){ tlsCopy(TLS_US, btn); }
@@ -2806,7 +2829,7 @@ function delout(id){
     const c=d.cc[x.ccNum];
     if(c && normPlat(c.plat)===normPlat(x.ccPlat)){
       snap.cc=c; d.cc[x.ccNum]=null;
-      if(d.queue.length){ const nx=d.queue.shift(); snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, ts:Date.now()}; }
+      if(d.queue.length){ const nx=d.queue.shift(); snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now()}; }
     }
     d.manifest=d.manifest||[];
     if(!d.manifest.some(m=>m.id===x.id)) d.manifest.push(mfRecord(d,x));
@@ -2883,6 +2906,13 @@ function sjListHtml(data, pass, title, hint){
   }).join("");
   return `<div class="card"><h3>📄 ${title}</h3><div style="font-size:12px;color:var(--text-dim);">${hint}</div>${L.length?rows:`<div class="emptystate">Belum ada surat jalan.</div>`}</div>`;
 }
+let sjLpF="";
+function deliverySjHtml(data){
+  const lps=[...new Set([...(data.lpList||[]), ...(data.ils||[]).filter(x=>x.sj).map(x=>x.lp)].filter(Boolean))];
+  const sel=`<div class="field" style="margin:8px 0 0;"><label>Filter LP</label><select onchange="sjLpF=this.value;render()"><option value="">Semua LP</option>${lps.map(l=>`<option value="${l}" ${lpKey(l)===lpKey(sjLpF)&&sjLpF?"selected":""}>${l}</option>`).join("")}</select></div>`;
+  const html=sjListHtml(data, b=>!sjLpF||lpKey(b.lp)===lpKey(sjLpF), "Surat Jalan (semua LP)", "Delivery melihat surat jalan semua LP. Muncul setelah Delout. Terhapus otomatis 7 hari.");
+  return html.replace('</div>${','</div>${').replace(/(<div style="font-size:12px;color:var\(--text-dim\);">[^<]*<\/div>)/, '$1'+sel.replace(/\$/g,'$$$$'));
+}
 function canUndoDelout(){ return !!(currentUser && (currentUser.role==="koordinator"||currentUser.role==="delivery"||currentUser.role==="admin")); }
 function sjCleanup(){
   try{
@@ -2901,7 +2931,7 @@ function myCcPlatKey(){ try{ return normPlat((getCcProfile()||{}).plat||""); }ca
    Dicatat saat Delout, disimpan 14 hari. Kolom Nama Cabang & No. SJKB dibiarkan kosong (diisi macro Excel dari TLS).
 ====================================================================== */
 const MF_KEEP_MS=14*24*3600*1000;
-function mfDriver(d,plat){ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); return (r&&r.driver)||""; }
+function mfDriver(d,plat){ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); return (r&&(r.driver||r.drvCode))||""; }
 function mfRecord(d,x){ return {id:x.id, out:x.outTs||Date.now(), t:x.tlsTs||x.ts, lp:x.lp||"", plat:x.ccPlat||"", drv:mfDriver(d,x.ccPlat), bt:!!x.batam, u:(x.units||[]).map(u=>[u.frame,u.model||""])}; }
 function mfTitle(m){ m=String(m||""); return m.charAt(0).toUpperCase()+m.slice(1).toLowerCase(); }
 function mfPad(n){ return String(n).padStart(2,"0"); }
@@ -2911,12 +2941,19 @@ function mfRecords(data){
   (data.ils||[]).filter(b=>b.status==="done" && !have.has(b.id)).forEach(b=>{ L.push({id:b.id, out:b.doneTs||b.ts, t:b.tlsTs||b.ts, lp:b.lp||"", plat:b.ccPlat||"", drv:mfDriver(data,b.ccPlat), bt:!!b.batam, u:(b.units||[]).map(u=>[u.frame,u.model||""])}); });
   return L;
 }
-function mfRows(data, dateStr, lp){
+const MF_DAY_FROM=7*60, MF_DAY_TO=20*60;   // Day 07:00–20:00, Night 20:01–06:59
+function mfShiftName(h,mi){ const mn=h*60+mi; return (mn>=MF_DAY_FROM && mn<=MF_DAY_TO)?"Day":"Night"; }
+function mfRows(data, dateStr, lp, shift){
   const tujuan=tlsCfg().tujuanNama.replace(/\w\S*/g,w=>w.charAt(0)+w.slice(1).toLowerCase()).replace(/^Nvdc/,"NVDC");
-  const L=mfRecords(data).filter(m=>mfDateStr(m.t)===dateStr && (!lp || lpKey(m.lp)===lpKey(lp))).sort((a,b)=>a.t-b.t);
+  const nextDs=mfDateStr(new Date(dateStr+"T12:00:00").getTime()+86400000);
+  const inShift=m=>{ const dt=new Date(m.t), mn=dt.getHours()*60+dt.getMinutes(), d=mfDateStr(m.t);
+    if(shift==="Day") return d===dateStr && mn>=MF_DAY_FROM && mn<=MF_DAY_TO;
+    if(shift==="Night") return (d===dateStr && mn>MF_DAY_TO) || (d===nextDs && mn<MF_DAY_FROM);
+    return d===dateStr; };
+  const L=mfRecords(data).filter(m=>inShift(m) && (!lp || lpKey(m.lp)===lpKey(lp))).sort((a,b)=>a.t-b.t);
   const rows=[]; let n=0;
   L.forEach(m=>{ const d=new Date(m.t), h=d.getHours(), hhmm=mfPad(h)+":"+mfPad(d.getMinutes());
-    m.u.forEach(u=>{ n++; rows.push([n, u[0], mfTitle(u[1]), m.plat, m.drv, m.lp, "EKY", "", m.bt?"Batam":tujuan, "CC", d.getDate()+"-"+["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][d.getMonth()]+"-"+String(d.getFullYear()).slice(2), (h>=7&&h<19)?"Day":"Night", hhmm, ""]); });
+    m.u.forEach(u=>{ n++; rows.push([n, u[0], mfTitle(u[1]), m.plat, m.drv, m.lp, "EKY", "", m.bt?"Batam":tujuan, "CC", d.getDate()+"-"+["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][d.getMonth()]+"-"+String(d.getFullYear()).slice(2), mfShiftName(h,d.getMinutes()), hhmm, ""]); });
   });
   return rows;
 }
@@ -2965,16 +3002,97 @@ function mfSave(name, mime, bytes){
 async function downloadManifest(){
   const ds=(document.getElementById("mfDate")||{}).value||mfDateStr(Date.now());
   const lpSel=(document.getElementById("mfLP")||{}).value||"";
+  const shf=(document.getElementById("mfShift")||{}).value||"";
   const data=DB.get();
-  const lps=lpSel? [lpSel] : [...new Set(mfRecords(data).filter(m=>mfDateStr(m.t)===ds).map(m=>m.lp).filter(Boolean))].sort();
-  const all=mfRows(data, ds, lpSel);
-  if(!all.length){ alert("Tidak ada data manifest untuk tanggal "+ds+(lpSel?" (LP "+lpSel+")":"")+". Manifest dicatat saat Delout."); return; }
+  const lps=lpSel? [lpSel] : [...new Set(mfRecords(data).map(m=>m.lp).filter(Boolean))].sort();
+  const all=mfRows(data, ds, lpSel, shf);
+  if(!all.length){ alert("Tidak ada data manifest untuk tanggal "+ds+(shf?" shift "+shf:"")+(lpSel?" (LP "+lpSel+")":"")+". Manifest dicatat saat Delout."); return; }
   const sheets=[];
   const add=(name,rows)=>sheets.push({name, rows:[MF_HEAD].concat(rows)});
-  if(!lpSel){ add("Manifest ALL", all); lps.forEach(lp=>{ const r=mfRows(data, ds, lp); if(r.length) add("LP "+lp, r); }); }
+  if(!lpSel){ add("Manifest ALL", all); lps.forEach(lp=>{ const r=mfRows(data, ds, lp, shf); if(r.length) add("LP "+lp, r); }); }
   else add("LP "+lpSel, all);
   const out=mfXlsx(sheets,[5,20,10,12,22,7,7,28,16,6,12,7,10,30]);
-  mfSave("Manifest-"+(lpSel?lpSel+"-":"ALL-")+ds+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",out);
+  mfSave("Manifest-"+(lpSel?lpSel+"-":"ALL-")+ds+(shf?"-"+shf:"")+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",out);
+}
+function tlsOpenCardHtml(){
+  if(!window.AndroidTLS||!window.AndroidTLS.openTls) return "";
+  return `<div class="card"><h3>🌐 TLS</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Buka TLS di dalam aplikasi (untuk login atau cek manual). Pembuatan ILS tetap lewat tombol <b>Kirim ke TLS</b> di kartu ILS.</div>
+    <button class="btn btn-primary" style="width:100%;" onclick="try{AndroidTLS.openTls()}catch(e){alert('Gagal membuka TLS')}">🌐 Buka TLS</button></div>`;
+}
+
+/* ======================================================================
+   TANDA TANGAN (TTD) — Group Head per shift & MP Delivery per user
+   Disimpan sebagai gambar PNG kecil transparan di d.sigs (sinkron Firebase).
+====================================================================== */
+const SIG_SHIFTS=[{k:"red",l:"RED"},{k:"white",l:"WHITE"}];
+function sigKey(k){ return String(k||"").replace(/[.#$\/\[\]\s]/g,"_"); }
+function sigGet(kind,key){ try{ const s=DB.get().sigs||{}; return ((s[kind]||{})[sigKey(key)])||""; }catch(e){ return ""; } }
+function sigName(key){ try{ return (((DB.get().sigs||{}).names)||{})[sigKey(key)]||""; }catch(e){ return ""; } }
+function sigSet(kind,key,url){ DB.set(d=>{ d.sigs=d.sigs||{}; d.sigs[kind]=d.sigs[kind]||{}; if(url) d.sigs[kind][sigKey(key)]=url; else delete d.sigs[kind][sigKey(key)]; }); render(); }
+function sigSetName(key,v){ DB.set(d=>{ d.sigs=d.sigs||{}; d.sigs.names=d.sigs.names||{}; const t=String(v||"").trim(); if(t) d.sigs.names[sigKey(key)]=t; else delete d.sigs.names[sigKey(key)]; }); }
+function sigArg(k){ return encodeURIComponent(k).replace(/'/g,"%27"); }
+function sigDel(kind,k){ if(!confirm("Hapus tanda tangan ini?")) return; sigSet(kind,decodeURIComponent(k),""); }
+function sigFile(kind,k,inp){
+  const f=inp.files&&inp.files[0]; if(!f) return; const key=decodeURIComponent(k);
+  const fr=new FileReader();
+  fr.onload=()=>{ const im=new Image(); im.onload=()=>{
+    try{
+      let W=360,H=140; const sc=Math.min(W/im.width,H/im.height,1); W=Math.max(20,Math.round(im.width*sc)); H=Math.max(10,Math.round(im.height*sc));
+      const c=document.createElement("canvas"); c.width=W; c.height=H; const x=c.getContext("2d"); x.drawImage(im,0,0,W,H);
+      const id=x.getImageData(0,0,W,H), p=id.data;
+      for(let i=0;i<p.length;i+=4){ const lum=0.3*p[i]+0.59*p[i+1]+0.11*p[i+2]; if(lum>200 || p[i+3]<40){ p[i+3]=0; } else { p[i]=Math.min(p[i],40); p[i+1]=Math.min(p[i+1],40); p[i+2]=Math.min(p[i+2],90); p[i+3]=255; } }
+      x.putImageData(id,0,0);
+      const url=c.toDataURL("image/png");
+      if(url.length>90000){ alert("Gambar terlalu besar/rumit. Foto tanda tangan di kertas putih, dekat dan jelas."); return; }
+      sigSet(kind,key,url);
+    }catch(e){ alert("Gagal memproses gambar: "+e.message); }
+  }; im.onerror=()=>alert("File bukan gambar."); im.src=fr.result; };
+  fr.readAsDataURL(f); inp.value="";
+}
+let _sigDraw=null;
+function sigDrawOpen(kind,k){
+  const key=decodeURIComponent(k);
+  showModal(`<h3>✍ Gambar Tanda Tangan</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Tanda tangan di kotak dengan jari. Latar dibuat transparan.</div>
+    <canvas id="sigCv" width="320" height="140" style="width:100%;max-width:320px;height:140px;border:2px dashed var(--border,#999);border-radius:8px;background:#fff;touch-action:none;display:block;"></canvas>
+    <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-outline" style="flex:1" onclick="sigDrawClear()">Ulang</button><button class="btn btn-primary" style="flex:1" onclick="sigDrawSave('${kind}','${k}')">💾 Simpan</button></div>`);
+  const c=document.getElementById("sigCv"), x=c.getContext("2d"); x.lineWidth=2.5; x.lineCap="round"; x.lineJoin="round"; x.strokeStyle="#0a1a3a";
+  _sigDraw={c,x,on:false,any:false};
+  const pt=e=>{ const r=c.getBoundingClientRect(); return {x:(e.clientX-r.left)*c.width/r.width, y:(e.clientY-r.top)*c.height/r.height}; };
+  c.onpointerdown=e=>{ e.preventDefault(); c.setPointerCapture(e.pointerId); const q=pt(e); _sigDraw.on=true; _sigDraw.any=true; x.beginPath(); x.moveTo(q.x,q.y); x.lineTo(q.x+0.1,q.y+0.1); x.stroke(); };
+  c.onpointermove=e=>{ if(!_sigDraw.on) return; e.preventDefault(); const q=pt(e); x.lineTo(q.x,q.y); x.stroke(); };
+  c.onpointerup=c.onpointercancel=()=>{ _sigDraw.on=false; };
+}
+function sigDrawClear(){ if(!_sigDraw) return; _sigDraw.x.clearRect(0,0,_sigDraw.c.width,_sigDraw.c.height); _sigDraw.any=false; }
+function sigDrawSave(kind,k){
+  if(!_sigDraw||!_sigDraw.any){ alert("Tanda tangan masih kosong."); return; }
+  const c=document.createElement("canvas"); c.width=_sigDraw.c.width; c.height=_sigDraw.c.height; const x=c.getContext("2d"); x.drawImage(_sigDraw.c,0,0);
+  const url=c.toDataURL("image/png"); closeModal(); sigSet(kind,decodeURIComponent(k),url);
+}
+function sigRowHtml(kind,key,title,sub,extra){
+  const k=sigArg(key), img=sigGet(kind,key);
+  return `<div class="kitem" style="margin-top:8px;">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap;">
+      <div><b>${title}</b>${sub?`<div style="font-size:12px;color:var(--text-dim);">${sub}</div>`:""}${extra||""}</div>
+      <div style="min-width:130px;height:56px;border:1px dashed #999;border-radius:6px;background:#fff;display:flex;align-items:center;justify-content:center;">${img?`<img src="${img}" style="max-width:126px;max-height:52px;">`:`<span style="font-size:11px;color:#999;">belum ada TTD</span>`}</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+      <label class="btn btn-outline btn-sm" style="cursor:pointer;margin:0;">📷 Unggah foto<input type="file" accept="image/*" style="display:none" onchange="sigFile('${kind}','${k}',this)"></label>
+      <button class="btn btn-outline btn-sm" onclick="sigDrawOpen('${kind}','${k}')">✍ Gambar</button>
+      ${img?`<button class="btn btn-danger btn-sm" onclick="sigDel('${kind}','${k}')">Hapus</button>`:""}
+    </div></div>`;
+}
+function renderAdminSig(){
+  const data=DB.get(), mps=(data.users||[]).filter(u=>u.role==="delivery");
+  return `<div class="card"><h3>✍ TTD Group Head (per shift)</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Group Head berbeda tiap shift. TTD dipasang sesuai shift ILS.</div>
+      ${SIG_SHIFTS.map(sh=>sigRowHtml("gh",sh.k,"Group Head — Shift "+sh.l,"",`<div style="margin-top:6px;"><input type="text" placeholder="Nama Group Head" value="${sigName("gh_"+sh.k).replace(/"/g,"&quot;")}" onchange="sigSetName('gh_${sh.k}',this.value)" style="width:100%;max-width:220px;"></div>`)).join("")}
+    </div>
+    <div class="card"><h3>✍ TTD MP Delivery (per user)</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Tiap user role Delivery punya TTD sendiri.</div>
+      ${mps.length?mps.map(u=>sigRowHtml("mp",u.username,u.name,"username: "+u.username)).join(""):`<div class="msg info">Belum ada user dengan role Delivery.</div>`}
+    </div>`;
 }
 function manifestCardHtml(data){
   const today=mfDateStr(Date.now());
@@ -2983,6 +3101,7 @@ function manifestCardHtml(data){
   return `<div class="card"><h3>📊 Download Manifest (Excel)</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 14 hari. Hari ini: <b>${nToday} unit</b>. Kolom Nama Cabang dan No. SJKB dibiarkan kosong untuk macro Excel kamu.</div>
     <div class="field"><label>Tanggal delivery</label><input id="mfDate" type="date" value="${today}"></div>
+    <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (00:00–23:59)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 tanggal ini – 06:59 hari berikutnya)</option></select></div>
     <div class="field"><label>Isi file</label><select id="mfLP"><option value="">Semua LP (sheet ALL + satu sheet per LP)</option>${lps.map(l=>`<option value="${l}">Hanya LP ${l}</option>`).join("")}</select></div>
     <button class="btn btn-primary" onclick="downloadManifest()">⬇ Download Excel</button></div>`;
 }
@@ -2992,7 +3111,7 @@ function kosongkanCC(num){
     d.cc[num] = null;
     if(d.queue.length>0){
       const next = d.queue.shift();
-      d.cc[num] = {plat: next.plat, lp: next.lp, ts: Date.now()};
+      d.cc[num] = {plat: next.plat, lp: next.lp, drvCode: next.drvCode||"", ts: Date.now()};
     }
   });
 }
@@ -3441,7 +3560,8 @@ function parseDccpGrid(grid){
   if(hr<0) return [];
   const H = grid[hr];
   const cModel = H.findIndex(x=>/cc\.?\s*model/i.test(txt(x)));
-  const cDriver = H.findIndex(x=>/^driver/i.test(txt(x)));
+  const cDriver = H.findIndex(x=>/^driver/i.test(txt(x)) && !/kode|code/i.test(txt(x)));
+  const cDrvCode = H.findIndex(x=>/(kode|code).*(driver|drv)|(driver|drv).*(kode|code)/i.test(txt(x)));
   const cLoad = H.findIndex(x=>/^loading/i.test(txt(x)));
   const cTrip = H.findIndex(x=>/^trip$/i.test(txt(x)));
   const timeCols = [];
@@ -3463,7 +3583,7 @@ function parseDccpGrid(grid){
     const nUnit = cLoad>=0 ? Number(row[cLoad]) : NaN;
     const planTrip = nTrip>0 ? nTrip : (trips.length||1);
     const planUnit = nUnit>0 ? nUnit : planTrip*6;
-    out.push({lp, police: police.toUpperCase(), model: cModel>=0?txt(row[cModel]):"", driver: cDriver>=0?txt(row[cDriver]):"", schedTime:sched, dest, trips, planTrip, planUnit});
+    out.push({lp, police: police.toUpperCase(), model: cModel>=0?txt(row[cModel]):"", driver: cDriver>=0?txt(row[cDriver]):"", drvCode: cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"", schedTime:sched, dest, trips, planTrip, planUnit});
   }
   return out;
 }
@@ -3504,7 +3624,7 @@ function dccpSaveEdit(){
   const g = id=>document.getElementById(id).value.trim();
   const police = g("dfPolice").toUpperCase(), lp=g("dfLP");
   if(!police || !lp){ document.getElementById("dccpEditMsg").innerHTML=`<div class="msg err">Plat & LP wajib diisi.</div>`; return; }
-  const rec = {lp, police, model:g("dfModel"), driver:g("dfDriver"), schedTime:g("dfTime"), dest:g("dfDest"), note:g("dfNote"), planTrip:Math.max(0,parseInt(g("dfTrip"))||0), planUnit:Math.max(0,parseInt(g("dfUnit"))||0)};
+  const rec = {lp, police, model:g("dfModel"), driver:g("dfDriver"), drvCode:g("dfDrvCode").toUpperCase(), schedTime:g("dfTime"), dest:g("dfDest"), note:g("dfNote"), planTrip:Math.max(0,parseInt(g("dfTrip"))||0), planUnit:Math.max(0,parseInt(g("dfUnit"))||0)};
   const idx = dccpEditIdx;
   DB.set(d=>{
     if(idx===-1){
@@ -3534,7 +3654,8 @@ function dccpEditForm(data){
       <label>Plat CC<input id="dfPolice" value="${r.police}" placeholder="B 1234 ABC"></label>
       <label>LP<input id="dfLP" list="dfLPlist" value="${r.lp}"><datalist id="dfLPlist">${lpOpts}</datalist></label>
       <label>Model<input id="dfModel" value="${r.model||""}"></label>
-      <label>Driver<input id="dfDriver" value="${r.driver||""}"></label>
+      <label>Nama Driver<input id="dfDriver" value="${r.driver||""}"></label>
+      <label>Kode Driver (untuk TLS)<input id="dfDrvCode" value="${r.drvCode||""}" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></label>
       <label>Jadwal (jam)<input id="dfTime" type="time" value="${r.schedTime||""}"></label>
       <label>Tujuan<input id="dfDest" value="${r.dest||""}"></label>
       <label>Plan ritase<input id="dfTrip" type="number" min="0" value="${r.planTrip!=null?r.planTrip:(idx===-1?1:((r.trips||[]).length||1))}"></label>
@@ -4697,15 +4818,17 @@ function renderAdmin(){
       <button class="tabbtn ${adminTab==='prio'?'active':''}" onclick="adminTab='prio';render()">⭐ Prioritas</button>
       <button class="tabbtn ${adminTab==='areastall'?'active':''}" onclick="adminTab='areastall';render()">📍 Area Stall Unit</button>
       <button class="tabbtn ${adminTab==='speed'?'active':''}" onclick="adminTab='speed';render()">🏎 Kecepatan</button>
+      <button class="tabbtn ${adminTab==='sig'?'active':''}" onclick="adminTab='sig';render()">✍ TTD</button>
       <button class="tabbtn ${adminTab==='tls'?'active':''}" onclick="adminTab='tls';render()">🔗 TLS</button>
       <button class="tabbtn ${adminTab==='dccp'?'active':''}" onclick="adminTab='dccp';render()">📋 DCCP</button>
       <button class="tabbtn ${adminTab==='data'?'active':''}" onclick="adminTab='data';render()">🗄 Data</button>
     </div>`;
 
+  if(adminTab==="sig") return tabsHtml + renderAdminSig();
   if(adminTab==="tls") return tabsHtml + renderAdminTls();
   if(adminTab==="users"){
     const rows = data.users.map((u,i)=>`
-      <tr><td>${u.username}</td><td>${u.name}</td><td><span class="badge gold">${u.role}</span>${u.lp?` <span class="badge">LP ${u.lp}</span>`:''}</td>
+      <tr><td>${u.username}</td><td>${u.name}</td><td><span class="badge gold">${u.role}</span>${u.lp?` <span class="badge">LP ${u.lp}</span>`:''}${u.drvCode?` <span class="badge">${u.drvCode}</span>`:''}</td>
       <td style="white-space:nowrap;">
         <button class="btn-outline btn btn-sm" onclick="editUser(${i})">Edit</button>
         <button class="btn-danger btn btn-sm" onclick="deleteUser(${i})">Hapus</button>
@@ -4719,7 +4842,8 @@ function renderAdmin(){
         <div class="field"><label>Role</label>
           <select id="newRole">${ROLES.map(r=>`<option value="${r.key}">${r.label}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>LP (khusus Koordinator — kosong = semua LP)</label><select id="newLP"><option value="">(semua LP)</option>${(data.lpList||[]).map(l=>`<option value="${l}">${l}</option>`).join("")}</select></div>
+        <div class="field"><label>LP (wajib untuk Koordinator &amp; Driver CC)</label><select id="newLP"><option value="">-- pilih LP --</option>${(data.lpList||[]).map(l=>`<option value="${l}">${l}</option>`).join("")}</select></div>
+        <div class="field"><label>Kode Driver (khusus Driver CC, wajib, sesuai TLS)</label><input id="newDrv" type="text" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></div>
         <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
       </div>
       <div class="card">
@@ -4728,7 +4852,7 @@ function renderAdmin(){
         <div class="field"><label>Role</label>
           <select id="bkRole" onchange="bulkRoleChange()">${ROLES.map(r=>`<option value="${r.key}">${r.label}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>LP (khusus Koordinator — kosong = semua LP)</label><select id="bkLP"><option value="">(semua LP)</option>${(data.lpList||[]).map(l=>`<option value="${l}">${l}</option>`).join("")}</select></div>
+        <div class="field"><label>LP (wajib untuk Koordinator &amp; Driver CC)</label><select id="bkLP"><option value="">-- pilih LP --</option>${(data.lpList||[]).map(l=>`<option value="${l}">${l}</option>`).join("")}</select></div>
         <div class="field"><label>Daftar nama orang (opsional — satu nama per baris)</label><textarea id="bkNames" rows="5" placeholder="Contoh:&#10;Budi Santoso&#10;Andi Wijaya&#10;Siti Rahma&#10;(kalau diisi, jumlah &amp; awalan di bawah diabaikan; username dibuat dari nama depan)" style="width:100%;"></textarea></div>
         <div class="field"><label>Jumlah akun</label><input id="bkCount" type="number" min="1" value="10"></div>
         <div class="field"><label>Awalan username</label><input id="bkPrefix" type="text" value="${ROLES[0].key}"></div>
@@ -5283,7 +5407,9 @@ function genPass(){
 }
 function bulkAddUsers(){
   const role = document.getElementById("bkRole").value;
-  const lp = role==="koordinator" ? (document.getElementById("bkLP").value||"") : "";
+  const lp = (role==="koordinator"||role==="cc") ? (document.getElementById("bkLP").value||"") : "";
+  if(role==="cc"){ alert("Akun Driver CC butuh Kode Driver unik per orang, jadi tidak bisa dibuat massal. Gunakan Tambah User (satu per satu)."); return; }
+  if(role==="koordinator" && !lp){ alert("Pilih LP dulu untuk akun Koordinator."); return; }
   const n = parseInt(document.getElementById("bkCount").value, 10);
   const pref = document.getElementById("bkPrefix").value.trim().toLowerCase().replace(/[^a-z0-9._-]/g,"");
   const nameP = document.getElementById("bkName").value.trim();
@@ -5336,10 +5462,14 @@ function addUser(){
   const n = document.getElementById("newName").value.trim();
   const p = document.getElementById("newPass").value.trim();
   const r = document.getElementById("newRole").value;
-  const lp = r==="koordinator" ? (document.getElementById("newLP").value||"") : "";
+  const lp = (r==="koordinator"||r==="cc") ? (document.getElementById("newLP").value||"") : "";
+  const drvCode = r==="cc" ? (document.getElementById("newDrv").value||"").trim().toUpperCase() : "";
   if(!u||!n||!p){ alert("Lengkapi semua field."); return; }
+  if((r==="koordinator"||r==="cc") && !lp){ alert("LP wajib dipilih untuk role Koordinator dan Driver CC."); return; }
+  if(r==="cc" && !drvCode){ alert("Role Driver CC wajib diisi Kode Driver."); return; }
   if(DB.get().users.some(x=>x.username===u)){ alert("Username sudah dipakai. Pilih username lain."); return; }
-  DB.set(d=>{ d.users.push({username:u, name:n, password:p, role:r, lp}); });
+  if(drvCode && DB.get().users.some(x=>x.drvCode===drvCode)){ alert("Kode driver "+drvCode+" sudah dipakai akun lain."); return; }
+  DB.set(d=>{ d.users.push({username:u, name:n, password:p, role:r, lp, drvCode}); });
 }
 function deleteUser(i){
   DB.set(d=>{ d.users.splice(i,1); });
@@ -5361,9 +5491,10 @@ function editUser(i){
     <div class="field"><label>Role</label>
       <select id="editRole">${ROLES.map(r=>`<option value="${r.key}" ${r.key===u.role?'selected':''}>${r.label}</option>`).join("")}</select>
     </div>
-    <div class="field"><label>LP (khusus Koordinator — kosong = semua LP)</label>
-      <select id="editLP"><option value="">(semua LP)</option>${(data.lpList||[]).map(l=>`<option value="${l}" ${lpKey(l)===lpKey(u.lp)?'selected':''}>${l}</option>`).join("")}</select>
+    <div class="field"><label>LP (wajib untuk Koordinator &amp; Driver CC)</label>
+      <select id="editLP"><option value="">-- pilih LP --</option>${(data.lpList||[]).map(l=>`<option value="${l}" ${lpKey(l)===lpKey(u.lp)?'selected':''}>${l}</option>`).join("")}</select>
     </div>
+    <div class="field"><label>Kode Driver (khusus Driver CC)</label><input id="editDrv" type="text" value="${u.drvCode||""}" style="text-transform:uppercase;"></div>
     <button class="btn btn-primary" onclick="saveUserEdit(${i})">💾 Simpan Perubahan</button>
   `);
 }
@@ -5372,9 +5503,13 @@ function saveUserEdit(i){
   const n = document.getElementById("editName").value.trim();
   const p = document.getElementById("editPass").value.trim();
   const r = document.getElementById("editRole").value;
-  const lp = r==="koordinator" ? (document.getElementById("editLP").value||"") : "";
+  const lp = (r==="koordinator"||r==="cc") ? (document.getElementById("editLP").value||"") : "";
   if(!u||!n||!p){ alert("Lengkapi semua field."); return; }
-  DB.set(d=>{ d.users[i] = {username:u, name:n, password:p, role:r, lp}; });
+  const drvCode = r==="cc" ? (document.getElementById("editDrv").value||"").trim().toUpperCase() : "";
+  if((r==="koordinator"||r==="cc") && !lp){ alert("LP wajib dipilih untuk role Koordinator dan Driver CC."); return; }
+  if(r==="cc" && !drvCode){ alert("Role Driver CC wajib diisi Kode Driver."); return; }
+  if(drvCode && DB.get().users.some((x,k)=>k!==i && x.drvCode===drvCode)){ alert("Kode driver "+drvCode+" sudah dipakai akun lain."); return; }
+  DB.set(d=>{ d.users[i] = {username:u, name:n, password:p, role:r, lp, drvCode}; });
   closeModal();
 }
 function addModel(){
@@ -5643,6 +5778,7 @@ setInterval(()=>{
   }
 }, 3000);
 </script>
-<script>if("serviceWorker" in navigator && /^https?:/.test(location.protocol)){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}</script>
+<script>if("serviceWorker" in navigator && /^https?:/.test(location.protocol)){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}try{ var _ac=document.getElementById("appCtl"); if(_ac && window.AndroidTLS && AndroidTLS.exitApp) _ac.style.display="flex"; }catch(e){}
+</script>
 </body>
 </html>
