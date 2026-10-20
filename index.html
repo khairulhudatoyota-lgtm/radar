@@ -83,7 +83,7 @@ input,select{font-family:inherit;}
 .userchip{display:flex; align-items:center; justify-content:space-between; margin-top:10px;}
 .userchip .who{font-size:12px; color:var(--text-dim);}
 .userchip .who b{color:var(--text);}
-.logoutBtn{background:var(--panel2); color:var(--red); border:1px solid var(--border); padding:6px 12px; border-radius:8px; font-size:11px; font-weight:600;}
+.logoutBtn{background:var(--panel2); color:var(--red); border:1px solid var(--red); padding:8px 14px; border-radius:8px; font-size:12px; font-weight:700;}
 
 .tabbar{display:flex; overflow-x:auto; gap:6px; padding:8px 10px; background:var(--panel); border-bottom:1px solid var(--border); scrollbar-width:none;}
 .tabbar::-webkit-scrollbar{display:none;}
@@ -1358,7 +1358,12 @@ function doLogin(){
   const roles = [...new Set(ok.map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
   msgEl.innerHTML = `<div class="rolesectitle" style="margin:6px 0 8px;">Pilih menu tujuan</div><div class="rolegrid">` +
     roles.map(r=>{ const o = ROLES.find(x=>x.key===r) || {label:r, icon:"•", desc:""};
-      return `<button class="rolebtn" type="button" onclick="loginPickRole('${r}')"><span class="ic">${o.icon}</span><span class="rtext"><b>${o.label.toUpperCase()}</b><span>${o.desc}</span></span></button>`; }).join("") + `</div>`;
+      return `<button class="rolebtn" type="button" onclick="loginPickRole('${r}')"><span class="ic">${o.icon}</span><span class="rtext"><b>${o.label.toUpperCase()}</b><span>${o.desc}</span></span></button>`; }).join("") + `</div><button type="button" class="logoutBtn" style="width:100%;margin-top:12px;padding:12px;font-size:14px;" onclick="loginCancel()">⎋ Keluar</button>`;
+}
+function loginCancel(){
+  document.getElementById("loginMsg").innerHTML = "";
+  document.getElementById("loginPass").value = "";
+  try{ document.getElementById("loginUser").focus(); }catch(e){}
 }
 function doLogout(){
   spdStop(); spdCloseOverlay();
@@ -1388,6 +1393,7 @@ function enterApp(forceTab){
   document.getElementById("curUserName").textContent = currentUser.name;
   document.getElementById("curUserRole").textContent = ((ROLES.find(r=>r.key===currentUser.role)||{label:"DISPLAY"}).label || "DISPLAY") + (currentUser.shift?" · SHIFT "+rsShift(currentUser.shift):"");
   const isDisplay = currentUser.role==="display";
+  { const lb = document.querySelector(".logoutBtn"); if(lb) lb.textContent = isDisplay ? "← Menu Login" : "⎋ Keluar"; }
   const tabbarEl = document.getElementById("tabbar");
   if(isDisplay){
     tabbarEl.classList.add("hidden");
@@ -2088,16 +2094,20 @@ function startAutoAbsen(silent){
   autoAbsen = { on:true, id:null, wake:null, state:"armed", hits:0, dist:null, acc:null, ts:0, msg:"", err:"" };
   try{ localStorage.setItem(CCAUTO_KEY,"1"); }catch(e){}
   acquireWake();
+  try{ if(window.AndroidTLS && window.AndroidTLS.bgStart) window.AndroidTLS.bgStart(); }catch(e){}
   autoAbsen.id = navigator.geolocation.watchPosition(onAutoPos, onAutoErr, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
   if(!silent) render();
 }
 function stopAutoAbsen(silent){
+  try{ if(window.AndroidTLS && window.AndroidTLS.bgStop) window.AndroidTLS.bgStop(); }catch(e){}
   if(autoAbsen.id!=null){ try{ navigator.geolocation.clearWatch(autoAbsen.id); }catch(e){} }
   try{ if(autoAbsen.wake) autoAbsen.wake.release(); }catch(e){}
   autoAbsen = { on:false, id:null, wake:null, state:"armed", hits:0, dist:null, acc:null, ts:0, msg:"", err:"" };
   try{ localStorage.removeItem(CCAUTO_KEY); }catch(e){}
   if(!silent) render();
 }
+/* posisi dari layanan latar belakang aplikasi Android (tetap jalan saat layar terkunci / aplikasi diminimalkan) */
+window.radarBgPos=function(lat,lng,acc){ try{ if(autoAbsen.on) onAutoPos({coords:{latitude:lat,longitude:lng,accuracy:acc}}); }catch(e){} };
 function onAutoErr(err){
   if(err && err.code===1){ autoAbsen.err = "Izin lokasi ditolak. Aktifkan izin lokasi (pilih 'Izinkan') lalu aktifkan ulang."; updateAutoStatus(); }
 }
@@ -2134,7 +2144,7 @@ function autoStatusHtml(){
   if(a.err) return `<div class="msg err">${a.err}</div>`;
   if(a.state==="done") return `<div class="msg ok">${a.msg}</div><div style="font-size:11px;color:var(--text-dim);">Pantau tetap jalan. Absen otomatis siap lagi begitu kamu keluar area dan kembali.</div>`;
   const dist = a.dist==null ? "mencari sinyal GPS…" : `${a.dist.toFixed(1)} km dari yard${a.acc!=null?` · akurasi ±${Math.round(a.acc)} m`:""}`;
-  return `<div class="msg info"><b>🟢 Aktif — menunggu masuk radius ${y.radiusKm} km</b><br><span id="autoDist">${dist}</span></div>`;
+  return `<div class="msg info"><b>🟢 Aktif — menunggu masuk radius ${y.radiusKm} km</b><br><span id="autoDist">${dist}</span>${(window.AndroidTLS&&window.AndroidTLS.bgStart)?`<br><span style="font-size:11px;">Tetap berjalan walau layar terkunci. Jangan geser/tutup aplikasi dari daftar terbaru.</span>`:""}</div>`;
 }
 function updateAutoStatus(){ const el = document.getElementById("autoStatus"); if(el) el.innerHTML = autoStatusHtml(); }
 
@@ -2233,6 +2243,7 @@ function renderOrderStall(){
 
   return `
     ${absenBlock}
+    ${myCcPlatKey()?sjListHtml(data, b=>normPlat(b.ccPlat)===myCcPlatKey(), "Surat Jalan Saya", "Muncul setelah Delout. Terhapus otomatis 7 hari."):""}
     ${shareCardHtml()}
 
     <div class="card">
@@ -2332,7 +2343,7 @@ function renderDelivery(){
       <div style="display:flex; gap:8px; margin-top:12px;">
         <button class="btn btn-outline btn-sm" style="flex:1;" onclick="printILS(${b.id})">🖨 Cetak ILS</button>
         ${b.batam?"":`<button class="btn btn-outline btn-sm" style="flex:1;" onclick="openTLS(${b.id})">📋 Salin untuk TLS</button>`}
-        <button class="btn btn-green btn-sm" style="flex:1;" onclick="finalizeILS(${b.id})">✔ CC Berangkat / Dell Out</button>
+        <button class="btn btn-green btn-sm" style="flex:1;" onclick="delout(${b.id})">✔ CC Berangkat / Dell Out</button>
       </div>
       ${b.batam?`<div style="margin-top:10px;font-size:12px;color:var(--text-dim);">ILS BATAM: input ke TLS dilakukan manual di PC.</div>`:""}
       ${tlsBadgeHtml(b)}
@@ -2360,7 +2371,7 @@ function renderDelivery(){
     </button>
     </div>
 
-    <div class="dl-right"><div class="dlbatches">
+    <div class="dl-right">${manifestCardHtml(data)}<div class="dlbatches">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
     </div></div>
   `;
@@ -2396,7 +2407,7 @@ function createILS(ccNum, slots){
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
   DB.set(d=>{
     const id = Date.now();
-    d.ils.push({id, ccNum, ccPlat: ccInfo.plat, lp: ccInfo.lp, units, batam: units.every(u=>u.batam), mp: currentUser.name, ts: Date.now(), status:"open"});
+    d.ils.push({id, ccNum, ccPlat: ccInfo.plat, lp: ccInfo.lp, units, batam: units.every(u=>u.batam), mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
     units.forEach(u=>{ d.units[u.slot].ilsId = id; });
   });
   notifyILSCreated(ccInfo.plat, units.length);
@@ -2544,11 +2555,11 @@ const TLS_TUJ=[["NVDCKRW","NVDC KARAWANG"],["NVDCCIB","NVDC CIBITUNG"],["PSUPTBN
 function tlsCfg(){
   const c=DB.get().tlsCfg||{};
   const t=TLS_TIPE.find(x=>x[0]===c.tipe)||TLS_TIPE[0], j=TLS_TUJ.find(x=>x[0]===c.tujuan)||TLS_TUJ[0];
-  return {tipe:t[0], tipeNama:t[1], tujuan:j[0], tujuanNama:j[1], dry:!!c.dry};
+  return {tipe:t[0], tipeNama:t[1], tujuan:j[0], tujuanNama:j[1], dry:!!c.dry, valUrl:(c.valUrl||"")};
 }
 function saveTlsCfg(){
-  const t=document.getElementById("tlsTipe").value, j=document.getElementById("tlsTuj").value, dry=!!document.getElementById("tlsDry").checked;
-  DB.set(d=>{ d.tlsCfg={tipe:t, tujuan:j, dry:dry, by:(currentUser&&currentUser.name)||"", ts:Date.now()}; });
+  const t=document.getElementById("tlsTipe").value, j=document.getElementById("tlsTuj").value, dry=!!document.getElementById("tlsDry").checked, vu=(document.getElementById("tlsValUrl").value||"").trim();
+  DB.set(d=>{ d.tlsCfg={tipe:t, tujuan:j, dry:dry, valUrl:vu, by:(currentUser&&currentUser.name)||"", ts:Date.now()}; });
   render(); alert("Pengaturan TLS tersimpan.");
 }
 function renderAdminTls(){
@@ -2557,6 +2568,7 @@ function renderAdminTls(){
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Nilai default untuk ILS reguler. Dipakai di layar "Salin untuk TLS" dan nanti oleh script pengisi TLS. Ubah di sini kalau aturan di TLS berubah.</p>
     <div class="field"><label>Tipe Pengiriman (ILS reguler)</label><select id="tlsTipe">${TLS_TIPE.map(x=>`<option value="${x[0]}" ${x[0]===c.tipe?"selected":""}>${x[0]} - ${x[1]}</option>`).join("")}</select></div>
     <div class="field"><label>Lokasi Tujuan (ILS reguler)</label><select id="tlsTuj">${TLS_TUJ.map(x=>`<option value="${x[0]}" ${x[0]===c.tujuan?"selected":""}>${x[0]} - ${x[1]}</option>`).join("")}</select></div>
+    <div class="field"><label>Alamat halaman SJKB Validasi di TLS (https://…)</label><input id="tlsValUrl" type="url" placeholder="https://tls.toyota.astra.co.id/…" value="${(c.valUrl||"").replace(/"/g,"&quot;")}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Dipakai tombol <b>Validasi</b> milik Koordinator. Kosong = aplikasi membuka beranda TLS, lalu pilih menu sendiri.</div></div>
     <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:4px 0 12px;"><input type="checkbox" id="tlsDry" ${c.dry?"checked":""} style="margin-top:3px;"><span><b>Mode tes</b>: script mengisi form tapi <b>tidak menekan Simpan</b>. Matikan kalau sudah yakin.</span></label>
     <button class="btn btn-primary" onclick="saveTlsCfg()">💾 Simpan</button>
     <p style="font-size:11px;color:var(--text-dim);margin:10px 0 0;">Saat ini: <b>${c.tipe}</b> · <b>${c.tujuan}</b>${c.dry?" · <b style=\"color:#b45309;\">MODE TES (tanpa Simpan)</b>":""}. ILS Batam selalu manual di TLS.</p></div>
@@ -2597,6 +2609,7 @@ function tlsCopyPackage(btn){
 }
 function tlsCopyUs(btn){ tlsCopy(TLS_US, btn); }
 function tlsCopyBm(btn){ tlsCopy(decodeURIComponent(TLS_BM), btn); }
+function tlsSendApp(){ const b=window._tlsB; if(!b||!window.AndroidTLS){ alert("Fitur ini hanya di aplikasi RADAR EKY (APK)."); return; } try{ window.AndroidTLS.send(tlsPayload(b)); }catch(e){ alert("Gagal kirim ke aplikasi: "+e.message); } }
 function tlsCopyCode(btn){ const b=window._tlsB; if(!b) return; tlsCopy(encodeURIComponent("window.__RADAR_PKG="+JSON.stringify(tlsPayload(b))+";")+TLS_BM.slice("javascript:".length), btn); }
 function setTlsModa(id,m){
   const bb=(DB.get().ils||[]).find(x=>x.id===id);
@@ -2607,6 +2620,7 @@ function openTLS(id){
   const head=(k,label,v,key)=>`<div class="tlsrow"><div class="k">${label}</div><div class="v">${v||"-"}</div>${key?`<button type="button" class="tlscp" onclick="tlsCopy(tlsHeadVal('${key}'),this)">Salin</button>`:""}</div>`;
   const rows=b.units.map((u,i)=>`<tr><td>${i+1}</td><td><b>${u.frame}</b></td><td><button type="button" class="tlscp" onclick="tlsCopy(tlsVal(${i},'frame'),this)">Salin</button></td></tr>`).join("");
   showModal(`<h3 style="margin:0 0 4px;">📋 Siap input ke TLS</h3>
+    ${window.AndroidTLS?`<button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 8px;" onclick="tlsSendApp()">📲 Kirim ke TLS (otomatis)</button>`:""}
     <button type="button" class="btn btn-primary btn-sm" style="width:100%;margin:2px 0 6px;" onclick="tlsCopyCode(this)">⚡ Salin kode isi TLS</button>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Di TLS (halaman Pembuatan ILS / SJKB): ketuk <b>kotak alamat</b>, ketik <b>javascript:</b> lalu <b>tempel</b>, tekan <b>Enter / Go</b>.</p>
     <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 10px;" onclick="tlsCopyPackage(this)">Salin paket (cara bookmark)</button>
@@ -2662,14 +2676,16 @@ function koordStatusHtml(data){
   const L=koordStatusList(data), hhmm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
   const ready=L.filter(x=>x.ils&&x.ils.tlsTs).length;
   const items=L.map(x=>{
-    const who=`LP ${x.lp||"-"} · ${x.plat}${x.driver?` · Driver ${x.driver}`:""}`;
-    const steps=`<div class="steps"><span class="ok">✔ Absen ${hhmm(x.absenTs)}</span><span class="${x.ils?'ok':''}">${x.ils?'✔ ILS dibuat '+hhmm(x.ils.ts):'ILS belum dibuat'}</span><span class="${x.ils&&x.ils.tlsTs?'ok':''}">${x.ils&&x.ils.tlsTs?'✔ Di TLS '+hhmm(x.ils.tlsTs):'Input ke TLS'}</span><span>Validasi unit</span><span>Kosongkan stall</span></div>`;
-    if(x.ils && !x.ils.tlsTs){
-      return `<div class="kitem wait"><b>⏳ ILS dibuat di RADAR — menunggu Delivery input ke TLS</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${x.n} · ${x.ils.units.length} unit${x.ils.batam?' (BATAM)':''} · belum bisa divalidasi sampai ILS ada di TLS</div>${steps}</div>`;
+    const b=x.ils, who=`LP ${x.lp||"-"} · ${x.plat}${x.driver?` · Driver ${x.driver}`:""}`;
+    const st=(t,done,txt)=>`<span class="${done?'ok':''}">${done?'✔ ':''}${txt}${done&&t?' '+hhmm(t):''}</span>`;
+    const steps=`<div class="steps">${st(x.absenTs,true,'Absen')}${st(b&&b.ts,!!b,b?'ILS dibuat':'ILS belum dibuat')}${st(b&&b.tlsTs,!!(b&&b.tlsTs),b&&b.tlsTs?'Di TLS':'Input ke TLS')}${st(b&&b.valTs,!!(b&&b.valTs),b&&b.valTs?'Validasi selesai':'Validasi unit')}${st(b&&b.loadTs,!!(b&&b.loadTs),b&&b.loadTs?'Loading selesai':'Loading')}<span>Delout</span></div>`;
+    if(b && !b.tlsTs){
+      return `<div class="kitem wait"><b>⏳ ILS dibuat di RADAR — menunggu Delivery input ke TLS</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${x.n} · ${b.units.length} unit${b.batam?' (BATAM)':''} · belum bisa divalidasi sampai ILS ada di TLS</div>${steps}</div>`;
     }
-    if(x.ils){
-      const stalls=[...new Set(x.ils.units.map(u=>u.loc?'luar stall':groupOf(u.slot)))].join(", ");
-      return `<div class="kitem"><b>✅ ILS sudah di TLS — siap validasi unit</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${x.n} · ${x.ils.units.length} unit${x.ils.batam?' (BATAM)':''} dari stall ${stalls} · oleh ${x.ils.mp||'-'}</div>${steps}</div>`;
+    if(b){
+      const stalls=[...new Set(b.units.map(u=>u.loc?'luar stall':groupOf(u.slot)))].join(", ");
+      const head=!b.valStartTs?'✅ ILS sudah di TLS — siap validasi unit':(!b.valTs?'🔍 Sedang validasi unit':(!b.loadTs?'🚚 Validasi selesai — proses loading':'📄 Loading selesai — siap Delout'));
+      return `<div class="kitem"><b>${head}</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${x.n} · ${b.units.length} unit${b.batam?' (BATAM)':''} dari stall ${stalls} · oleh ${b.mp||'-'}</div>${steps}${sjActionsHtml(b)}</div>`;
     }
     return `<div class="kitem wait"><b>⏳ CC sudah absen — ILS belum dibuat</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${x.n} · menunggu Delivery membuat ILS</div>${steps}</div>`;
   }).join("");
@@ -2725,6 +2741,7 @@ function renderKoordinator(){
 
   return `
     ${koordStatusHtml(data)}
+    ${sjListHtml(data, b=>lpMine(b.lp), "Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""), "Muncul setelah Delout. Terhapus otomatis 7 hari.")}
     <div class="card">
       <h3>🧭 Kelola Stall Car Carrier</h3>
       <p style="font-size:12px; color:var(--text-dim);">Kosongkan stall setelah truk CC benar-benar keluar area. Antrian berikutnya otomatis masuk.</p>
@@ -2737,6 +2754,239 @@ function renderKoordinator(){
     ${queueCards}
   `;
 }
+/* ======================================================================
+   SURAT JALAN — validasi (scan QR unit di TLS) → loading → Delout
+   PDF asli dari TLS disimpan di Firebase path terpisah (radar_sj/<id>), bukan di data utama.
+   Surat jalan baru tampil ke CC & Koordinator setelah Delout; terhapus otomatis 7 hari.
+====================================================================== */
+const SJ_PATH="radar_sj", SJ_KEEP_MS=7*24*3600*1000, DELOUT_UNDO_MS=5*60*1000;
+function sjILS(id){ return (DB.get().ils||[]).find(x=>x.id===id); }
+function sjWho(){ return (currentUser&&currentUser.name)||""; }
+function sjActionsHtml(b){
+  const btn=(c,t,f)=>`<button class="btn btn-sm ${c}" style="flex:1;min-width:130px;" onclick="${f}(${b.id})">${t}</button>`;
+  let h=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">`;
+  if(!b.valStartTs) h+=btn('btn-primary','🔍 Validasi','validasiMulai');
+  else if(!b.valTs) h+=btn('btn-primary','✔ Validasi selesai','validasiSelesai')+btn('btn-outline','↗ Buka TLS lagi','validasiMulai');
+  else if(!b.loadTs) h+=btn('btn-primary','🚚 Loading selesai','loadingSelesai');
+  else h+=btn('btn-green','🚪 Delout','delout');
+  h+=`</div>`;
+  if(b.valStartTs){
+    h+=`<div style="margin-top:8px;font-size:12px;">${b.sj?`<span style="color:#17803d;font-weight:700;">📄 Surat jalan tersimpan (disembunyikan sampai Delout)</span>`:`<span style="color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</span>`} <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjUploadPick(${b.id})">${b.sj?'Ganti':'Unggah'} PDF</button></div>`;
+  }
+  return h;
+}
+function validasiMulai(id){
+  const b=sjILS(id); if(!b) return;
+  if(!b.valStartTs) DB.set(d=>{ const x=d.ils.find(y=>y.id===id); if(x&&!x.valStartTs){ x.valStartTs=Date.now(); x.valBy=sjWho(); } });
+  const url=tlsCfg().valUrl||"";
+  if(window.AndroidTLS && window.AndroidTLS.openValidasi){ window.AndroidTLS.openValidasi(String(id), url, b.ccPlat||""); }
+  else{ alert("Buka lewat aplikasi RADAR (APK) agar surat jalan tertangkap otomatis. Di web, validasi dikerjakan di TLS lalu PDF-nya diunggah lewat tombol Unggah PDF."); try{ window.open(url||"https://tls.toyota.astra.co.id","_blank"); }catch(e){} }
+}
+function validasiSelesai(id){
+  const b=sjILS(id); if(!b||b.valTs) return;
+  if(!confirm("Semua unit sudah dipindai & tervalidasi, dan tombol Generate di TLS sudah ditekan?")) return;
+  DB.set(d=>{ const x=d.ils.find(y=>y.id===id); if(x&&!x.valTs){ x.valTs=Date.now(); x.valDoneBy=sjWho(); } });
+  try{ if(window.AndroidTLS && window.AndroidTLS.closeTls) window.AndroidTLS.closeTls(); }catch(e){}
+}
+function loadingSelesai(id){
+  const b=sjILS(id); if(!b||b.loadTs) return;
+  if(!confirm("CC sudah selesai loading semua unit?")) return;
+  DB.set(d=>{ const x=d.ils.find(y=>y.id===id); if(x&&!x.loadTs){ x.loadTs=Date.now(); x.loadBy=sjWho(); } });
+}
+function delout(id){
+  const b=sjILS(id); if(!b||b.status!=="open") return;
+  const data=DB.get(), q=(data.queue||[])[0];
+  const msg=`Delout ${b.ccPlat}?\n\n• CC keluar dari Stall ${b.ccNum}\n• ${b.units.length} unit dihapus dari stall (sudah loading)\n`+(q?`• CC berikutnya naik ke stall: ${q.plat} (${q.lp||"-"})\n`:"")+(b.sj?"• Surat jalan jadi terlihat oleh CC & Koordinator":"• PDF surat jalan belum masuk — bisa diunggah nanti")+"\n\nBisa dibatalkan dalam 5 menit.";
+  if(!confirm(msg)) return;
+  DB.set(d=>{
+    const x=(d.ils||[]).find(y=>y.id===id); if(!x||x.status!=="open") return;
+    const snap={units:[],cc:null,promoted:null};
+    x.units.forEach(u=>{ snap.units.push({slot:u.slot,v:d.units[u.slot]||null}); if(isOffKey(u.slot)) delete d.units[u.slot]; else d.units[u.slot]=null; });
+    x.status="done"; x.doneTs=Date.now(); x.outTs=x.doneTs; x.outBy=sjWho();
+    const c=d.cc[x.ccNum];
+    if(c && normPlat(c.plat)===normPlat(x.ccPlat)){
+      snap.cc=c; d.cc[x.ccNum]=null;
+      if(d.queue.length){ const nx=d.queue.shift(); snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, ts:Date.now()}; }
+    }
+    d.manifest=d.manifest||[];
+    if(!d.manifest.some(m=>m.id===x.id)) d.manifest.push(mfRecord(d,x));
+    { const cm=Date.now()-MF_KEEP_MS; d.manifest=d.manifest.filter(m=>m.out>=cm); }
+    x.undo=snap;
+  });
+}
+function delOutUndo(id){
+  const b=sjILS(id);
+  if(!b||!b.undo||!b.outTs||Date.now()-b.outTs>DELOUT_UNDO_MS){ alert("Batas waktu batal Delout (5 menit) sudah lewat."); return; }
+  if(!confirm("Batalkan Delout? CC dan unit dikembalikan ke stall.")) return;
+  let ok=true;
+  DB.set(d=>{
+    const x=(d.ils||[]).find(y=>y.id===id); if(!x||!x.undo) return; const sn=x.undo;
+    if(sn.cc){
+      const cur=d.cc[x.ccNum];
+      if(sn.promoted){ if(cur && normPlat(cur.plat)===normPlat(sn.promoted.plat)){ d.queue.unshift(sn.promoted); } else { ok=false; return; } }
+      d.cc[x.ccNum]=sn.cc;
+    }
+    sn.units.forEach(e=>{ if(e.v) d.units[e.slot]=e.v; });
+    x.status="open"; delete x.doneTs; delete x.outTs; delete x.outBy; delete x.undo;
+    d.manifest=(d.manifest||[]).filter(m=>m.id!==x.id);
+  });
+  if(!ok) alert("Tidak bisa dibatalkan: stall itu sudah berubah (CC berikutnya sudah diproses).");
+}
+/* --- penyimpanan PDF --- */
+function sjCanStore(){ return !!(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed); }
+async function sjStore(id,name,b64,mime){
+  if(!sjILS(id)){ alert("ILS tidak ditemukan."); return false; }
+  const size=Math.floor(b64.length*3/4);
+  if(size>900000){ alert("PDF terlalu besar (maks ±900 KB)."); return false; }
+  if(!sjCanStore()){ alert("RADAR sedang offline — PDF belum bisa disimpan. Coba lagi saat online."); return false; }
+  const ts=Date.now();
+  try{ await FBS.db.ref(SJ_PATH+"/"+id).set({name:name||"surat-jalan.pdf", mime:mime||"application/pdf", ts, b64}); }
+  catch(e){ alert("Gagal menyimpan PDF: "+(e&&e.message||e)+"\nPeriksa aturan (Rules) Firebase Realtime Database untuk path radar_sj."); return false; }
+  DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b) b.sj={name:name||"surat-jalan.pdf", size, ts}; });
+  return true;
+}
+window.radarSJ=function(id,name,b64){ return sjStore(Number(id),name,b64,"application/pdf"); };
+function sjUploadPick(id){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept="application/pdf,.pdf";
+  inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
+    const r=new FileReader(); r.onload=async()=>{ const u=String(r.result); const ok=await sjStore(id,f.name,u.substring(u.indexOf(",")+1),"application/pdf"); if(ok) alert("Surat jalan tersimpan."); }; r.readAsDataURL(f); };
+  inp.click();
+}
+async function sjFetch(id){
+  if(!sjCanStore()) throw new Error("offline");
+  const snap=await FBS.db.ref(SJ_PATH+"/"+id).once("value"); const v=snap.val();
+  if(!v||!v.b64) throw new Error("File tidak ditemukan / sudah terhapus");
+  return v;
+}
+function sjBlob(v){ const bin=atob(v.b64), arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); return new Blob([arr],{type:v.mime||"application/pdf"}); }
+async function sjView(id){
+  try{
+    const v=await sjFetch(id);
+    if(window.AndroidTLS && window.AndroidTLS.openPdf){ window.AndroidTLS.openPdf(v.name||"surat-jalan.pdf", v.b64); return; }
+    window.open(URL.createObjectURL(sjBlob(v)),"_blank");
+  }catch(e){ alert("Gagal membuka surat jalan: "+(e&&e.message||e)); }
+}
+async function sjDownload(id){
+  try{
+    const v=await sjFetch(id), a=document.createElement("a");
+    a.href=URL.createObjectURL(sjBlob(v)); a.download=v.name||"surat-jalan.pdf"; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),500);
+  }catch(e){ alert("Gagal mengunduh surat jalan: "+(e&&e.message||e)); }
+}
+function sjListHtml(data, pass, title, hint){
+  const now=Date.now();
+  const L=(data.ils||[]).filter(b=>b.outTs && ((b.sj && now-b.outTs<SJ_KEEP_MS) || (b.undo && now-b.outTs<DELOUT_UNDO_MS)) && pass(b)).sort((a,b)=>b.outTs-a.outTs);
+  const fmt=t=>new Date(t).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const rows=L.map(b=>{
+    const exp=fmt(b.outTs+SJ_KEEP_MS);
+    return `<div class="kitem" style="margin-top:8px;"><b>📄 ${b.ccPlat}</b> · LP ${b.lp||"-"}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.units.length} unit · Delout ${fmt(b.outTs)}${b.sj?` · terbit di TLS ${fmt(b.sj.ts)} · terhapus otomatis ${exp}`:" · PDF belum diunggah"}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
+  }).join("");
+  return `<div class="card"><h3>📄 ${title}</h3><div style="font-size:12px;color:var(--text-dim);">${hint}</div>${L.length?rows:`<div class="emptystate">Belum ada surat jalan.</div>`}</div>`;
+}
+function canUndoDelout(){ return !!(currentUser && (currentUser.role==="koordinator"||currentUser.role==="delivery"||currentUser.role==="admin")); }
+function sjCleanup(){
+  try{
+    const d=DB.get(), now=Date.now();
+    const old=(d.ils||[]).filter(b=>(b.sj && now-(b.outTs||b.sj.ts)>SJ_KEEP_MS) || (b.undo && b.outTs && now-b.outTs>DELOUT_UNDO_MS));
+    if(!old.length) return;
+    old.forEach(b=>{ if(b.sj && now-(b.outTs||b.sj.ts)>SJ_KEEP_MS && sjCanStore()){ try{ FBS.db.ref(SJ_PATH+"/"+b.id).remove(); }catch(e){} } });
+    DB.set(dd=>{ (dd.ils||[]).forEach(b=>{ const n=Date.now(); if(b.sj && n-(b.outTs||b.sj.ts)>SJ_KEEP_MS) delete b.sj; if(b.undo && b.outTs && n-b.outTs>DELOUT_UNDO_MS) delete b.undo; }); });
+  }catch(e){}
+}
+setInterval(sjCleanup, 600000); setTimeout(sjCleanup, 9000);
+function myCcPlatKey(){ try{ return normPlat((getCcProfile()||{}).plat||""); }catch(e){ return ""; } }
+
+/* ======================================================================
+   MANIFEST DELIVERY OUT — unduh Excel (semua LP / per LP)
+   Dicatat saat Delout, disimpan 14 hari. Kolom Nama Cabang & No. SJKB dibiarkan kosong (diisi macro Excel dari TLS).
+====================================================================== */
+const MF_KEEP_MS=14*24*3600*1000;
+function mfDriver(d,plat){ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); return (r&&r.driver)||""; }
+function mfRecord(d,x){ return {id:x.id, out:x.outTs||Date.now(), t:x.tlsTs||x.ts, lp:x.lp||"", plat:x.ccPlat||"", drv:mfDriver(d,x.ccPlat), bt:!!x.batam, u:(x.units||[]).map(u=>[u.frame,u.model||""])}; }
+function mfTitle(m){ m=String(m||""); return m.charAt(0).toUpperCase()+m.slice(1).toLowerCase(); }
+function mfPad(n){ return String(n).padStart(2,"0"); }
+function mfDateStr(t){ const d=new Date(t); return d.getFullYear()+"-"+mfPad(d.getMonth()+1)+"-"+mfPad(d.getDate()); }
+function mfRecords(data){
+  const L=(data.manifest||[]).slice(), have=new Set(L.map(m=>m.id));
+  (data.ils||[]).filter(b=>b.status==="done" && !have.has(b.id)).forEach(b=>{ L.push({id:b.id, out:b.doneTs||b.ts, t:b.tlsTs||b.ts, lp:b.lp||"", plat:b.ccPlat||"", drv:mfDriver(data,b.ccPlat), bt:!!b.batam, u:(b.units||[]).map(u=>[u.frame,u.model||""])}); });
+  return L;
+}
+function mfRows(data, dateStr, lp){
+  const tujuan=tlsCfg().tujuanNama.replace(/\w\S*/g,w=>w.charAt(0)+w.slice(1).toLowerCase()).replace(/^Nvdc/,"NVDC");
+  const L=mfRecords(data).filter(m=>mfDateStr(m.t)===dateStr && (!lp || lpKey(m.lp)===lpKey(lp))).sort((a,b)=>a.t-b.t);
+  const rows=[]; let n=0;
+  L.forEach(m=>{ const d=new Date(m.t), h=d.getHours(), hhmm=mfPad(h)+":"+mfPad(d.getMinutes());
+    m.u.forEach(u=>{ n++; rows.push([n, u[0], mfTitle(u[1]), m.plat, m.drv, m.lp, "EKY", "", m.bt?"Batam":tujuan, "CC", d.getDate()+"-"+["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][d.getMonth()]+"-"+String(d.getFullYear()).slice(2), (h>=7&&h<19)?"Day":"Night", hhmm, ""]); });
+  });
+  return rows;
+}
+const MF_HEAD=["No","Frame Number","Model","No. Polisi","Driver","L / P","Plant","Nama Cabang","Tujuan Kirim","Moda","Tgl Delivery","Shift","Jam Keluar","No. SJKB"];
+/* penulis .xlsx mandiri (tanpa pustaka luar): zip tanpa kompresi + XML sheet */
+const _crcT=(()=>{ const t=[]; for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function _crc32(b){ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c=_crcT[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function _zip(files){
+  const enc=new TextEncoder(), parts=[], cen=[]; let off=0;
+  const u16=n=>[n&255,(n>>>8)&255], u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+  files.forEach(f=>{
+    const nm=enc.encode(f.name), d=enc.encode(f.data), crc=_crc32(d);
+    const lh=[0x50,0x4b,3,4,...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(d.length),...u32(d.length),...u16(nm.length),...u16(0)];
+    parts.push(new Uint8Array(lh),nm,d);
+    cen.push({nm,crc,len:d.length,off});
+    off+=lh.length+nm.length+d.length;
+  });
+  let csz=0; const cparts=[];
+  cen.forEach(c=>{ const h=[0x50,0x4b,1,2,...u16(20),...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(c.crc),...u32(c.len),...u32(c.len),...u16(c.nm.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(c.off)]; cparts.push(new Uint8Array(h),c.nm); csz+=h.length+c.nm.length; });
+  const end=new Uint8Array([0x50,0x4b,5,6,...u16(0),...u16(0),...u16(cen.length),...u16(cen.length),...u32(csz),...u32(off),...u16(0)]);
+  const all=parts.concat(cparts,[end]); let tot=0; all.forEach(a=>tot+=a.length);
+  const out=new Uint8Array(tot); let p=0; all.forEach(a=>{ out.set(a,p); p+=a.length; }); return out;
+}
+function _xe(v){ return String(v).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,""); }
+function _colName(i){ let s=""; i++; while(i>0){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=Math.floor((i-1)/26); } return s; }
+function mfXlsx(sheets, widths){
+  const files=[], names=sheets.map((sh,i)=>({n:(String(sh.name).replace(/[\\\/\?\*\[\]:]/g,"").slice(0,31)||"Sheet"+(i+1)), i}));
+  files.push({name:"[Content_Types].xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map((_,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("")+'</Types>'});
+  files.push({name:"_rels/.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'});
+  files.push({name:"xl/workbook.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'+names.map(x=>'<sheet name="'+_xe(x.n)+'" sheetId="'+(x.i+1)+'" r:id="rId'+(x.i+1)+'"/>').join("")+'</sheets></workbook>'});
+  files.push({name:"xl/_rels/workbook.xml.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+names.map(x=>'<Relationship Id="rId'+(x.i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(x.i+1)+'.xml"/>').join("")+'<Relationship Id="rId'+(names.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'});
+  files.push({name:"xl/styles.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF000000"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs></styleSheet>'});
+  sheets.forEach((sh,si)=>{
+    const cols=widths?'<cols>'+widths.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join("")+'</cols>':'';
+    const rows=sh.rows.map((r,ri)=>'<row r="'+(ri+1)+'">'+r.map((v,ci)=>{ const ref=_colName(ci)+(ri+1), st=ri===0?' s="1"':''; if(v===""||v===null||v===undefined) return ri===0?'<c r="'+ref+'"'+st+'/>':''; if(typeof v==="number") return '<c r="'+ref+'"'+st+'><v>'+v+'</v></c>'; return '<c r="'+ref+'"'+st+' t="inlineStr"><is><t xml:space="preserve">'+_xe(v)+'</t></is></c>'; }).join("")+'</row>').join("");
+    files.push({name:"xl/worksheets/sheet"+(si+1)+".xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'+cols+'<sheetData>'+rows+'</sheetData><autoFilter ref="A1:'+_colName((sh.rows[0]||[]).length-1)+Math.max(1,sh.rows.length)+'"/></worksheet>'});
+  });
+  return _zip(files);
+}
+function mfSave(name, mime, bytes){
+  let bin=""; for(let i=0;i<bytes.length;i+=8192) bin+=String.fromCharCode.apply(null, bytes.subarray(i,i+8192));
+  const b64=btoa(bin);
+  if(window.AndroidTLS && window.AndroidTLS.saveFile){ window.AndroidTLS.saveFile(name, mime, b64); return; }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([bytes],{type:mime})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),800);
+}
+async function downloadManifest(){
+  const ds=(document.getElementById("mfDate")||{}).value||mfDateStr(Date.now());
+  const lpSel=(document.getElementById("mfLP")||{}).value||"";
+  const data=DB.get();
+  const lps=lpSel? [lpSel] : [...new Set(mfRecords(data).filter(m=>mfDateStr(m.t)===ds).map(m=>m.lp).filter(Boolean))].sort();
+  const all=mfRows(data, ds, lpSel);
+  if(!all.length){ alert("Tidak ada data manifest untuk tanggal "+ds+(lpSel?" (LP "+lpSel+")":"")+". Manifest dicatat saat Delout."); return; }
+  const sheets=[];
+  const add=(name,rows)=>sheets.push({name, rows:[MF_HEAD].concat(rows)});
+  if(!lpSel){ add("Manifest ALL", all); lps.forEach(lp=>{ const r=mfRows(data, ds, lp); if(r.length) add("LP "+lp, r); }); }
+  else add("LP "+lpSel, all);
+  const out=mfXlsx(sheets,[5,20,10,12,22,7,7,28,16,6,12,7,10,30]);
+  mfSave("Manifest-"+(lpSel?lpSel+"-":"ALL-")+ds+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",out);
+}
+function manifestCardHtml(data){
+  const today=mfDateStr(Date.now());
+  const lps=[...new Set([...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean))];
+  const nToday=mfRows(data,today,"").length;
+  return `<div class="card"><h3>📊 Download Manifest (Excel)</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 14 hari. Hari ini: <b>${nToday} unit</b>. Kolom Nama Cabang dan No. SJKB dibiarkan kosong untuk macro Excel kamu.</div>
+    <div class="field"><label>Tanggal delivery</label><input id="mfDate" type="date" value="${today}"></div>
+    <div class="field"><label>Isi file</label><select id="mfLP"><option value="">Semua LP (sheet ALL + satu sheet per LP)</option>${lps.map(l=>`<option value="${l}">Hanya LP ${l}</option>`).join("")}</select></div>
+    <button class="btn btn-primary" onclick="downloadManifest()">⬇ Download Excel</button></div>`;
+}
+
 function kosongkanCC(num){
   DB.set(d=>{
     d.cc[num] = null;
@@ -4441,7 +4691,7 @@ function renderAdmin(){
       <button class="tabbtn ${adminTab==='models'?'active':''}" onclick="adminTab='models';render()">🚗 Model Unit</button>
       <button class="tabbtn ${adminTab==='ccstall'?'active':''}" onclick="adminTab='ccstall';render()">🚦 Stall CC</button>
       <button class="tabbtn ${adminTab==='defectcfg'?'active':''}" onclick="adminTab='defectcfg';render()">🔧 Defect</button>
-      <button class="tabbtn ${adminTab==='rute'?'active':''}" onclick="adminTab='rute';render()">🗺 Rute CC</button>
+      <button class="tabbtn ${adminTab==='titik'||adminTab==='rute'?'active':''}" onclick="adminTab='titik';render()">📍 Titik Lokasi</button>
       <button class="tabbtn ${adminTab==='plan'?'active':''}" onclick="adminTab='plan';render()">🏭 Plan</button>
       <button class="tabbtn ${adminTab==='batam'?'active':''}" onclick="adminTab='batam';render()">🟠 Batam</button>
       <button class="tabbtn ${adminTab==='prio'?'active':''}" onclick="adminTab='prio';render()">⭐ Prioritas</button>
@@ -4499,22 +4749,34 @@ function renderAdmin(){
       </div>`;
   }
 
-  if(adminTab==="rute"){
-    const mp = data.mapPoints || {}, f = p => p ? (p.lat.toFixed(6)+", "+p.lng.toFixed(6)) : "";
+  if(adminTab==="rute"||adminTab==="titik"){
+    const mp = data.mapPoints || {}, y = data.yardLocation || {};
+    const f = p => p ? (p.lat.toFixed(6)+", "+p.lng.toFixed(6)) : "";
+    const gm = p => p ? `<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${p.lat},${p.lng}">🗺 Cek di Google Maps</a>` : "";
+    const acts = id => `<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="titikGps('${id}')">📍 Tandai di lokasi saya (GPS)</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="titikPick('${id}')">🗺 Pilih di peta (jarak jauh)</button>
+        </div>`;
     const blk = (id,label,p) => `<div class="field"><label>${label} (lat, lng)</label>
         <input id="mp_${id}" type="text" placeholder="-6.xxxxx, 107.xxxxx" value="${f(p)}">
-        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-outline btn-sm" onclick="mapUseMyLoc('${id}')">📍 Pakai lokasi saya sekarang</button>
-          ${p?`<a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${p.lat},${p.lng}">🗺 Cek di Google Maps</a>`:""}
-        </div></div>`;
+        ${acts(id)}${p?`<div style="margin-top:6px;">${gm(p)}</div>`:""}</div>`;
+    const yp = (y.lat!=null && y.lng!=null) ? {lat:y.lat, lng:y.lng} : null;
     return `${tabsHtml}
       <div class="card">
+        <h3>📍 Lokasi Absensi Driver CC</h3>
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Titik ini <b>terpisah</b> dari titik rute di bawah. Driver CC hanya bisa absen kalau posisinya dalam radius dari titik ini. Tandai langsung dengan berdiri di lokasi, atau pilih di peta dari jauh.</p>
+        <div id="yardLocMsg"></div>
+        ${blk("yard","Titik absensi",yp)}
+        <div class="field"><label>Radius absen (km)</label><input id="yardRadius" type="text" value="${y.radiusKm ?? 5}"></div>
+        <button class="btn btn-primary" onclick="saveYardLocation()">💾 Simpan Lokasi Absensi</button>
+      </div>
+      <div class="card">
         <h3>🗺 Titik Rute CC (ADM KAP – NVDC Karawang)</h3>
-        <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Tentukan dua titik. Peta CC akan menampilkan posisi truk di antara keduanya. Cara termudah: berdiri di lokasi, tekan <b>Pakai lokasi saya sekarang</b>. Atau di Google Maps tekan lama titiknya, salin koordinat, tempel di sini.</p>
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Dipakai Peta CC untuk menampilkan posisi truk di antara kedua titik. Cara tandai sama: GPS di lokasi, atau pilih di peta.</p>
         <div id="mpMsg"></div>
         ${blk("adm","ADM KAP (Karawang Assy Plant)",mp.adm)}
         ${blk("nvdc","NVDC Karawang",mp.nvdc)}
-        <button class="btn btn-primary" onclick="saveMapPoints()">💾 Simpan Titik</button>
+        <button class="btn btn-primary" onclick="saveMapPoints()">💾 Simpan Titik Rute</button>
       </div>`;
   }
   if(adminTab==="models"){
@@ -4565,14 +4827,9 @@ function renderAdmin(){
         </tbody></table>
       </div>
       <div class="card">
-        <h3>📍 Lokasi Yard (buat Absen Radius)</h3>
-        <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Driver CC cuma bisa absen kalau posisinya dalam radius ini dari titik lokasi yard.</p>
-        <div id="yardLocMsg"></div>
-        <div class="field"><label>Latitude</label><input id="yardLat" type="text" value="${data.yardLocation.lat ?? ''}" placeholder="Belum diatur"></div>
-        <div class="field"><label>Longitude</label><input id="yardLng" type="text" value="${data.yardLocation.lng ?? ''}" placeholder="Belum diatur"></div>
-        <div class="field"><label>Radius (km)</label><input id="yardRadius" type="text" value="${data.yardLocation.radiusKm}"></div>
-        <button class="btn btn-outline" style="margin-bottom:10px;" onclick="useCurrentLocForYard()">📍 Pakai Lokasi Saya Sekarang (harus berdiri di yard)</button>
-        <button class="btn btn-primary" onclick="saveYardLocation()">💾 Simpan Lokasi Yard</button>
+        <h3>📍 Lokasi Absensi</h3>
+        <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Titik dan radius absen driver CC dipindah ke menu tersendiri supaya terpisah dari titik lain.</p>
+        <button class="btn btn-primary" onclick="adminTab='titik';render()">Buka 📍 Titik Lokasi</button>
       </div>`;
   }
 
@@ -4688,6 +4945,45 @@ function mapParse(txt){
   if(!(lat>=-90 && lat<=90 && lng>=-180 && lng<=180)) return null;
   return {lat, lng};
 }
+function titikGps(id){
+  const msg = document.getElementById(id==="yard" ? "yardLocMsg" : "mpMsg");
+  if(!navigator.geolocation){ msg.innerHTML = `<div class="msg err">HP ini tidak mendukung GPS.</div>`; return; }
+  msg.innerHTML = `<div class="msg info">📍 Mengambil lokasi…</div>`;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    document.getElementById("mp_"+id).value = pos.coords.latitude.toFixed(6)+", "+pos.coords.longitude.toFixed(6);
+    msg.innerHTML = `<div class="msg ok">✔ Lokasi terisi (akurasi ±${Math.round(pos.coords.accuracy)} m). Tekan Simpan.</div>`;
+  }, err=>{ msg.innerHTML = `<div class="msg err">Gagal ambil lokasi: ${err.message}. Aktifkan izin lokasi.</div>`; }, {enableHighAccuracy:true, timeout:15000});
+}
+function titikPick(id){
+  const inp = document.getElementById("mp_"+id), cur = mapParse(inp && inp.value);
+  const D = DB.get(), mp = D.mapPoints || {}, y = D.yardLocation || {};
+  const c = cur || ((y.lat!=null && y.lng!=null) ? {lat:y.lat, lng:y.lng} : null) || mp.adm || mp.nvdc || {lat:-6.33, lng:107.34};
+  window._pick = {id, pt: cur};
+  showModal(`<h3 style="margin:0 0 6px;">🗺 Pilih titik di peta</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;">Geser dan zoom peta, lalu <b>ketuk lokasi</b> yang tepat.</p>
+    <div id="pickMap" style="height:340px;border-radius:12px;border:1px solid var(--border);"></div>
+    <div id="pickInfo" style="font-size:12px;margin:8px 0;">${cur?("Titik saat ini: "+cur.lat.toFixed(6)+", "+cur.lng.toFixed(6)):"Belum ada titik dipilih."}</div>
+    <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1;" onclick="titikPickApply()">✔ Pakai titik ini</button><button class="btn btn-outline" style="flex:1;" onclick="closeModal()">Batal</button></div>`);
+  ensureLeaflet().then(()=>{
+    const el = document.getElementById("pickMap"); if(!el) return;
+    const m = L.map("pickMap").setView([c.lat, c.lng], cur ? 17 : 13);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(m);
+    let mk = null;
+    const setPt = (lat,lng)=>{ window._pick.pt = {lat,lng}; if(mk) mk.setLatLng([lat,lng]); else mk = L.marker([lat,lng]).addTo(m); const i = document.getElementById("pickInfo"); if(i) i.textContent = "Titik dipilih: "+lat.toFixed(6)+", "+lng.toFixed(6); };
+    if(cur) setPt(cur.lat, cur.lng);
+    m.on("click", e=>setPt(e.latlng.lat, e.latlng.lng));
+    setTimeout(()=>m.invalidateSize(), 250);
+  }).catch(()=>{ const i = document.getElementById("pickInfo"); if(i) i.textContent = "Peta gagal dimuat (butuh internet). Isi koordinat manual."; });
+}
+function titikPickApply(){
+  const p = window._pick;
+  if(!p || !p.pt){ alert("Ketuk dulu lokasi di peta."); return; }
+  const inp = document.getElementById("mp_"+p.id);
+  if(inp) inp.value = p.pt.lat.toFixed(6)+", "+p.pt.lng.toFixed(6);
+  closeModal();
+  const msg = document.getElementById(p.id==="yard" ? "yardLocMsg" : "mpMsg");
+  if(msg) msg.innerHTML = `<div class="msg ok">✔ Titik terisi dari peta. Tekan Simpan.</div>`;
+}
 function mapUseMyLoc(id){
   const msg = document.getElementById("mpMsg");
   if(!navigator.geolocation){ msg.innerHTML = `<div class="msg err">HP ini tidak mendukung GPS.</div>`; return; }
@@ -4702,6 +4998,7 @@ function saveMapPoints(){
   const msg = document.getElementById("mpMsg");
   if(!a || !n){ msg.innerHTML = `<div class="msg err">Isi kedua titik dengan format: -6.xxxxx, 107.xxxxx</div>`; return; }
   DB.set(d=>{ d.mapPoints = {adm:a, nvdc:n}; });
+  alert("Titik rute tersimpan.");
 }
 const TRK_PATH = "radar_track";
 let TRACK = {}, TRKERR = "", ccMapObj = null, ccMapLayer = null, _leafP = null;
@@ -4861,12 +5158,12 @@ function useCurrentLocForYard(){
   );
 }
 function saveYardLocation(){
-  const lat = parseFloat(document.getElementById("yardLat").value);
-  const lng = parseFloat(document.getElementById("yardLng").value);
+  const p = mapParse(document.getElementById("mp_yard").value);
   const radius = parseFloat(document.getElementById("yardRadius").value);
   const msgEl = document.getElementById("yardLocMsg");
-  if(isNaN(lat) || isNaN(lng)){ msgEl.innerHTML = `<div class="msg err">Latitude/Longitude belum valid.</div>`; return; }
-  DB.set(d=>{ d.yardLocation = {lat, lng, radiusKm: isNaN(radius)?5:radius}; });
+  if(!p){ msgEl.innerHTML = `<div class="msg err">Titik absensi belum valid. Format: -6.xxxxx, 107.xxxxx</div>`; return; }
+  DB.set(d=>{ d.yardLocation = {lat:p.lat, lng:p.lng, radiusKm: (isNaN(radius)||radius<=0)?5:radius}; });
+  alert("Lokasi absensi tersimpan.");
 }
 /* ---- Kalibrasi area stall: Admin berjalan keliling, aplikasi merekam jejak GPS ---- */
 const REC = {on:false, id:null, pts:[], cur:null, acc:null, wake:null, msg:""};
