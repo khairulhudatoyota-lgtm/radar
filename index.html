@@ -83,6 +83,7 @@ input,select{font-family:inherit;}
 .userchip{display:flex; align-items:center; justify-content:space-between; margin-top:10px;}
 .userchip .who{font-size:12px; color:var(--text-dim);}
 .userchip .who b{color:var(--text);}
+.menuBtn{background:var(--panel2); color:var(--text); border:1px solid var(--border,#888); padding:8px 14px; border-radius:8px; font-size:12px; font-weight:700; margin-right:8px;}
 .logoutBtn{background:var(--panel2); color:var(--red); border:1px solid var(--red); padding:8px 14px; border-radius:8px; font-size:12px; font-weight:700;}
 
 .tabbar{display:flex; overflow-x:auto; gap:6px; padding:8px 10px; background:var(--panel); border-bottom:1px solid var(--border); scrollbar-width:none;}
@@ -787,6 +788,7 @@ window.RSnd=(function(){
       <div class="sub">Real-time Arrival, Dispatch &amp; Release</div>
       <div class="userchip">
         <div class="who">Login sebagai <b id="curUserName">-</b> · <span id="curUserRole" class="badge gold">ROLE</span></div>
+        <button class="menuBtn" id="menuBtn" onclick="backToRoleMenu()" style="display:none;">☰ Menu</button>
         <button class="logoutBtn" onclick="doLogout()">Keluar</button>
       </div>
     </div>
@@ -998,8 +1000,8 @@ function getSession(){
   }catch(e){ return null; }
 }
 let loginShift = (function(){ try{ const v=localStorage.getItem("radar_shift"); return (v==="red"||v==="white")?v:""; }catch(e){ return ""; } })();
-function setSession(user){
-  const s = { username:user.username, name:user.name, role:user.role, shift:loginShift||"", expiry: Date.now() + CONFIG.SESSION_HOURS*3600*1000 };
+function setSession(user, roles){
+  const s = { username:user.username, name:user.name, role:user.role, roles:(roles&&roles.length?roles:[user.role]), shift:loginShift||"", expiry: Date.now() + CONFIG.SESSION_HOURS*3600*1000 };
   localStorage.setItem(SESS_KEY, JSON.stringify(s));
   return s;
 }
@@ -1329,10 +1331,10 @@ function saveSpeedCfg(){
   m.innerHTML = `<div class="msg ok">✔ Pengaturan kecepatan tersimpan.</div>`;
 }
 
-function loginEnter(acc){
+function loginEnter(acc, roles){
   if(!TABS_BY_ROLE[acc.role]){ document.getElementById("loginMsg").innerHTML = `<div class="msg err">Akun ini belum punya otoritas yang valid. Hubungi Admin.</div>`; return; }
   selectedRole = acc.role;
-  currentUser = setSession(acc);
+  currentUser = setSession(acc, roles);
   spdUnlock();
   try{ RSnd.login(); }catch(e){}
   document.getElementById("loginMsg").innerHTML = "";
@@ -1343,7 +1345,8 @@ function loginPickRole(role){
   const u = document.getElementById("loginUser").value.trim(), p = document.getElementById("loginPass").value;
   const users = DB.get().users || [];
   const acc = users.find(x=>String(x.username).toLowerCase()===u.toLowerCase() && x.password===p && x.role===role);
-  if(acc) loginEnter(acc);
+  const roles = [...new Set(users.filter(x=>String(x.username).toLowerCase()===u.toLowerCase() && x.password===p).map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
+  if(acc) loginEnter(acc, roles);
 }
 function doLogin(){
   const u = document.getElementById("loginUser").value.trim();
@@ -1358,7 +1361,7 @@ function doLogin(){
   if(!same.length){ msgEl.innerHTML = `<div class="msg err">Username tidak ditemukan.</div>`; try{RSnd.err();}catch(e){} return; }
   const ok = same.filter(x=>x.password===p);
   if(!ok.length){ msgEl.innerHTML = `<div class="msg err">Password salah.</div>`; try{RSnd.err();}catch(e){} return; }
-  if(ok.length===1){ loginEnter(ok[0]); return; }
+  if(ok.length===1){ loginEnter(ok[0], [ok[0].role]); return; }
   // satu username terdaftar untuk beberapa peran: pengguna memilih menu tujuan
   const roles = [...new Set(ok.map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
   msgEl.innerHTML = `<div class="rolesectitle" style="margin:6px 0 8px;">Pilih menu tujuan</div><div class="rolegrid">` +
@@ -1369,6 +1372,27 @@ function loginCancel(){
   document.getElementById("loginMsg").innerHTML = "";
   document.getElementById("loginPass").value = "";
   try{ document.getElementById("loginUser").focus(); }catch(e){}
+}
+function backToRoleMenu(){
+  if(!currentUser || !currentUser.roles || currentUser.roles.length<2) return;
+  showModal(`<h3 style="margin:0 0 4px;">Pilih menu tujuan</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Kamu masuk sebagai <b>${currentUser.name}</b>. Pindah menu tanpa login ulang.</div><div class="rolegrid">`+
+    currentUser.roles.map(r=>{ const o=ROLES.find(x=>x.key===r)||{label:r,icon:"•",desc:""};
+      return `<button class="rolebtn" type="button" onclick="switchToRole('${r}')"><span class="ic">${o.icon}</span><span class="rtext"><b>${o.label.toUpperCase()}</b><span>${o.desc}${r===currentUser.role?" · (sedang dibuka)":""}</span></span></button>`; }).join("")+`</div>`);
+}
+function switchToRole(r){
+  if(!currentUser || !(currentUser.roles||[]).includes(r) || !TABS_BY_ROLE[r]) return;
+  closeModal();
+  if(r===currentUser.role) return;
+  try{ spdStop(); spdCloseOverlay(); }catch(e){}
+  try{ geoStop(); }catch(e){}
+  try{ stopScanner(); }catch(e){}
+  try{ disposeCar3D(); }catch(e){}
+  try{ if(autoWatchId){ navigator.geolocation.clearWatch(autoWatchId); autoWatchId=null; } }catch(e){}
+  try{ stopAutoAbsen(true); }catch(e){}
+  currentUser = Object.assign({}, currentUser, {role:r});
+  try{ const s=getSession()||{}; s.role=r; s.roles=currentUser.roles; localStorage.setItem(SESS_KEY, JSON.stringify(s)); }catch(e){}
+  try{ spdUnlock(); }catch(e){}
+  enterApp();
 }
 function doLogout(){
   spdStop(); spdCloseOverlay();
@@ -1412,6 +1436,7 @@ function enterApp(forceTab){
   document.getElementById("curUserName").textContent = currentUser.name;
   document.getElementById("curUserRole").textContent = ((ROLES.find(r=>r.key===currentUser.role)||{label:"DISPLAY"}).label || "DISPLAY") + (currentUser.shift?" · SHIFT "+rsShift(currentUser.shift):"");
   const isDisplay = currentUser.role==="display";
+  { const mb=document.getElementById("menuBtn"); if(mb) mb.style.display = (!isDisplay && currentUser.roles && currentUser.roles.length>1) ? "" : "none"; }
   { const lb = document.querySelector(".logoutBtn"); if(lb) lb.textContent = isDisplay ? "← Menu Login" : "⎋ Keluar"; }
   const tabbarEl = document.getElementById("tabbar");
   if(isDisplay){
@@ -2220,48 +2245,41 @@ function renderOrderStall(){
     </div>
   `).join("");
 
-  const absenBlock = absenState.verified ? `
-    <div class="card">
+  const _pr = getCcProfile();
+  const _lpOpts = sel=>data.lpList.map(lp=>`<option value="${lp}" ${sel===lp?"selected":""}>${lp}</option>`).join("");
+  const verifiedForm = absenState.verified ? `
+    <div class="card" style="border:2px solid var(--green);">
       <h3>📝 Form Registrasi Antrian CC</h3>
       <div class="msg ok" style="margin-bottom:12px;">✔ Absen berhasil — ${absenState.distanceKm!=null ? absenState.distanceKm.toFixed(1)+" km dari yard." : "mode MANUAL (tanpa GPS)."}</div>
       <div id="orderMsg"></div>
-      <div class="field">
-        <label>Nomor Polisi Truk</label>
-        <input id="ccPlat" type="text" placeholder="B 1234 ABC">
-      </div>
-      <div class="field">
-        <label>Nama LP / Perusahaan</label>
-        <select id="ccLP">
-          <option value="">-- pilih LP --</option>
-          ${data.lpList.map(lp=>`<option value="${lp}">${lp}</option>`).join("")}
-        </select>
-      </div>
+      <div class="field"><label>Nomor Polisi Truk</label><input id="ccPlat" type="text" placeholder="B 1234 ABC" value="${_pr.plat||""}"></div>
+      <div class="field"><label>Kode Driver (sesuai TLS)</label><input id="ccDrv" type="text" placeholder="KMDCCDRV302" value="${_pr.drvCode||""}" style="text-transform:uppercase;"></div>
+      <div class="field"><label>Nama LP / Perusahaan</label><select id="ccLP"><option value="">-- pilih LP --</option>${_lpOpts(_pr.lp)}</select></div>
       <button class="btn btn-primary" onclick="submitOrderStall()">🚚 Proses Antrian</button>
-    </div>
-  ` : `
+    </div>` : "";
+  const profileCard = `
     <div class="card">
-      <h3>Cara Absen</h3>
-      <div style="display:flex;gap:10px;margin:2px 0 10px;"><button type="button" class="modechip ${absenMode()==='auto'?'on':''}" onclick="setAbsenMode('auto')">🤖 Otomatis</button><button type="button" class="modechip ${absenMode()==='manual'?'on':''}" onclick="setAbsenMode('manual')">✍ Manual</button></div>
-      <p style="font-size:12px;color:var(--text-dim);margin:0;">${absenMode()==='auto'?`Absen tercatat sendiri begitu HP masuk radius ${data.yardLocation.radiusKm} km dari yard.`:`Tekan tombol absen saat sudah tiba. Absen manual hanya berhasil kalau kamu berada dalam radius ${data.yardLocation.radiusKm} km dari yard.`}</p>
-    </div>
-    ${absenMode()==='auto' ? `    <div class="card">
+      <h3>🚚 Data Truk</h3>
+      <div class="field"><label>Nomor Polisi Truk</label><input id="ccpPlat" type="text" placeholder="B 1234 ABC" value="${_pr.plat||""}"></div>
+      <div class="field"><label>Kode Driver (sesuai TLS)</label><input id="ccpDrv" type="text" placeholder="KMDCCDRV302" value="${_pr.drvCode||""}" style="text-transform:uppercase;"></div>
+      <div class="field"><label>Nama LP / Perusahaan</label><select id="ccpLP"><option value="">-- pilih LP --</option>${_lpOpts(_pr.lp)}</select></div>
+      <button class="btn btn-outline" onclick="saveCcProfile()">💾 Simpan Data Truk (tersimpan di HP ini)</button>
+    </div>`;
+  const autoCard = `
+    <div class="card">
       <h3>🤖 Absen Otomatis (GPS HP)</h3>
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Aktifkan sekali. Begitu HP-mu masuk radius ${data.yardLocation.radiusKm} km dari yard, truk <b>otomatis terdaftar</b> ke stall kosong / antrian tanpa klik. <b>Biarkan aplikasi terbuka</b> selama perjalanan (layar dijaga tetap menyala).</p>
-      ${(()=>{ const pr = getCcProfile(); return `
-      <div class="field"><label>Nomor Polisi Truk</label><input id="ccpPlat" type="text" placeholder="B 1234 ABC" value="${pr.plat||""}"></div>
-      <div class="field"><label>Kode Driver (sesuai TLS)</label><input id="ccpDrv" type="text" placeholder="KMDCCDRV302" value="${pr.drvCode||""}" style="text-transform:uppercase;"></div>
-      <div class="field"><label>Nama LP / Perusahaan</label><select id="ccpLP"><option value="">-- pilih LP --</option>${data.lpList.map(lp=>`<option value="${lp}" ${pr.lp===lp?"selected":""}>${lp}</option>`).join("")}</select></div>
-      <button class="btn btn-outline" style="margin-bottom:8px;" onclick="saveCcProfile()">💾 Simpan Data Truk (tersimpan di HP ini)</button>`; })()}
       <div id="autoStatus" style="margin:8px 0;">${autoStatusHtml()}</div>
       <button class="btn ${autoAbsen.on?'btn-danger':'btn-primary'}" onclick="${autoAbsen.on?'stopAutoAbsen()':'startAutoAbsen()'}">${autoAbsen.on?'⏹ Matikan Absen Otomatis':'🤖 Aktifkan Absen Otomatis'}</button>
-    </div>` : ""}
-    ${absenMode()==='manual' ? `    <div class="card">
-      <h3>📍 Absen Kedatangan</h3>
-      <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Absen cuma bisa dilakukan kalau posisi kamu udah dalam radius ${data.yardLocation.radiusKm} km dari lokasi loading unit.</p>
+    </div>`;
+  const manualCard = `
+    <div class="card">
+      <h3>✍ Absen Manual</h3>
+      <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Absen cuma bisa dilakukan kalau posisi kamu sudah dalam radius ${data.yardLocation.radiusKm} km dari lokasi loading unit. Bisa dipakai kapan saja, walaupun absen otomatis sedang aktif.</p>
       <div id="absenMsg"></div>
-      <button class="btn btn-primary" style="margin-bottom:8px;" onclick="absenManual()">✍ Absen Manual (cek lokasi)</button>
-    </div>` : ""}
-  `;
+      <button class="btn btn-primary" onclick="absenManual()">✍ Absen Manual (cek lokasi)</button>
+    </div>`;
+  const absenBlock = verifiedForm + profileCard + autoCard + manualCard;
 
   return `
     ${absenBlock}
@@ -2314,7 +2332,10 @@ function submitOrderStall(){
   const plat = document.getElementById("ccPlat").value.trim().toUpperCase();
   const lp = document.getElementById("ccLP").value.trim();
   const msgEl = document.getElementById("orderMsg");
+  const drv = ((document.getElementById("ccDrv")||{}).value||"").trim().toUpperCase();
   if(!plat || !lp){ msgEl.innerHTML = `<div class="msg err">Nomor polisi & nama LP wajib diisi.</div>`; return; }
+  if(!drv){ msgEl.innerHTML = `<div class="msg err">Kode Driver wajib diisi (contoh: KMDCCDRV302).</div>`; return; }
+  try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:drv})); }catch(e){}
 
   const res = registerCC(plat, lp, absenState.distanceKm, false, !!absenState.manual);
   if(res.dup) msgEl.innerHTML = `<div class="msg info">Truk ${plat} sudah terdaftar di stall / antrian.</div>`;
@@ -2368,6 +2389,10 @@ function renderDelivery(){
         ${b.batam?"":`<button class="btn btn-outline btn-sm" style="flex:1;" onclick="openTLS(${b.id})">📋 Salin untuk TLS</button>`}
         <button class="btn btn-green btn-sm" style="flex:1;" onclick="delout(${b.id})">✔ CC Berangkat / Dell Out</button>
       </div>
+      <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <button class="btn btn-outline btn-sm" style="flex:1;min-width:130px;" onclick="cancelILS(${b.id})">↩ Batal ILS</button>
+        ${canKeluarkanCC()?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:130px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${b.ccNum})">🚪 Keluarkan CC</button>`:""}
+      </div>
       ${b.batam?`<div style="margin-top:10px;font-size:12px;color:var(--text-dim);">ILS BATAM: input ke TLS dilakukan manual di PC.</div>`:""}
       ${tlsBadgeHtml(b)}
     </div>
@@ -2394,7 +2419,7 @@ function renderDelivery(){
     </button>
     </div>
 
-    <div class="dl-right">${deliverySjHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}<div class="dlbatches">
+    <div class="dl-right">${ccOutLogHtml(data)}${deliverySjHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}<div class="dlbatches">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
     </div></div>
   `;
@@ -2457,29 +2482,45 @@ function stallStats(data){
     return {stall:st, units:arr.map(a=>a[0]), n:arr.length, firstTs:Math.min(...ts), fullTs:Math.max(...ts), batam:b, reg:arr.length-b, mixed:b>0 && b<arr.length};
   });
 }
+let draftStall = {};            // {ccNum: nomor stall} pilihan manual MP
 function ccProposals(data){
-  const stats = stallStats(data), used = new Set(), out = [], ccs = [];
+  const stats = stallStats(data), used = new Set(), usedBy = {}, manualBy = {}, out = [], ccs = [];
   for(let i=1;i<=CONFIG.CC_TOTAL;i++){ if(data.cc[i]) ccs.push({n:i, c:data.cc[i]}); }
   ccs.sort((a,b)=>(a.c.ts||0)-(b.c.ts||0));
+  const wantBOf = (n,c)=>{ const row = (data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat)); return draftType[n]!==undefined ? draftType[n]==="B" : /batam/i.test((row&&row.dest)||""); };
+  const okFor = (x,wantB)=> !x.mixed && (wantB ? x.batam>0 : x.reg>0);
+  const active = ccs.filter(({n,c})=>!c.dismissed && !(data.ils||[]).some(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat)));
+  const manual = {};
+  active.forEach(({n,c})=>{ const want = draftStall[n]; if(!want) return;
+    const st = stats.find(x=>String(x.stall)===String(want) && !used.has(x.stall) && okFor(x, wantBOf(n,c)));
+    if(st){ used.add(st.stall); manualBy[st.stall]=n; manual[n]=st; } });
   for(const {n,c} of ccs){
     if((data.ils||[]).some(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat))) continue;
     const row = (data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat));
-    const wantB = draftType[n]!==undefined ? draftType[n]==="B" : /batam/i.test((row&&row.dest)||"");
-    const cand = stats.filter(x=>!used.has(x.stall) && !x.mixed && (wantB ? x.batam>0 : x.reg>0));
-    const full = cand.filter(x=>x.n>=CONFIG.SLOTS_PER_STALL).sort((a,b)=>a.fullTs-b.fullTs)[0];
-    const base = {n, plat:c.plat, lp:c.lp||"", driver:(row&&row.driver)||"", batam:wantB, ccTs:c.ts||0, dismissed:!!c.dismissed, waiting:!!c.waiting};
-    if(full){ used.add(full.stall); out.push({...base, ready:true, stall:full.stall, units:full.units.slice(0,CONFIG.MAX_LOAD_PER_CC), have:full.n}); }
-    else{ const best = cand.slice().sort((a,b)=>b.n-a.n||a.firstTs-b.firstTs)[0]; out.push({...base, ready:false, stall:best?best.stall:null, units:best?best.units:[], have:best?best.n:0}); }
+    const wantB = wantBOf(n,c);
+    const base = {n, plat:c.plat, lp:c.lp||"", driver:(row&&row.driver)||"", batam:wantB, ccTs:c.ts||0, dismissed:!!c.dismissed, waiting:!!c.waiting, manualStall:!!manual[n]};
+    if(c.dismissed){ out.push({...base, ready:false, stall:null, units:[], have:0, cands:[]}); continue; }
+    let pick = manual[n] || null;
+    if(!pick){
+      const cand = stats.filter(x=>!used.has(x.stall) && okFor(x,wantB));
+      const full = cand.filter(x=>x.n>=CONFIG.SLOTS_PER_STALL).sort((a,b)=>a.fullTs-b.fullTs)[0];
+      pick = full || cand.slice().sort((a,b)=>b.n-a.n||a.firstTs-b.firstTs)[0] || null;
+      if(pick){ used.add(pick.stall); usedBy[pick.stall]=n; }
+    }
+    if(pick && pick.n>=CONFIG.SLOTS_PER_STALL) out.push({...base, ready:true, stall:pick.stall, units:pick.units.slice(0,CONFIG.MAX_LOAD_PER_CC), have:pick.n});
+    else out.push({...base, ready:false, stall:pick?pick.stall:null, units:pick?pick.units:[], have:pick?pick.n:0});
   }
+  out.forEach(p=>{ p.cands = stats.filter(x=>okFor(x,p.batam) && (!manualBy[x.stall] || manualBy[x.stall]===p.n)).map(x=>({stall:x.stall, n:x.n})); });
   return out;
 }
-function draftGo(n){ const p = ccProposals(DB.get()).find(x=>x.n===n); if(p && p.ready && createILS(n, p.units)){ delete draftType[n]; render(); } }
+function draftSetStall(n, v){ if(v) draftStall[n]=v; else delete draftStall[n]; render(); }
+function draftGo(n){ const p = ccProposals(DB.get()).find(x=>x.n===n); if(p && p.ready && createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; render(); } }
 function draftWait(n){ DB.set(d=>{ if(d.cc[n]) d.cc[n].waiting = true; }); }
 function draftSendRest(n, noConfirm){
   const p = ccProposals(DB.get()).find(x=>x.n===n);
   if(!p || !p.units.length){ alert("Tidak ada unit tersisa untuk jenis ini."); return; }
   if(!noConfirm && !confirm(`Kirim ${p.units.length} unit dari stall ${p.stall} (kurang dari ${CONFIG.SLOTS_PER_STALL}) ke CC ${p.plat}?`)) return;
-  if(createILS(n, p.units)){ delete draftType[n]; render(); }
+  if(createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; render(); }
 }
 function draftDismiss(n, on){ DB.set(d=>{ if(d.cc[n]) d.cc[n].dismissed = !!on; }); }
 function draftSetType(n, t){ draftType[n] = t; render(); }
@@ -2489,34 +2530,39 @@ function draftCardsHtml(data){
   const typeSw = p=>`<div style="display:flex;gap:6px;margin:6px 0;"><span style="font-size:11px;color:var(--text-dim);align-self:center;">Muatan:</span>
       <button class="linechip ${!p.batam?'on':''}" style="padding:4px 12px;font-size:12px;" onclick="draftSetType(${p.n},'R')">Reguler</button>
       <button class="linechip ${p.batam?'on':''}" style="padding:4px 12px;font-size:12px;" onclick="draftSetType(${p.n},'B')">🟠 Batam</button></div>`;
+  const stallSel = p=>`<div style="display:flex;gap:6px;margin:6px 0;align-items:center;"><span style="font-size:11px;color:var(--text-dim);">Stall unit:</span><select onchange="draftSetStall(${p.n},this.value)" style="flex:1;max-width:260px;"><option value="">Otomatis (urut FIFO)</option>${(p.cands||[]).map(c=>`<option value="${c.stall}" ${String(draftStall[p.n])===String(c.stall)?"selected":""}>Stall ${c.stall} · ${c.n}/${CONFIG.SLOTS_PER_STALL} unit${c.n>=CONFIG.SLOTS_PER_STALL?" (penuh)":""}</option>`).join("")}</select></div>`;
+  const outBtn = p=>!canKeluarkanCC()?"":`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`;
   return `<div class="dl-draft">` + P.map(p=>{
     const who = `LP <b>${p.lp||"-"}</b> · <b>${p.plat}</b>${p.driver?` · Driver <b>${p.driver}</b>`:""}`;
-    if(p.dismissed) return `<div class="card" style="opacity:.75;"><div style="font-size:13px;">🚚 ${who} — draft dibatalkan.</div><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="draftDismiss(${p.n},false)">↺ Tampilkan draft lagi</button></div>`;
+    if(p.dismissed) return `<div class="card" style="opacity:.75;"><div style="font-size:13px;">🚚 ${who} — dilewati sementara (stall-nya tidak ditahan).</div><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="draftDismiss(${p.n},false)">↺ Tampilkan lagi</button>${canKeluarkanCC()?`<button class="btn btn-outline btn-sm" style="margin:8px 0 0 8px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`:""}</div>`;
     if(p.ready) return `<div class="card" style="border:2px solid var(--green);background:#F3FBF6;">
       <h3 style="color:var(--green);">🚚 CC Siap Loading — Draft ILS</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>Siap loading unit di <b style="font-size:17px;">Stall ${p.stall}</b> · ${p.units.length} unit${p.batam?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800;">BATAM</span>`:""}</div>
-      ${typeSw(p)}<div class="dchips">${chips(p)}</div>
-      <div style="display:flex;gap:8px;margin-top:12px;">
+      ${typeSw(p)}${stallSel(p)}<div class="dchips">${chips(p)}</div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" style="flex:2;" onclick="draftGo(${p.n})">✔ Lanjutkan — Buat ILS</button>
-        <button class="btn btn-outline" style="flex:1;" onclick="draftDismiss(${p.n},true)">✕ Batalkan</button>
+        <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
+        ${outBtn(p)}
       </div></div>`;
     const info = p.units.length ? `Stall <b>${p.stall}</b> baru <b>${p.have}/${CONFIG.SLOTS_PER_STALL}</b> unit.` : `Belum ada unit ${p.batam?"Batam":"reguler"} yang siap (stall masih kosong).`;
     if(!p.waiting) return `<div class="card" style="border:2px solid #E8833A;background:#FFF8EF;">
       <h3 style="color:#C9661A;">🚚 CC Siap Loading — Stall Belum Penuh</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>${info}</div>
-      ${typeSw(p)}${p.units.length?`<div class="dchips">${chips(p)}</div>`:""}
+      ${typeSw(p)}${stallSel(p)}${p.units.length?`<div class="dchips">${chips(p)}</div>`:""}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         ${p.units.length?`<button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="draftSendRest(${p.n},true)">✔ Tetap Buat ILS (${p.units.length} unit)</button>`:""}
         <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftWait(${p.n})">⏳ Menunggu</button>
-        <button class="btn btn-outline" style="flex:1;min-width:90px;" onclick="draftDismiss(${p.n},true)">✕ Batalkan</button>
+        <button class="btn btn-outline" style="flex:1;min-width:90px;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
+        ${outBtn(p)}
       </div></div>`;
     return `<div class="card" style="border:2px dashed var(--gold-dim);">
       <h3>⏳ Menunggu Stall Penuh</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>${info} Kamu akan diberi notifikasi lagi begitu stall penuh.</div>
-      ${typeSw(p)}
+      ${typeSw(p)}${stallSel(p)}
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
         ${p.units.length?`<button class="btn btn-outline btn-sm" style="flex:1;" onclick="draftSendRest(${p.n})">Tetap buat sekarang (${p.units.length})</button>`:""}
-        <button class="btn btn-outline btn-sm" style="flex:1;" onclick="draftDismiss(${p.n},true)">✕ Batalkan</button>
+        <button class="btn btn-outline btn-sm" style="flex:1;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
+        ${outBtn(p)}
       </div></div>`;
   }).join("") + `</div>`;
 }
@@ -3106,6 +3152,47 @@ function manifestCardHtml(data){
     <button class="btn btn-primary" onclick="downloadManifest()">⬇ Download Excel</button></div>`;
 }
 
+
+/* ===== Batal ILS & Keluarkan CC ===== */
+function cancelILS(id){
+  const b=(DB.get().ils||[]).find(x=>x.id===id); if(!b) return;
+  if(b.outTs || b.status==="done"){ alert("ILS ini sudah Delout, tidak bisa dibatalkan di sini. Gunakan Batalkan Delout (5 menit) bila perlu."); return; }
+  const msg=`Batalkan ILS #${id} (CC ${b.ccPlat})?\n\n• ${b.units.length} unit kembali ke stall seperti sebelum ILS dibuat\n• ILS beserta daftar QR / No. Rangka dihapus`+(b.tlsTs?"\n• ILS ini sudah ditandai masuk TLS: pastikan ILS di TLS juga dibatalkan":"")+(b.valStartTs?"\n• Proses validasi sudah dimulai dan ikut dihapus":"");
+  if(!confirm(msg)) return;
+  DB.set(d=>{ const i=(d.ils||[]).findIndex(x=>x.id===id); if(i<0) return; const x=d.ils[i];
+    (x.units||[]).forEach(u=>{ const cur=d.units[u.slot]; if(cur && cur.ilsId===id) delete cur.ilsId; });
+    d.ils.splice(i,1); });
+  try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+id).remove(); }catch(e){}
+  render();
+}
+function canKeluarkanCC(){ return !!(currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); }
+function ccOutLogHtml(data){
+  const mid=prodMidnight(), L=(data.ccOutLog||[]).filter(x=>x.ts>=mid).slice().reverse();
+  if(!L.length) return "";
+  const hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+  return `<div class="card"><h3>🚪 CC Dikeluarkan (hari produksi ini)</h3>${L.map(x=>`<div class="kitem" style="margin-top:8px;"><b>${x.plat}</b> · LP ${x.lp||"-"} · Stall ${x.ccNum}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${hm(x.ts)} · dipulangkan oleh <b>${x.by||"-"}</b>${x.ilsId?" · ILS dibatalkan":""}</div><div style="font-size:13px;margin-top:4px;">Alasan: ${String(x.why||"").replace(/</g,"&lt;")}</div></div>`).join("")}</div>`;
+}
+function keluarkanCC(n){
+  if(!canKeluarkanCC()){ alert("Hanya Delivery yang boleh memulangkan CC."); return; }
+  const d0=DB.get(), c=d0.cc[n]; if(!c){ alert("Stall "+n+" sudah kosong."); return; }
+  const ils=(d0.ils||[]).find(b=>b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat));
+  const q=(d0.queue||[])[0];
+  const why=prompt(`Keluarkan CC ${c.plat} dari Stall ${n}?\n`+(ils?`• ILS #${ils.id} ikut dibatalkan, unit kembali ke stall\n`:"")+`• Stall ${n} dikosongkan`+(q?`\n• CC berikutnya naik: ${q.plat}`:"")+`\n\nDikeluarkan oleh: ${(currentUser&&currentUser.name)||"-"} (otomatis dari akun login)\n\nKetik alasan (wajib, mis. tidak lolos verifikasi / unit NG):`, "");
+  if(why===null) return;
+  if(String(why).trim().length<3){ alert("Alasan wajib diketik (minimal 3 huruf). CC tidak jadi dikeluarkan."); return; }
+  DB.set(d=>{
+    const cur=d.cc[n]; if(!cur) return;
+    const oi=(d.ils||[]).findIndex(b=>b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===normPlat(cur.plat));
+    let ilsId=null;
+    if(oi>=0){ const x=d.ils[oi]; ilsId=x.id; (x.units||[]).forEach(u=>{ const un=d.units[u.slot]; if(un && un.ilsId===x.id) delete un.ilsId; }); d.ils.splice(oi,1); }
+    d.ccOutLog=d.ccOutLog||[]; d.ccOutLog.push({ts:Date.now(), plat:cur.plat, lp:cur.lp||"", ccNum:n, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", ilsId});
+    if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
+    d.cc[n]=null;
+    if(d.queue.length>0){ const next=d.queue.shift(); d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now()}; }
+  });
+  if(ils){ try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+ils.id).remove(); }catch(e){} }
+  render();
+}
 function kosongkanCC(num){
   DB.set(d=>{
     d.cc[num] = null;
@@ -3637,6 +3724,70 @@ function dccpSaveEdit(){
   });
   dccpEditIdx=null; render();
 }
+
+/* ===== CC PENGGANTI (per ritase atau sampai ritase terakhir) ===== */
+function dccpTripList(r){ return ((r.trips&&r.trips.length)?r.trips:(r.schedTime?[r.schedTime]:[])).slice().sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0)); }
+function dccpDoneCount(r,data){ const mid=prodMidnight(); const k=normPlat(r.police); return (data.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=mid+SHIFT_START_H*3600000).length; }
+function dccpGantiOpen(ri){
+  const data=DB.get(), r=data.dccpSchedule[ri]; if(!r) return;
+  const times=dccpTripList(r), done=dccpDoneCount(r,data);
+  if(!times.length){ alert("CC ini belum punya jam ritase. Upload ulang DCCP atau isi lewat ✏️ Edit."); return; }
+  const lpOpts=(data.lpList||[]).map(l=>`<option value="${l}" ${l===r.lp?"selected":""}>${l}</option>`).join("");
+  const rows=times.map((t,i)=>`<label style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--border);${i<done?"opacity:.5;":""}"><input type="checkbox" class="gTrip" value="${t}" ${i<done?"disabled":""}> <b>Rit ${i+1}</b> · ${t}${i<done?" <span style='color:#1E9E5A;font-size:12px;'>✓ sudah jalan</span>":""}</label>`).join("");
+  showModal(`<h3 style="margin:0 0 4px;">🔁 CC Pengganti</h3>
+    <div style="font-size:13px;margin-bottom:8px;">Yang diganti: <b>${r.police}</b> · LP ${r.lp}</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Pilih ritase yang diganti. Tiap ritase boleh dipilih sendiri, atau pakai pintasan di bawah.</div>
+    ${rows}
+    <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;">Pintasan:</span>
+      <select id="gFrom">${times.map((t,i)=>`<option value="${i}">Rit ${i+1} (${t}) s.d. terakhir</option>`).join("")}</select>
+      <button type="button" class="btn btn-outline btn-sm" onclick="gantiPickFrom()">Centang</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">
+      <label>Plat CC pengganti<input id="gPlat" placeholder="B 1234 ABC" style="text-transform:uppercase;"></label>
+      <label>LP<select id="gLP">${lpOpts}</select></label>
+      <label>Nama driver<input id="gDrv"></label>
+      <label>Kode driver<input id="gCode" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></label>
+    </div>
+    <label style="display:block;margin-top:8px;">Alasan (opsional)<input id="gWhy" placeholder="mis. CC tidak hadir"></label>
+    <div id="gMsg" style="margin-top:8px;"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="dccpGantiDo(${ri})">✔ Terapkan Pengganti</button>`);
+}
+function gantiPickFrom(){
+  const from=parseInt(document.getElementById("gFrom").value,10)||0;
+  document.querySelectorAll(".gTrip").forEach((c,i)=>{ if(!c.disabled) c.checked = i>=from; });
+}
+function dccpGantiDo(ri){
+  const val=id=>((document.getElementById(id)||{}).value||"").trim();
+  const msg=document.getElementById("gMsg");
+  const plat=val("gPlat").toUpperCase(), lp=val("gLP"), drv=val("gDrv"), code=val("gCode").toUpperCase(), why=val("gWhy");
+  const chosen=[...document.querySelectorAll(".gTrip:checked")].map(c=>c.value);
+  if(!chosen.length){ msg.innerHTML=`<div class="msg err">Pilih minimal satu ritase yang diganti.</div>`; return; }
+  if(!plat){ msg.innerHTML=`<div class="msg err">Isi plat CC pengganti.</div>`; return; }
+  const cur=DB.get().dccpSchedule[ri]; if(!cur) return;
+  if(normPlat(plat)===normPlat(cur.police)){ msg.innerHTML=`<div class="msg err">Plat pengganti sama dengan CC semula.</div>`; return; }
+  DB.set(d=>{
+    const old=d.dccpSchedule[ri]; if(!old) return;
+    const trips=dccpTripList(old), n=chosen.length;
+    const pt=(old.planTrip!=null?Number(old.planTrip):trips.length)||trips.length||1;
+    const pu=old.planUnit!=null?Number(old.planUnit):pt*6;
+    const per=pt>0?pu/pt:6;
+    const rest=trips.filter(t=>!chosen.includes(t));
+    old.trips=rest; old.schedTime=rest[0]||"";
+    old.planTrip=Math.max(0,pt-n); old.planUnit=Math.max(0,Math.round(pu-n*per));
+    old.gantiLog=(old.gantiLog||[]).concat([{ts:Date.now(), trips:chosen, to:plat, why}]);
+    const tgt=d.dccpSchedule.find(x=>normPlat(x.police)===normPlat(plat));
+    const note=`pengganti ${old.police} (rit ${chosen.join(", ")})`+(why?" - "+why:"");
+    if(tgt){
+      const all=[...new Set([...dccpTripList(tgt), ...chosen])].sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0));
+      const tpt=(tgt.planTrip!=null?Number(tgt.planTrip):dccpTripList(tgt).length)||0, tpu=tgt.planUnit!=null?Number(tgt.planUnit):tpt*6;
+      tgt.trips=all; tgt.schedTime=all[0]||tgt.schedTime||""; tgt.planTrip=tpt+n; tgt.planUnit=Math.round(tpu+n*per);
+      tgt.gantiDari=old.police; tgt.note=((tgt.note?tgt.note+"; ":"")+note);
+      if(drv) tgt.driver=drv; if(code) tgt.drvCode=code;
+    } else {
+      d.dccpSchedule.push({lp:lp||old.lp, police:plat, model:old.model||"", driver:drv, drvCode:code, schedTime:chosen[0], trips:chosen.slice(), dest:old.dest||"", note, planTrip:n, planUnit:Math.round(n*per), pengganti:true, gantiDari:old.police});
+    }
+  });
+  closeModal(); render();
+}
 function dccpDelete(i){
   if(!confirm("Hapus CC ini dari jadwal?")) return;
   DB.set(d=>{ d.dccpSchedule.splice(i,1); });
@@ -3691,8 +3842,8 @@ function renderDccpUpload(){
       ${rows.map((r,ri)=>{
         const a = withActual ? findActualArrival(r.police,data) : null;
         if(withActual && !lpMine(r.lp)) return "";
-        return `<tr><td>${r.lp}</td><td><b>${r.police}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.note?`<div style="font-size:10px;color:var(--text-dim);">${r.note}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
-        ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${a.stall})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
+        return `<tr><td>${r.lp}</td><td><b>${r.police}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.note?`<div style="font-size:10px;color:var(--text-dim);">${r.note}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
+        ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${a.stall})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
       }).join("")}
     </table></div>`;
   return `
@@ -3757,7 +3908,7 @@ function syncUnitLog(d){
   d.unitLog = log.filter(e=> !((e.status==="sent" && (e.sentTs||e.ilsTs||0) < cut) || (e.status==="removed" && (e.removedTs||0) < cut)))
     .filter(e=> present.has(e) || !clr || Math.max(e.parkedTs||0,e.ilsTs||0,e.sentTs||0,e.removedTs||0) > clr);
   if(clr) d.ils = (d.ils||[]).filter(b=> !(b.status==="done" && (b.doneTs||b.ts||0) <= clr));
-  d.ils = (d.ils||[]).filter(b=> !(b.status==="done" && (b.doneTs||b.ts||0) < cut));
+  d.ils = (d.ils||[]).filter(b=> !(b.status==="done" && (b.doneTs||b.ts||0) < cut && !(b.sj && now-(b.outTs||b.doneTs||b.ts||0) < SJ_KEEP_MS)));
 }
 
 /* ======================================================================
