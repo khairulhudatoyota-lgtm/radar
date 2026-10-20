@@ -3001,6 +3001,87 @@ function delOutUndo(id){
   if(!ok) alert("Tidak bisa dibatalkan: stall itu sudah berubah (CC berikutnya sudah diproses).");
 }
 /* --- penyimpanan PDF --- */
+/* ===== BACA PDF ILS: No. SJKB + Cabang per nomor rangka (pdf.js dimuat saat dibutuhkan) ===== */
+const PDFJS_URL="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", PDFJS_WORKER="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+let _pdfjsP=null;
+function pdfjsLoad(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(_pdfjsP) return _pdfjsP;
+  _pdfjsP=new Promise((res,rej)=>{
+    const sc=document.createElement("script"); sc.src=PDFJS_URL;
+    sc.onload=()=>{ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob(['importScripts("'+PDFJS_WORKER+'")'],{type:"text/javascript"})); res(window.pdfjsLib); }catch(e){ _pdfjsP=null; rej(e); } };
+    sc.onerror=()=>{ _pdfjsP=null; rej(new Error("pembaca PDF gagal dimuat (butuh internet)")); };
+    document.head.appendChild(sc);
+  });
+  return _pdfjsP;
+}
+/* items: [{s:teks, x, y, pg}] — y makin kecil makin ke bawah (koordinat PDF). Fungsi murni agar bisa diuji. */
+function sjParseItems(items){
+  const out={sjkb:"", cab:{}, n:0};
+  const all=items.map(i=>String(i.s||"").trim()).filter(Boolean);
+  const txt=all.join(" ");
+  let m=txt.match(/No\.?\s*SJKB\s*:?\s*([A-Z0-9][A-Z0-9\/\-\.]{6,})/i) || txt.match(/\b([A-Z0-9]{3,}\/\d{8}\/\d{3,6}\/[A-Z0-9]+)\b/);
+  if(m) out.sjkb=m[1].toUpperCase();
+  const pages=[...new Set(items.map(i=>i.pg||1))].sort((a,b)=>a-b);
+  const isColor=t=>/^[A-Z0-9]\d{2}-[A-Z][A-Z \/\-]*$/.test(t);
+  pages.forEach(pg=>{
+    const L=items.filter(i=>(i.pg||1)===pg && String(i.s||"").trim()).map(i=>({s:String(i.s).trim(), x:i.x, y:i.y}));
+    const frames=L.filter(i=>/^[A-Z0-9]{17}$/.test(i.s) && /\d/.test(i.s) && /[A-Z]/.test(i.s)).sort((a,b)=>b.y-a.y);
+    if(!frames.length) return;
+    const hd=L.find(i=>/^cabang$/i.test(i.s)), pk=L.find(i=>/^parkir$/i.test(i.s));
+    const lh=L.find(i=>/^line( head)?$/i.test(i.s)), stopY=lh ? lh.y+6 : -Infinity;
+    if(hd || pk){
+      /* tata letak tabel (Instruction Loading Sheet): kolom "Cabang" di kanan */
+      const cabX = hd ? hd.x-4 : pk.x+40;
+      frames.forEach((f,i)=>{
+        const top=f.y+7, bot=(i+1<frames.length) ? frames[i+1].y+7 : Math.max(f.y-45, stopY);
+        const parts=L.filter(c=>c.x>=cabX && c.y<=top && c.y>bot && !/^REG\d+/i.test(c.s) && !/^\d{3}$/.test(c.s) && !/^cabang$/i.test(c.s)).sort((a,b)=>(b.y-a.y)||(a.x-b.x));
+        out.cab[f.s]=parts.map(c=>c.s).join(" ").replace(/\s+/g," ").trim(); out.n++;
+      });
+    }else{
+      /* tata letak kartu (Surat Jalan Kendaraan Baru): rangka, model, warna, lalu cabang di bawahnya */
+      const xs=[...new Set(frames.map(f=>Math.round(f.x/10)))].sort((a,b)=>a-b);
+      frames.forEach(f=>{
+        const cx=Math.round(f.x/10), nxt=xs.find(v=>v>cx), xR = nxt!=null ? nxt*10-6 : Infinity;
+        const same=frames.filter(g=>Math.round(g.x/10)===cx && g.y<f.y);
+        const bot = same.length ? same[0].y+12 : Math.max(f.y-75, stopY);
+        const band=L.filter(c=>c.x>=f.x-3 && c.x<xR && c.y<f.y-2 && c.y>bot && c.s!==f.s);
+        const lines=[]; band.sort((a,b)=>(b.y-a.y)||(a.x-b.x)).forEach(c=>{ const ln=lines.find(q=>Math.abs(q.y-c.y)<3); if(ln) ln.t.push(c.s); else lines.push({y:c.y, t:[c.s]}); });
+        const txt=lines.map(q=>q.t.join(" ").replace(/\s+/g," ").trim());
+        const ci=txt.findIndex(isColor);
+        const name = ci>=0 ? txt.slice(ci+1).join(" ") : (txt.length ? txt[txt.length-1] : "");
+        out.cab[f.s]=name.trim(); out.n++;
+      });
+    }
+  });
+  return out;
+}
+async function sjParsePdf(b64){
+  const lib=await pdfjsLoad();
+  const bin=atob(b64), arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  const pdf=await lib.getDocument({data:arr}).promise, items=[];
+  for(let p=1;p<=pdf.numPages;p++){ const pg=await pdf.getPage(p), tc=await pg.getTextContent(); tc.items.forEach(it=>{ if(it.str&&it.str.trim()) items.push({s:it.str, x:it.transform[4], y:it.transform[5], pg:p}); }); }
+  return sjParseItems(items);
+}
+function sjApplyParsed(id, r){
+  if(!r || (!r.sjkb && !r.n)) return false;
+  DB.set(d=>{
+    const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.sjkb=r.sjkb||b.sjkb||""; b.sjCab=r.cab||{}; }
+    const m=(d.manifest||[]).find(x=>x.id===id); if(m){ m.sk=r.sjkb||m.sk||""; m.cb=r.cab||{}; }
+  });
+  return true;
+}
+async function sjIndex(id,b64){ try{ return sjApplyParsed(id, await sjParsePdf(b64)); }catch(e){ return false; } }
+function sjInfo(data,m){
+  const b=(data.ils||[]).find(y=>y.id===m.id);
+  return {sk: m.sk||(b&&b.sjkb)||"", cb: (m.cb&&Object.keys(m.cb).length)?m.cb:((b&&b.sjCab)||{})};
+}
+/* sebelum unduh manifest: baca PDF yang sudah tersimpan tapi belum dibaca */
+async function mfEnsureParsed(){
+  const data=DB.get(); if(!sjCanStore()) return;
+  const need=mfRecords(data).filter(m=>{ const i=sjInfo(data,m); const b=(data.ils||[]).find(y=>y.id===m.id); return !i.sk && b && b.sj; }).slice(0,40);
+  for(const m of need){ try{ const v=await sjFetch(m.id); await sjIndex(m.id, v.b64); }catch(e){} }
+}
 function sjCanStore(){ return !!(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed); }
 async function sjStore(id,name,b64,mime){
   if(!sjILS(id)){ alert("ILS tidak ditemukan."); return false; }
@@ -3011,6 +3092,7 @@ async function sjStore(id,name,b64,mime){
   try{ await FBS.db.ref(SJ_PATH+"/"+id).set({name:name||"surat-jalan.pdf", mime:mime||"application/pdf", ts, b64}); }
   catch(e){ alert("Gagal menyimpan PDF: "+(e&&e.message||e)+"\nPeriksa aturan (Rules) Firebase Realtime Database untuk path radar_sj."); return false; }
   DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b) b.sj={name:name||"surat-jalan.pdf", size, ts}; });
+  sjIndex(id,b64);   // baca No. SJKB & Cabang di latar belakang (untuk manifest)
   return true;
 }
 window.radarSJ=function(id,name,b64){ return sjStore(Number(id),name,b64,"application/pdf"); };
@@ -3077,13 +3159,13 @@ function myCcPlatKey(){ try{ return normPlat((getCcProfile()||{}).plat||""); }ca
 ====================================================================== */
 const MF_KEEP_MS=14*24*3600*1000;
 function mfDriver(d,plat){ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); return (r&&(r.driver||r.drvCode))||""; }
-function mfRecord(d,x){ return {id:x.id, out:x.outTs||Date.now(), t:x.tlsTs||x.ts, lp:x.lp||"", plat:x.ccPlat||"", drv:mfDriver(d,x.ccPlat), bt:!!x.batam, u:(x.units||[]).map(u=>[u.frame,u.model||""])}; }
+function mfRecord(d,x){ return {id:x.id, out:x.outTs||Date.now(), t:x.tlsTs||x.ts, lp:x.lp||"", plat:x.ccPlat||"", drv:mfDriver(d,x.ccPlat), bt:!!x.batam, sk:x.sjkb||"", cb:x.sjCab||{}, u:(x.units||[]).map(u=>[u.frame,u.model||""])}; }
 function mfTitle(m){ m=String(m||""); return m.charAt(0).toUpperCase()+m.slice(1).toLowerCase(); }
 function mfPad(n){ return String(n).padStart(2,"0"); }
 function mfDateStr(t){ const d=new Date(t); return d.getFullYear()+"-"+mfPad(d.getMonth()+1)+"-"+mfPad(d.getDate()); }
 function mfRecords(data){
   const L=(data.manifest||[]).slice(), have=new Set(L.map(m=>m.id));
-  (data.ils||[]).filter(b=>b.status==="done" && !have.has(b.id)).forEach(b=>{ L.push({id:b.id, out:b.doneTs||b.ts, t:b.tlsTs||b.ts, lp:b.lp||"", plat:b.ccPlat||"", drv:mfDriver(data,b.ccPlat), bt:!!b.batam, u:(b.units||[]).map(u=>[u.frame,u.model||""])}); });
+  (data.ils||[]).filter(b=>b.status==="done" && !have.has(b.id)).forEach(b=>{ L.push({id:b.id, out:b.doneTs||b.ts, t:b.tlsTs||b.ts, lp:b.lp||"", plat:b.ccPlat||"", drv:mfDriver(data,b.ccPlat), bt:!!b.batam, sk:b.sjkb||"", cb:b.sjCab||{}, u:(b.units||[]).map(u=>[u.frame,u.model||""])}); });
   return L;
 }
 const MF_DAY_FROM=7*60, MF_DAY_TO=20*60;   // Day 07:00–20:00, Night 20:01–06:59
@@ -3098,7 +3180,8 @@ function mfRows(data, dateStr, lp, shift){
   const L=mfRecords(data).filter(m=>inShift(m) && (!lp || lpKey(m.lp)===lpKey(lp))).sort((a,b)=>a.t-b.t);
   const rows=[]; let n=0;
   L.forEach(m=>{ const d=new Date(m.t), h=d.getHours(), hhmm=mfPad(h)+":"+mfPad(d.getMinutes());
-    m.u.forEach(u=>{ n++; rows.push([n, u[0], mfTitle(u[1]), m.plat, m.drv, m.lp, "EKY", "", m.bt?"Batam":tujuan, "CC", d.getDate()+"-"+["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][d.getMonth()]+"-"+String(d.getFullYear()).slice(2), mfShiftName(h,d.getMinutes()), hhmm, ""]); });
+    const si=sjInfo(data,m), serial=Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(1899,11,30))/86400000);
+    m.u.forEach(u=>{ n++; const cb=(si.cb[String(u[0]).toUpperCase()]||""); rows.push([n, u[0], mfTitle(u[1]), m.plat, m.drv, m.lp, "EKY", cb||{y:1}, m.bt?"Batam":tujuan, "CC", {d:serial}, mfShiftName(h,d.getMinutes()), hhmm, si.sk||{y:1}]); });
   });
   return rows;
 }
@@ -3130,10 +3213,10 @@ function mfXlsx(sheets, widths){
   files.push({name:"_rels/.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'});
   files.push({name:"xl/workbook.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'+names.map(x=>'<sheet name="'+_xe(x.n)+'" sheetId="'+(x.i+1)+'" r:id="rId'+(x.i+1)+'"/>').join("")+'</sheets></workbook>'});
   files.push({name:"xl/_rels/workbook.xml.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+names.map(x=>'<Relationship Id="rId'+(x.i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(x.i+1)+'.xml"/>').join("")+'<Relationship Id="rId'+(names.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'});
-  files.push({name:"xl/styles.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF000000"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs></styleSheet>'});
+  files.push({name:"xl/styles.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="dd\-mmm\-yy"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF000000"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/></cellXfs></styleSheet>'});
   sheets.forEach((sh,si)=>{
     const cols=widths?'<cols>'+widths.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join("")+'</cols>':'';
-    const rows=sh.rows.map((r,ri)=>'<row r="'+(ri+1)+'">'+r.map((v,ci)=>{ const ref=_colName(ci)+(ri+1), st=ri===0?' s="1"':''; if(v===""||v===null||v===undefined) return ri===0?'<c r="'+ref+'"'+st+'/>':''; if(typeof v==="number") return '<c r="'+ref+'"'+st+'><v>'+v+'</v></c>'; return '<c r="'+ref+'"'+st+' t="inlineStr"><is><t xml:space="preserve">'+_xe(v)+'</t></is></c>'; }).join("")+'</row>').join("");
+    const rows=sh.rows.map((r,ri)=>'<row r="'+(ri+1)+'">'+r.map((v,ci)=>{ const ref=_colName(ci)+(ri+1), st=ri===0?' s="1"':''; if(v && typeof v==="object"){ if(v.y) return '<c r="'+ref+'" s="3"/>'; if(v.d!=null) return '<c r="'+ref+'" s="2"><v>'+v.d+'</v></c>'; v=""; } if(v===""||v===null||v===undefined) return ri===0?'<c r="'+ref+'"'+st+'/>':''; if(typeof v==="number") return '<c r="'+ref+'"'+st+'><v>'+v+'</v></c>'; return '<c r="'+ref+'"'+st+' t="inlineStr"><is><t xml:space="preserve">'+_xe(v)+'</t></is></c>'; }).join("")+'</row>').join("");
     files.push({name:"xl/worksheets/sheet"+(si+1)+".xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'+cols+'<sheetData>'+rows+'</sheetData><autoFilter ref="A1:'+_colName((sh.rows[0]||[]).length-1)+Math.max(1,sh.rows.length)+'"/></worksheet>'});
   });
   return _zip(files);
@@ -3148,6 +3231,7 @@ async function downloadManifest(){
   const ds=(document.getElementById("mfDate")||{}).value||mfDateStr(Date.now());
   const lpSel=(document.getElementById("mfLP")||{}).value||"";
   const shf=(document.getElementById("mfShift")||{}).value||"";
+  try{ await mfEnsureParsed(); }catch(e){}
   const data=DB.get();
   const lps=lpSel? [lpSel] : [...new Set(mfRecords(data).map(m=>m.lp).filter(Boolean))].sort();
   const all=mfRows(data, ds, lpSel, shf);
@@ -3925,7 +4009,8 @@ function dccpGantiDo(ri){
 }
 /* ===== TUKAR JAM LOADING ANTAR CC =====
    - Hanya bisa sebelum loading pertama (kedua CC belum punya ILS hari ini).
-   - Sekali tukar, SELURUH jam ritase kedua CC saling bertukar (beserta rencana ritase/unitnya).
+   - Jam ritase TETAP di barisnya; yang bertukar adalah identitas CC (plat, driver, kode driver, model, LP) antar kedua baris,
+     sehingga tabel tetap urut jam dan koordinator mudah membacanya.
    - Hanya antar CC se-LP. Lintas LP baru boleh bila tidak ada CC se-LP lain yang masih bisa ditukar.
    - Dilakukan Koordinator / Delivery (Admin tetap boleh). */
 function canTukarJam(){ return !!(currentUser && (currentUser.role==="koordinator"||currentUser.role==="delivery"||currentUser.role==="admin")); }
@@ -3949,7 +4034,7 @@ function tukarOpen(ri){
     <div class="msg ${c.crossOk?"err":"info"}" style="font-size:12px;margin-bottom:8px;">${c.crossOk?`Tidak ada CC LP ${me.lp} lain yang bisa ditukar, jadi boleh tukar dengan <b>LP lain</b>. Pastikan tetap sesuai heijunka.`:`Hanya boleh tukar dengan CC <b>LP ${me.lp}</b> yang sama.`}</div>
     <label style="display:block;margin-bottom:8px;">Tukar dengan CC<select id="tkP" onchange="tukarFillB()">${optP}</select></label>
     <div id="tkPrev" style="font-size:13px;margin-bottom:8px;"></div>
-    <div class="msg info" style="font-size:12px;margin-bottom:8px;">Seluruh jam ritase kedua CC saling bertukar sekaligus. Hanya bisa sebelum loading pertama.</div>
+    <div class="msg info" style="font-size:12px;margin-bottom:8px;">Jam tetap di barisnya. Yang bertukar: plat, nama driver, dan kode driver. Hanya bisa sebelum loading pertama.</div>
     <label style="display:block;margin-bottom:8px;">Alasan (wajib)<input id="tkWhy" placeholder="mis. CC pagi ada kendala"></label>
     <div style="font-size:12px;color:var(--text-dim);">Ditukar oleh: ${(currentUser&&currentUser.name)||"-"} (otomatis dari akun login)</div>
     <div id="tkMsg" style="margin-top:8px;"></div>
@@ -3959,7 +4044,8 @@ function tukarOpen(ri){
 function tukarFillB(){
   const d=DB.get(), sel=document.getElementById("tkP"), pv=document.getElementById("tkPrev"); if(!sel||!pv) return;
   const x=d.dccpSchedule[parseInt(sel.value,10)], me=d.dccpSchedule[window._tkMe]; if(!x||!me) return;
-  pv.innerHTML=`Sesudah tukar:<br><b>${me.police}</b> → ${dccpTripList(x).join(" · ")}<br><b>${x.police}</b> → ${dccpTripList(me).join(" · ")}`;
+  const jm=r=>dccpTripList(r).join(" · ");
+  pv.innerHTML=`Sesudah tukar:<br>Jam <b>${jm(me)}</b> → <b>${x.police}</b> (${x.driver||"-"})<br>Jam <b>${jm(x)}</b> → <b>${me.police}</b> (${me.driver||"-"})`;
 }
 function tukarDo(ri){
   const v=id=>((document.getElementById(id)||{}).value||"").trim(), msg=document.getElementById("tkMsg");
@@ -3973,11 +4059,12 @@ function tukarDo(ri){
     if(!tukarOk(a,d)||!tukarOk(b,d)){ err="Salah satu CC sudah loading, tukar jam tidak bisa lagi."; return; }
     if(!c.allowed.includes(pi)){ err = c.same.length ? `Tukar hanya boleh dengan CC LP ${a.lp} yang sama.` : "CC pasangan tidak valid."; return; }
     const ta=dccpTripList(a), tb=dccpTripList(b);
-    const pa={planTrip:a.planTrip, planUnit:a.planUnit}, pb={planTrip:b.planTrip, planUnit:b.planUnit};
-    a.trips=tb.slice(); a.schedTime=tb[0]||""; b.trips=ta.slice(); b.schedTime=ta[0]||"";
-    [["planTrip"],["planUnit"]].forEach(([k])=>{ if(pb[k]!==undefined) a[k]=pb[k]; else delete a[k]; if(pa[k]!==undefined) b[k]=pa[k]; else delete b[k]; });
-    a.note=((a.note?a.note+"; ":"")+`tukar jam dgn ${b.police} (${ta.join(",")} -> ${tb.join(",")})`); b.note=((b.note?b.note+"; ":"")+`tukar jam dgn ${a.police} (${tb.join(",")} -> ${ta.join(",")})`);
-    d.swapLog=d.swapLog||[]; d.swapLog.push({ts:Date.now(), a:a.police, lpA:a.lp||"", tA:ta.join(", "), b:b.police, lpB:b.lp||"", tB:tb.join(", "), cross:String(a.lp||"").toUpperCase()!==String(b.lp||"").toUpperCase(), why, by:(currentUser&&currentUser.name)||""});
+    const ia={lp:a.lp, police:a.police, model:a.model, driver:a.driver, drvCode:a.drvCode, origPolice:a.origPolice}, ib={lp:b.lp, police:b.police, model:b.model, driver:b.driver, drvCode:b.drvCode, origPolice:b.origPolice};
+    const put=(r,i)=>{ ["lp","police","model","driver","drvCode"].forEach(k=>{ if(i[k]!==undefined) r[k]=i[k]; else delete r[k]; }); };
+    put(a,ib); put(b,ia);
+    a.origPolice=ia.police; b.origPolice=ib.police;
+    a.tukar=ia.police; b.tukar=ib.police;
+    d.swapLog=d.swapLog||[]; d.swapLog.push({ts:Date.now(), a:ia.police, lpA:ia.lp||"", drA:ia.driver||"", tA:ta.join(", "), b:ib.police, lpB:ib.lp||"", drB:ib.driver||"", tB:tb.join(", "), cross:String(ia.lp||"").toUpperCase()!==String(ib.lp||"").toUpperCase(), why, by:(currentUser&&currentUser.name)||""});
     if(d.swapLog.length>200) d.swapLog=d.swapLog.slice(-200);
     ccQueueSort(d);
   });
@@ -3986,8 +4073,9 @@ function tukarDo(ri){
 }
 function swapLogHtml(data){
   const mid=prodMidnight(), L=(data.swapLog||[]).filter(x=>x.ts>=mid).slice().reverse(); if(!L.length) return "";
-  return `<div class="card" style="border-left:5px solid #2F6FB5;"><h3>🔄 Tukar Jam Hari Ini (${L.length})</h3>${L.map(x=>`<div style="padding:6px 0;border-top:1px solid var(--border);font-size:13px;"><b>${x.a}</b> (${x.lpA}) ${x.tA} ⇄ <b>${x.b}</b> (${x.lpB}) ${x.tB}${x.cross?` <span style="color:#D64545;font-weight:700;">lintas LP</span>`:""}<br><span style="font-size:11px;color:var(--text-dim);">${holdHm(x.ts)} · oleh ${x.by||"-"} · ${x.why}</span></div>`).join("")}</div>`;
+  return `<div class="card" style="border-left:5px solid #2F6FB5;"><h3>🔄 Tukar CC Hari Ini (${L.length})</h3>${L.map(x=>`<div style="padding:6px 0;border-top:1px solid var(--border);font-size:13px;"><b>${x.a}</b> (${x.lpA}) → jam ${x.tB}<br><b>${x.b}</b> (${x.lpB}) → jam ${x.tA}${x.cross?` <span style="color:#D64545;font-weight:700;">lintas LP</span>`:""}<br><span style="font-size:11px;color:var(--text-dim);">${holdHm(x.ts)} · oleh ${x.by||"-"} · ${x.why}</span></div>`).join("")}</div>`;
 }
+function dccpNoteTxt(r){ return String(r.note||"").replace(/(?:^|;\s*)tukar jam dgn [^;]*/g,"").replace(/^[;\s]+/,"").trim(); }
 function dccpDelete(i){
   if(!confirm("Hapus CC ini dari jadwal?")) return;
   DB.set(d=>{ d.dccpSchedule.splice(i,1); });
@@ -4042,7 +4130,7 @@ function renderDccpUpload(){
       ${rows.map((r,ri)=>{
         const a = withActual ? findActualArrival(r.police,data) : null;
         if(withActual && !lpMine(r.lp)) return "";
-        return `<tr><td>${r.lp}</td><td><b>${r.police}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.note?`<div style="font-size:10px;color:var(--text-dim);">${r.note}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
+        return `<tr><td>${r.lp}</td><td><b>${r.police}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
         ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${a.stall})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> ${canTukarJam()?`<button class="btn btn-sm" onclick="tukarOpen(${ri})">🔄 Tukar Jam</button>`:""} <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
       }).join("")}
     </table></div>`;
