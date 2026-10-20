@@ -771,6 +771,7 @@ window.RSnd=(function(){
     <div class="field"><label>Shift (wajib)</label>
       <div class="shiftrow"><button type="button" id="shiftRed" class="shiftchip red" onclick="setLoginShift('red')">🔴 SHIFT RED</button><button type="button" id="shiftWhite" class="shiftchip white" onclick="setLoginShift('white')">⚪ SHIFT WHITE</button></div>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0 12px;"><input type="checkbox" id="loginRemember" checked> Ingat saya di HP ini (tidak perlu login ulang selama 30 hari)</label>
     <button class="btn btn-primary" onclick="doLogin()">➜ Masuk</button>
 
     <div style="text-align:center; margin-top:18px;">
@@ -793,7 +794,7 @@ window.RSnd=(function(){
       <div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMEYyQTRBIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDgxNzJCIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTE2IiBmaWxsPSJ1cmwoI2cpIi8+CjxnIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CjxwYXRoIGQ9Ik0xNzAgMzkyVjEzMkgyNjJBNzggNzggMCAwIDEgMjYyIDI4OEgxNzAiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI1NCIvPgo8cGF0aCBkPSJNMjU4IDI5MkwzNDYgMzkyIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iNTQiLz4KPHBhdGggZD0iTTI1OCAzMDZMMzMwIDM4NiIgc3Ryb2tlPSIjMEYyQTRBIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1kYXNoYXJyYXk9IjIgMTYiLz4KPHBhdGggZD0iTTMzNiAxMThBNjYgNjYgMCAwIDEgNDAyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2Ii8+CjxwYXRoIGQ9Ik0zMzYgNzhBMTA2IDEwNiAwIDAgMSA0NDIgMTg0IiBzdHJva2U9IiNGRkIwMjAiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1vcGFjaXR5PSIuNyIvPgo8cGF0aCBkPSJNMzM2IDM4QTE0NiAxNDYgMCAwIDEgNDgyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2IiBzdHJva2Utb3BhY2l0eT0iLjQiIC8+CjwvZz4KPHBhdGggZD0iTTI0MCAyMzhDMjIyIDIxNCAyMTYgMjA0IDIxNiAxOTJBMjQgMjQgMCAwIDEgMjY0IDE5MkMyNjQgMjA0IDI1OCAyMTQgMjQwIDIzOFoiIGZpbGw9IiNGRkIwMjAiLz4KPGNpcmNsZSBjeD0iMjQwIiBjeT0iMTkyIiByPSI5IiBmaWxsPSIjMDgxNzJCIi8+Cjwvc3ZnPg==" alt="" style="width:28px;height:28px;border-radius:7px;display:block"><h1>RADAR</h1><span id="syncBadge" class="syncb sync-local">● Lokal</span></div>
       <div class="sub">Real-time Arrival, Dispatch &amp; Release</div>
       <div class="userchip">
-        <div class="who">Login sebagai <b id="curUserName">-</b> · <span id="curUserRole" class="badge gold">ROLE</span></div>
+        <div class="who">Login sebagai <b id="curUserName">-</b> · <span id="curUserRole" class="badge gold" onclick="shiftChangeOpen()" style="cursor:pointer;">ROLE</span></div>
         <button class="menuBtn" id="menuBtn" onclick="backToRoleMenu()" style="display:none;">☰ Menu</button>
         <button class="logoutBtn" onclick="doLogout()">Keluar</button>
       </div>
@@ -996,7 +997,30 @@ const DB = {
 };
 
 /* ===== Session ===== */
+function sessionAccountOk(){   // akun yang diingat harus masih ada (mis. belum dihapus Admin)
+  try{
+    if(!currentUser || currentUser.role==="display" || currentUser.username==="public") return true;
+    const us=DB.get().users||[]; if(!us.length) return true;
+    return us.some(u=>String(u.username).toLowerCase()===String(currentUser.username).toLowerCase() && (currentUser.roles||[currentUser.role]).includes(u.role));
+  }catch(e){ return true; }
+}
+function shiftChangeOpen(){
+  if(!currentUser || currentUser.role==="display") return;
+  showModal(`<h3 style="margin:0 0 6px;">Ganti Shift</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Shift saat ini: <b>${currentUser.shift?rsShift(currentUser.shift):"-"}</b>. Tidak perlu login ulang.</div>
+    <div class="shiftrow"><button type="button" class="shiftchip red ${currentUser.shift==="red"?"on":""}" onclick="shiftChangeDo('red')">🔴 SHIFT RED</button><button type="button" class="shiftchip white ${currentUser.shift==="white"?"on":""}" onclick="shiftChangeDo('white')">⚪ SHIFT WHITE</button></div>`);
+}
+function shiftChangeDo(sh){
+  if(!currentUser) return;
+  loginShift=sh; try{ localStorage.setItem("radar_shift", sh); }catch(e){}
+  currentUser=Object.assign({}, currentUser, {shift:sh});
+  try{ const x=getSession()||{}; x.shift=sh; localStorage.setItem(SESS_KEY, JSON.stringify(x)); }catch(e){}
+  closeModal();
+  const el=document.getElementById("curUserRole"); if(el) el.textContent=((ROLES.find(r=>r.key===currentUser.role)||{label:"DISPLAY"}).label||"DISPLAY")+" · SHIFT "+rsShift(sh);
+  render();
+}
 const SESS_KEY = "apcc_session_v1";
+function rememberOn(){ try{ return localStorage.getItem("radar_remember")!=="0"; }catch(e){ return true; } }
+function lastUser(){ try{ return localStorage.getItem("radar_lastuser")||""; }catch(e){ return ""; } }
 function getSession(){
   try{
     const s = JSON.parse(localStorage.getItem(SESS_KEY) || "null");
@@ -1007,7 +1031,7 @@ function getSession(){
 }
 let loginShift = (function(){ try{ const v=localStorage.getItem("radar_shift"); return (v==="red"||v==="white")?v:""; }catch(e){ return ""; } })();
 function setSession(user, roles){
-  const s = { username:user.username, name:user.name, role:user.role, roles:(roles&&roles.length?roles:[user.role]), shift:loginShift||"", expiry: Date.now() + CONFIG.SESSION_HOURS*3600*1000 };
+  const s = { username:user.username, name:user.name, role:user.role, roles:(roles&&roles.length?roles:[user.role]), shift:loginShift||"", expiry: Date.now() + (rememberOn() ? 30*24 : CONFIG.SESSION_HOURS)*3600*1000 };
   localStorage.setItem(SESS_KEY, JSON.stringify(s));
   return s;
 }
@@ -1340,6 +1364,7 @@ function saveSpeedCfg(){
 function loginEnter(acc, roles){
   if(!TABS_BY_ROLE[acc.role]){ document.getElementById("loginMsg").innerHTML = `<div class="msg err">Akun ini belum punya otoritas yang valid. Hubungi Admin.</div>`; return; }
   selectedRole = acc.role;
+  try{ const rb=document.getElementById("loginRemember"); if(rb) localStorage.setItem("radar_remember", rb.checked?"1":"0"); localStorage.setItem("radar_lastuser", acc.username); }catch(e){}
   currentUser = setSession(acc, roles);
   spdUnlock();
   try{ RSnd.login(); }catch(e){}
@@ -1414,7 +1439,7 @@ function doLogout(){
   document.getElementById("mainView").classList.add("hidden");
   document.getElementById("credScreen").classList.add("hidden");
   document.getElementById("roleSelectScreen").classList.remove("hidden");
-  document.getElementById("loginUser").value = "";
+  document.getElementById("loginUser").value = lastUser();
   document.getElementById("loginPass").value = "";
 }
 function enterDisplay(){
@@ -6191,6 +6216,8 @@ function renderDisplay(){
    BOOT
 ====================================================================== */
 initRoleGrid();
+try{ const lu=document.getElementById("loginUser"); if(lu && !lu.value) lu.value=lastUser(); }catch(e){}
+try{ const rb=document.getElementById("loginRemember"); if(rb) rb.checked=rememberOn(); }catch(e){}
 { const _d = DB.load(); syncUnitLog(_d); DB.save(_d); } // pastikan seed ada + migrasi log unit
 const existingSession = getSession();
 if(existingSession){
@@ -6201,6 +6228,7 @@ let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
 setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
 }, 1000);
