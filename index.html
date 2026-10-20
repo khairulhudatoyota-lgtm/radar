@@ -4101,6 +4101,13 @@ function swapLogHtml(data){
   return `<div class="card" style="border-left:5px solid #2F6FB5;"><h3>🔄 Tukar CC Hari Ini (${L.length})</h3>${L.map(x=>`<div style="padding:6px 0;border-top:1px solid var(--border);font-size:13px;"><b>${x.a}</b> (${x.lpA}) → jam ${x.tB}<br><b>${x.b}</b> (${x.lpB}) → jam ${x.tA}${x.cross?` <span style="color:#D64545;font-weight:700;">lintas LP</span>`:""}<br><span style="font-size:11px;color:var(--text-dim);">${holdHm(x.ts)} · oleh ${x.by||"-"} · ${x.why}</span></div>`).join("")}</div>`;
 }
 function dccpNoteTxt(r){ return String(r.note||"").replace(/(?:^|;\s*)tukar jam dgn [^;]*/g,"").replace(/^[;\s]+/,"").trim(); }
+function dccpClearAll(){
+  if(!(currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))) return;
+  const n=(DB.get().dccpSchedule||[]).length; if(!n) return;
+  if(!confirm("Hapus SEMUA jadwal DCCP ("+n+" truk) di semua perangkat?\nUpload ulang file DCCP setelah ini. Tidak bisa dibatalkan.")) return;
+  DB.set(d=>{ d.dccpSchedule=[]; d.dccpMeta={fileName:"",uploadedAt:null,uploadedBy:""}; d.hold=[]; });
+  dccpEditIdx=null; render();
+}
 function dccpDelete(i){
   if(!confirm("Hapus CC ini dari jadwal?")) return;
   DB.set(d=>{ d.dccpSchedule.splice(i,1); });
@@ -4172,7 +4179,7 @@ function renderDccpUpload(){
         <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn" onclick="saveDccpSchedule()">✔ Simpan Jadwal</button><button class="btn btn-sm" onclick="clearDccpPreview()">Batal</button></div>`:""}
     </div>`}
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">Jadwal Aktif (${data.dccpSchedule.length} truk)</h3><button class="btn btn-sm" onclick="dccpOpenEdit(-1)">➕ Tambah CC / Spot Order</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">Jadwal Aktif (${data.dccpSchedule.length} truk)</h3><span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(-1)">➕ Tambah CC / Spot Order</button>${(data.dccpSchedule.length&&currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))?`<button class="btn-danger btn btn-sm" onclick="dccpClearAll()">🗑 Hapus Semua</button>`:""}</span></div>
       ${meta.fileName?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${meta.fileName} · diunggah ${new Date(meta.uploadedAt).toLocaleString('id-ID')} oleh ${meta.uploadedBy}</div>`:""}
       ${data.dccpSchedule.length && !data.dccpSchedule.some(r=>r.trips&&r.trips.length) ? `<div class="msg err" style="margin-bottom:10px;">Jadwal ini masih format lama (hanya jam ritase pertama). Upload ulang file DCCP agar semua jam ritase terbaca.</div>`:""}
       ${data.dccpSchedule.length?tbl(data.dccpSchedule,true):`<div class="emptystate">Belum ada jadwal diunggah.</div>`}
@@ -5491,7 +5498,12 @@ function renderAdmin(){
         <h3>🗄 Kelola Data</h3>
         <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Data saat ini tersimpan lokal di browser ini (localStorage). Belum sinkron ke Microsoft 365 / SharePoint.</p>
         <button class="btn btn-outline" style="margin-bottom:10px;" onclick="exportData()">⬇ Export Data (JSON)</button>
-        <button class="btn btn-danger" onclick="resetData()">⚠ Reset Semua Data</button>
+        <button class="btn btn-danger" onclick="resetData()">⚠ Reset Semua Data (termasuk akun!)</button>
+      </div>
+      <div class="card" style="border:2px solid #E8833A;">
+        <h3>🧪 Mulai Trial (data operasional saja)</h3>
+        <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Membersihkan stall, unit, antrean, Parkir Luar, ILS, manifest, surat jalan (PDF), log, posisi CC, laporan defect, dan riwayat kecepatan di <b>semua perangkat</b>. <b>Akun, password, TTD, lokasi yard, pengaturan TLS, dan daftar LP tetap aman.</b> Jadwal DCCP boleh dipilih mau ikut dihapus atau tidak.</p>
+        <button class="btn btn-primary" onclick="resetTrial()">🧪 Mulai Trial (hapus data operasional)</button>
       </div>
       <div class="card">
         <h3>🧹 Bersihkan Data Uji (grafik &amp; riwayat)</h3>
@@ -6003,6 +6015,26 @@ function clearTestData(){
   DB.set(d=>{ d.logClearTs = Date.now(); });
   alert("Riwayat uji dibersihkan.");
   render();
+}
+/* ===== MULAI TRIAL: hapus data operasional, akun & pengaturan tetap aman ===== */
+const TRIAL_KEYS_OBJ=["units","cc","drvByPlat"], TRIAL_KEYS_ARR=["queue","hold","ils","manifest","ccCalls","ccOutLog","swapLog","defects","speedAlerts"];
+function resetTrial(){
+  if(!(currentUser && currentUser.role==="admin")){ alert("Hanya Admin."); return; }
+  if(FBS.enabled && !(FBS.authed && FBS.conn && FBS.ready)){ alert("Perangkat belum Online (tanda hijau di pojok atas). Tunggu hijau, lalu ulangi, supaya semua HP ikut bersih."); return; }
+  if(!confirm("MULAI TRIAL: hapus data operasional di SEMUA perangkat?\n\nDihapus: stall & unit, antrean, Parkir Luar, ILS, manifest, surat jalan (PDF), log, posisi CC, laporan defect, riwayat kecepatan.\nAMAN (tidak dihapus): akun & password, TTD, lokasi yard, pengaturan TLS, daftar LP.\n\nTidak bisa dibatalkan.")) return;
+  const delDccp = confirm("Hapus juga JADWAL DCCP hari ini?\n\nOK = hapus jadwal DCCP (upload ulang nanti)\nBatal = jadwal DCCP tetap ada");
+  const typed = prompt("Ketik MULAI untuk melanjutkan:", "");
+  if(String(typed||"").trim().toUpperCase()!=="MULAI"){ alert("Dibatalkan."); return; }
+  const fresh = normalizeData(seedDB());
+  DB.set(d=>{
+    TRIAL_KEYS_OBJ.forEach(k=>{ d[k] = (fresh[k]!==undefined) ? cloneJ(fresh[k]) : {}; });
+    TRIAL_KEYS_ARR.forEach(k=>{ d[k] = []; });
+    d.logClearTs = Date.now();
+    if(delDccp){ d.dccpSchedule = []; d.dccpMeta = cloneJ(fresh.dccpMeta); }
+  });
+  try{ if(FBS.enabled && FBS.db){ FBS.db.ref(SJ_PATH).remove(); FBS.db.ref(TRK_PATH).remove(); } }catch(e){}
+  try{ localStorage.removeItem("radar_spd_seen"); }catch(e){}
+  alert("Selesai. Data operasional bersih, siap mulai trial. Akun & pengaturan tetap aman."); render();
 }
 function resetData(){
   if(!confirm("Yakin reset semua data di SEMUA perangkat? Tindakan ini tidak bisa dibatalkan.")) return;
