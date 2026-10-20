@@ -218,6 +218,12 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 #spdOv .box{background:#fff;color:#16213E;border-radius:18px;padding:22px 18px;max-width:420px;width:100%;text-align:center;border-top:8px solid #D64545;}
 #spdOv .big{font-size:56px;font-weight:900;color:#D64545;line-height:1;}
 #spdOv .row{font-size:13px;margin-top:6px;}
+#ccCallOv{position:fixed;inset:0;z-index:10000;background:rgba(14,110,52,.97);color:#fff;display:flex;align-items:center;justify-content:center;padding:20px;animation:ccBg .7s infinite alternate;}
+@keyframes ccBg{from{background:rgba(14,110,52,.97)}to{background:rgba(30,160,80,.97)}}
+#ccCallOv .box{background:#fff;color:#16213E;border-radius:18px;padding:22px 18px;max-width:420px;width:100%;text-align:center;border-top:8px solid #1a7f3c;}
+#ccCallOv .big{font-size:52px;font-weight:900;color:#1a7f3c;line-height:1;margin-top:6px;}
+#ccCallOv .row{font-size:14px;margin-top:6px;}
+#ccCallOv .okbtn{margin-top:16px;width:100%;padding:16px;border:0;border-radius:12px;background:#16213E;color:#fff;font-size:17px;font-weight:800;}
 #spdOv .okbtn{width:100%;margin-top:16px;padding:16px;border:0;border-radius:12px;background:#25D366;color:#073b1d;font-size:16px;font-weight:900;}
 .modechip{flex:1;padding:13px 8px;border-radius:12px;border:2px solid var(--border,#d5dbe5);background:var(--panel,#fff);font-weight:800;font-size:14px;color:var(--text,#16213E);cursor:pointer;}
 .modechip.on{background:var(--gold,#16213E);border-color:var(--gold,#16213E);color:#fff;}
@@ -2119,9 +2125,8 @@ function getCcProfile(){ try{ const o = JSON.parse(localStorage.getItem(CCP_KEY)
 function saveCcProfile(){
   const plat = (document.getElementById("ccpPlat").value||"").trim().toUpperCase();
   const lp = (document.getElementById("ccpLP").value||"").trim();
-  const drvCode = ((document.getElementById("ccpDrv")||{}).value||"").trim().toUpperCase();
+  const drvCode = getCcProfile().drvCode||"";
   if(!plat || !lp){ alert("Isi nomor polisi dan LP dulu."); return; }
-  if(!drvCode){ alert("Isi Kode Driver dulu (contoh: KMDCCDRV302). Kode ini dipakai untuk mengisi driver di TLS karena nama bisa sama."); return; }
   try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode})); }catch(e){}
   render();
 }
@@ -2253,7 +2258,6 @@ function renderOrderStall(){
       <div class="msg ok" style="margin-bottom:12px;">✔ Absen berhasil — ${absenState.distanceKm!=null ? absenState.distanceKm.toFixed(1)+" km dari yard." : "mode MANUAL (tanpa GPS)."}</div>
       <div id="orderMsg"></div>
       <div class="field"><label>Nomor Polisi Truk</label><input id="ccPlat" type="text" placeholder="B 1234 ABC" value="${_pr.plat||""}"></div>
-      <div class="field"><label>Kode Driver (sesuai TLS)</label><input id="ccDrv" type="text" placeholder="KMDCCDRV302" value="${_pr.drvCode||""}" style="text-transform:uppercase;"></div>
       <div class="field"><label>Nama LP / Perusahaan</label><select id="ccLP"><option value="">-- pilih LP --</option>${_lpOpts(_pr.lp)}</select></div>
       <button class="btn btn-primary" onclick="submitOrderStall()">🚚 Proses Antrian</button>
     </div>` : "";
@@ -2261,7 +2265,6 @@ function renderOrderStall(){
     <div class="card">
       <h3>🚚 Data Truk</h3>
       <div class="field"><label>Nomor Polisi Truk</label><input id="ccpPlat" type="text" placeholder="B 1234 ABC" value="${_pr.plat||""}"></div>
-      <div class="field"><label>Kode Driver (sesuai TLS)</label><input id="ccpDrv" type="text" placeholder="KMDCCDRV302" value="${_pr.drvCode||""}" style="text-transform:uppercase;"></div>
       <div class="field"><label>Nama LP / Perusahaan</label><select id="ccpLP"><option value="">-- pilih LP --</option>${_lpOpts(_pr.lp)}</select></div>
       <button class="btn btn-outline" onclick="saveCcProfile()">💾 Simpan Data Truk (tersimpan di HP ini)</button>
     </div>`;
@@ -2332,10 +2335,8 @@ function submitOrderStall(){
   const plat = document.getElementById("ccPlat").value.trim().toUpperCase();
   const lp = document.getElementById("ccLP").value.trim();
   const msgEl = document.getElementById("orderMsg");
-  const drv = ((document.getElementById("ccDrv")||{}).value||"").trim().toUpperCase();
   if(!plat || !lp){ msgEl.innerHTML = `<div class="msg err">Nomor polisi & nama LP wajib diisi.</div>`; return; }
-  if(!drv){ msgEl.innerHTML = `<div class="msg err">Kode Driver wajib diisi (contoh: KMDCCDRV302).</div>`; return; }
-  try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:drv})); }catch(e){}
+  try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:getCcProfile().drvCode||""})); }catch(e){}
 
   const res = registerCC(plat, lp, absenState.distanceKm, false, !!absenState.manual);
   if(res.dup) msgEl.innerHTML = `<div class="msg info">Truk ${plat} sudah terdaftar di stall / antrian.</div>`;
@@ -2455,7 +2456,7 @@ function createILS(ccNum, slots){
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
   DB.set(d=>{
     const id = Date.now();
-    d.ils.push({id, ccNum, ccPlat: ccInfo.plat, lp: ccInfo.lp, drvCode: ccInfo.drvCode||"", units, batam: units.every(u=>u.batam), mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
+    d.ils.push({id, ccNum, ccPlat: ccInfo.plat, lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
     units.forEach(u=>{ d.units[u.slot].ilsId = id; });
   });
   notifyILSCreated(ccInfo.plat, units.length);
@@ -2498,7 +2499,7 @@ function ccProposals(data){
     if((data.ils||[]).some(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat))) continue;
     const row = (data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat));
     const wantB = wantBOf(n,c);
-    const base = {n, plat:c.plat, lp:c.lp||"", driver:(row&&row.driver)||"", batam:wantB, ccTs:c.ts||0, dismissed:!!c.dismissed, waiting:!!c.waiting, manualStall:!!manual[n]};
+    const base = {n, plat:c.plat, lp:c.lp||"", driver:(row&&row.driver)||"", drvCode:resolveDrvCode(data, c.plat, c.drvCode), batam:wantB, ccTs:c.ts||0, dismissed:!!c.dismissed, waiting:!!c.waiting, manualStall:!!manual[n]};
     if(c.dismissed){ out.push({...base, ready:false, stall:null, units:[], have:0, cands:[]}); continue; }
     let pick = manual[n] || null;
     if(!pick){
@@ -2513,10 +2514,13 @@ function ccProposals(data){
   out.forEach(p=>{ p.cands = stats.filter(x=>okFor(x,p.batam) && (!manualBy[x.stall] || manualBy[x.stall]===p.n)).map(x=>({stall:x.stall, n:x.n})); });
   return out;
 }
+function draftSetDrv(n, v){ const c=DB.get().cc[n]; if(c) setDrvCode(c.plat, v, n); }
+function draftSaveDrvInput(n){ const el=document.getElementById("drvIn"+n); if(el) draftSetDrv(n, el.value); }
 function draftSetStall(n, v){ if(v) draftStall[n]=v; else delete draftStall[n]; render(); }
-function draftGo(n){ const p = ccProposals(DB.get()).find(x=>x.n===n); if(p && p.ready && createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; render(); } }
+function draftGo(n){ draftSaveDrvInput(n); const p = ccProposals(DB.get()).find(x=>x.n===n); if(p && p.ready && createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; render(); } }
 function draftWait(n){ DB.set(d=>{ if(d.cc[n]) d.cc[n].waiting = true; }); }
 function draftSendRest(n, noConfirm){
+  draftSaveDrvInput(n);
   const p = ccProposals(DB.get()).find(x=>x.n===n);
   if(!p || !p.units.length){ alert("Tidak ada unit tersisa untuk jenis ini."); return; }
   if(!noConfirm && !confirm(`Kirim ${p.units.length} unit dari stall ${p.stall} (kurang dari ${CONFIG.SLOTS_PER_STALL}) ke CC ${p.plat}?`)) return;
@@ -2531,6 +2535,7 @@ function draftCardsHtml(data){
       <button class="linechip ${!p.batam?'on':''}" style="padding:4px 12px;font-size:12px;" onclick="draftSetType(${p.n},'R')">Reguler</button>
       <button class="linechip ${p.batam?'on':''}" style="padding:4px 12px;font-size:12px;" onclick="draftSetType(${p.n},'B')">🟠 Batam</button></div>`;
   const stallSel = p=>`<div style="display:flex;gap:6px;margin:6px 0;align-items:center;"><span style="font-size:11px;color:var(--text-dim);">Stall unit:</span><select onchange="draftSetStall(${p.n},this.value)" style="flex:1;max-width:260px;"><option value="">Otomatis (urut FIFO)</option>${(p.cands||[]).map(c=>`<option value="${c.stall}" ${String(draftStall[p.n])===String(c.stall)?"selected":""}>Stall ${c.stall} · ${c.n}/${CONFIG.SLOTS_PER_STALL} unit${c.n>=CONFIG.SLOTS_PER_STALL?" (penuh)":""}</option>`).join("")}</select></div>`;
+  const drvRow = p=>`<div style="display:flex;gap:6px;margin:6px 0;align-items:center;"><span style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Kode driver TLS:</span><input id="drvIn${p.n}" type="text" value="${escH(p.drvCode||"")}" placeholder="mis. KMDCCDRV302" onchange="draftSetDrv(${p.n},this.value)" style="flex:1;min-width:0;text-transform:uppercase;padding:6px 8px;border:1px solid ${p.drvCode?"var(--border,#ccd)":"#D64545"};border-radius:8px;"></div>${p.drvCode?"":`<div style="font-size:11px;color:#D64545;margin:-2px 0 4px;">Kode driver belum diisi — TLS akan memakai nama driver (bisa tertukar).</div>`}`;
   const outBtn = p=>!canKeluarkanCC()?"":`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`;
   return `<div class="dl-draft">` + P.map(p=>{
     const who = `LP <b>${p.lp||"-"}</b> · <b>${p.plat}</b>${p.driver?` · Driver <b>${p.driver}</b>`:""}`;
@@ -2538,7 +2543,7 @@ function draftCardsHtml(data){
     if(p.ready) return `<div class="card" style="border:2px solid var(--green);background:#F3FBF6;">
       <h3 style="color:var(--green);">🚚 CC Siap Loading — Draft ILS</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>Siap loading unit di <b style="font-size:17px;">Stall ${p.stall}</b> · ${p.units.length} unit${p.batam?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800;">BATAM</span>`:""}</div>
-      ${typeSw(p)}${stallSel(p)}<div class="dchips">${chips(p)}</div>
+      ${typeSw(p)}${stallSel(p)}${drvRow(p)}<div class="dchips">${chips(p)}</div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" style="flex:2;" onclick="draftGo(${p.n})">✔ Lanjutkan — Buat ILS</button>
         <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
@@ -2548,7 +2553,7 @@ function draftCardsHtml(data){
     if(!p.waiting) return `<div class="card" style="border:2px solid #E8833A;background:#FFF8EF;">
       <h3 style="color:#C9661A;">🚚 CC Siap Loading — Stall Belum Penuh</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>${info}</div>
-      ${typeSw(p)}${stallSel(p)}${p.units.length?`<div class="dchips">${chips(p)}</div>`:""}
+      ${typeSw(p)}${stallSel(p)}${drvRow(p)}${p.units.length?`<div class="dchips">${chips(p)}</div>`:""}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         ${p.units.length?`<button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="draftSendRest(${p.n},true)">✔ Tetap Buat ILS (${p.units.length} unit)</button>`:""}
         <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftWait(${p.n})">⏳ Menunggu</button>
@@ -2558,7 +2563,7 @@ function draftCardsHtml(data){
     return `<div class="card" style="border:2px dashed var(--gold-dim);">
       <h3>⏳ Menunggu Stall Penuh</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>${info} Kamu akan diberi notifikasi lagi begitu stall penuh.</div>
-      ${typeSw(p)}${stallSel(p)}
+      ${typeSw(p)}${stallSel(p)}${drvRow(p)}
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
         ${p.units.length?`<button class="btn btn-outline btn-sm" style="flex:1;" onclick="draftSendRest(${p.n})">Tetap buat sekarang (${p.units.length})</button>`:""}
         <button class="btn btn-outline btn-sm" style="flex:1;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
@@ -2602,9 +2607,36 @@ function tlsCopy(txt,btn){
   try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(fb); else fb(); }catch(e){ fb(); }
 }
 function tlsVal(i,k){ const b=window._tlsB; if(!b) return ""; if(k==="all-frame") return b.units.map(u=>u.frame).join("\n"); if(k==="all-stall") return b.units.map(u=>u.loc?u.loc:groupOf(u.slot)).join("\n"); const u=b.units[i]; return k==="frame"?u.frame:(u.loc?u.loc:groupOf(u.slot)); }
-function tlsDriver(b){ try{ if(b.drvCode) return String(b.drvCode).toUpperCase(); const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(b.ccPlat)); return String((r&&(r.drvCode||r.driver))||"").toUpperCase(); }catch(e){ return ""; } }
+function canSetDrvCode(){ return !!(currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); }
+/* Kode driver (untuk TLS) hanya diketahui/diisi Delivery. Prioritas: isian Delivery per plat > data CC > kolom DCCP */
+function resolveDrvCode(data, plat, own){
+  try{
+    const k=normPlat(plat); const m=((data.drvByPlat||{})[k])||"";
+    if(m) return String(m).toUpperCase();
+    if(own) return String(own).toUpperCase();
+    const r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k);
+    return String((r&&r.drvCode)||"").toUpperCase();
+  }catch(e){ return ""; }
+}
+function setDrvCode(plat, code, ccNum){
+  code=String(code||"").trim().toUpperCase(); const k=normPlat(plat); if(!k) return;
+  DB.set(d=>{
+    d.drvByPlat=d.drvByPlat||{};
+    if(code) d.drvByPlat[k]=code; else delete d.drvByPlat[k];
+    if(ccNum && d.cc[ccNum] && normPlat(d.cc[ccNum].plat)===k) d.cc[ccNum].drvCode=code;
+  });
+}
+function tlsDriver(b){ try{ const c=resolveDrvCode(DB.get(), b.ccPlat, b.drvCode); if(c) return c; const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(b.ccPlat)); return String((r&&r.driver)||"").toUpperCase(); }catch(e){ return ""; } }
 const TLS_VENDOR_MAP={KMDI:"KMD", KPL:"KPC"};  /* nama LP di RADAR -> kode vendor di TLS */
 function tlsVendor(lp){ const k=String(lp||"").trim().toUpperCase(); return TLS_VENDOR_MAP[k]||String(lp||"").trim(); }
+function tlsSaveDrv(id,btn){
+  const el=document.getElementById("tlsDrvIn"); if(!el) return; const v=el.value.trim().toUpperCase();
+  const b=(DB.get().ils||[]).find(x=>x.id===id); if(!b) return;
+  setDrvCode(b.ccPlat, v, b.ccNum);
+  DB.set(d=>{ const x=(d.ils||[]).find(y=>y.id===id); if(x) x.drvCode=v; });
+  if(window._tlsB && window._tlsB.id===id) window._tlsB.drvCode=v;
+  if(btn){ const o=btn.textContent; btn.textContent="✔ Tersimpan"; setTimeout(()=>{ btn.textContent=o; },1200); }
+}
 function tlsHeadVal(k){ const b=window._tlsB; return k==="vendor"?tlsVendor(b.lp):k==="plat"?(b.ccPlat||""):k==="driver"?tlsDriver(b):""; }
 function markTLS(id){
   DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.tlsTs=Date.now(); b.tlsBy=(currentUser&&currentUser.name)||""; } });
@@ -2696,7 +2728,7 @@ function openTLS(id){
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Di TLS (halaman Pembuatan ILS / SJKB): ketuk <b>kotak alamat</b>, ketik <b>javascript:</b> lalu <b>tempel</b>, tekan <b>Enter / Go</b>.</p>
     <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 10px;" onclick="tlsCopyPackage(this)">Salin paket (cara bookmark)</button>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;">ILS #${b.id} · ${b.units.length} unit. Kalau script tidak jalan, isian di bawah bisa disalin satu per satu ke TLS. Simpan tetap ditekan sendiri di TLS.</p>
-    ${head("vendor","Vendor / LP",tlsVendor(b.lp),"vendor")}<div class="tlsrow"><div class="k">Moda</div><div class="v" style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="tlscp ${(b.moda||'CC')==='CC'?'ok':''}" onclick="setTlsModa(${b.id},'CC')">CC - Car Carrier</button><button type="button" class="tlscp ${b.moda==='SC'?'ok':''}" onclick="setTlsModa(${b.id},'SC')">SC - Single Carrier (1 unit)</button></div></div>${head("plat","No. Polisi",b.ccPlat,"plat")}${tlsDriver(b)?head("driver","Driver",tlsDriver(b),"driver"):`<div class="tlsrow"><div class="k">Driver</div><div class="v" style="color:#c0392b;font-size:13px;">Belum ada di jadwal DCCP</div></div>`}${head("tipe","Tipe Pengiriman",tlsCfg().tipe+" - "+tlsCfg().tipeNama,"")}${head("tujuan","Tujuan",tlsCfg().tujuan+" - "+tlsCfg().tujuanNama,"")}
+    ${head("vendor","Vendor / LP",tlsVendor(b.lp),"vendor")}<div class="tlsrow"><div class="k">Kode driver</div><div class="v" style="display:flex;gap:6px;"><input id="tlsDrvIn" type="text" value="${escH(tlsDriver(b))}" placeholder="KMDCCDRV302" style="flex:1;min-width:0;text-transform:uppercase;padding:6px 8px;border:1px solid var(--border,#ccd);border-radius:8px;"><button type="button" class="tlscp" onclick="tlsSaveDrv(${b.id},this)">Simpan</button></div></div><div class="tlsrow"><div class="k">Moda</div><div class="v" style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="tlscp ${(b.moda||'CC')==='CC'?'ok':''}" onclick="setTlsModa(${b.id},'CC')">CC - Car Carrier</button><button type="button" class="tlscp ${b.moda==='SC'?'ok':''}" onclick="setTlsModa(${b.id},'SC')">SC - Single Carrier (1 unit)</button></div></div>${head("plat","No. Polisi",b.ccPlat,"plat")}${tlsDriver(b)?head("driver","Driver",tlsDriver(b),"driver"):`<div class="tlsrow"><div class="k">Driver</div><div class="v" style="color:#c0392b;font-size:13px;">Belum ada di jadwal DCCP</div></div>`}${head("tipe","Tipe Pengiriman",tlsCfg().tipe+" - "+tlsCfg().tipeNama,"")}${head("tujuan","Tujuan",tlsCfg().tujuan+" - "+tlsCfg().tujuanNama,"")}
     <div style="display:flex;gap:8px;margin:12px 0 2px;"><button type="button" class="tlscp" style="flex:1;padding:10px;" onclick="tlsCopy(tlsVal(0,'all-frame'),this)">Salin semua Frame No.</button></div>
     <table class="tlstb"><thead><tr><th>No</th><th>Frame No.</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <p style="font-size:11px;color:var(--text-dim);margin:10px 0 0;">Di TLS cukup isi No. Rangka lalu Enter; kolom lain terisi otomatis. Kolom Stall TLS tidak perlu diisi.</p>
@@ -2877,7 +2909,7 @@ function delout(id){
     const c=d.cc[x.ccNum];
     if(c && normPlat(c.plat)===normPlat(x.ccPlat)){
       snap.cc=c; d.cc[x.ccNum]=null;
-      if(d.queue.length){ const nx=d.queue.shift(); snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now()}; }
+      if(d.queue.length){ const nx=d.queue.shift(); snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now()}; pushCcCall(d, nx, x.ccNum); }
     }
     d.manifest=d.manifest||[];
     if(!d.manifest.some(m=>m.id===x.id)) d.manifest.push(mfRecord(d,x));
@@ -3167,6 +3199,39 @@ function cancelILS(id){
   try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+id).remove(); }catch(e){}
   render();
 }
+/* ===== PANGGILAN GILIRAN PARKIR: driver waiting list yang naik ke stall → HP berbunyi sampai OK ditekan ===== */
+function ccCallsList(d){ const a=d.ccCalls; return Array.isArray(a)?a:(a&&typeof a==="object"?Object.values(a):[]); }
+function pushCcCall(d, c, stall){ const a=ccCallsList(d).slice(); a.push({id:String(Date.now())+"-"+stall, plat:c.plat, stall:stall, ts:Date.now()}); d.ccCalls=a.slice(-60); }
+let _ccCallTimer=null, _ccCallId=null;
+function ccCallClose(){
+  const o=document.getElementById("ccCallOv"); if(o) o.remove();
+  if(_ccCallTimer){ clearInterval(_ccCallTimer); _ccCallTimer=null; }
+  if(_ccCallId!==null){ _ccCallId=null; try{ if(window.AndroidTLS && AndroidTLS.alarmStop) AndroidTLS.alarmStop(); }catch(e){} }
+}
+function ccCallShow(c){
+  ccCallClose(); _ccCallId=c.id;
+  const o=document.createElement("div"); o.id="ccCallOv";
+  o.innerHTML=`<div class="box"><div style="font-size:13px;font-weight:800;color:#1a7f3c;letter-spacing:.08em;">🅿️ GILIRAN KAMU PARKIR</div><div class="big">STALL ${escH(c.stall)}</div><div class="row" style="font-size:17px;margin-top:10px;"><b>${escH(c.plat)}</b></div><div class="row">Segera masuk ke stall ${escH(c.stall)}.<br>Alarm berbunyi sampai OK ditekan.</div><button type="button" class="okbtn" onclick="ccCallOk('${escH(c.id)}')">✔ OK, saya menuju stall</button></div>`;
+  document.body.appendChild(o);
+  spdSiren(3);
+  _ccCallTimer=setInterval(()=>{ if(!document.getElementById("ccCallOv")){ clearInterval(_ccCallTimer); _ccCallTimer=null; return; } spdSiren(3); }, 2400);
+  try{
+    if(window.AndroidTLS && AndroidTLS.alarmStart) AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+c.stall, c.plat+": segera masuk ke stall "+c.stall);
+    else if('Notification' in window && Notification.permission==='granted') new Notification("🅿️ Giliran parkir — Stall "+c.stall, {body:c.plat+": segera masuk ke stall "+c.stall});
+  }catch(e){}
+}
+function ccCallOk(id){
+  ccCallClose();
+  try{ DB.set(d=>{ const a=ccCallsList(d).slice(); const x=a.find(y=>y&&y.id===id); if(x) x.ack=Date.now(); d.ccCalls=a; }); }catch(e){}
+}
+function ccCallCheck(){
+  if(!currentUser || currentUser.role!=="cc"){ if(_ccCallId!==null) ccCallClose(); return; }
+  const d=DB.get(), pl=normPlat(getCcProfile().plat||""); if(!pl) return;
+  const c=ccCallsList(d).filter(x=>x && !x.ack && normPlat(x.plat)===pl && Date.now()-x.ts<3*3600000).sort((a,b)=>b.ts-a.ts)
+    .find(x=>{ const cur=d.cc[x.stall]; return cur && normPlat(cur.plat)===pl; });
+  if(!c){ if(_ccCallId!==null) ccCallClose(); return; }
+  if(_ccCallId!==c.id || !document.getElementById("ccCallOv")) ccCallShow(c);
+}
 function canKeluarkanCC(){ return !!(currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); }
 function ccOutLogHtml(data){
   const mid=prodMidnight(), L=(data.ccOutLog||[]).filter(x=>x.ts>=mid).slice().reverse();
@@ -3190,7 +3255,7 @@ function keluarkanCC(n){
     d.ccOutLog=d.ccOutLog||[]; d.ccOutLog.push({ts:Date.now(), plat:cur.plat, lp:cur.lp||"", ccNum:n, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", ilsId});
     if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
     d.cc[n]=null;
-    if(d.queue.length>0){ const next=d.queue.shift(); d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now()}; }
+    if(d.queue.length>0){ const next=d.queue.shift(); d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now()}; pushCcCall(d, next, n); }
   });
   if(ils){ try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+ils.id).remove(); }catch(e){} }
   render();
@@ -3201,6 +3266,7 @@ function kosongkanCC(num){
     if(d.queue.length>0){
       const next = d.queue.shift();
       d.cc[num] = {plat: next.plat, lp: next.lp, drvCode: next.drvCode||"", ts: Date.now()};
+      pushCcCall(d, next, num);
     }
   });
 }
@@ -3713,8 +3779,10 @@ function dccpSaveEdit(){
   const g = id=>document.getElementById(id).value.trim();
   const police = g("dfPolice").toUpperCase(), lp=g("dfLP");
   if(!police || !lp){ document.getElementById("dccpEditMsg").innerHTML=`<div class="msg err">Plat & LP wajib diisi.</div>`; return; }
-  const rec = {lp, police, model:g("dfModel"), driver:g("dfDriver"), drvCode:g("dfDrvCode").toUpperCase(), schedTime:g("dfTime"), dest:g("dfDest"), note:g("dfNote"), planTrip:Math.max(0,parseInt(g("dfTrip"))||0), planUnit:Math.max(0,parseInt(g("dfUnit"))||0)};
+  const _dc = document.getElementById("dfDrvCode");
+  const rec = {lp, police, model:g("dfModel"), driver:g("dfDriver"), drvCode:(_dc?_dc.value.trim().toUpperCase():undefined), schedTime:g("dfTime"), dest:g("dfDest"), note:g("dfNote"), planTrip:Math.max(0,parseInt(g("dfTrip"))||0), planUnit:Math.max(0,parseInt(g("dfUnit"))||0)};
   const idx = dccpEditIdx;
+  if(rec.drvCode===undefined) delete rec.drvCode;   // koordinator tidak mengubah kode driver
   DB.set(d=>{
     if(idx===-1){
       d.dccpSchedule.push({...rec, extra:true, schedTime: rec.schedTime || ""});
@@ -3747,7 +3815,7 @@ function dccpGantiOpen(ri){
       <label>Plat CC pengganti<input id="gPlat" placeholder="B 1234 ABC" style="text-transform:uppercase;"></label>
       <label>LP<select id="gLP">${lpOpts}</select></label>
       <label>Nama driver<input id="gDrv"></label>
-      <label>Kode driver<input id="gCode" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></label>
+      ${canSetDrvCode()?`<label>Kode driver<input id="gCode" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></label>`:""}
     </div>
     <label style="display:block;margin-top:8px;">Alasan (opsional)<input id="gWhy" placeholder="mis. CC tidak hadir"></label>
     <div id="gMsg" style="margin-top:8px;"></div>
@@ -3808,7 +3876,7 @@ function dccpEditForm(data){
       <label>LP<input id="dfLP" list="dfLPlist" value="${r.lp}"><datalist id="dfLPlist">${lpOpts}</datalist></label>
       <label>Model<input id="dfModel" value="${r.model||""}"></label>
       <label>Nama Driver<input id="dfDriver" value="${r.driver||""}"></label>
-      <label>Kode Driver (untuk TLS)<input id="dfDrvCode" value="${r.drvCode||""}" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></label>
+      ${canSetDrvCode()?`<label>Kode Driver (untuk TLS)<input id="dfDrvCode" value="${r.drvCode||""}" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></label>`:""}
       <label>Jadwal (jam)<input id="dfTime" type="time" value="${r.schedTime||""}"></label>
       <label>Tujuan<input id="dfDest" value="${r.dest||""}"></label>
       <label>Plan ritase<input id="dfTrip" type="number" min="0" value="${r.planTrip!=null?r.planTrip:(idx===-1?1:((r.trips||[]).length||1))}"></label>
@@ -4996,7 +5064,7 @@ function renderAdmin(){
           <select id="newRole">${ROLES.map(r=>`<option value="${r.key}">${r.label}</option>`).join("")}</select>
         </div>
         <div class="field"><label>LP (wajib untuk Koordinator &amp; Driver CC)</label><select id="newLP"><option value="">-- pilih LP --</option>${(data.lpList||[]).map(l=>`<option value="${l}">${l}</option>`).join("")}</select></div>
-        <div class="field"><label>Kode Driver (khusus Driver CC, wajib, sesuai TLS)</label><input id="newDrv" type="text" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></div>
+        <div class="field"><label>Kode Driver (opsional, biasanya diisi Delivery)</label><input id="newDrv" type="text" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></div>
         <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
       </div>
       <div class="card">
@@ -5619,7 +5687,6 @@ function addUser(){
   const drvCode = r==="cc" ? (document.getElementById("newDrv").value||"").trim().toUpperCase() : "";
   if(!u||!n||!p){ alert("Lengkapi semua field."); return; }
   if((r==="koordinator"||r==="cc") && !lp){ alert("LP wajib dipilih untuk role Koordinator dan Driver CC."); return; }
-  if(r==="cc" && !drvCode){ alert("Role Driver CC wajib diisi Kode Driver."); return; }
   if(DB.get().users.some(x=>x.username===u)){ alert("Username sudah dipakai. Pilih username lain."); return; }
   if(drvCode && DB.get().users.some(x=>x.drvCode===drvCode)){ alert("Kode driver "+drvCode+" sudah dipakai akun lain."); return; }
   DB.set(d=>{ d.users.push({username:u, name:n, password:p, role:r, lp, drvCode}); });
@@ -5647,7 +5714,7 @@ function editUser(i){
     <div class="field"><label>LP (wajib untuk Koordinator &amp; Driver CC)</label>
       <select id="editLP"><option value="">-- pilih LP --</option>${(data.lpList||[]).map(l=>`<option value="${l}" ${lpKey(l)===lpKey(u.lp)?'selected':''}>${l}</option>`).join("")}</select>
     </div>
-    <div class="field"><label>Kode Driver (khusus Driver CC)</label><input id="editDrv" type="text" value="${u.drvCode||""}" style="text-transform:uppercase;"></div>
+    <div class="field"><label>Kode Driver (opsional, biasanya diisi Delivery)</label><input id="editDrv" type="text" value="${u.drvCode||""}" style="text-transform:uppercase;"></div>
     <button class="btn btn-primary" onclick="saveUserEdit(${i})">💾 Simpan Perubahan</button>
   `);
 }
@@ -5660,7 +5727,6 @@ function saveUserEdit(i){
   if(!u||!n||!p){ alert("Lengkapi semua field."); return; }
   const drvCode = r==="cc" ? (document.getElementById("editDrv").value||"").trim().toUpperCase() : "";
   if((r==="koordinator"||r==="cc") && !lp){ alert("LP wajib dipilih untuk role Koordinator dan Driver CC."); return; }
-  if(r==="cc" && !drvCode){ alert("Role Driver CC wajib diisi Kode Driver."); return; }
   if(drvCode && DB.get().users.some((x,k)=>k!==i && x.drvCode===drvCode)){ alert("Kode driver "+drvCode+" sudah dipakai akun lain."); return; }
   DB.set(d=>{ d.users[i] = {username:u, name:n, password:p, role:r, lp, drvCode}; });
   closeModal();
@@ -5914,7 +5980,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); }catch(e){} }, 3000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
 }, 1000);
