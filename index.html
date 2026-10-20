@@ -2180,6 +2180,7 @@ function doAutoRegister(dist){
   const res = registerCC(prof.plat, prof.lp, dist, true);
   autoAbsen.state = "done";
   autoAbsen.msg = res.dup ? `Truk ${prof.plat} sudah tercatat di stall / antrian.`
+                : res.hold ? `🕒 Absen tercatat. Jadwal loading ${prof.plat} jam ${holdHm(res.due)} — belum masuk slot / waiting list. Tunggu di luar, otomatis masuk ${ccEarlyMin()} menit sebelum jadwal.`
                 : res.stall ? `✔ Absen otomatis berhasil — ${prof.plat} masuk STALL ${res.stall}. Silakan masuk area.`
                 : `⏳ Absen otomatis berhasil — semua stall penuh, ${prof.plat} masuk antrian nomor ${res.queue}.`;
   playAlarmSound();
@@ -2244,7 +2245,7 @@ function renderOrderStall(){
   const queueCards = data.queue.map((q,idx)=>`
     <div class="card" style="margin-bottom:10px;">
       <div style="display:flex; justify-content:space-between;">
-        <div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>
+        <div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>
       </div>
       ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
     </div>
@@ -2289,6 +2290,7 @@ function renderOrderStall(){
     ${myCcPlatKey()?sjListHtml(data, b=>normPlat(b.ccPlat)===myCcPlatKey(), "Surat Jalan Saya", "Muncul setelah Delout. Terhapus otomatis 7 hari."):""}
     ${shareCardHtml()}
 
+    ${holdCardHtml(data, true)}
     <div class="card">
       <h3>📡 Live Monitoring Stall CC</h3>
       <div class="ccrow">${ccCards}</div>
@@ -2316,18 +2318,79 @@ function ccCardsHtml(data){
   }
   return html;
 }
-/* Daftarkan truk ke stall kosong / antrian. Return {stall:n} | {queue:n} | {dup:true} */
+/* ===== ATURAN ANTREAN (aturan lapangan antar LP) =====
+   - CC yang absen SEBELUM jam DCCP-nya belum masuk slot maupun waiting list: ditahan di d.hold ("menunggu jadwal").
+   - Begitu waktunya tiba (jam ritase berikutnya dikurangi toleransi), otomatis masuk stall / waiting list.
+   - Waiting list diurutkan menurut jam jadwal DCCP, bukan menurut siapa yang datang duluan. */
+function ccEarlyMin(d){ const v=Number((d||DB.get()).earlyMin); return isFinite(v)&&v>=0 ? v : 30; }
+function ccNextDue(d, plat){   // ts jam ritase berikutnya milik plat ini; null = tidak terjadwal / semua ritase sudah jalan
+  const k=normPlat(plat), r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return null;
+  const times=dccpTripList(r); if(!times.length) return null;
+  const done=dccpDoneCount(r,d); if(done>=times.length) return null;
+  return ccTimeToTs(times[done], prodMidnight());
+}
+function ccHoldDue(d, plat){   // ts jadwal bila CC ini masih harus menunggu di luar, selain itu null
+  const due=ccNextDue(d,plat); if(due==null) return null;
+  return Date.now() < due - ccEarlyMin(d)*60000 ? due : null;
+}
+function ccQueueSort(d){
+  (d.queue||[]).forEach(q=>{ const du=ccNextDue(d,q.plat); q.due = du!=null ? du : (q.ts||0); });
+  d.queue.sort((a,b)=>(a.due||0)-(b.due||0));
+}
+function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut jadwal). Return {stall:n}|{queue:n}
+  let order=[...CONFIG.CC_ACTIVE_DEFAULT];
+  CONFIG.CC_EMERGENCY.forEach(n=>{ if(d.ccOpen[n]) order.push(n); });
+  let assigned=null; for(const n of order){ if(!d.cc[n]){ assigned=n; break; } }
+  if(assigned){ d.cc[assigned]={plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual}; return {stall:assigned}; }
+  d.queue.push({plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:item.ts||Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual});
+  ccQueueSort(d);
+  const pos=d.queue.findIndex(q=>normPlat(q.plat)===normPlat(item.plat));
+  return {queue:pos+1};
+}
+function holdRelease(force){   // dipanggil berkala; force = daftar plat yang dilepas paksa (Delivery/Admin)
+  const d0=DB.get(), h0=d0.hold||[]; if(!h0.length) return;
+  const f=(force||[]).map(normPlat);
+  if(!h0.some(x=>f.includes(normPlat(x.plat)) || !ccHoldDue(d0,x.plat))) return;
+  DB.set(d=>{
+    const all=d.hold||[], keep=[], rel=[];
+    all.forEach(x=>{ if(!f.includes(normPlat(x.plat)) && ccHoldDue(d,x.plat)) keep.push(x); else rel.push(x); });
+    if(!rel.length) return;
+    d.hold=keep;
+    rel.sort((a,b)=>(ccNextDue(d,a.plat)||a.ts||0)-(ccNextDue(d,b.plat)||b.ts||0));
+    rel.forEach(x=>{ const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall); });
+  });
+}
+function holdLepas(plat){
+  if(!canKeluarkanCC()) return;
+  if(!confirm("Naikkan "+plat+" dari Parkir Luar ke waiting list sekarang walau belum waktu jadwalnya?")) return;
+  holdRelease([plat]); render();
+}
+function holdHm(ts){ const t=new Date(ts); return String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"); }
+function holdCardHtml(data, onlyMine){
+  let L=(data.hold||[]).slice();
+  if(onlyMine){ const k=myCcPlatKey(); L=L.filter(x=>normPlat(x.plat)===k); }
+  if(!L.length) return "";
+  L.sort((a,b)=>(ccNextDue(data,a.plat)||0)-(ccNextDue(data,b.plat)||0));
+  const em=ccEarlyMin(data);
+  return `<div class="card" style="border-left:5px solid #E8833A;">
+    <h3>🅿️ Parkir Luar (${L.length})</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Sudah absen, belum waktu jadwal DCCP, jadi belum masuk slot maupun waiting list. Otomatis masuk waiting list ${em} menit sebelum jam jadwal, atau dinaikkan MP Delivery.</div>
+    ${L.map(x=>{ const du=ccNextDue(data,x.plat); return `<div style="padding:8px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;">
+      <div><b>${x.plat}</b> <span style="font-size:11px;color:var(--text-dim);">${x.lp||""}</span><br><span style="font-size:12px;">Jadwal <b>${du!=null?holdHm(du):"-"}</b> · masuk antrian otomatis ${du!=null?holdHm(du-em*60000):"-"}</span></div>
+      ${canKeluarkanCC()?`<button class="btn btn-outline btn-sm" onclick="holdLepas('${x.plat}')">⬆ Naikkan ke Waiting List</button>`:""}
+    </div>`; }).join("")}
+  </div>`;
+}
+/* Daftarkan truk ke stall kosong / antrian / ruang tunggu jadwal. Return {stall:n} | {queue:n} | {hold:true,due:ts} | {dup:true} */
 function registerCC(plat, lp, dist, auto, manual){
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
-    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k)){ res = {dup:true}; return; }
+    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; return; }
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
-    let order = [...CONFIG.CC_ACTIVE_DEFAULT];
-    CONFIG.CC_EMERGENCY.forEach(n=>{ if(d.ccOpen[n]) order.push(n); });
-    let assigned = null;
-    for(const n of order){ if(!d.cc[n]){ assigned = n; break; } }
-    if(assigned){ d.cc[assigned] = {plat, lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual}; res = {stall:assigned}; }
-    else{ d.queue.push({plat, lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual}); res = {queue:d.queue.length}; }
+    const item = {plat, lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
+    const hd = ccHoldDue(d, plat);
+    if(hd!=null){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }
+    res = placeCC(d, item);
   });
   return res;
 }
@@ -2340,6 +2403,7 @@ function submitOrderStall(){
 
   const res = registerCC(plat, lp, absenState.distanceKm, false, !!absenState.manual);
   if(res.dup) msgEl.innerHTML = `<div class="msg info">Truk ${plat} sudah terdaftar di stall / antrian.</div>`;
+  else if(res.hold) msgEl.innerHTML = `<div class="msg info">🕒 Absen ${plat} tercatat. Jadwal loading kamu jam <b>${holdHm(res.due)}</b>, jadi belum masuk slot / waiting list. Tunggu di luar, otomatis masuk antrian ${ccEarlyMin()} menit sebelum jadwal.</div>`;
   else if(res.stall) msgEl.innerHTML = `<div class="msg ok">✔ Truk ${plat} masuk STALL ${res.stall}. Silakan masuk area.</div>`;
   else msgEl.innerHTML = `<div class="msg info">⏳ Semua stall penuh. Truk ${plat} masuk antrian nomor ${res.queue}.</div>`;
   document.getElementById("ccPlat").value = "";
@@ -2838,7 +2902,7 @@ function renderKoordinator(){
 
   const queueCards = data.queue.map((q,idx)=>`
     <div class="card" style="margin-bottom:10px;">
-      <b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${new Date(q.ts).toLocaleTimeString('id-ID')}</span>
+      <b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}</span>
       ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
     </div>`).join("");
 
@@ -2850,6 +2914,7 @@ function renderKoordinator(){
       <p style="font-size:12px; color:var(--text-dim);">Kosongkan stall setelah truk CC benar-benar keluar area. Antrian berikutnya otomatis masuk.</p>
     </div>
     ${cards}
+    ${holdCardHtml(data,false)}
     <div class="card">
       <h3>⏳ Waiting List</h3>
       ${data.queue.length===0? `<div class="emptystate">Tidak ada antrian.</div>` : ''}
@@ -3757,7 +3822,7 @@ function normPlat(s){ return String(s||"").replace(/\s+/g,"").toUpperCase(); }
 function findActualArrival(police, data){
   const k = normPlat(police);
   for(let i=1;i<=5;i++){ const o=data.cc[i]; if(o && normPlat(o.plat)===k) return {ts:o.ts, stall:i}; }
-  const q = (data.queue||[]).find(x=>normPlat(x.plat)===k);
+  const q = (data.queue||[]).find(x=>normPlat(x.plat)===k) || (data.hold||[]).find(x=>normPlat(x.plat)===k);
   if(q) return {ts:q.ts, stall:null};
   return null;
 }
@@ -3858,6 +3923,71 @@ function dccpGantiDo(ri){
   });
   closeModal(); render();
 }
+/* ===== TUKAR JAM LOADING ANTAR CC =====
+   - Hanya bisa sebelum loading pertama (kedua CC belum punya ILS hari ini).
+   - Sekali tukar, SELURUH jam ritase kedua CC saling bertukar (beserta rencana ritase/unitnya).
+   - Hanya antar CC se-LP. Lintas LP baru boleh bila tidak ada CC se-LP lain yang masih bisa ditukar.
+   - Dilakukan Koordinator / Delivery (Admin tetap boleh). */
+function canTukarJam(){ return !!(currentUser && (currentUser.role==="koordinator"||currentUser.role==="delivery"||currentUser.role==="admin")); }
+function tukarOk(r,d){ return dccpTripList(r).length>0 && dccpDoneCount(r,d)===0; }
+function tukarCands(d, ri){
+  const me=d.dccpSchedule[ri]; if(!me) return {all:[],same:[],allowed:[]};
+  const all=[]; d.dccpSchedule.forEach((x,i)=>{ if(i!==ri && normPlat(x.police)!==normPlat(me.police) && tukarOk(x,d)) all.push(i); });
+  const same=all.filter(i=>String(d.dccpSchedule[i].lp||"").trim().toUpperCase()===String(me.lp||"").trim().toUpperCase());
+  return {all, same, allowed: same.length?same:all, crossOk: !same.length};
+}
+function tukarOpen(ri){
+  if(!canTukarJam()) return;
+  const d=DB.get(), me=d.dccpSchedule[ri]; if(!me) return;
+  if(!tukarOk(me,d)){ alert("Tukar jam hanya bisa sebelum loading pertama. CC ini sudah pernah loading hari ini atau belum punya jam ritase."); return; }
+  const c=tukarCands(d,ri);
+  if(!c.allowed.length){ alert("Tidak ada CC lain yang masih di loading pertama untuk ditukar."); return; }
+  const optP=c.allowed.map(i=>{ const x=d.dccpSchedule[i]; return `<option value="${i}">${x.police} · LP ${x.lp}</option>`; }).join("");
+  showModal(`<h3 style="margin:0 0 4px;">🔄 Tukar Jam Loading</h3>
+    <div style="font-size:13px;margin-bottom:4px;"><b>${me.police}</b> · LP ${me.lp}</div>
+    <div style="font-size:13px;margin-bottom:8px;">Jam sekarang: <b>${dccpTripList(me).join(" · ")}</b></div>
+    <div class="msg ${c.crossOk?"err":"info"}" style="font-size:12px;margin-bottom:8px;">${c.crossOk?`Tidak ada CC LP ${me.lp} lain yang bisa ditukar, jadi boleh tukar dengan <b>LP lain</b>. Pastikan tetap sesuai heijunka.`:`Hanya boleh tukar dengan CC <b>LP ${me.lp}</b> yang sama.`}</div>
+    <label style="display:block;margin-bottom:8px;">Tukar dengan CC<select id="tkP" onchange="tukarFillB()">${optP}</select></label>
+    <div id="tkPrev" style="font-size:13px;margin-bottom:8px;"></div>
+    <div class="msg info" style="font-size:12px;margin-bottom:8px;">Seluruh jam ritase kedua CC saling bertukar sekaligus. Hanya bisa sebelum loading pertama.</div>
+    <label style="display:block;margin-bottom:8px;">Alasan (wajib)<input id="tkWhy" placeholder="mis. CC pagi ada kendala"></label>
+    <div style="font-size:12px;color:var(--text-dim);">Ditukar oleh: ${(currentUser&&currentUser.name)||"-"} (otomatis dari akun login)</div>
+    <div id="tkMsg" style="margin-top:8px;"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="tukarDo(${ri})">✔ Tukar Jam</button>`);
+  window._tkMe=ri; tukarFillB();
+}
+function tukarFillB(){
+  const d=DB.get(), sel=document.getElementById("tkP"), pv=document.getElementById("tkPrev"); if(!sel||!pv) return;
+  const x=d.dccpSchedule[parseInt(sel.value,10)], me=d.dccpSchedule[window._tkMe]; if(!x||!me) return;
+  pv.innerHTML=`Sesudah tukar:<br><b>${me.police}</b> → ${dccpTripList(x).join(" · ")}<br><b>${x.police}</b> → ${dccpTripList(me).join(" · ")}`;
+}
+function tukarDo(ri){
+  const v=id=>((document.getElementById(id)||{}).value||"").trim(), msg=document.getElementById("tkMsg");
+  const pi=parseInt(v("tkP"),10), why=v("tkWhy");
+  if(why.length<3){ msg.innerHTML=`<div class="msg err">Alasan wajib diketik (minimal 3 huruf).</div>`; return; }
+  if(isNaN(pi)){ msg.innerHTML=`<div class="msg err">Pilih CC pasangannya.</div>`; return; }
+  let err="";
+  DB.set(d=>{
+    const a=d.dccpSchedule[ri], b=d.dccpSchedule[pi]; if(!a||!b){ err="Data jadwal berubah, ulangi."; return; }
+    const c=tukarCands(d,ri);
+    if(!tukarOk(a,d)||!tukarOk(b,d)){ err="Salah satu CC sudah loading, tukar jam tidak bisa lagi."; return; }
+    if(!c.allowed.includes(pi)){ err = c.same.length ? `Tukar hanya boleh dengan CC LP ${a.lp} yang sama.` : "CC pasangan tidak valid."; return; }
+    const ta=dccpTripList(a), tb=dccpTripList(b);
+    const pa={planTrip:a.planTrip, planUnit:a.planUnit}, pb={planTrip:b.planTrip, planUnit:b.planUnit};
+    a.trips=tb.slice(); a.schedTime=tb[0]||""; b.trips=ta.slice(); b.schedTime=ta[0]||"";
+    [["planTrip"],["planUnit"]].forEach(([k])=>{ if(pb[k]!==undefined) a[k]=pb[k]; else delete a[k]; if(pa[k]!==undefined) b[k]=pa[k]; else delete b[k]; });
+    a.note=((a.note?a.note+"; ":"")+`tukar jam dgn ${b.police} (${ta.join(",")} -> ${tb.join(",")})`); b.note=((b.note?b.note+"; ":"")+`tukar jam dgn ${a.police} (${tb.join(",")} -> ${ta.join(",")})`);
+    d.swapLog=d.swapLog||[]; d.swapLog.push({ts:Date.now(), a:a.police, lpA:a.lp||"", tA:ta.join(", "), b:b.police, lpB:b.lp||"", tB:tb.join(", "), cross:String(a.lp||"").toUpperCase()!==String(b.lp||"").toUpperCase(), why, by:(currentUser&&currentUser.name)||""});
+    if(d.swapLog.length>200) d.swapLog=d.swapLog.slice(-200);
+    ccQueueSort(d);
+  });
+  if(err){ msg.innerHTML=`<div class="msg err">${err}</div>`; return; }
+  closeModal(); holdRelease(); render();
+}
+function swapLogHtml(data){
+  const mid=prodMidnight(), L=(data.swapLog||[]).filter(x=>x.ts>=mid).slice().reverse(); if(!L.length) return "";
+  return `<div class="card" style="border-left:5px solid #2F6FB5;"><h3>🔄 Tukar Jam Hari Ini (${L.length})</h3>${L.map(x=>`<div style="padding:6px 0;border-top:1px solid var(--border);font-size:13px;"><b>${x.a}</b> (${x.lpA}) ${x.tA} ⇄ <b>${x.b}</b> (${x.lpB}) ${x.tB}${x.cross?` <span style="color:#D64545;font-weight:700;">lintas LP</span>`:""}<br><span style="font-size:11px;color:var(--text-dim);">${holdHm(x.ts)} · oleh ${x.by||"-"} · ${x.why}</span></div>`).join("")}</div>`;
+}
 function dccpDelete(i){
   if(!confirm("Hapus CC ini dari jadwal?")) return;
   DB.set(d=>{ d.dccpSchedule.splice(i,1); });
@@ -3913,11 +4043,12 @@ function renderDccpUpload(){
         const a = withActual ? findActualArrival(r.police,data) : null;
         if(withActual && !lpMine(r.lp)) return "";
         return `<tr><td>${r.lp}</td><td><b>${r.police}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.note?`<div style="font-size:10px;color:var(--text-dim);">${r.note}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
-        ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${a.stall})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
+        ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${a.stall})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> ${canTukarJam()?`<button class="btn btn-sm" onclick="tukarOpen(${ri})">🔄 Tukar Jam</button>`:""} <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
       }).join("")}
     </table></div>`;
   return `
     ${dccpEditIdx!==null ? dccpEditForm(data) : ""}
+    ${swapLogHtml(data)}
     ${(currentUser&&currentUser.role==="koordinator")?`<div class="card" style="border-left:5px solid #2F6FB5;"><h3 style="margin:0 0 4px;">📋 Jadwal DCCP hari ini</h3><div style="font-size:13px;color:var(--text-dim);">${myKoordLP()?`Menampilkan CC <b>LP ${myKoordLP()}</b>. `:''}Koordinator boleh <b>mengubah</b> plat, driver, atau jam bila CC diganti tidak sesuai jadwal (tombol ✏️), dan menambah <b>Spot Order</b>. Unggah file DCCP dilakukan Delivery atau Admin.</div></div>`:`
     <div class="card">
       <h3>📋 Upload Jadwal DCCP</h3>
@@ -5927,6 +6058,7 @@ function renderDisplay(){
       </div>
 
       ${offUnitEntries(data).length?`<div class="y-off">${offListHtml(data,false)}</div>`:""}
+      ${holdCardHtml(data,false)}
       <div class="card y-queue">
         <h3>⏳ Antrian CC Menunggu (${data.queue.length})</h3>
         ${data.queue.length===0 ? `<div class="emptystate">Tidak ada antrian.</div>` :
@@ -5980,7 +6112,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); }catch(e){} }, 3000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
 }, 1000);
