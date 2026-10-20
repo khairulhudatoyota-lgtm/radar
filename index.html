@@ -1020,6 +1020,8 @@ function shiftChangeDo(sh){
 }
 const SESS_KEY = "apcc_session_v1";
 function rememberOn(){ try{ return localStorage.getItem("radar_remember")!=="0"; }catch(e){ return true; } }
+function lastPass(){ try{ const v=localStorage.getItem("radar_lastpass"); return v ? decodeURIComponent(escape(atob(v))) : ""; }catch(e){ return ""; } }
+function savePass(p){ try{ if(p) localStorage.setItem("radar_lastpass", btoa(unescape(encodeURIComponent(p)))); else localStorage.removeItem("radar_lastpass"); }catch(e){} }
 function lastUser(){ try{ return localStorage.getItem("radar_lastuser")||""; }catch(e){ return ""; } }
 function getSession(){
   try{
@@ -1364,7 +1366,7 @@ function saveSpeedCfg(){
 function loginEnter(acc, roles){
   if(!TABS_BY_ROLE[acc.role]){ document.getElementById("loginMsg").innerHTML = `<div class="msg err">Akun ini belum punya otoritas yang valid. Hubungi Admin.</div>`; return; }
   selectedRole = acc.role;
-  try{ const rb=document.getElementById("loginRemember"); if(rb) localStorage.setItem("radar_remember", rb.checked?"1":"0"); localStorage.setItem("radar_lastuser", acc.username); }catch(e){}
+  try{ const rb=document.getElementById("loginRemember"); if(rb) localStorage.setItem("radar_remember", rb.checked?"1":"0"); localStorage.setItem("radar_lastuser", acc.username); savePass((rb&&!rb.checked)?"":document.getElementById("loginPass").value); }catch(e){}
   currentUser = setSession(acc, roles);
   spdUnlock();
   try{ RSnd.login(); }catch(e){}
@@ -1391,7 +1393,7 @@ function doLogin(){
   if(!same.length) same = users.filter(x=>String(x.username).toLowerCase()===u.toLowerCase());
   if(!same.length){ msgEl.innerHTML = `<div class="msg err">Username tidak ditemukan.</div>`; try{RSnd.err();}catch(e){} return; }
   const ok = same.filter(x=>x.password===p);
-  if(!ok.length){ msgEl.innerHTML = `<div class="msg err">Password salah.</div>`; try{RSnd.err();}catch(e){} return; }
+  if(!ok.length){ savePass(""); msgEl.innerHTML = `<div class="msg err">Password salah.</div>`; try{RSnd.err();}catch(e){} return; }
   if(ok.length===1){ loginEnter(ok[0], [ok[0].role]); return; }
   // satu username terdaftar untuk beberapa peran: pengguna memilih menu tujuan
   const roles = [...new Set(ok.map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
@@ -1440,7 +1442,7 @@ function doLogout(){
   document.getElementById("credScreen").classList.add("hidden");
   document.getElementById("roleSelectScreen").classList.remove("hidden");
   document.getElementById("loginUser").value = lastUser();
-  document.getElementById("loginPass").value = "";
+  document.getElementById("loginPass").value = rememberOn() ? lastPass() : "";
 }
 function enterDisplay(){
   currentUser = {username:"public", name:"Display", role:"display"};
@@ -6248,7 +6250,7 @@ function renderDisplay(){
    BOOT
 ====================================================================== */
 initRoleGrid();
-try{ const lu=document.getElementById("loginUser"); if(lu && !lu.value) lu.value=lastUser(); }catch(e){}
+try{ const lu=document.getElementById("loginUser"); if(lu && !lu.value) lu.value=lastUser(); const lp=document.getElementById("loginPass"); if(lp && !lp.value && rememberOn()) lp.value=lastPass(); }catch(e){}
 try{ const rb=document.getElementById("loginRemember"); if(rb) rb.checked=rememberOn(); }catch(e){}
 { const _d = DB.load(); syncUnitLog(_d); DB.save(_d); } // pastikan seed ada + migrasi log unit
 const existingSession = getSession();
