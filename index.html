@@ -2292,7 +2292,7 @@ const CCP_KEY = "apcc_ccprofile", CCAUTO_KEY = "apcc_ccauto";
 let autoAbsen = { on:false, id:null, wake:null, state:"armed", hits:0, dist:null, acc:null, ts:0, msg:"", err:"" };
 function getCcProfile(){ try{ const o = JSON.parse(localStorage.getItem(CCP_KEY)||"null"); return o && typeof o==="object" ? o : {plat:"",lp:"",drvCode:""}; }catch(e){ return {plat:"",lp:"",drvCode:""}; } }
 function saveCcProfile(){
-  const plat = (document.getElementById("ccpPlat").value||"").trim().toUpperCase();
+  const plat = platFmt(document.getElementById("ccpPlat").value||"");
   const lp = (document.getElementById("ccpLP").value||"").trim();
   const drvCode = getCcProfile().drvCode||"";
   if(!plat || !lp){ alert("Isi nomor polisi dan LP dulu."); return; }
@@ -2556,7 +2556,7 @@ function registerCC(plat, lp, dist, auto, manual){
   DB.set(d=>{
     if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; return; }
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
-    const item = {plat, lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
+    const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
     const hd = ccHoldDue(d, plat);
     if(hd!=null){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }
     res = placeCC(d, item);
@@ -2689,7 +2689,7 @@ function createILS(ccNum, slots){
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
   DB.set(d=>{
     const id = Date.now();
-    d.ils.push({id, ccNum, ccPlat: ccInfo.plat, lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
+    d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
     units.forEach(u=>{ d.units[u.slot].ilsId = id; });
   });
   notifyILSCreated(ccInfo.plat, units.length);
@@ -4866,7 +4866,7 @@ function parseDccpGrid(grid){
     const nUnit = cLoad>=0 ? Number(row[cLoad]) : NaN;
     const planTrip = nTrip>0 ? nTrip : (trips.length||1);
     const planUnit = nUnit>0 ? nUnit : planTrip*6;
-    out.push({lp, police: police.toUpperCase(), model: cModel>=0?txt(row[cModel]):"", driver: cDriver>=0?txt(row[cDriver]):"", drvCode: cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"", schedTime:sched, dest, trips, planTrip, planUnit});
+    out.push({lp, police: platFmt(police), model: cModel>=0?txt(row[cModel]):"", driver: cDriver>=0?txt(row[cDriver]):"", drvCode: cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"", schedTime:sched, dest, trips, planTrip, planUnit});
   }
   return out;
 }
@@ -4883,6 +4883,8 @@ function saveDccpSchedule(){
 }
 function clearDccpPreview(){ dccpParsedPreview=null; render(); }
 function normPlat(s){ return String(s||"").replace(/\s+/g,"").toUpperCase(); }
+/* Format plat baku: huruf wilayah (spasi) angka (spasi) huruf belakang, mis. B 9506 PEJ. Plat yang hanya beda spasi dianggap sama. */
+function platFmt(v){ const t=String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,""); const m=t.match(/^([A-Z]{1,2})(\d{1,4})([A-Z]{0,3})$/); return m?[m[1],m[2],m[3]].filter(Boolean).join(" "):String(v||"").trim().toUpperCase(); }
 function findActualArrival(police, data){
   const k = normPlat(police);
   for(let i=1;i<=5;i++){ const o=data.cc[i]; if(o && normPlat(o.plat)===k) return {ts:o.ts, stall:i}; }
@@ -4906,7 +4908,7 @@ function dccpOpenEdit(i){ dccpEditIdx=i; render(); }
 function dccpCancelEdit(){ dccpEditIdx=null; render(); }
 function dccpSaveEdit(){
   const g = id=>document.getElementById(id).value.trim();
-  const police = g("dfPolice").toUpperCase(), lp=g("dfLP");
+  const police = platFmt(g("dfPolice")), lp=g("dfLP");
   if(!police || !lp){ document.getElementById("dccpEditMsg").innerHTML=`<div class="msg err">Plat & LP wajib diisi.</div>`; return; }
   const _dc = document.getElementById("dfDrvCode");
   const rec = {lp, police, model:g("dfModel"), driver:g("dfDriver"), drvCode:(_dc?_dc.value.trim().toUpperCase():undefined), schedTime:g("dfTime"), dest:g("dfDest"), note:g("dfNote"), planTrip:Math.max(0,parseInt(g("dfTrip"))||0), planUnit:Math.max(0,parseInt(g("dfUnit"))||0)};
@@ -4957,7 +4959,7 @@ function gantiPickFrom(){
 function dccpGantiDo(ri){
   const val=id=>((document.getElementById(id)||{}).value||"").trim();
   const msg=document.getElementById("gMsg");
-  const plat=val("gPlat").toUpperCase(), lp=val("gLP"), drv=val("gDrv"), code=val("gCode").toUpperCase(), why=val("gWhy");
+  const plat=platFmt(val("gPlat")), lp=val("gLP"), drv=val("gDrv"), code=val("gCode").toUpperCase(), why=val("gWhy");
   const chosen=[...document.querySelectorAll(".gTrip:checked")].map(c=>c.value);
   if(!chosen.length){ msg.innerHTML=`<div class="msg err">Pilih minimal satu ritase yang diganti.</div>`; return; }
   if(!plat){ msg.innerHTML=`<div class="msg err">Isi plat CC pengganti.</div>`; return; }
@@ -5117,7 +5119,7 @@ function renderDccpUpload(){
       ${rows.map((r,ri)=>{
         const a = withActual ? findActualArrival(r.police,data) : null;
         if(withActual && !lpMine(r.lp)) return "";
-        return `<tr><td>${r.lp}</td><td><b>${r.police}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
+        return `<tr><td>${r.lp}</td><td><b>${platFmt(r.police)}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
         ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${a.stall})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> ${canTukarJam()?`<button class="btn btn-sm" onclick="tukarOpen(${ri})">🔄 Tukar Jam</button>`:""} <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
       }).join("")}
     </table></div>`;
@@ -5546,7 +5548,7 @@ function renderCCPlan(){
 
   <div class="card"><h3>Per Car Carrier</h3><div style="overflow-x:auto;"><table style="font-size:13px;">
     <tr><th style="${th}">Plat</th><th style="${th}">LP</th><th style="${th}">Driver</th><th style="${th}">Plan</th><th style="${th}">Aktual</th><th style="${th}">Minus</th><th style="${th}">Harusnya s.d. kini</th><th style="${th}">Jam ritase hari ini</th><th style="${th}">Status</th></tr>
-    ${rows.map(x=>{ const c=stChip[x.status]; return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${x.r.police}</b>${x.r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${x.r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${x.r.origPolice}</div>`:""}</td><td style="${td}">${x.r.lp}</td><td style="${td}">${x.r.driver||"-"}</td><td style="${td}">${x.planTrip}</td><td style="${td}"><b>${x.act}</b></td><td style="${td};font-weight:800;color:${x.minus>0?"#D64545":"#1E9E5A"};">${x.minus>0?"−"+x.minus:(x.minus<0?"+"+(-x.minus):"0")}</td><td style="${td}">${x.dueNow}${x.dueMinus>0?` <span style="color:#D64545;font-weight:700;">(−${x.dueMinus})</span>`:""}</td><td style="${td}">${ccTripChipsHtml(x.r,data)}${x.inYard?`<div style="font-size:11px;color:var(--text-dim);">${x.inYard.stall?"di Stall "+x.inYard.stall:"antri"}</div>`:""}</td><td style="${td}"><span style="color:${c[1]};font-weight:700;">${c[0]}</span></td></tr>`; }).join("")}
+    ${rows.map(x=>{ const c=stChip[x.status]; return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${platFmt(x.r.police)}</b>${x.r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${x.r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${x.r.origPolice}</div>`:""}</td><td style="${td}">${x.r.lp}</td><td style="${td}">${x.r.driver||"-"}</td><td style="${td}">${x.planTrip}</td><td style="${td}"><b>${x.act}</b></td><td style="${td};font-weight:800;color:${x.minus>0?"#D64545":"#1E9E5A"};">${x.minus>0?"−"+x.minus:(x.minus<0?"+"+(-x.minus):"0")}</td><td style="${td}">${x.dueNow}${x.dueMinus>0?` <span style="color:#D64545;font-weight:700;">(−${x.dueMinus})</span>`:""}</td><td style="${td}">${ccTripChipsHtml(x.r,data)}${x.inYard?`<div style="font-size:11px;color:var(--text-dim);">${x.inYard.stall?"di Stall "+x.inYard.stall:"antri"}</div>`:""}</td><td style="${td}"><span style="color:${c[1]};font-weight:700;">${c[0]}</span></td></tr>`; }).join("")}
   </table></div></div>
   ${R.unplanned.length?`<div class="card"><h3>CC di Luar Jadwal</h3><table style="font-size:13px;"><tr><th style="${th}">Plat</th><th style="${th}">Ritase</th><th style="${th}">Unit</th></tr>${R.unplanned.map(u=>`<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${u.plat}</b></td><td style="${td}">${u.act}</td><td style="${td}">${u.actUnit}</td></tr>`).join("")}</table><div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Sudah dihitung di total aktual. Tambahkan lewat menu DCCP › Spot Order bila ingin masuk plan.</div></div>`:""}
   `}
@@ -7353,7 +7355,7 @@ function renderDisplay(){
   const ritaseByPlat = {};
   const _sh = currentShift(), _w = shiftWindow(prodDayStart(), _sh);
   const _ilsShift = data.ils.filter(b=>b.ts>=_w[0] && b.ts<_w[1]);
-  _ilsShift.forEach(b=>{ const k=b.ccPlat; ritaseByPlat[k]=(ritaseByPlat[k]||0)+1; });
+  _ilsShift.forEach(b=>{ const k=platFmt(b.ccPlat); ritaseByPlat[k]=(ritaseByPlat[k]||0)+1; });
   const totalRitase = _ilsShift.length;
   const _inpByModel = {}, _inpByLine = {}; let _inpTot = 0;
   (data.unitLog||[]).forEach(e=>{ if(e.parkedTs!=null && e.parkedTs>=_w[0] && e.parkedTs<_w[1]){ _inpTot++; _inpByModel[e.model]=(_inpByModel[e.model]||0)+1; if(e.line) _inpByLine[e.line]=(_inpByLine[e.line]||0)+1; } });
@@ -7375,7 +7377,7 @@ function renderDisplay(){
         <div style="overflow-x:auto;"><table>
           <tr><th>Plat</th><th>LP / Driver</th><th>Jam Ritase</th><th>Aktual Datang</th><th>Status</th></tr>
           ${sched.map(r=>{ const a=findActualArrival(r.police,data);
-            return `<tr><td><b>${r.police}</b>${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${r.origPolice}</div>`:""}</td><td>${r.lp}<div style="font-size:11px;color:var(--text-dim);">${r.driver||""}</div></td><td>${ccTripChipsHtml(r,data)}</td>
+            return `<tr><td><b>${platFmt(r.police)}</b>${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${r.origPolice}</div>`:""}</td><td>${r.lp}<div style="font-size:11px;color:var(--text-dim);">${r.driver||""}</div></td><td>${ccTripChipsHtml(r,data)}</td>
             <td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):"-"}</td>
             <td>${a?(a.stall?`Stall ${a.stall} `:"Antri ")+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum datang</span>"}</td></tr>`;}).join("")}
         </table></div>
