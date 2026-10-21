@@ -3924,6 +3924,7 @@ function saveDccpSchedule(){
   DB.set(d=>{
     d.dccpSchedule = p.rows;
     d.dccpMeta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||""};
+    d.swapLog = [];   // jadwal DCCP baru menimpa yang lama: log tukar CC ikut bersih
   });
   dccpParsedPreview = null;
   render();
@@ -4107,7 +4108,7 @@ function dccpClearAll(){
   if(!(currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))) return;
   const n=(DB.get().dccpSchedule||[]).length; if(!n) return;
   if(!confirm("Hapus SEMUA jadwal DCCP ("+n+" truk) di semua perangkat?\nUpload ulang file DCCP setelah ini. Tidak bisa dibatalkan.")) return;
-  DB.set(d=>{ d.dccpSchedule=[]; d.dccpMeta={fileName:"",uploadedAt:null,uploadedBy:""}; d.hold=[]; });
+  DB.set(d=>{ d.dccpSchedule=[]; d.dccpMeta={fileName:"",uploadedAt:null,uploadedBy:""}; d.hold=[]; d.swapLog=[]; });
   dccpEditIdx=null; render();
 }
 function dccpDelete(i){
@@ -4171,7 +4172,7 @@ function renderDccpUpload(){
   return `
     ${dccpEditIdx!==null ? dccpEditForm(data) : ""}
     ${swapLogHtml(data)}
-    ${(currentUser&&currentUser.role==="koordinator")?`<div class="card" style="border-left:5px solid #2F6FB5;"><h3 style="margin:0 0 4px;">📋 Jadwal DCCP hari ini</h3><div style="font-size:13px;color:var(--text-dim);">${myKoordLP()?`Menampilkan CC <b>LP ${myKoordLP()}</b>. `:''}Koordinator boleh <b>mengubah</b> plat, driver, atau jam bila CC diganti tidak sesuai jadwal (tombol ✏️), dan menambah <b>Spot Order</b>. Unggah file DCCP dilakukan Delivery atau Admin.</div></div>`:`
+    ${(currentUser&&currentUser.role==="koordinator")?`<div class="card" style="border-left:5px solid #2F6FB5;"><h3 style="margin:0 0 4px;">📋 Jadwal DCCP hari ini</h3><div style="font-size:13px;color:var(--text-dim);">${myKoordLP()?`Menampilkan CC <b>LP ${myKoordLP()}</b>. `:''}Koordinator boleh <b>mengubah</b> plat, driver, atau jam bila CC diganti tidak sesuai jadwal (tombol ✏️), dan menambah <b>Spot Order</b>. Koordinator juga boleh <b>mengunggah file DCCP baru</b> (menimpa jadwal semua LP dan membersihkan log tukar).</div></div>`:""}
     <div class="card">
       <h3>📋 Upload Jadwal DCCP</h3>
       <p style="font-size:13px;color:var(--text-dim);margin:6px 0 12px;">Pilih file Excel DCCP. Hanya bagian <b>B. EAST KARAWANG PLANT OPERATION</b> yang dibaca.</p>
@@ -4179,7 +4180,7 @@ function renderDccpUpload(){
       <div id="dccpMsg" style="margin-top:10px;"></div>
       ${pv?`<h4 style="margin:14px 0 6px;">Pratinjau — ${pv.fileName} (${pv.rows.length} truk)</h4>${tbl(pv.rows,false)}
         <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn" onclick="saveDccpSchedule()">✔ Simpan Jadwal</button><button class="btn btn-sm" onclick="clearDccpPreview()">Batal</button></div>`:""}
-    </div>`}
+    </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">Jadwal Aktif (${data.dccpSchedule.length} truk)</h3><span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(-1)">➕ Tambah CC / Spot Order</button>${(data.dccpSchedule.length&&currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))?`<button class="btn-danger btn btn-sm" onclick="dccpClearAll()">🗑 Hapus Semua</button>`:""}</span></div>
       ${meta.fileName?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${meta.fileName} · diunggah ${new Date(meta.uploadedAt).toLocaleString('id-ID')} oleh ${meta.uploadedBy}</div>`:""}
