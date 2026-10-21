@@ -786,7 +786,7 @@ window.RSnd=(function(){
       <button type="button" class="btn-outline btn btn-sm" style="width:auto;padding:10px 16px;color:var(--red);border-color:var(--red);" onclick="appExit()">⏻ Keluar Aplikasi</button>
     </div>
     <div class="credit"><small>Dibuat oleh</small><b>Khairul Huda</b></div>
-    <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:6px;">Versi 21 Okt 2026 · 23.00</div>
+    <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:6px;">Versi 21 Okt 2026 · 23.15</div>
     </div></div>
   </div>
 
@@ -1530,12 +1530,14 @@ function switchToRole(r){
   try{ disposeCar3D(); }catch(e){}
   try{ if(autoWatchId){ navigator.geolocation.clearWatch(autoWatchId); autoWatchId=null; } }catch(e){}
   try{ stopAutoAbsen(true); }catch(e){}
+  if(r==="cc") ccPlatOk=false;
   currentUser = Object.assign({}, currentUser, {role:r});
   try{ const s=getSession()||{}; s.role=r; s.roles=currentUser.roles; localStorage.setItem(SESS_KEY, JSON.stringify(s)); }catch(e){}
   try{ spdUnlock(); }catch(e){}
   enterApp();
 }
 function doLogout(){
+  ccPlatOk=false; try{ stopShare(true); }catch(e){}
   spdStop(); spdCloseOverlay();
   geoStop();
   stopScanner();
@@ -1590,7 +1592,7 @@ function enterApp(forceTab){
     activeTab = forceTab || tabs[0].key;
   }
   render();
-  if(currentUser.role==="cc"){ try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){} }
+  if(currentUser.role==="cc"){ if(ccPlatOk){ try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){} } else setTimeout(ccPlatGateCheck, 60); }
 }
 function switchTab(t){
   if(currentUser && TABS_BY_ROLE[currentUser.role] && !TABS_BY_ROLE[currentUser.role].some(x=>x.key===t)) return;   // menu di luar otoritas role ditolak
@@ -2315,7 +2317,7 @@ function startAutoAbsen(silent){
   if(!silent) render();
 }
 function stopAutoAbsen(silent){
-  try{ if(window.AndroidTLS && window.AndroidTLS.bgStop) window.AndroidTLS.bgStop(); }catch(e){}
+  try{ if(window.AndroidTLS && window.AndroidTLS.bgStop && !shareTrk.on) window.AndroidTLS.bgStop(); }catch(e){}
   if(autoAbsen.id!=null){ try{ navigator.geolocation.clearWatch(autoAbsen.id); }catch(e){} }
   try{ if(autoAbsen.wake) autoAbsen.wake.release(); }catch(e){}
   autoAbsen = { on:false, id:null, wake:null, state:"armed", hits:0, dist:null, acc:null, ts:0, msg:"", err:"" };
@@ -2323,7 +2325,7 @@ function stopAutoAbsen(silent){
   if(!silent) render();
 }
 /* posisi dari layanan latar belakang aplikasi Android (tetap jalan saat layar terkunci / aplikasi diminimalkan) */
-window.radarBgPos=function(lat,lng,acc){ try{ if(autoAbsen.on) onAutoPos({coords:{latitude:lat,longitude:lng,accuracy:acc}}); }catch(e){} };
+window.radarBgPos=function(lat,lng,acc){ const P={coords:{latitude:lat,longitude:lng,accuracy:acc,speed:null}}; try{ if(autoAbsen.on) onAutoPos(P); }catch(e){} try{ if(shareTrk.on) onSharePos(P); }catch(e){} };
 function onAutoErr(err){
   if(err && err.code===1){ autoAbsen.err = "Izin lokasi ditolak. Aktifkan izin lokasi (pilih 'Izinkan') lalu aktifkan ulang."; updateAutoStatus(); }
 }
@@ -6658,17 +6660,20 @@ function trkKey(plat){ return String(plat||"").toUpperCase().replace(/[^A-Z0-9]/
 let shareTrk = {on:false, id:null, wake:null, last:0, key:"", msg:""};
 async function shareWake(){ try{ if('wakeLock' in navigator && !shareTrk.wake){ shareTrk.wake = await navigator.wakeLock.request('screen'); shareTrk.wake.addEventListener('release',()=>{ shareTrk.wake=null; }); } }catch(e){} }
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && shareTrk.on) shareWake(); });
-function startShare(){
+function startShare(silent){
   const prof = getCcProfile();
-  if(!prof.plat || !prof.lp){ alert("Simpan dulu nomor polisi & LP truk kamu (kartu Absen Otomatis)."); return; }
-  if(!FBS.enabled || !FBS.authed){ alert("Perangkat belum Online. Tunggu tanda hijau 'Online' di pojok atas."); return; }
-  if(!navigator.geolocation){ alert("HP ini tidak mendukung GPS."); return; }
+  if(shareTrk.on) return;
+  if(!prof.plat || !prof.lp){ if(!silent) alert("Simpan dulu nomor polisi & LP truk kamu (kartu Data Truk)."); return; }
+  if(!FBS.enabled || !FBS.authed){ if(!silent) alert("Perangkat belum Online. Tunggu tanda hijau 'Online' di pojok atas."); return; }
+  if(!navigator.geolocation){ if(!silent) alert("HP ini tidak mendukung GPS."); return; }
+  try{ if(window.AndroidTLS && window.AndroidTLS.bgStart) window.AndroidTLS.bgStart(); }catch(e){}
   shareTrk = {on:true, id:null, wake:null, last:0, key:trkKey(prof.plat), msg:"Mencari sinyal GPS…"};
   shareWake();
-  shareTrk.id = navigator.geolocation.watchPosition(onSharePos, err=>{ shareTrk.msg = err && err.code===1 ? "Izin lokasi ditolak. Aktifkan izin lokasi lalu ulangi." : "GPS error: "+(err&&err.message||""); shareStatusUpdate(); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
+  shareTrk.id = navigator.geolocation.watchPosition(onSharePos, err=>{ shareTrk.denied = !!(err && err.code===1); shareTrk.msg = err && err.code===1 ? "Izin lokasi ditolak. Aktifkan izin lokasi lalu ulangi." : "GPS error: "+(err&&err.message||""); shareStatusUpdate(); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
   render();
 }
 function stopShare(silent){
+  try{ if(window.AndroidTLS && window.AndroidTLS.bgStop && !autoAbsen.on && shareTrk.on) window.AndroidTLS.bgStop(); }catch(e){}
   if(shareTrk.id!=null){ try{ navigator.geolocation.clearWatch(shareTrk.id); }catch(e){} }
   try{ if(shareTrk.wake) shareTrk.wake.release(); }catch(e){}
   try{ if(shareTrk.key && FBS.db) FBS.db.ref(TRK_PATH+"/"+shareTrk.key).remove(); }catch(e){}
@@ -6684,18 +6689,63 @@ function onSharePos(pos){
   ref.set(rec).then(()=>{ try{ ref.onDisconnect().remove(); }catch(e){} shareTrk.msg = "✔ Posisi terkirim "+new Date(now).toLocaleTimeString("id-ID")+" (±"+rec.acc+" m)"; shareStatusUpdate(); })
     .catch(e=>{ shareTrk.msg = "Gagal kirim posisi: "+(e&&e.message||e)+" — minta Admin menambah aturan Firebase 'radar_track'."; shareStatusUpdate(); });
 }
+/* ===== Wajib isi plat truk setiap masuk sebagai Driver CC (driver sering berganti truk) ===== */
+let ccPlatOk=false;
+const CC_PLATS_KEY="radar_cc_plats";
+function ccRecentPlats(){ try{ const a=JSON.parse(localStorage.getItem(CC_PLATS_KEY)||"[]"); return Array.isArray(a)?a.slice(0,4):[]; }catch(e){ return []; } }
+function ccPlatNorm(v){ const t=String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,""); const m=t.match(/^([A-Z]{1,2})(\d{1,4})([A-Z]{0,3})$/); return m?[m[1],m[2],m[3]].filter(Boolean).join(" "):""; }
+function ccPlatGateCheck(){ if(currentUser && currentUser.role==="cc" && !ccPlatOk && !document.getElementById("cgPlat")) ccPlatGateOpen(); }
+function ccPlatGateOpen(){
+  const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), pr=getCcProfile();
+  const accLp=(acc&&acc.lp)||"", rec=ccRecentPlats();
+  showModal(`<h3 style="margin:0 0 4px;">🚚 Plat truk hari ini</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Wajib diisi setiap masuk, karena truk bisa berganti. Posisi dan absen otomatis memakai plat ini.</div>
+    ${rec.length?`<div style="font-size:12px;margin-bottom:6px;">Pernah dipakai di HP ini (ketuk untuk memilih):</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${rec.map(p=>`<button type="button" class="btn btn-outline btn-sm" style="width:auto;font-weight:800;" onclick="document.getElementById('cgPlat').value='${xlEsc(p)}';ccPlatGateSave()">${xlEsc(p)}</button>`).join("")}</div>`:""}
+    <div class="field"><label>Nomor polisi truk</label><input id="cgPlat" type="text" placeholder="B 1234 ABC" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;font-size:20px;font-weight:800;letter-spacing:1px;" onkeydown="if(event.key==='Enter')ccPlatGateSave()"></div>
+    <div class="field"><label>LP</label>${accLp?`<input type="text" value="${xlEsc(accLp)}" disabled><input type="hidden" id="cgLp" value="${xlEsc(accLp)}">`:`<select id="cgLp"><option value="">-- pilih LP --</option>${(d.lpList||[]).map(l=>`<option value="${xlEsc(l)}" ${lpKey(l)===lpKey(pr.lp)?"selected":""}>${xlEsc(l)}</option>`).join("")}</select>`}</div>
+    <div id="cgMsg"></div>
+    <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal();doLogout()">Keluar</button>
+    <button type="button" class="btn btn-primary" style="flex:2;" onclick="ccPlatGateSave()">✔ Lanjut</button></div>`);
+  const bg=document.querySelector("#modalRoot .modal-bg"); if(bg) bg.onclick=null;
+  const x=document.querySelector("#modalRoot .close-x"); if(x) x.remove();
+  setTimeout(()=>{ try{ document.getElementById("cgPlat").focus(); }catch(e){} },80);
+}
+function ccPlatGateSave(){
+  const plat=ccPlatNorm((document.getElementById("cgPlat")||{}).value), lp=((document.getElementById("cgLp")||{}).value||"").trim(), msg=document.getElementById("cgMsg");
+  if(!plat){ msg.innerHTML=`<div class="msg err">Format plat tidak dikenali. Contoh: B 9660 TEJ</div>`; return; }
+  if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
+  const pr=getCcProfile();
+  if(shareTrk.on && trkKey(pr.plat)!==trkKey(plat)) stopShare(true);
+  try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:pr.drvCode||""})); }catch(e){}
+  try{ const r=[plat].concat(ccRecentPlats().filter(p=>p!==plat)).slice(0,4); localStorage.setItem(CC_PLATS_KEY, JSON.stringify(r)); }catch(e){}
+  ccPlatOk=true; closeModal();
+  try{ syncCcProfileFromAccount(); }catch(e){}
+  try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){}
+  render(); try{ ccAutoTrack(); }catch(e){}
+}
+/* Bagikan posisi OTOMATIS: Driver CC yang sudah mengisi Data Truk langsung mengirim posisi tanpa tombol */
+function ccAutoTrack(){
+  if(!currentUser || currentUser.role!=="cc"){ if(shareTrk.on && shareTrk.auto) stopShare(true); return; }
+  if(!ccPlatOk) return;
+  const prof=getCcProfile(); if(!prof.plat || !prof.lp) return;
+  if(shareTrk.on && shareTrk.key!==trkKey(prof.plat)){ stopShare(true); }
+  if(shareTrk.on || shareTrk.denied) return;
+  if(!(FBS.enabled && FBS.authed)) return;
+  startShare(true); shareTrk.auto=true;
+}
+setInterval(()=>{ try{ ccAutoTrack(); }catch(e){} }, 5000);
 function shareStatusUpdate(){ const el = document.getElementById("shareStat"); if(el) el.innerHTML = shareStatusHtml(); }
 function shareStatusHtml(){
-  if(!shareTrk.on) return `<div class="msg info">Pembagian posisi belum aktif.</div>`;
+  if(shareTrk.denied) return `<div class="msg err"><b>Izin lokasi ditolak.</b> Buka Pengaturan HP → Aplikasi → RADAR EKY → Izin → Lokasi → <b>Izinkan sepanjang waktu</b>, lalu buka ulang aplikasi.</div>`;
+  if(!shareTrk.on){ const pr=getCcProfile(); return `<div class="msg info">${(!pr.plat||!pr.lp)?"Isi dan simpan <b>Data Truk</b> dulu. Setelah itu posisi terkirim otomatis.":"Menyiapkan pengiriman posisi otomatis… (pastikan status Online)"}</div>`; }
   const bad = /Gagal|ditolak|error/i.test(shareTrk.msg);
   return `<div class="msg ${bad?'err':'ok'}"><b>📡 Aktif</b> — ${escH(shareTrk.msg)}</div>`;
 }
 function shareCardHtml(){
   return `<div class="card">
-    <h3>📡 Bagikan Posisi (Peta CC)</h3>
-    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Aktifkan saat berangkat supaya Koordinator bisa melihat posisi truk di peta (ADM KAP – NVDC). <b>Biarkan aplikasi terbuka</b> dan layar menyala. Matikan kalau sudah tiba.</p>
+    <h3>📡 Posisi Truk (otomatis)</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Posisi truk terkirim <b>otomatis</b> ke Peta CC selama kamu login sebagai Driver CC. Tidak perlu menekan apa pun. Tutup aplikasi dengan <b>Minimize</b>, jangan Keluar.</p>
     <div id="shareStat" style="margin:8px 0;">${shareStatusHtml()}</div>
-    <button class="btn ${shareTrk.on?'btn-danger':'btn-primary'}" onclick="${shareTrk.on?'stopShare()':'startShare()'}">${shareTrk.on?'⏹ Hentikan Bagikan Posisi':'📡 Mulai Bagikan Posisi'}</button>
   </div>`;
 }
 /* --- viewer: peta --- */
