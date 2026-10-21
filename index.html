@@ -6668,11 +6668,13 @@ function startShare(silent){
   if(!navigator.geolocation){ if(!silent) alert("HP ini tidak mendukung GPS."); return; }
   try{ if(window.AndroidTLS && window.AndroidTLS.bgStart) window.AndroidTLS.bgStart(); }catch(e){}
   shareTrk = {on:true, id:null, wake:null, last:0, key:trkKey(prof.plat), msg:"Mencari sinyal GPS…"};
+  try{ if(window.AndroidTLS && window.AndroidTLS.trkConfig) window.AndroidTLS.trkConfig(shareTrk.key, prof.plat, prof.lp); }catch(e){}
   shareWake();
   shareTrk.id = navigator.geolocation.watchPosition(onSharePos, err=>{ shareTrk.denied = !!(err && err.code===1); shareTrk.msg = err && err.code===1 ? "Izin lokasi ditolak. Aktifkan izin lokasi lalu ulangi." : "GPS error: "+(err&&err.message||""); shareStatusUpdate(); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
   render();
 }
 function stopShare(silent){
+  try{ if(window.AndroidTLS && window.AndroidTLS.trkConfig) window.AndroidTLS.trkConfig("","",""); }catch(e){}
   try{ if(window.AndroidTLS && window.AndroidTLS.bgStop && !autoAbsen.on && shareTrk.on) window.AndroidTLS.bgStop(); }catch(e){}
   if(shareTrk.id!=null){ try{ navigator.geolocation.clearWatch(shareTrk.id); }catch(e){} }
   try{ if(shareTrk.wake) shareTrk.wake.release(); }catch(e){}
@@ -6734,12 +6736,14 @@ function ccAutoTrack(){
   startShare(true); shareTrk.auto=true;
 }
 setInterval(()=>{ try{ ccAutoTrack(); }catch(e){} }, 5000);
+setInterval(()=>{ try{ if(shareTrk.on) shareStatusUpdate(); }catch(e){} }, 10000);
 function shareStatusUpdate(){ const el = document.getElementById("shareStat"); if(el) el.innerHTML = shareStatusHtml(); }
 function shareStatusHtml(){
   if(shareTrk.denied) return `<div class="msg err"><b>Izin lokasi ditolak.</b> Buka Pengaturan HP → Aplikasi → RADAR EKY → Izin → Lokasi → <b>Izinkan sepanjang waktu</b>, lalu buka ulang aplikasi.</div>`;
   if(!shareTrk.on){ const pr=getCcProfile(); return `<div class="msg info">${(!pr.plat||!pr.lp)?"Isi dan simpan <b>Data Truk</b> dulu. Setelah itu posisi terkirim otomatis.":"Menyiapkan pengiriman posisi otomatis… (pastikan status Online)"}</div>`; }
   const bad = /Gagal|ditolak|error/i.test(shareTrk.msg);
-  return `<div class="msg ${bad?'err':'ok'}"><b>📡 Aktif</b> — ${escH(shareTrk.msg)}</div>`;
+  let nat=""; try{ if(window.AndroidTLS && window.AndroidTLS.trkStatus){ const t=window.AndroidTLS.trkStatus(); if(t) nat=`<div style="font-size:11px;margin-top:4px;opacity:.85;">Latar belakang: ${escH(t)}</div>`; } }catch(e){}
+  return `<div class="msg ${bad?'err':'ok'}"><b>📡 Aktif</b> — ${escH(shareTrk.msg)}${nat}</div>`;
 }
 function shareCardHtml(){
   return `<div class="card">
