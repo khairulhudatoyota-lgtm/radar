@@ -6698,17 +6698,52 @@ let ccPlatOk=false;
 const CC_PLATS_KEY="radar_cc_plats";
 function ccRecentPlats(){ try{ const a=JSON.parse(localStorage.getItem(CC_PLATS_KEY)||"[]"); return Array.isArray(a)?a.slice(0,4):[]; }catch(e){ return []; } }
 function ccPlatNorm(v){ const t=String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,""); const m=t.match(/^([A-Z]{1,2})(\d{1,4})([A-Z]{0,3})$/); return m?[m[1],m[2],m[3]].filter(Boolean).join(" "):""; }
-function ccPlatGateCheck(){ if(currentUser && currentUser.role==="cc" && !ccPlatOk && !document.getElementById("cgPlat")) ccPlatGateOpen(); }
-function ccPlatGateOpen(){
+/* Plat diingat selama SATU shift di hari produksi yang sama (untuk user yang sama), supaya driver tidak mengetik ulang setiap aplikasi dibuka ulang */
+const CC_PLATDAY_KEY="radar_cc_platday";
+function ccPlatRememberSave(plat){ try{ localStorage.setItem(CC_PLATDAY_KEY, JSON.stringify({u:currentUser.username, plat:plat, shift:loginShift||"", day:prodDayStart(Date.now())})); }catch(e){} }
+function ccPlatRememberedOk(){
+  try{
+    if(!currentUser || currentUser.role!=="cc") return false;
+    let o=JSON.parse(localStorage.getItem(CC_PLATDAY_KEY)||"null");
+    const pr=getCcProfile();
+    if(!o){
+      // sekali per HP, saat versi ini pertama dipakai: plat yang sudah tersimpan hari ini dianggap sah, supaya tidak perlu mengetik ulang
+      if(!localStorage.getItem("radar_cc_platmig") && pr.plat && pr.lp){
+        localStorage.setItem("radar_cc_platmig","1");
+        ccPlatRememberSave(pr.plat);
+        o=JSON.parse(localStorage.getItem(CC_PLATDAY_KEY)||"null");
+      }
+      if(!o) return false;
+    }
+    if(o.u!==currentUser.username || !pr.plat || !pr.lp) return false;
+    if(trkKey(pr.plat)!==trkKey(o.plat)) return false;
+    if((o.shift||"")!==(loginShift||"")) return false;
+    return o.day===prodDayStart(Date.now());
+  }catch(e){ return false; }
+}
+function ccPlatChange(){ try{ if(document.getElementById("cgPlat")) return; ccPlatGateOpen(true); const bg=document.querySelector("#modalRoot .modal-bg"); if(bg) bg.onclick=()=>closeModal(); }catch(e){} }
+function ccPlatGateCheck(){
+  if(currentUser && currentUser.role==="cc" && !ccPlatOk && !document.getElementById("cgPlat")){
+    if(ccPlatRememberedOk()){
+      ccPlatOk=true;
+      try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){}
+      try{ render(); }catch(e){}
+      try{ ccAutoTrack(); }catch(e){}
+      return;
+    }
+    ccPlatGateOpen();
+  }
+}
+function ccPlatGateOpen(cancelable){
   const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), pr=getCcProfile();
   const accLp=(acc&&acc.lp)||"", rec=ccRecentPlats();
   showModal(`<h3 style="margin:0 0 4px;">🚚 Plat truk hari ini</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Wajib diisi setiap masuk, karena truk bisa berganti. Posisi dan absen otomatis memakai plat ini.</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">${cancelable?"Ganti plat hanya kalau kamu benar-benar berpindah truk. Kalau tidak, tekan Batal.":"Diisi sekali per shift, karena truk bisa berganti. Posisi dan absen otomatis memakai plat ini."}</div>
     ${rec.length?`<div style="font-size:12px;margin-bottom:6px;">Pernah dipakai di HP ini (ketuk untuk memilih):</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${rec.map(p=>`<button type="button" class="btn btn-outline btn-sm" style="width:auto;font-weight:800;" onclick="document.getElementById('cgPlat').value='${xlEsc(p)}';ccPlatGateSave()">${xlEsc(p)}</button>`).join("")}</div>`:""}
     <div class="field"><label>Nomor polisi truk</label><input id="cgPlat" type="text" placeholder="B 1234 ABC" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;font-size:20px;font-weight:800;letter-spacing:1px;" onkeydown="if(event.key==='Enter')ccPlatGateSave()"></div>
     <div class="field"><label>LP</label>${accLp?`<input type="text" value="${xlEsc(accLp)}" disabled><input type="hidden" id="cgLp" value="${xlEsc(accLp)}">`:`<select id="cgLp"><option value="">-- pilih LP --</option>${(d.lpList||[]).map(l=>`<option value="${xlEsc(l)}" ${lpKey(l)===lpKey(pr.lp)?"selected":""}>${xlEsc(l)}</option>`).join("")}</select>`}</div>
     <div id="cgMsg"></div>
-    <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal();doLogout()">Keluar</button>
+    <div style="display:flex;gap:8px;">${cancelable?`<button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal()">Batal</button>`:`<button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal();doLogout()">Keluar</button>`}
     <button type="button" class="btn btn-primary" style="flex:2;" onclick="ccPlatGateSave()">✔ Lanjut</button></div>`);
   const bg=document.querySelector("#modalRoot .modal-bg"); if(bg) bg.onclick=null;
   const x=document.querySelector("#modalRoot .close-x"); if(x) x.remove();
@@ -6723,6 +6758,7 @@ function ccPlatGateSave(){
   try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:pr.drvCode||""})); }catch(e){}
   try{ const r=[plat].concat(ccRecentPlats().filter(p=>p!==plat)).slice(0,4); localStorage.setItem(CC_PLATS_KEY, JSON.stringify(r)); }catch(e){}
   ccPlatOk=true; closeModal();
+  ccPlatRememberSave(plat);
   try{ syncCcProfileFromAccount(); }catch(e){}
   try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){}
   render(); try{ ccAutoTrack(); }catch(e){}
@@ -6750,6 +6786,7 @@ function shareStatusHtml(){
 function shareCardHtml(){
   return `<div class="card">
     <h3>📡 Posisi Truk (otomatis)</h3>
+    ${(()=>{ const pr=getCcProfile(); return pr.plat?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px;"><div style="font-size:13px;">Plat aktif: <b style="font-size:16px;">${escH(pr.plat)}</b> <span style="color:var(--text-dim);">· ${escH(pr.lp||"-")}</span></div><button type="button" class="btn btn-outline btn-sm" onclick="ccPlatChange()">✎ Ganti plat</button></div>`:""; })()}
     <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Posisi truk terkirim <b>otomatis</b> ke Peta CC selama kamu login sebagai Driver CC. Tidak perlu menekan apa pun. Tutup aplikasi dengan <b>Minimize</b>, jangan Keluar.</p>
     <div id="shareStat" style="margin:8px 0;">${shareStatusHtml()}</div>
   </div>`;
