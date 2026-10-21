@@ -773,6 +773,7 @@ window.RSnd=(function(){
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0 12px;"><input type="checkbox" id="loginRemember" checked> Ingat saya di HP ini (tidak perlu login ulang selama 30 hari)</label>
     <button class="btn btn-primary" onclick="doLogin()">➜ Masuk</button>
+    <button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="regOpen()">📝 Belum punya akun? Daftar</button>
 
     <div style="text-align:center; margin-top:18px;">
       <button class="btn-outline btn btn-sm" style="width:auto; padding:10px 18px;" onclick="enterDisplay()">📺 Buka Display (tanpa login)</button>
@@ -903,7 +904,7 @@ function dbKeys(d){ return Object.keys(d).filter(k=>LOCAL_ONLY.indexOf(k)<0); }
 function normalizeData(raw){
   const seed = seedDB(), d = (raw && typeof raw==="object") ? raw : {};
   for(const k of Object.keys(seed)){ if(d[k]===undefined || d[k]===null) d[k] = seed[k]; }
-  ["queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users"].forEach(k=>{
+  ["queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs"].forEach(k=>{
     if(!Array.isArray(d[k])) d[k] = (d[k] && typeof d[k]==="object") ? Object.values(d[k]) : [];
   });
   const toObj = v=>{ if(Array.isArray(v)){ const o={}; v.forEach((x,i)=>{ if(x!==null && x!==undefined) o[i]=x; }); return o; } return v || {}; };
@@ -1374,14 +1375,100 @@ function loginEnter(acc, roles){
   document.getElementById("loginPass").value = "";
   enterApp();   // langsung ke menu sesuai role akun
 }
-function loginPickRole(role){
-  const u = document.getElementById("loginUser").value.trim(), p = document.getElementById("loginPass").value;
-  const users = DB.get().users || [];
-  const acc = users.find(x=>String(x.username).toLowerCase()===u.toLowerCase() && x.password===p && x.role===role);
-  const roles = [...new Set(users.filter(x=>String(x.username).toLowerCase()===u.toLowerCase() && x.password===p).map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
-  if(acc) loginEnter(acc, roles);
+/* ===== Password: disimpan sebagai hash PBKDF2-SHA256 + salt (bukan teks asli) ===== */
+const PW_ITER=100000, PW_MIN=6;
+const PW_COMMON=["user","123456","1234567","12345678","123456789","111111","000000","password","qwerty","radar","radareky","toyota","admin","abc123"];
+function pwHex(b){ return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
+function pwUnhex(h){ const a=new Uint8Array(h.length/2); for(let i=0;i<a.length;i++) a[i]=parseInt(h.substr(i*2,2),16); return a; }
+function pwIsHashed(v){ return typeof v==="string" && v.indexOf("h1$")===0; }
+async function pwHash(p, saltHex, iter){
+  if(!(window.crypto && crypto.subtle)) throw new Error("Browser tidak mendukung enkripsi password. Buka RADAR lewat https.");
+  iter=iter||PW_ITER;
+  if(!saltHex){ const a=new Uint8Array(16); crypto.getRandomValues(a); saltHex=pwHex(a); }
+  const key=await crypto.subtle.importKey("raw", new TextEncoder().encode(String(p)), "PBKDF2", false, ["deriveBits"]);
+  const bits=await crypto.subtle.deriveBits({name:"PBKDF2", salt:pwUnhex(saltHex), iterations:iter, hash:"SHA-256"}, key, 256);
+  return "h1$"+iter+"$"+saltHex+"$"+pwHex(bits);
 }
-function doLogin(){
+async function pwCheck(stored, p){
+  if(stored==null || p==null) return false;
+  if(!pwIsHashed(stored)) return String(stored)===String(p);   // akun lama (belum dikonversi)
+  const parts=stored.split("$"); if(parts.length!==4) return false;
+  const h=await pwHash(p, parts[2], parseInt(parts[1],10)||PW_ITER);
+  let diff=h.length^stored.length; for(let i=0;i<Math.min(h.length,stored.length);i++) diff|=h.charCodeAt(i)^stored.charCodeAt(i);
+  return diff===0;
+}
+function pwWeak(p, uname){
+  const x=String(p||""), l=x.toLowerCase();
+  return x.length<PW_MIN || l===String(uname||"").toLowerCase() || PW_COMMON.includes(l) || /^(.)\1+$/.test(x);
+}
+function pwRule(){ return "Minimal "+PW_MIN+" karakter, tidak sama dengan username, dan bukan password umum (123456, user, password, dll)."; }
+/* ubah password teks-asli milik akun yang baru saja login menjadi hash (di latar belakang) */
+async function pwUpgrade(okList, p){
+  try{
+    const todo=okList.filter(x=>!pwIsHashed(x.password)); if(!todo.length) return;
+    const map={}; for(const x of todo){ map[x.username+"|"+x.role]=await pwHash(p); }
+    DB.set(d=>{ (d.users||[]).forEach(x=>{ const h=map[x.username+"|"+x.role]; if(h && !pwIsHashed(x.password) && String(x.password)===String(p)) x.password=h; }); });
+  }catch(e){}
+}
+/* Admin: konversi semua password teks-asli yang tersisa (berjalan sekali saat Admin online) */
+let _pwMigBusy=false;
+async function pwMigrateAll(){
+  if(_pwMigBusy || !currentUser || currentUser.role!=="admin") return;
+  if(!(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed)) return;
+  const todo=(DB.get().users||[]).filter(x=>x && x.password!=null && !pwIsHashed(x.password));
+  if(!todo.length) return;
+  _pwMigBusy=true;
+  try{
+    for(let i=0;i<todo.length;i+=20){
+      const chunk=todo.slice(i,i+20), map=[];
+      for(const x of chunk) map.push({u:x.username, r:x.role, old:String(x.password), h:await pwHash(x.password), weak:pwWeak(x.password,x.username)});
+      DB.set(d=>{ (d.users||[]).forEach(x=>{ const m=map.find(y=>y.u===x.username && y.r===x.role && String(x.password)===y.old); if(m){ x.password=m.h; if(m.weak) x.mustChange=true; } }); });
+    }
+  }catch(e){ console.warn("migrasi password", e); }
+  finally{ _pwMigBusy=false; }
+}
+setInterval(()=>{ try{ pwMigrateAll(); }catch(e){} }, 30000);
+let _loginOk=null;
+function loginGo(acc, roles){
+  const L=_loginOk;
+  const need=L && (L.ok.some(x=>x.mustChange) || pwWeak(L.p, acc.username));
+  if(need) pwForceChange(acc, roles); else loginEnter(acc, roles);
+}
+function pwForceChange(acc, roles){
+  showModal(`<h3 style="margin:0 0 6px;">🔒 Ganti password dulu</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Password akun <b>${xlEsc(acc.username)}</b> masih password awal atau terlalu mudah ditebak. Buat password baru sebelum masuk.<br>${pwRule()}</div>
+    <div class="field"><label>Password baru</label><input id="pwNew1" type="password" autocomplete="new-password"></div>
+    <div class="field"><label>Ulangi password baru</label><input id="pwNew2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')document.getElementById('pwSaveBtn').click()"></div>
+    <div id="pwMsg"></div>
+    <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal();loginCancel();">Batal</button>
+    <button type="button" id="pwSaveBtn" class="btn btn-primary" style="flex:2;">💾 Simpan &amp; Masuk</button></div>`);
+  document.getElementById("pwSaveBtn").onclick=()=>pwForceSave(acc, roles);
+  setTimeout(()=>{ try{ document.getElementById("pwNew1").focus(); }catch(e){} },50);
+}
+async function pwForceSave(acc, roles){
+  const a=document.getElementById("pwNew1").value, b=document.getElementById("pwNew2").value, msg=document.getElementById("pwMsg"), btn=document.getElementById("pwSaveBtn");
+  const err=t=>{ msg.innerHTML=`<div class="msg err">${t}</div>`; };
+  if(pwWeak(a, acc.username)) return err(pwRule());
+  if(_loginOk && a===_loginOk.p) return err("Password baru harus berbeda dari password lama.");
+  if(a!==b) return err("Ulangan password tidak sama.");
+  btn.disabled=true; btn.textContent="Menyimpan…";
+  try{
+    const h=await pwHash(a), roleSet=new Set(((_loginOk&&_loginOk.ok)||[acc]).map(x=>x.role)), un=acc.username;
+    DB.set(d=>{ (d.users||[]).forEach(x=>{ if(x.username===un && roleSet.has(x.role)){ x.password=h; delete x.mustChange; } }); });
+    if(_loginOk){ _loginOk.p=a; _loginOk.ok.forEach(x=>{ delete x.mustChange; }); }
+    const lp=document.getElementById("loginPass"); if(lp) lp.value=a;
+    closeModal();
+    loginEnter(acc, roles);
+    setTimeout(()=>alert("✅ Password baru tersimpan. Pakai password ini untuk login berikutnya."),300);
+  }catch(e){ btn.disabled=false; btn.textContent="💾 Simpan & Masuk"; err(xlEsc(e.message||e)); }
+}
+function loginPickRole(role){
+  const L=_loginOk; if(!L) return;
+  const acc=L.ok.find(x=>x.role===role);
+  const roles=[...new Set(L.ok.map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
+  if(acc) loginGo(acc, roles);
+}
+async function doLogin(){
   const u = document.getElementById("loginUser").value.trim();
   const p = document.getElementById("loginPass").value;
   const data = DB.get();
@@ -1391,10 +1478,16 @@ function doLogin(){
   const users = data.users || [];
   let same = users.filter(x=>x.username===u);
   if(!same.length) same = users.filter(x=>String(x.username).toLowerCase()===u.toLowerCase());
-  if(!same.length){ msgEl.innerHTML = `<div class="msg err">Username tidak ditemukan.</div>`; try{RSnd.err();}catch(e){} return; }
-  const ok = same.filter(x=>x.password===p);
+  if(!same.length){ const rm=regLoginMsg(u); msgEl.innerHTML = `<div class="msg err">${rm||"Username tidak ditemukan. Belum punya akun? Tekan <b>Daftar</b>."}</div>`; try{RSnd.err();}catch(e){} return; }
+  msgEl.innerHTML = `<div class="msg">Memeriksa…</div>`;
+  const ok = [];
+  try{ for(const x of same){ if(await pwCheck(x.password, p)) ok.push(x); } }
+  catch(e){ msgEl.innerHTML = `<div class="msg err">${xlEsc(e.message||e)}</div>`; return; }
   if(!ok.length){ savePass(""); msgEl.innerHTML = `<div class="msg err">Password salah.</div>`; try{RSnd.err();}catch(e){} return; }
-  if(ok.length===1){ loginEnter(ok[0], [ok[0].role]); return; }
+  msgEl.innerHTML = "";
+  _loginOk = {p, ok};
+  pwUpgrade(ok, p);
+  if(ok.length===1){ loginGo(ok[0], [ok[0].role]); return; }
   // satu username terdaftar untuk beberapa peran: pengguna memilih menu tujuan
   const roles = [...new Set(ok.map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
   msgEl.innerHTML = `<div class="rolesectitle" style="margin:6px 0 8px;">Pilih menu tujuan</div><div class="rolegrid">` +
@@ -1771,11 +1864,41 @@ function saveSlotEdit(id){
   DB.set(d=>{ const c=lookupUnitCat(d,newVin); d.units[id] = {...d.units[id], frame:newVin, model:model, batam:!!(c&&c.batam), prio:!!(c&&c.prio)}; });
   closeModal();
 }
-function clearSlotForRepair(id){
+/* ===== konfirmasi password akun yang sedang login (untuk aksi sensitif, mis. keluarkan unit) ===== */
+let _pcResolve=null;
+function pwConfirm(title, detail){
+  return new Promise(res=>{
+    if(!currentUser || !currentUser.username || currentUser.role==="display"){ alert("Login dulu."); res(false); return; }
+    _pcResolve=res;
+    showModal(`<h3 style="margin:0 0 6px;">🔒 ${xlEsc(title)}</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">${detail||""}<br>Masukkan password akun <b>${xlEsc(currentUser.username)}</b> untuk melanjutkan.</div>
+      <div class="field"><label>Password</label><input id="pcPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')pwConfirmGo()"></div>
+      <div id="pcMsg"></div>
+      <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="pwConfirmEnd(false)">Batal</button>
+      <button type="button" id="pcBtn" class="btn btn-danger" style="flex:2;" onclick="pwConfirmGo()">Lanjutkan</button></div>`);
+    setTimeout(()=>{ try{ document.getElementById("pcPass").focus(); }catch(e){} },50);
+  });
+}
+function pwConfirmEnd(ok){ closeModal(); const r=_pcResolve; _pcResolve=null; if(r) r(ok); }
+async function pwConfirmGo(){
+  const p=(document.getElementById("pcPass")||{}).value||"", msg=document.getElementById("pcMsg"), btn=document.getElementById("pcBtn");
+  if(!p){ msg.innerHTML=`<div class="msg err">Isi password.</div>`; return; }
+  btn.disabled=true; btn.textContent="Memeriksa…";
+  const mine=(DB.get().users||[]).filter(x=>x.username===currentUser.username);
+  let ok=false; try{ for(const x of mine){ if(await pwCheck(x.password,p)){ ok=true; break; } } }catch(e){}
+  if(!ok){ btn.disabled=false; btn.textContent="Lanjutkan"; msg.innerHTML=`<div class="msg err">Password salah.</div>`; return; }
+  pwConfirmEnd(true);
+}
+function unitOutLogAdd(d, slot, v, kind){
+  const L=xlArr(d.unitOutLog).filter(x=>Date.now()-x.ts<7*24*3600*1000);
+  L.push({ts:Date.now(), slot, frame:(v&&v.frame)||"", model:(v&&v.model)||"", kind, by:(currentUser&&currentUser.name)||"", user:(currentUser&&currentUser.username)||"", role:(currentUser&&currentUser.role)||""});
+  d.unitOutLog=L.slice(-300);
+}
+async function clearSlotForRepair(id){
   if(!geoGuard()) return;
-  if(!confirm(`Keluarkan unit dari slot ${id}? Slot ini akan kosong lagi dan siap diisi unit lain.`)) return;
-  DB.set(d=>{ d.units[id] = null; });
-  closeModal();
+  const v=(DB.get().units||{})[id]; closeModal();
+  if(!(await pwConfirm("Keluarkan unit dari Stall "+id, v?("No. Rangka <b>"+xlEsc(v.frame||"-")+"</b> · "+xlEsc(v.model||"")+". Slot akan kosong lagi."):"Slot akan kosong lagi."))) return;
+  DB.set(d=>{ unitOutLogAdd(d, id, d.units[id], "stall"); d.units[id] = null; });
 }
 function refreshSlotSelection(){
   document.querySelectorAll('.slot[data-slot]').forEach(el=>{
@@ -3197,19 +3320,24 @@ function mfRecords(data){
 }
 const MF_DAY_FROM=7*60, MF_DAY_TO=20*60;   // Day 07:00–20:00, Night 20:01–06:59
 function mfShiftName(h,mi){ const mn=h*60+mi; return (mn>=MF_DAY_FROM && mn<=MF_DAY_TO)?"Day":"Night"; }
+function mfTujuanNama(){ return tlsCfg().tujuanNama.replace(/\w\S*/g,w=>w.charAt(0)+w.slice(1).toLowerCase()).replace(/^Nvdc/,"NVDC"); }
+/* baris manifest satu ILS — dipakai Download Excel dan kirim ke Excel Online */
+function mfRecRows(data, m, tujuan, n0){
+  const d=new Date(m.t), h=d.getHours(), hhmm=mfPad(h)+":"+mfPad(d.getMinutes());
+  const si=sjInfo(data,m), serial=Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(1899,11,30))/86400000);
+  const U=Array.isArray(m.u)?m.u:(m.u?Object.values(m.u):[]);
+  return U.map((u,i)=>{ const cb=(si.cb[String(u[0]).toUpperCase()]||""); return [(n0||0)+i+1, u[0], mfTitle(u[1]), m.plat, m.drv, m.lp, "EKY", cb||{y:1}, m.bt?"Batam":tujuan, "CC", {d:serial}, mfShiftName(h,d.getMinutes()), hhmm, si.sk||{y:1}]; });
+}
 function mfRows(data, dateStr, lp, shift){
-  const tujuan=tlsCfg().tujuanNama.replace(/\w\S*/g,w=>w.charAt(0)+w.slice(1).toLowerCase()).replace(/^Nvdc/,"NVDC");
+  const tujuan=mfTujuanNama();
   const nextDs=mfDateStr(new Date(dateStr+"T12:00:00").getTime()+86400000);
   const inShift=m=>{ const dt=new Date(m.t), mn=dt.getHours()*60+dt.getMinutes(), d=mfDateStr(m.t);
     if(shift==="Day") return d===dateStr && mn>=MF_DAY_FROM && mn<=MF_DAY_TO;
     if(shift==="Night") return (d===dateStr && mn>MF_DAY_TO) || (d===nextDs && mn<MF_DAY_FROM);
     return d===dateStr; };
   const L=mfRecords(data).filter(m=>inShift(m) && (!lp || lpKey(m.lp)===lpKey(lp))).sort((a,b)=>a.t-b.t);
-  const rows=[]; let n=0;
-  L.forEach(m=>{ const d=new Date(m.t), h=d.getHours(), hhmm=mfPad(h)+":"+mfPad(d.getMinutes());
-    const si=sjInfo(data,m), serial=Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(1899,11,30))/86400000);
-    m.u.forEach(u=>{ n++; const cb=(si.cb[String(u[0]).toUpperCase()]||""); rows.push([n, u[0], mfTitle(u[1]), m.plat, m.drv, m.lp, "EKY", cb||{y:1}, m.bt?"Batam":tujuan, "CC", {d:serial}, mfShiftName(h,d.getMinutes()), hhmm, si.sk||{y:1}]); });
-  });
+  const rows=[];
+  L.forEach(m=>{ mfRecRows(data, m, tujuan, rows.length).forEach(r=>rows.push(r)); });
   return rows;
 }
 const MF_HEAD=["No","Frame Number","Model","No. Polisi","Driver","L / P","Plant","Nama Cabang","Tujuan Kirim","Moda","Tgl Delivery","Shift","Jam Keluar","No. SJKB"];
@@ -3270,6 +3398,577 @@ async function downloadManifest(){
   const out=mfXlsx(sheets,[5,20,10,12,22,7,7,28,16,6,12,7,10,30]);
   mfSave("Manifest-"+(lpSel?lpSel+"-":"ALL-")+ds+(shf?"-"+shf:"")+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",out);
 }
+/* ======================================================================
+   EXCEL ONLINE — manifest Delout dikirim otomatis ke tabel Excel (OneDrive/SharePoint kantor)
+   - Login Microsoft memakai OAuth2 + PKCE langsung (tanpa pustaka luar).
+   - Hanya SATU perangkat "penulis" (PC Delivery standby, via tethering) yang menulis ke Excel.
+     Perangkat lain cukup Delout seperti biasa; datanya antre di manifest (Firebase).
+   - Satu ILS dikirim setelah masa batal Delout (5 menit) lewat, dan setelah No. SJKB terbaca
+     dari PDF surat jalan (maks. tunggu 60 menit; lewat dari itu dikirim dengan kolom kosong).
+====================================================================== */
+const XL_TOK="radar_xl_tok", XL_PK="radar_xl_pkce", XL_WR="radar_xl_writer", XL_LOG="radar_xl_log", XL_RES="radar_xl_item", XL_SIL="radar_xl_silent";
+const XL_WAIT_SJ_MS=60*60*1000, XL_EVERY_MS=60*1000, XL_SILENT_GAP_MS=30*60*1000;
+const XL_SCOPE="openid profile offline_access User.Read Files.ReadWrite.All";
+const XL={busy:false, state:"", msg:"", parseTry:{}};
+function xlLS(k,v){
+  try{
+    if(v===undefined){ const s=localStorage.getItem(k); return s?JSON.parse(s):null; }
+    if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,JSON.stringify(v));
+  }catch(e){}
+  return null;
+}
+function xlEsc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function xlArr(v){ return Array.isArray(v)?v.filter(Boolean):(v&&typeof v==="object"?Object.values(v).filter(Boolean):[]); }
+function xlCfg(){
+  const c=DB.get().xlCfg||{};
+  const client=String(c.client||"").trim(), link=String(c.link||"").trim();
+  return {tenant:String(c.tenant||"").trim(), client, link, table:(String(c.table||"").trim()||"Manifest"),
+    since:+c.since||0, on:c.on!==false && !!(client&&link), lastOk:+c.lastOk||0, lastBy:c.lastBy||"", err:c.err||"", errTs:+c.errTs||0};
+}
+function xlRedirectUri(){ return location.origin+location.pathname; }
+function xlAuthBase(tenant){ return "https://login.microsoftonline.com/"+encodeURIComponent(tenant||"organizations")+"/oauth2/v2.0/"; }
+function xlB64u(bytes){ let s=""; for(let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]); return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function xlRand(n){ const a=new Uint8Array(n); crypto.getRandomValues(a); return xlB64u(a); }
+function xlJwt(t){ try{ const p=String(t).split(".")[1].replace(/-/g,"+").replace(/_/g,"/"); return JSON.parse(decodeURIComponent(escape(atob(p+"===".slice((p.length+3)%4))))); }catch(e){ return {}; } }
+function xlIsWriter(){ return !!(xlLS(XL_WR) && xlLS(XL_TOK)); }
+function xlTime(t){ if(!t) return "-"; const d=new Date(t); return d.toLocaleDateString("id-ID",{day:"2-digit",month:"short"})+" "+mfPad(d.getHours())+":"+mfPad(d.getMinutes()); }
+function xlLog(txt,ok){ const L=xlLS(XL_LOG)||[]; L.unshift({t:Date.now(),txt,ok:!!ok}); xlLS(XL_LOG,L.slice(0,30)); }
+
+/* ---------- login Microsoft ---------- */
+async function xlLogin(opts){
+  opts=opts||{};
+  const c=xlCfg();
+  if(!c.client){ if(!opts.silent) alert("Isi dan simpan dulu Client ID di Admin → Excel."); return; }
+  if(!c.link){ if(!opts.silent) alert("Isi dan simpan dulu link file Excel di Admin → Excel."); return; }
+  if(!(window.crypto && crypto.subtle)){ if(!opts.silent) alert("Browser ini tidak mendukung login aman. Buka RADAR lewat https di Chrome atau Edge."); return; }
+  if(!opts.silent && window.AndroidTLS){ if(!confirm("Login Microsoft sebaiknya dilakukan di Chrome/Edge PC (perangkat penulis), bukan di aplikasi HP. Tetap lanjut?")) return; }
+  const verifier=xlRand(48);
+  const challenge=xlB64u(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+  const state=xlRand(16), tok=xlLS(XL_TOK)||{};
+  xlLS(XL_PK,{v:verifier, s:state, w:!!opts.makeWriter, silent:!!opts.silent, tenant:c.tenant, client:c.client, ts:Date.now()});
+  const p=new URLSearchParams({client_id:c.client, response_type:"code", redirect_uri:xlRedirectUri(), response_mode:"query",
+    scope:XL_SCOPE, state, code_challenge:challenge, code_challenge_method:"S256"});
+  if(opts.silent){ p.set("prompt","none"); if(tok.user) p.set("login_hint",tok.user); }
+  else p.set("prompt","select_account");
+  location.assign(xlAuthBase(c.tenant)+"authorize?"+p.toString());
+}
+function xlErrText(desc){
+  const d=String(desc||"");
+  if(/AADSTS65001|AADSTS90094|admin|approval|consent/i.test(d)) return "Butuh persetujuan admin IT (Need admin approval). Akses RADAR ke Excel diblokir oleh kebijakan Microsoft kantor.";
+  if(/AADSTS50011/i.test(d)) return "Alamat RADAR (Redirect URI) tidak cocok dengan yang didaftarkan di App registrations. Salin ulang Redirect URI dari Admin → Excel.";
+  if(/AADSTS700016|AADSTS90002/i.test(d)) return "Client ID atau Tenant ID salah / aplikasi tidak ditemukan.";
+  if(/AADSTS50058|login_required|interaction_required/i.test(d)) return "Sesi Microsoft habis. Perlu login ulang.";
+  if(/AADSTS53003|AADSTS53000|AADSTS530/i.test(d)) return "Diblokir kebijakan akses perusahaan (Conditional Access) untuk perangkat/jaringan ini.";
+  return d.split(/\r?\n/)[0].slice(0,220)||"Login gagal.";
+}
+async function xlHandleRedirect(){
+  let u; try{ u=new URL(location.href); }catch(e){ return; }
+  const code=u.searchParams.get("code"), st=u.searchParams.get("state"), er=u.searchParams.get("error"), erDesc=u.searchParams.get("error_description")||"";
+  if(!code && !er) return;
+  const pk=xlLS(XL_PK);
+  if(!pk || pk.s!==st) return;   // bukan balasan login RADAR
+  ["code","state","session_state","error","error_description","error_uri","client_info","iss"].forEach(k=>u.searchParams.delete(k));
+  try{ history.replaceState(null,"",u.pathname+(u.searchParams.toString()?"?"+u.searchParams.toString():"")+u.hash); }catch(e){}
+  xlLS(XL_PK,null);
+  if(er){
+    XL.state="relogin"; XL.msg=xlErrText(erDesc||er);
+    if(!pk.silent) setTimeout(()=>alert("Login Microsoft gagal:\n\n"+XL.msg),600);
+    setTimeout(xlBanner,800);
+    return;
+  }
+  try{
+    const body=new URLSearchParams({client_id:pk.client, grant_type:"authorization_code", code, redirect_uri:xlRedirectUri(), code_verifier:pk.v, scope:XL_SCOPE});
+    const r=await fetch(xlAuthBase(pk.tenant)+"token",{method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok || !j.access_token) throw new Error(xlErrText(j.error_description||j.error||("HTTP "+r.status)));
+    const id=xlJwt(j.id_token||"");
+    xlLS(XL_TOK,{at:j.access_token, exp:Date.now()+((+j.expires_in||3600)-120)*1000, rt:j.refresh_token||"", rtTs:Date.now(),
+      user:id.preferred_username||id.email||"", name:id.name||"", tenant:pk.tenant, client:pk.client});
+    if(pk.w) xlLS(XL_WR,{on:true, ts:Date.now()});
+    xlLS(XL_SIL,null); XL.state="ok"; XL.msg="";
+    xlLog("Login Microsoft: "+(id.preferred_username||id.name||"berhasil"), true);
+    if(!pk.silent) setTimeout(()=>alert("✅ Login Microsoft berhasil"+(id.preferred_username?" ("+id.preferred_username+")":"")+".\n\nPerangkat ini sekarang menjadi PENULIS Excel. Tekan 'Tes sambungan' di Admin → Excel untuk memastikan file dan tabelnya terbaca."),600);
+    setTimeout(()=>{ xlBanner(); xlTick(); },4000);
+  }catch(e){
+    XL.state="relogin"; XL.msg=String(e.message||e);
+    if(!pk.silent) setTimeout(()=>alert("Login Microsoft gagal:\n\n"+XL.msg),600);
+    setTimeout(xlBanner,800);
+  }
+}
+async function xlToken(){
+  const t=xlLS(XL_TOK);
+  if(!t) throw {code:"relogin", msg:"Perangkat ini belum login Microsoft."};
+  if(t.at && Date.now()<t.exp) return t.at;
+  if(!t.rt) throw {code:"relogin", msg:"Sesi Microsoft habis. Perlu login ulang."};
+  let r, j;
+  try{
+    const body=new URLSearchParams({client_id:t.client, grant_type:"refresh_token", refresh_token:t.rt, scope:XL_SCOPE});
+    r=await fetch(xlAuthBase(t.tenant)+"token",{method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body});
+    j=await r.json().catch(()=>({}));
+  }catch(e){ throw {code:"net", msg:"Tidak ada koneksi ke Microsoft."}; }
+  if(!r.ok || !j.access_token){
+    if(r.status>=500 || r.status===429) throw {code:"net", msg:"Server Microsoft sibuk (HTTP "+r.status+")."};
+    throw {code:"relogin", msg:xlErrText(j.error_description||j.error||"Sesi Microsoft habis.")};
+  }
+  t.at=j.access_token; t.exp=Date.now()+((+j.expires_in||3600)-120)*1000; if(j.refresh_token) t.rt=j.refresh_token;
+  xlLS(XL_TOK,t);
+  return t.at;
+}
+async function xlGraph(method, path, body, retried){
+  const at=await xlToken();
+  let r;
+  try{ r=await fetch("https://graph.microsoft.com/v1.0"+path,{method, headers:{Authorization:"Bearer "+at, "Content-Type":"application/json"}, body:body?JSON.stringify(body):undefined}); }
+  catch(e){ throw {code:"net", msg:"Tidak ada koneksi ke Microsoft Graph."}; }
+  if(r.status===401 && !retried){ const t=xlLS(XL_TOK); if(t){ t.exp=0; xlLS(XL_TOK,t); } return xlGraph(method,path,body,true); }
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){
+    const m=(j.error&&(j.error.message||j.error.code))||("HTTP "+r.status);
+    if(r.status===429 || r.status>=500) throw {code:"net", msg:"Microsoft sibuk, dicoba lagi otomatis ("+m+")."};
+    if(r.status===401) throw {code:"relogin", msg:"Izin Microsoft ditolak. Perlu login ulang."};
+    if(r.status===403) throw {code:"cfg", msg:"Akun ini tidak punya izin edit ke file Excel tersebut (403). Pastikan link dibagikan dengan akses edit."};
+    if(r.status===404) throw {code:"cfg", msg:"File atau tabel tidak ditemukan (404): "+m};
+    throw {code:"cfg", msg:m};
+  }
+  return j;
+}
+function xlShareId(link){ return "u!"+btoa(unescape(encodeURIComponent(link))).replace(/=+$/,"").replace(/\//g,"_").replace(/\+/g,"-"); }
+async function xlItem(){
+  const c=xlCfg(), cache=xlLS(XL_RES);
+  if(cache && cache.link===c.link && cache.d && cache.i) return cache;
+  const j=await xlGraph("GET","/shares/"+xlShareId(c.link)+"/driveItem?$select=id,name,parentReference");
+  const it={link:c.link, d:j.parentReference&&j.parentReference.driveId, i:j.id, name:j.name||""};
+  if(!it.d||!it.i) throw {code:"cfg", msg:"Link Excel tidak bisa dibaca. Pakai Share → Copy link dari Excel Online."};
+  xlLS(XL_RES,it); return it;
+}
+function xlTblPath(it,tbl){ return "/drives/"+encodeURIComponent(it.d)+"/items/"+encodeURIComponent(it.i)+"/workbook/tables/"+encodeURIComponent(tbl); }
+
+/* ---------- baris manifest untuk satu ILS (sama persis dengan Download Excel) ---------- */
+function xlRowsFor(data, m, tbl){
+  const tujuan=mfTujuanNama();
+  return mfRecRows(data, m, tujuan, 0).map(r=>r.map((v,ci)=>{
+    if(ci===0) return "=ROW()-ROW("+tbl+"[#Headers])";
+    if(v && typeof v==="object"){ if(v.d!=null) return v.d; return ""; }
+    return v==null?"":v;
+  }));
+}
+function xlPending(data){
+  const c=xlCfg();
+  return xlArr(data.manifest).filter(m=>m && !m.xl && (+m.out||0)>=c.since).sort((a,b)=>(a.out||0)-(b.out||0));
+}
+function xlWhy(data,m){   // "" = siap kirim; selain itu alasan menunggu
+  const age=Date.now()-(+m.out||0);
+  if(age < DELOUT_UNDO_MS+30000) return "undo";
+  const si=sjInfo(data,m);
+  if(!si.sk && age<XL_WAIT_SJ_MS) return "sjkb";
+  return "";
+}
+async function xlTryParse(data,m){
+  const b=xlArr(data.ils).find(y=>y.id===m.id); if(!b||!b.sj) return;
+  const k=m.id, last=XL.parseTry[k]||0; if(Date.now()-last<5*60000) return;
+  XL.parseTry[k]=Date.now();
+  try{ const v=await sjFetch(m.id); await sjIndex(m.id, v.b64); }catch(e){}
+}
+function xlSetErr(msg){
+  const c=xlCfg(); msg=msg||"";
+  if(c.err===msg) return;
+  DB.set(d=>{ d.xlCfg=Object.assign({}, d.xlCfg||{}, {err:msg, errTs:Date.now()}); });
+}
+async function xlTick(force){
+  if(XL.busy) return;
+  if(!xlIsWriter()){ xlBanner(); return; }
+  const c=xlCfg(); if(!c.on){ xlBanner(); return; }
+  if(!sjCanStore()){ XL.state="offline"; XL.msg="RADAR offline (Firebase). Cek tethering/data seluler."; xlBanner(); return; }
+  XL.busy=true;
+  try{
+    let data=DB.get();
+    const pend=xlPending(data);
+    for(const m of pend){ if(xlWhy(data,m)==="sjkb") await xlTryParse(data,m); }
+    data=DB.get();
+    const ready=xlPending(data).filter(m=>!xlWhy(data,m)).slice(0, force?40:12);
+    if(!ready.length){ if(XL.state!=="relogin"){ XL.state="ok"; XL.msg=""; } return; }
+    const it=await xlItem();
+    for(const m of ready){
+      const rows=xlRowsFor(DB.get(), m, c.table);
+      if(rows.length) await xlGraph("POST", xlTblPath(it,c.table)+"/rows", {index:null, values:rows});
+      const ts=Date.now(), who=(currentUser&&currentUser.name)||"PC penulis";
+      DB.set(d=>{
+        const x=xlArr(d.manifest).find(y=>y.id===m.id); if(x) x.xl=ts;
+        d.xlCfg=Object.assign({}, d.xlCfg||{}, {lastOk:ts, lastBy:who, err:"", errTs:0});
+      });
+      xlLog("Terkirim "+m.plat+" · "+rows.length+" unit"+(sjInfo(DB.get(),m).sk?"":" (No. SJKB kosong)"), true);
+    }
+    XL.state="ok"; XL.msg="";
+  }catch(e){
+    const code=(e&&e.code)||"cfg", msg=(e&&e.msg)||String(e&&e.message||e);
+    XL.state=code; XL.msg=msg; xlLog(msg,false);
+    if(code!=="net") xlSetErr(msg);
+    if(code==="relogin") xlTrySilent();
+  }finally{ XL.busy=false; xlBanner(); }
+}
+function xlIdle(){
+  const a=document.activeElement, typing=a && (a.tagName==="INPUT"||a.tagName==="TEXTAREA"||a.tagName==="SELECT");
+  const modal=document.getElementById("modalRoot"); const busyModal=modal && modal.innerHTML.trim();
+  return !typing && !busyModal && !(typeof scanStream!=="undefined" && scanStream);
+}
+function xlTrySilent(){
+  const last=+(xlLS(XL_SIL)||0);
+  if(Date.now()-last<XL_SILENT_GAP_MS || !xlIdle()) return;
+  xlLS(XL_SIL, Date.now());
+  xlLogin({silent:true, makeWriter:true});
+}
+function xlBanner(){
+  let el=document.getElementById("xlBanner");
+  const show=xlLS(XL_WR) && (XL.state==="relogin" || !xlLS(XL_TOK));
+  if(!show){ if(el) el.remove(); return; }
+  if(!el){ el=document.createElement("div"); el.id="xlBanner"; document.body.appendChild(el); }
+  el.style.cssText="position:fixed;left:12px;right:12px;bottom:12px;z-index:9998;background:#b91c1c;color:#fff;border-radius:12px;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;box-shadow:0 6px 20px rgba(0,0,0,.3);font-size:13px;max-width:720px;margin:0 auto;";
+  el.innerHTML='<span style="flex:1;min-width:200px;">📗 <b>Sambungan Excel terputus.</b> '+xlEsc(XL.msg||"Perlu login ulang Microsoft.")+' Manifest tetap antre dan dikirim setelah login.</span><button type="button" onclick="xlLogin({makeWriter:true})" style="background:#fff;color:#b91c1c;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;">Login ulang Microsoft</button>';
+}
+function xlStopWriter(){
+  if(!confirm("Berhenti jadikan perangkat ini penulis Excel?\n\nLogin Microsoft di perangkat ini dihapus. Manifest tetap antre sampai ada perangkat penulis lagi.")) return;
+  xlLS(XL_TOK,null); xlLS(XL_WR,null); xlLS(XL_RES,null); xlLS(XL_SIL,null); XL.state=""; XL.msg="";
+  xlBanner(); render();
+}
+async function xlTest(btn){
+  const out=document.getElementById("xlTestOut"); if(btn) btn.disabled=true;
+  const say=(h,ok)=>{ if(out) out.innerHTML='<div style="margin-top:10px;padding:10px;border-radius:8px;font-size:12px;background:'+(ok?"rgba(31,157,85,.12)":"rgba(185,28,28,.12)")+';">'+h+'</div>'; };
+  say("Menguji sambungan…",true);
+  try{
+    xlLS(XL_RES,null);
+    const c=xlCfg(), it=await xlItem();
+    const cols=await xlGraph("GET", xlTblPath(it,c.table)+"/columns?$select=name");
+    const names=xlArr(cols.value).map(x=>String(x.name||"").trim());
+    const want=MF_HEAD, bad=want.map((w,i)=>(names[i]||"").toLowerCase()===w.toLowerCase()?null:(i+1)+". harus \""+w+"\", di tabel \""+(names[i]||"(tidak ada)")+"\"").filter(Boolean);
+    let h="✅ File <b>"+xlEsc(it.name)+"</b> terbaca. Tabel <b>"+xlEsc(c.table)+"</b> punya "+names.length+" kolom.";
+    if(names.length!==want.length) h+="<br>⚠ Jumlah kolom harus "+want.length+" (No … No. SJKB).";
+    if(bad.length) h+="<br>⚠ Judul kolom berbeda (data tetap ditulis berurutan):<br>"+bad.map(xlEsc).join("<br>");
+    else if(names.length===want.length) h+="<br>Urutan 14 kolom cocok. Siap dipakai.";
+    say(h, names.length===want.length);
+    xlSetErr("");
+  }catch(e){ say("❌ "+xlEsc((e&&e.msg)||String(e&&e.message||e)),false); }
+  finally{ if(btn) btn.disabled=false; }
+}
+function xlSendNow(btn){ if(btn) btn.disabled=true; xlTick(true).then(()=>{ render(); }); }
+function xlSaveCfg(){
+  const g=id=>(document.getElementById(id)||{}).value||"";
+  const tenant=g("xlTenant").trim(), client=g("xlClient").trim(), link=g("xlLink").trim(), table=(g("xlTable").trim()||"Manifest");
+  const on=!!(document.getElementById("xlOn")||{}).checked, old=!!(document.getElementById("xlOld")||{}).checked;
+  if(!/^[0-9a-f-]{36}$/i.test(client)){ alert("Client ID harus 36 karakter seperti xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (Application (client) ID)."); return; }
+  if(tenant && !/^([0-9a-f-]{36}|organizations|[a-z0-9.-]+\.[a-z]{2,})$/i.test(tenant)){ alert("Tenant ID tidak valid. Isi Directory (tenant) ID, atau kosongkan untuk 'organizations'."); return; }
+  if(!/^https:\/\//i.test(link)){ alert("Link Excel harus diawali https:// (dari Share → Copy link di Excel Online)."); return; }
+  if(!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(table)){ alert("Nama tabel hanya huruf, angka, titik, dan garis bawah, tanpa spasi (contoh: Manifest)."); return; }
+  const prev=DB.get().xlCfg||{};
+  const first=!prev.client||!prev.link;
+  DB.set(d=>{ d.xlCfg=Object.assign({}, d.xlCfg||{}, {tenant, client, link, table, on, since: first?(old?0:Date.now()):(+prev.since||0), by:(currentUser&&currentUser.name)||"", ts:Date.now()}); });
+  if(prev.link!==link) xlLS(XL_RES,null);
+  render(); alert("Pengaturan Excel tersimpan.");
+}
+function xlSkipBacklog(){
+  const data=DB.get(), n=xlPending(data).length;
+  if(!confirm("Lewati "+n+" manifest yang belum terkirim?\n\nYang sudah ada sekarang TIDAK akan dikirim ke Excel. Mulai Delout berikutnya dikirim normal.")) return;
+  DB.set(d=>{ d.xlCfg=Object.assign({}, d.xlCfg||{}, {since:Date.now()}); });
+  render();
+}
+function xlCopyUri(btn){
+  const v=xlRedirectUri();
+  const done=()=>{ if(btn){ const t=btn.textContent; btn.textContent="✔ Tersalin"; setTimeout(()=>btn.textContent=t,1500); } };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done).catch(()=>prompt("Salin alamat ini:",v));
+  else prompt("Salin alamat ini:",v);
+}
+function xlQueueSummary(data){
+  const p=xlPending(data); let undo=0, sj=0, ready=0;
+  p.forEach(m=>{ const w=xlWhy(data,m); if(w==="undo") undo++; else if(w==="sjkb") sj++; else ready++; });
+  return {total:p.length, undo, sj, ready};
+}
+function xlDeviceHtml(){
+  const c=xlCfg(), tok=xlLS(XL_TOK), wr=xlLS(XL_WR), it=xlLS(XL_RES);
+  if(!c.client||!c.link) return `<div style="font-size:12px;color:var(--text-dim);">Admin belum mengisi pengaturan Excel (Admin → 📗 Excel).</div>`;
+  if(!(wr&&tok)) return `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Perangkat ini <b>bukan</b> penulis Excel. Jadikan penulis hanya di <b>satu</b> perangkat yang standby (PC Delivery via tethering, Chrome/Edge).</div>
+    <button class="btn btn-primary" onclick="xlLogin({makeWriter:true})">🔑 Login Microsoft &amp; jadikan perangkat ini penulis</button>`;
+  const ok=XL.state!=="relogin";
+  return `<div style="font-size:12px;line-height:1.6;margin-bottom:8px;">
+      <div>Status: ${ok?'<b style="color:#1f9d55;">● Penulis aktif</b>':'<b style="color:#b91c1c;">● Terputus — perlu login ulang</b>'}</div>
+      <div>Akun Microsoft: <b>${xlEsc(tok.user||tok.name||"-")}</b></div>
+      <div>File: <b>${xlEsc((it&&it.name)||"(belum dites)")}</b> · tabel <b>${xlEsc(c.table)}</b></div>
+      ${XL.msg?`<div style="color:#b45309;">${xlEsc(XL.msg)}</div>`:""}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="xlTest(this)">🧪 Tes sambungan</button>
+      <button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="xlSendNow(this)">📤 Kirim sekarang</button>
+      <button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="xlLogin({makeWriter:true})">🔑 Login ulang</button>
+      <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="xlStopWriter()">Berhenti jadi penulis</button>
+    </div><div id="xlTestOut"></div>`;
+}
+function xlStatusLine(data){
+  const c=xlCfg(); if(!c.client||!c.link) return "";
+  if(!c.on) return `<div style="font-size:12px;color:var(--text-dim);margin:0 0 8px;">📗 Excel Online: <b>nonaktif</b>.</div>`;
+  const q=xlQueueSummary(data);
+  const err=c.err?`<div style="color:#b91c1c;">⚠ ${xlEsc(c.err)}</div>`:"";
+  const late=q.ready>0 && Date.now()-c.lastOk>15*60000;
+  return `<div style="font-size:12px;margin:0 0 8px;padding:8px 10px;border-radius:8px;background:rgba(31,157,85,.08);line-height:1.5;">
+    📗 <b>Excel Online</b> · terakhir terkirim: <b>${xlTime(c.lastOk)}</b>${c.lastBy?" ("+xlEsc(c.lastBy)+")":""}<br>
+    Antrian: <b>${q.total}</b> ILS${q.total?` (${q.ready} siap kirim, ${q.undo} masa batal Delout, ${q.sj} menunggu No. SJKB)`:""}
+    ${late?`<div style="color:#b45309;">⚠ Ada data siap kirim tapi belum terkirim. Cek PC penulis (menyala, tethering, tab RADAR terbuka).</div>`:""}${err}</div>`;
+}
+function renderAdminXl(){
+  const data=DB.get(), c=xlCfg(), first=!c.client||!c.link, L=xlLS(XL_LOG)||[];
+  return `<div class="card"><h3>📗 Manifest otomatis ke Excel Online</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Setiap Delout, unitnya ditambahkan sebagai baris baru ke tabel di file Excel (OneDrive/SharePoint kantor). Kolom sama dengan Download Manifest. Satu ILS dikirim setelah masa batal Delout (5 menit) lewat dan No. SJKB terbaca dari PDF (maks. tunggu 60 menit).</p>
+    <ol style="font-size:12px;margin:0 0 12px 18px;padding:0;line-height:1.6;">
+      <li>Di Excel Online: tulis 14 judul kolom (No … No. SJKB), blok, <b>Insert → Table</b>, beri nama tabel <b>Manifest</b>. Format kolom <b>Tgl Delivery</b> sebagai tanggal.</li>
+      <li>Di <b>entra.microsoft.com → App registrations</b>: daftarkan aplikasi, platform <b>Single-page application</b>, Redirect URI = alamat di bawah (persis). API permissions: Microsoft Graph → Delegated → <b>Files.ReadWrite.All</b> dan <b>offline_access</b>.</li>
+      <li>Isi Tenant ID, Client ID, dan link file di bawah, lalu Simpan.</li>
+      <li>Di PC penulis: tekan <b>Login Microsoft &amp; jadikan perangkat ini penulis</b>, lalu <b>Tes sambungan</b>.</li>
+    </ol>
+    <div class="field"><label>Redirect URI (tempel persis ke App registrations)</label>
+      <div style="display:flex;gap:8px;"><input type="text" readonly value="${xlEsc(xlRedirectUri())}" style="flex:1;" onclick="this.select()"><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="xlCopyUri(this)">Salin</button></div></div>
+    <div class="field"><label>Directory (tenant) ID</label><input id="xlTenant" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value="${xlEsc(c.tenant)}"></div>
+    <div class="field"><label>Application (client) ID</label><input id="xlClient" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value="${xlEsc(c.client)}"></div>
+    <div class="field"><label>Link file Excel (Share → Copy link, akses edit)</label><input id="xlLink" type="url" placeholder="https://…sharepoint.com/:x:/…" value="${xlEsc(c.link)}"></div>
+    <div class="field"><label>Nama tabel di Excel</label><input id="xlTable" type="text" value="${xlEsc(c.table)}"></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0 8px;"><input type="checkbox" id="xlOn" ${(DB.get().xlCfg||{}).on===false?"":"checked"}> Aktifkan pengiriman otomatis</label>
+    ${first?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 12px;"><input type="checkbox" id="xlOld" style="margin-top:3px;"><span>Kirim juga manifest yang sudah ada (sampai 14 hari ke belakang). Kalau tidak dicentang, mulai dari Delout berikutnya.</span></label>`:""}
+    <button class="btn btn-primary" onclick="xlSaveCfg()">💾 Simpan</button></div>
+    <div class="card"><h3>💻 Perangkat ini</h3>${xlDeviceHtml()}</div>
+    <div class="card"><h3>📊 Status pengiriman</h3>${xlStatusLine(data)||'<div style="font-size:12px;color:var(--text-dim);">Belum diatur.</div>'}
+      ${xlPending(data).length?`<button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="xlSkipBacklog()">Lewati antrian lama</button>`:""}
+      ${L.length?`<div style="font-size:11px;margin-top:10px;line-height:1.6;"><b>Log perangkat ini</b>${L.slice(0,12).map(x=>`<div style="color:${x.ok?"inherit":"#b91c1c"};">${xlTime(x.t)} · ${xlEsc(x.txt)}</div>`).join("")}</div>`:""}
+    </div>`;
+}
+xlHandleRedirect();
+setInterval(()=>{ try{ xlTick(); }catch(e){} }, XL_EVERY_MS);
+setTimeout(()=>{ try{ xlTick(); }catch(e){} }, 15000);
+window.addEventListener("online",()=>setTimeout(()=>{ try{ xlTick(); }catch(e){} },5000));
+
+/* ======================================================================
+   PENDAFTARAN AKUN MANDIRI — user daftar sendiri (password buatan sendiri, tersimpan hash),
+   Admin menyetujui / menolak. Driver CC: Admin wajib isi Kode Driver saat menyetujui.
+====================================================================== */
+const REG_ROLES=["dispatcher","cc","delivery","koordinator","leader"];
+const REG_KEEP_MS=7*24*3600*1000;
+function regList(d){ return xlArr((d||DB.get()).regs); }
+function regPending(d){ return regList(d).filter(r=>r.status==="pending").sort((a,b)=>a.ts-b.ts); }
+function regNeedLp(role){ return role==="cc"||role==="koordinator"; }
+function regOpen(){
+  const lps=DB.get().lpList||[];
+  showModal(`<h3 style="margin:0 0 4px;">📝 Daftar akun baru</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Isi data di bawah. Akun bisa dipakai setelah <b>disetujui Admin</b>.</div>
+    <div class="field"><label>Nama lengkap</label><input id="rgName" type="text" autocomplete="name" placeholder="contoh: Budi Santoso"></div>
+    <div class="field"><label>Username (untuk login)</label><input id="rgUser" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="huruf kecil/angka, tanpa spasi"></div>
+    <div class="field"><label>Daftar sebagai</label><select id="rgRole" onchange="document.getElementById('rgLpBox').style.display=(this.value==='cc'||this.value==='koordinator')?'':'none'">
+      <option value="">-- pilih --</option>${ROLES.filter(r=>REG_ROLES.includes(r.key)).map(r=>`<option value="${r.key}">${r.icon} ${r.label}</option>`).join("")}</select></div>
+    <div class="field" id="rgLpBox" style="display:none;"><label>LP (wajib untuk Driver CC &amp; Koordinator)</label><select id="rgLp"><option value="">-- pilih LP --</option>${lps.map(l=>`<option value="${xlEsc(l)}">${xlEsc(l)}</option>`).join("")}</select></div>
+    <div class="field"><label>Password</label><input id="rgP1" type="password" autocomplete="new-password"></div>
+    <div class="field"><label>Ulangi password</label><input id="rgP2" type="password" autocomplete="new-password"></div>
+    <div style="font-size:11px;color:var(--text-dim);margin:-4px 0 10px;">${pwRule()} Ingat baik-baik password ini.</div>
+    <div id="rgMsg"></div>
+    <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal()">Batal</button>
+    <button type="button" id="rgBtn" class="btn btn-primary" style="flex:2;" onclick="regSubmit()">📨 Kirim pendaftaran</button></div>`);
+}
+async function regSubmit(){
+  const g=id=>(document.getElementById(id)||{}).value||"";
+  const name=g("rgName").trim().replace(/\s+/g," "), user=g("rgUser").trim().toLowerCase(), role=g("rgRole"), lp=regNeedLp(role)?g("rgLp"):"";
+  const p1=g("rgP1"), p2=g("rgP2"), msg=document.getElementById("rgMsg"), btn=document.getElementById("rgBtn");
+  const err=t=>{ msg.innerHTML=`<div class="msg err">${t}</div>`; };
+  msg.innerHTML="";
+  if(name.length<3) return err("Isi nama lengkap.");
+  if(!/^[a-z0-9._-]{3,30}$/.test(user)) return err("Username 3–30 karakter: huruf kecil, angka, titik, strip, atau garis bawah. Tanpa spasi.");
+  if(!REG_ROLES.includes(role)) return err("Pilih daftar sebagai apa.");
+  if(regNeedLp(role) && !lp) return err("Pilih LP.");
+  if(pwWeak(p1,user)) return err(pwRule());
+  if(p1!==p2) return err("Ulangan password tidak sama.");
+  if(!(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed)) return err("RADAR sedang offline. Pastikan internet (data seluler) aktif, tunggu status Online, lalu coba lagi.");
+  const d0=DB.get();
+  if((d0.users||[]).some(x=>String(x.username).toLowerCase()===user)) return err("Username sudah dipakai. Pilih username lain.");
+  if(regPending(d0).some(x=>x.username===user)) return err("Username ini sudah didaftarkan dan sedang menunggu persetujuan Admin.");
+  btn.disabled=true; btn.textContent="Mengirim…";
+  try{
+    const h=await pwHash(p1), id=Date.now()+"-"+Math.floor(Math.random()*1e6);
+    let dup=false;
+    DB.set(d=>{
+      const L=xlArr(d.regs).filter(r=>r.status==="pending" || Date.now()-(r.doneTs||r.ts)<REG_KEEP_MS);
+      if((d.users||[]).some(x=>String(x.username).toLowerCase()===user) || L.some(r=>r.status==="pending"&&r.username===user)){ dup=true; d.regs=L; return; }
+      L.filter(r=>r.username===user).forEach(r=>{ r.status="old"; });
+      L.push({id, username:user, name, role, lp, password:h, ts:Date.now(), status:"pending", dev:(navigator.userAgent||"").slice(0,80)});
+      d.regs=L.filter(r=>r.status!=="old");
+    });
+    if(dup){ btn.disabled=false; btn.textContent="📨 Kirim pendaftaran"; return err("Username baru saja dipakai orang lain. Pilih username lain."); }
+    try{ localStorage.setItem("radar_lastuser", user); }catch(e){}
+    showModal(`<h3 style="margin:0 0 6px;">✅ Pendaftaran terkirim</h3>
+      <div style="font-size:13px;line-height:1.7;">Username: <b style="font-family:monospace;font-size:16px;">${xlEsc(user)}</b><br>Daftar sebagai: <b>${xlEsc((ROLES.find(r=>r.key===role)||{}).label||role)}</b>${lp?` · LP <b>${xlEsc(lp)}</b>`:""}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin:10px 0 14px;">Tunggu persetujuan Admin${role==="cc"?" (Admin akan mengisi Kode Driver kamu)":""}. Setelah disetujui, login dengan username dan password yang tadi kamu buat.</div>
+      <button type="button" class="btn btn-primary" onclick="closeModal();try{document.getElementById('loginUser').value='${xlEsc(user)}';}catch(e){}">OK</button>`);
+  }catch(e){ btn.disabled=false; btn.textContent="📨 Kirim pendaftaran"; err(xlEsc(e.message||e)); }
+}
+/* pesan login untuk username yang belum disetujui / ditolak */
+function regLoginMsg(u){
+  const L=regList().filter(r=>r.username===String(u).toLowerCase()).sort((a,b)=>b.ts-a.ts), r=L[0];
+  if(!r) return "";
+  if(r.status==="pending") return "Akun masih <b>menunggu persetujuan Admin</b>. Coba lagi setelah disetujui.";
+  if(r.status==="rejected") return "Pendaftaran <b>ditolak</b> Admin"+(r.note?": "+xlEsc(r.note):"")+". Hubungi Admin, atau daftar ulang.";
+  return "";
+}
+/* ---------- Admin ---------- */
+function renderRegCard(){
+  const P=regPending(); if(!P.length) return "";
+  const data=DB.get(), lps=data.lpList||[];
+  return `<div class="card" style="border:2px solid #f59e0b;"><h3>📝 Pendaftaran menunggu persetujuan (${P.length})</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Password dibuat sendiri oleh pendaftar (terenkripsi). Driver CC wajib diisi <b>Kode Driver</b> sebelum disetujui.</div>
+    ${P.map(r=>{ const rl=ROLES.find(x=>x.key===r.role)||{label:r.role,icon:"•"};
+      return `<div style="border:1px solid var(--line,rgba(0,0,0,.12));border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div><b>${xlEsc(r.name)}</b> <span class="mono" style="font-size:12px;">@${xlEsc(r.username)}</span></div><div style="font-size:11px;color:var(--text-dim);">${xlTime(r.ts)}</div></div>
+        <div style="font-size:12px;margin:4px 0 8px;"><span class="badge gold">${rl.icon} ${xlEsc(rl.label)}</span>${r.lp?` <span class="badge">LP ${xlEsc(r.lp)}</span>`:""}</div>
+        ${regNeedLp(r.role)?`<div class="field" style="margin-bottom:8px;"><label>LP</label><select id="rgaLp_${r.id}">${lps.map(l=>`<option value="${xlEsc(l)}" ${lpKey(l)===lpKey(r.lp)?"selected":""}>${xlEsc(l)}</option>`).join("")}</select></div>`:""}
+        ${r.role==="cc"?`<div class="field" style="margin-bottom:8px;"><label>Kode Driver (wajib)</label><input id="rgaDrv_${r.id}" type="text" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></div>`:""}
+        <div style="display:flex;gap:8px;"><button type="button" class="btn btn-primary btn-sm" style="flex:2;" onclick="regApprove('${r.id}')">✔ Setuju</button>
+        <button type="button" class="btn btn-danger btn-sm" style="flex:1;" onclick="regReject('${r.id}')">✖ Tolak</button></div></div>`; }).join("")}
+  </div>`;
+}
+function regApprove(id){
+  const r=regPending().find(x=>x.id===id); if(!r){ render(); return; }
+  const lpEl=document.getElementById("rgaLp_"+id), drvEl=document.getElementById("rgaDrv_"+id);
+  const lp=regNeedLp(r.role)?((lpEl&&lpEl.value)||r.lp||""):"";
+  const drv=r.role==="cc"?((drvEl&&drvEl.value)||"").trim().toUpperCase():"";
+  if(regNeedLp(r.role) && !lp){ alert("Pilih LP."); return; }
+  if(r.role==="cc" && !/^[A-Z0-9._-]{3,30}$/.test(drv)){ alert("Isi Kode Driver untuk "+r.name+" (contoh KMDCCDRV302)."); if(drvEl) drvEl.focus(); return; }
+  const data=DB.get();
+  if(drv && (data.users||[]).some(x=>x.drvCode===drv)){ alert("Kode driver "+drv+" sudah dipakai akun lain."); return; }
+  if((data.users||[]).some(x=>String(x.username).toLowerCase()===r.username)){ alert("Username "+r.username+" sudah ada di daftar user. Tolak pendaftaran ini."); return; }
+  let ok=false;
+  DB.set(d=>{
+    const x=xlArr(d.regs).find(y=>y.id===id && y.status==="pending"); if(!x) return;
+    if((d.users||[]).some(u=>String(u.username).toLowerCase()===x.username)) return;
+    if(drv && (d.users||[]).some(u=>u.drvCode===drv)) return;
+    d.users.push({username:x.username, name:x.name, password:x.password, role:x.role, lp, drvCode:drv, regTs:x.ts, approvedBy:(currentUser&&currentUser.name)||"", approvedTs:Date.now()});
+    d.regs=xlArr(d.regs).filter(y=>y.id!==id);
+    ok=true;
+  });
+  if(!ok) alert("Gagal menyetujui: data berubah di perangkat lain. Coba lagi.");
+}
+function regReject(id){
+  const r=regPending().find(x=>x.id===id); if(!r) return;
+  const note=prompt("Tolak pendaftaran "+r.name+" (@"+r.username+")?\n\nAlasan (opsional, akan terlihat saat dia mencoba login):","");
+  if(note===null) return;
+  DB.set(d=>{ const x=xlArr(d.regs).find(y=>y.id===id); if(x){ x.status="rejected"; x.note=String(note).slice(0,120); x.doneTs=Date.now(); delete x.password; } d.regs=xlArr(d.regs); });
+}
+/* notifikasi ke Admin saat ada pendaftaran baru */
+let _regSeen=null;
+function regCheckIncoming(){
+  if(!currentUser || currentUser.role!=="admin") { _regSeen=null; return; }
+  const P=regPending(), ids=P.map(r=>r.id);
+  if(_regSeen===null){ _regSeen=new Set(ids); regToast(P.length, true); return; }
+  const fresh=P.filter(r=>!_regSeen.has(r.id)); ids.forEach(i=>_regSeen.add(i));
+  if(fresh.length){
+    regToast(P.length, false, fresh[fresh.length-1]);
+    try{ if('Notification' in window && Notification.permission==='granted') new Notification("📝 Pendaftaran akun baru",{body:fresh.map(r=>r.name+" ("+r.role+")").join(", ")}); }catch(e){}
+    try{ RSnd.login(); }catch(e){}
+  }
+}
+function regToast(n, quiet, last){
+  let el=document.getElementById("regToast");
+  if(!n || (quiet && !n)){ if(el) el.remove(); return; }
+  if(!el){ el=document.createElement("div"); el.id="regToast"; document.body.appendChild(el); }
+  el.style.cssText="position:fixed;top:76px;right:16px;z-index:9997;background:#f59e0b;color:#111;border-radius:12px;padding:10px 14px;box-shadow:0 6px 20px rgba(0,0,0,.25);font-size:13px;max-width:320px;cursor:pointer;";
+  el.innerHTML=`📝 <b>${n} pendaftaran</b> menunggu persetujuan${last?`<br><span style="font-size:12px;">Terbaru: ${xlEsc(last.name)}</span>`:""}<div style="font-size:11px;margin-top:4px;text-decoration:underline;">Buka Admin → User</div>`;
+  el.onclick=()=>{ el.remove(); adminTab='users'; try{ switchTab('admin'); }catch(e){} render(); };
+}
+setInterval(()=>{ try{ regCheckIncoming(); }catch(e){} }, 4000);
+
+/* ======================================================================
+   PENGAMAN HAPUS DATA — wajib foto wajah (kamera depan) + password Admin.
+   Foto & identitas disimpan di riwayat (wipeLog) SEBELUM data dihapus, dan riwayat ini
+   tidak ikut terhapus oleh Mulai Trial maupun Reset Semua Data.
+====================================================================== */
+const WIPE_KEEP=15;
+let _wgStream=null, _wgShot="", _wgResolve=null;
+function wipeLogList(d){ return xlArr((d||DB.get()).wipeLog).sort((a,b)=>b.ts-a.ts); }
+function wipeGate(actionLabel){
+  return new Promise(res=>{
+    _wgResolve=res; _wgShot="";
+    showModal(`<h3 style="margin:0 0 4px;">🛡 Verifikasi sebelum hapus data</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Aksi: <b>${xlEsc(actionLabel)}</b>. Foto wajah dan nama akun kamu akan <b>dicatat di riwayat</b> sebagai bukti siapa yang menghapus.</div>
+      <div style="position:relative;background:#0b1220;border-radius:12px;overflow:hidden;aspect-ratio:4/3;max-width:360px;margin:0 auto 10px;">
+        <video id="wgVid" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1);"></video>
+        <img id="wgImg" alt="" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">
+        <div id="wgCamMsg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#cbd5e1;font-size:13px;text-align:center;padding:16px;">Membuka kamera…</div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;">
+        <button type="button" id="wgSnap" class="btn btn-outline btn-sm" style="width:auto;" onclick="wipeSnap()" disabled>📸 Ambil foto wajah</button>
+        <button type="button" id="wgRe" class="btn btn-outline btn-sm" style="width:auto;display:none;" onclick="wipeRetake()">↺ Ulangi</button>
+      </div>
+      <div class="field"><label>Password Admin (${xlEsc(currentUser&&currentUser.username||"")})</label><input id="wgPass" type="password" autocomplete="current-password"></div>
+      <div id="wgMsg"></div>
+      <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="wipeGateClose(false)">Batal</button>
+      <button type="button" id="wgOk" class="btn btn-danger" style="flex:2;" onclick="wipeGateConfirm(${JSON.stringify(String(actionLabel)).replace(/"/g,"&quot;")})">Verifikasi &amp; lanjut</button></div>`);
+    wipeCamStart();
+  });
+}
+async function wipeCamStart(){
+  const v=document.getElementById("wgVid"), m=document.getElementById("wgCamMsg"), b=document.getElementById("wgSnap");
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ if(m) m.textContent="Perangkat ini tidak punya akses kamera. Hapus data hanya bisa dari perangkat berkamera (HP/laptop dengan webcam)."; return; }
+  try{
+    _wgStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user", width:{ideal:640}, height:{ideal:480}}, audio:false});
+    if(!v){ wipeCamStop(); return; }
+    v.srcObject=_wgStream; await v.play().catch(()=>{});
+    if(m) m.style.display="none"; if(b) b.disabled=false;
+  }catch(e){
+    if(m) m.textContent=(e&&e.name==="NotAllowedError")?"Izin kamera ditolak. Izinkan kamera untuk situs ini di pengaturan browser, lalu coba lagi.":"Kamera tidak bisa dibuka ("+(e&&e.name||e)+"). Hapus data hanya bisa dari perangkat berkamera.";
+  }
+}
+function wipeCamStop(){ try{ if(_wgStream) _wgStream.getTracks().forEach(t=>t.stop()); }catch(e){} _wgStream=null; }
+function wipeSnap(){
+  const v=document.getElementById("wgVid"); if(!v||!v.videoWidth) return;
+  const W=320, H=Math.round(W*v.videoHeight/v.videoWidth), c=document.createElement("canvas"); c.width=W; c.height=H;
+  const g=c.getContext("2d"); g.translate(W,0); g.scale(-1,1); g.drawImage(v,0,0,W,H);
+  // tolak frame gelap/kosong (kamera tertutup)
+  const px=g.getImageData(0,0,W,H).data; let sum=0, sq=0, n=0;
+  for(let i=0;i<px.length;i+=40){ const y=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2]; sum+=y; sq+=y*y; n++; }
+  const mean=sum/n, sd=Math.sqrt(Math.max(0,sq/n-mean*mean));
+  if(mean<25 || sd<8){ document.getElementById("wgMsg").innerHTML=`<div class="msg err">Foto terlalu gelap atau kamera tertutup. Hadapkan wajah ke kamera dengan cahaya cukup.</div>`; return; }
+  _wgShot=c.toDataURL("image/jpeg",0.6);
+  const img=document.getElementById("wgImg"); img.src=_wgShot; img.style.display="block";
+  document.getElementById("wgSnap").style.display="none"; document.getElementById("wgRe").style.display="";
+  document.getElementById("wgMsg").innerHTML="";
+}
+function wipeRetake(){
+  _wgShot=""; const img=document.getElementById("wgImg"); if(img) img.style.display="none";
+  document.getElementById("wgSnap").style.display=""; document.getElementById("wgRe").style.display="none";
+}
+function wipeGateClose(ok){ wipeCamStop(); closeModal(); const r=_wgResolve; _wgResolve=null; if(r) r(ok); }
+async function wipeGateConfirm(actionLabel){
+  const msg=document.getElementById("wgMsg"), btn=document.getElementById("wgOk"), p=(document.getElementById("wgPass")||{}).value||"";
+  const err=t=>{ msg.innerHTML=`<div class="msg err">${t}</div>`; };
+  if(!_wgShot) return err("Ambil foto wajah dulu.");
+  if(!p) return err("Isi password Admin.");
+  const me=(DB.get().users||[]).find(x=>x.username===(currentUser&&currentUser.username) && x.role==="admin");
+  btn.disabled=true; btn.textContent="Memeriksa…";
+  let ok=false; try{ ok=!!me && await pwCheck(me.password,p); }catch(e){}
+  if(!ok){ btn.disabled=false; btn.textContent="Verifikasi & lanjut"; return err("Password Admin salah."); }
+  const rec={ts:Date.now(), action:String(actionLabel), user:me.username, name:me.name||"", shift:(currentUser&&currentUser.shift)||"", dev:(navigator.userAgent||"").slice(0,90), photo:_wgShot};
+  DB.set(d=>{ d.wipeLog=xlArr(d.wipeLog).concat([rec]).sort((a,b)=>b.ts-a.ts).slice(0,WIPE_KEEP); });
+  window._wipeLastRec=rec;
+  wipeGateClose(true);
+}
+function unitOutLogHtml(){
+  const L=xlArr(DB.get().unitOutLog).slice().sort((a,b)=>b.ts-a.ts).slice(0,50);
+  return `<div class="card"><h3>🔧 Riwayat unit dikeluarkan (7 hari)</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Keluarkan unit dari stall / parkir luar wajib password akun yang login.</div>
+    ${L.length?`<table><thead><tr><th>Waktu</th><th>No. Rangka</th><th>Dari</th><th>Oleh</th></tr></thead><tbody>${L.map(x=>`<tr><td style="white-space:nowrap;">${xlTime(x.ts)}</td><td class="mono">${xlEsc(x.frame)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.model)}</span></td><td>${x.kind==="luar"?"Parkir luar":"Stall "+xlEsc(x.slot)}</td><td>${xlEsc(x.by)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.role)}</span></td></tr>`).join("")}</tbody></table>`:`<div style="font-size:12px;color:var(--text-dim);">Belum ada.</div>`}</div>`;
+}
+function wipeLogHtml(){
+  const L=wipeLogList();
+  return `<div class="card"><h3>🛡 Riwayat hapus data</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Setiap Mulai Trial / Reset Semua Data wajib foto wajah + password Admin. ${WIPE_KEEP} catatan terakhir disimpan dan tidak ikut terhapus.</div>
+    ${L.length?L.map(r=>`<div style="display:flex;gap:10px;align-items:center;border-top:1px solid rgba(0,0,0,.08);padding:8px 0;">
+      <img src="${xlEsc(r.photo||"")}" alt="foto" style="width:64px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;background:#ddd;" onclick="wipePhotoOpen(${r.ts})">
+      <div style="font-size:12px;line-height:1.5;"><b>${xlEsc(r.action)}</b><br>${xlEsc(r.name)} (@${xlEsc(r.user)})${r.shift?" · Shift "+xlEsc(String(r.shift).toUpperCase()):""}<br><span style="color:var(--text-dim);">${new Date(r.ts).toLocaleString("id-ID")}</span></div></div>`).join("")
+      :`<div style="font-size:12px;color:var(--text-dim);">Belum ada.</div>`}</div>`;
+}
+function wipePhotoOpen(ts){
+  const r=wipeLogList().find(x=>x.ts===ts); if(!r) return;
+  showModal(`<h3 style="margin:0 0 8px;">${xlEsc(r.action)}</h3><img src="${xlEsc(r.photo)}" style="width:100%;border-radius:10px;"><div style="font-size:12px;margin-top:8px;line-height:1.6;">${xlEsc(r.name)} (@${xlEsc(r.user)})<br>${new Date(r.ts).toLocaleString("id-ID")}<br><span style="color:var(--text-dim);">${xlEsc(r.dev)}</span></div><button class="btn btn-primary" style="margin-top:12px;" onclick="closeModal()">Tutup</button>`);
+}
+
 function tlsOpenCardHtml(){
   if(!window.AndroidTLS||!window.AndroidTLS.openTls) return "";
   return `<div class="card"><h3>🌐 TLS</h3>
@@ -3355,11 +4054,13 @@ function manifestCardHtml(data){
   const lps=[...new Set([...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean))];
   const nToday=mfRows(data,today,"").length;
   return `<div class="card"><h3>📊 Download Manifest (Excel)</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 14 hari. Hari ini: <b>${nToday} unit</b>. Kolom Nama Cabang dan No. SJKB dibiarkan kosong untuk macro Excel kamu.</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 14 hari. Hari ini: <b>${nToday} unit</b>. Nama Cabang dan No. SJKB diisi dari PDF surat jalan; sel kuning berarti PDF-nya belum ada.</div>
+    ${xlStatusLine(data)}
     <div class="field"><label>Tanggal delivery</label><input id="mfDate" type="date" value="${today}"></div>
     <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (00:00–23:59)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 tanggal ini – 06:59 hari berikutnya)</option></select></div>
     <div class="field"><label>Isi file</label><select id="mfLP"><option value="">Semua LP (sheet ALL + satu sheet per LP)</option>${lps.map(l=>`<option value="${l}">Hanya LP ${l}</option>`).join("")}</select></div>
-    <button class="btn btn-primary" onclick="downloadManifest()">⬇ Download Excel</button></div>`;
+    <button class="btn btn-primary" onclick="downloadManifest()">⬇ Download Excel</button>
+    ${(xlCfg().client&&xlCfg().link)?`<details style="margin-top:12px;"${xlLS(XL_WR)&&XL.state==="relogin"?" open":""}><summary style="cursor:pointer;font-size:13px;font-weight:600;">💻 Perangkat penulis Excel</summary><div style="margin-top:8px;">${xlDeviceHtml()}</div></details>`:""}</div>`;
 }
 
 
@@ -4885,10 +5586,10 @@ function saveOffEdit(k){
   DB.set(d=>{ if(d.units[k]) d.units[k].loc = loc; });
   closeModal();
 }
-function removeOff(k){
-  if(!confirm("Keluarkan unit ini dari daftar parkir luar stall?")) return;
-  DB.set(d=>{ delete d.units[k]; });
-  closeModal();
+async function removeOff(k){
+  const v=(DB.get().units||{})[k]; closeModal();
+  if(!(await pwConfirm("Keluarkan unit dari Parkir Luar Stall", v?("No. Rangka <b>"+xlEsc(v.frame||"-")+"</b> · "+xlEsc(v.model||"")+(v.loc?" · "+xlEsc(v.loc):"")):""))) return;
+  DB.set(d=>{ unitOutLogAdd(d, k, d.units[k], "luar"); delete d.units[k]; });
 }
 function parkOffStall(){
   if(!requireLine()) return;
@@ -5284,7 +5985,7 @@ function renderAdmin(){
   const data = DB.get();
   const tabsHtml = `
     <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-      <button class="tabbtn ${adminTab==='users'?'active':''}" onclick="adminTab='users';render()">👤 User</button>
+      <button class="tabbtn ${adminTab==='users'?'active':''}" onclick="adminTab='users';render()">👤 User${regPending(data).length?` <span style="background:#f59e0b;color:#111;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px;">${regPending(data).length}</span>`:""}</button>
       <button class="tabbtn ${adminTab==='models'?'active':''}" onclick="adminTab='models';render()">🚗 Model Unit</button>
       <button class="tabbtn ${adminTab==='ccstall'?'active':''}" onclick="adminTab='ccstall';render()">🚦 Stall CC</button>
       <button class="tabbtn ${adminTab==='defectcfg'?'active':''}" onclick="adminTab='defectcfg';render()">🔧 Defect</button>
@@ -5296,20 +5997,24 @@ function renderAdmin(){
       <button class="tabbtn ${adminTab==='speed'?'active':''}" onclick="adminTab='speed';render()">🏎 Kecepatan</button>
       <button class="tabbtn ${adminTab==='sig'?'active':''}" onclick="adminTab='sig';render()">✍ TTD</button>
       <button class="tabbtn ${adminTab==='tls'?'active':''}" onclick="adminTab='tls';render()">🔗 TLS</button>
+      <button class="tabbtn ${adminTab==='xl'?'active':''}" onclick="adminTab='xl';render()">📗 Excel</button>
       <button class="tabbtn ${adminTab==='dccp'?'active':''}" onclick="adminTab='dccp';render()">📋 DCCP</button>
       <button class="tabbtn ${adminTab==='data'?'active':''}" onclick="adminTab='data';render()">🗄 Data</button>
     </div>`;
 
   if(adminTab==="sig") return tabsHtml + renderAdminSig();
   if(adminTab==="tls") return tabsHtml + renderAdminTls();
+  if(adminTab==="xl") return tabsHtml + renderAdminXl();
   if(adminTab==="users"){
     const rows = data.users.map((u,i)=>`
       <tr><td>${u.username}</td><td>${u.name}</td><td><span class="badge gold">${u.role}</span>${u.lp?` <span class="badge">LP ${u.lp}</span>`:''}${u.drvCode?` <span class="badge">${u.drvCode}</span>`:''}</td>
       <td style="white-space:nowrap;">
+        <button class="btn-outline btn btn-sm" onclick="pwResetOpen(${i})">🔑 Reset</button>
         <button class="btn-outline btn btn-sm" onclick="editUser(${i})">Edit</button>
         <button class="btn-danger btn btn-sm" onclick="deleteUser(${i})">Hapus</button>
       </td></tr>`).join("");
     return `${tabsHtml}
+      ${renderRegCard()}
       <div class="card">
         <h3>➕ Tambah User</h3>
         <div class="field"><label>Username</label><input id="newUname" type="text"></div>
@@ -5508,6 +6213,7 @@ function renderAdmin(){
         <h3>🧪 Mulai Trial (data operasional saja)</h3>
         <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Membersihkan stall, unit, antrean, Parkir Luar, ILS, manifest, surat jalan (PDF), log, posisi CC, laporan defect, dan riwayat kecepatan di <b>semua perangkat</b>. <b>Akun, password, TTD, lokasi yard, pengaturan TLS, dan daftar LP tetap aman.</b> Jadwal DCCP boleh dipilih mau ikut dihapus atau tidak.</p>
         <button class="btn btn-primary" onclick="resetTrial()">🧪 Mulai Trial (hapus data operasional)</button>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">🛡 Wajib foto wajah + password Admin. Tercatat di Riwayat hapus data.</div>
       </div>
       <div class="card">
         <h3>🧹 Bersihkan Data Uji (grafik &amp; riwayat)</h3>
@@ -5518,7 +6224,9 @@ function renderAdmin(){
         <h3>📋 Laporan Defect / NG (${allDefects.length})</h3>
         <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Riwayat lengkap, termasuk yang sudah dikonfirmasi (tidak pernah dihapus otomatis).</p>
         <table><thead><tr><th>No. Rangka</th><th>Defect</th><th>Lapor</th><th>Status</th></tr></thead><tbody>${defectRows}</tbody></table>
-      </div>`;
+      </div>
+      ${unitOutLogHtml()}
+      ${wipeLogHtml()}`;
   }
 }
 function addDefectType(){
@@ -5882,6 +6590,42 @@ function bulkRoleChange(){
   const r = ROLES.find(x=>x.key===document.getElementById("bkRole").value);
   document.getElementById("bkPrefix").value = r.key; document.getElementById("bkName").value = r.label;
 }
+/* Reset cepat (untuk supir yang lupa password): buat password baru yang mudah dibacakan */
+function pwEasy(){
+  const a=new Uint32Array(2); crypto.getRandomValues(a);
+  let n=String(100000+(a[0]%900000));
+  if(/^(.)\1+$/.test(n)||PW_COMMON.includes(n)) n=String(100000+(a[1]%900000));
+  return n;
+}
+function pwResetOpen(i){
+  const u=(DB.get().users||[])[i]; if(!u) return;
+  const isCC=u.role==="cc", np=pwEasy();
+  showModal(`<h3 style="margin:0 0 6px;">🔑 Reset password</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Akun <b>${xlEsc(u.username)}</b> · ${xlEsc(u.name)} · ${xlEsc(u.role)}. Password lama tidak bisa dilihat (terenkripsi), jadi buat password baru lalu berikan ke orangnya.</div>
+    <div class="field"><label>Password baru</label>
+      <div style="display:flex;gap:8px;"><input id="pwRsVal" type="text" value="${np}" style="flex:1;font-family:monospace;font-size:20px;letter-spacing:2px;">
+      <button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="document.getElementById('pwRsVal').value=pwEasy()">🎲 Acak</button></div></div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 12px;"><input type="checkbox" id="pwRsMust" ${isCC?"":"checked"} style="margin-top:3px;"><span>Wajib ganti password saat login berikutnya${isCC?" <span style=\"color:var(--text-dim);\">(untuk supir biasanya tidak dicentang, supaya tidak lupa lagi)</span>":""}</span></label>
+    <div id="pwRsMsg"></div>
+    <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal()">Batal</button>
+    <button type="button" id="pwRsBtn" class="btn btn-primary" style="flex:2;" onclick="pwResetSave(${i})">💾 Simpan password baru</button></div>`);
+}
+async function pwResetSave(i){
+  const v=(document.getElementById("pwRsVal").value||"").trim(), must=!!document.getElementById("pwRsMust").checked;
+  const u=(DB.get().users||[])[i], msg=document.getElementById("pwRsMsg"), btn=document.getElementById("pwRsBtn");
+  if(!u) return;
+  if(pwWeak(v,u.username)){ msg.innerHTML=`<div class="msg err">${pwRule()}</div>`; return; }
+  btn.disabled=true; btn.textContent="Menyimpan…";
+  try{
+    const h=await pwHash(v), un=u.username, ro=u.role;
+    DB.set(d=>{ const x=(d.users||[]).find(y=>y.username===un && y.role===ro); if(x){ x.password=h; if(must) x.mustChange=true; else delete x.mustChange; x.pwResetTs=Date.now(); x.pwResetBy=(currentUser&&currentUser.name)||""; } });
+    showModal(`<h3 style="margin:0 0 6px;">✅ Password direset</h3>
+      <div style="font-size:13px;margin-bottom:10px;">Berikan ke <b>${xlEsc(u.name)}</b>:</div>
+      <div style="font-size:13px;line-height:1.8;padding:12px;border-radius:10px;background:rgba(31,157,85,.1);">Username: <b style="font-family:monospace;font-size:18px;">${xlEsc(un)}</b><br>Password: <b style="font-family:monospace;font-size:22px;letter-spacing:2px;">${xlEsc(v)}</b></div>
+      <div style="font-size:11px;color:var(--text-dim);margin:10px 0 12px;">Password ini hanya tampil sekarang. ${must?"User akan diminta membuat password sendiri saat login.":"User bisa langsung login dengan password ini."}</div>
+      <button type="button" class="btn btn-primary" onclick="closeModal()">Selesai</button>`);
+  }catch(e){ btn.disabled=false; btn.textContent="💾 Simpan password baru"; msg.innerHTML=`<div class="msg err">${xlEsc(e.message||e)}</div>`; }
+}
 function genPass(){
   const c = "abcdefghjkmnpqrstuvwxyz23456789", a = new Uint32Array(6); crypto.getRandomValues(a);
   let s = ""; a.forEach(x=>{ s += c[x % c.length]; }); return s;
@@ -5908,7 +6652,7 @@ function bulkAddUsers(){
       made0.push({username:uname, name:nm, password: mode==="same"?fixed:genPass(), role, lp});
     });
     bulkResult = {made:made0, skipped:[]};
-    DB.set(d=>{ const have = new Set(d.users.map(u=>u.username)); made0.forEach(u=>{ if(!have.has(u.username)) d.users.push({username:u.username, name:u.name, password:u.password, role:u.role, lp:u.lp||""}); }); });
+    bulkSave(made0);
     return;
   }
   if(!(n>=1)){ alert("Jumlah akun minimal 1."); return; }
@@ -5923,7 +6667,13 @@ function bulkAddUsers(){
   }
   if(!made.length){ alert("Semua username itu sudah ada. Ganti awalan username."); return; }
   bulkResult = {made, skipped};
-  DB.set(d=>{ const have = new Set(d.users.map(u=>u.username)); made.forEach(u=>{ if(!have.has(u.username)) d.users.push({username:u.username, name:u.name, password:u.password, role:u.role, lp:u.lp||""}); }); });
+  bulkSave(made);
+}
+async function bulkSave(list){
+  let H;
+  try{ H=[]; for(const u of list) H.push(await pwHash(u.password)); }
+  catch(e){ alert(e.message||e); bulkResult=null; render(); return; }
+  DB.set(d=>{ const have = new Set(d.users.map(u=>u.username)); list.forEach((u,k)=>{ if(!have.has(u.username)) d.users.push({username:u.username, name:u.name, password:H[k], mustChange:true, role:u.role, lp:u.lp||""}); }); });
 }
 function bulkCsv(){
   return "role,lp,username,password,nama\n" + bulkResult.made.map(u=>[u.role,u.lp||"",u.username,u.password,'"'+u.name.replace(/"/g,'""')+'"'].join(",")).join("\n");
@@ -5949,7 +6699,8 @@ function addUser(){
   if((r==="koordinator"||r==="cc") && !lp){ alert("LP wajib dipilih untuk role Koordinator dan Driver CC."); return; }
   if(DB.get().users.some(x=>x.username===u)){ alert("Username sudah dipakai. Pilih username lain."); return; }
   if(drvCode && DB.get().users.some(x=>x.drvCode===drvCode)){ alert("Kode driver "+drvCode+" sudah dipakai akun lain."); return; }
-  DB.set(d=>{ d.users.push({username:u, name:n, password:p, role:r, lp, drvCode}); });
+  pwHash(p).then(h=>{ DB.set(d=>{ d.users.push({username:u, name:n, password:h, mustChange:true, role:r, lp, drvCode}); }); })
+    .catch(e=>alert(e.message||e));
 }
 function deleteUser(i){
   DB.set(d=>{ d.users.splice(i,1); });
@@ -5961,9 +6712,9 @@ function editUser(i){
     <h3>✏️ Edit User</h3>
     <div class="field"><label>Username</label><input id="editUname" type="text" value="${u.username}"></div>
     <div class="field"><label>Nama</label><input id="editName" type="text" value="${u.name}"></div>
-    <div class="field"><label>Password Baru</label>
+    <div class="field"><label>Reset Password (kosongkan kalau tidak diganti)</label>
       <div style="position:relative;">
-        <input id="editPass" type="password" value="${u.password}" style="padding-right:44px;">
+        <input id="editPass" type="password" value="" autocomplete="new-password" placeholder="Password tidak bisa dilihat · isi untuk reset" style="padding-right:44px;">
         <button type="button" onclick="const i=document.getElementById('editPass'); i.type = i.type==='password'?'text':'password';"
           style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button>
       </div>
@@ -5975,6 +6726,7 @@ function editUser(i){
       <select id="editLP"><option value="">-- pilih LP --</option>${(data.lpList||[]).map(l=>`<option value="${l}" ${lpKey(l)===lpKey(u.lp)?'selected':''}>${l}</option>`).join("")}</select>
     </div>
     <div class="field"><label>Kode Driver (opsional, biasanya diisi Delivery)</label><input id="editDrv" type="text" value="${u.drvCode||""}" style="text-transform:uppercase;"></div>
+    <div style="font-size:11px;color:var(--text-dim);margin:-4px 0 10px;">Password tersimpan terenkripsi, jadi Admin tidak bisa melihatnya. Kalau user lupa, isi password baru di atas; user wajib menggantinya saat login berikutnya.</div>
     <button class="btn btn-primary" onclick="saveUserEdit(${i})">💾 Simpan Perubahan</button>
   `);
 }
@@ -5984,12 +6736,14 @@ function saveUserEdit(i){
   const p = document.getElementById("editPass").value.trim();
   const r = document.getElementById("editRole").value;
   const lp = (r==="koordinator"||r==="cc") ? (document.getElementById("editLP").value||"") : "";
-  if(!u||!n||!p){ alert("Lengkapi semua field."); return; }
+  if(!u||!n){ alert("Username dan nama wajib diisi."); return; }
   const drvCode = r==="cc" ? (document.getElementById("editDrv").value||"").trim().toUpperCase() : "";
   if((r==="koordinator"||r==="cc") && !lp){ alert("LP wajib dipilih untuk role Koordinator dan Driver CC."); return; }
   if(drvCode && DB.get().users.some((x,k)=>k!==i && x.drvCode===drvCode)){ alert("Kode driver "+drvCode+" sudah dipakai akun lain."); return; }
-  DB.set(d=>{ d.users[i] = {username:u, name:n, password:p, role:r, lp, drvCode}; });
-  closeModal();
+  const prev = DB.get().users[i]||{}, prevName = prev.username, prevRole = prev.role;
+  const apply = h=>{ DB.set(d=>{ let k=i; if(!d.users[k] || d.users[k].username!==prevName || d.users[k].role!==prevRole) k=d.users.findIndex(x=>x.username===prevName && x.role===prevRole); if(k<0) return;
+      const o=d.users[k]; d.users[k]=Object.assign({}, o, {username:u, name:n, role:r, lp, drvCode}, h?{password:h, mustChange:true}:{}); }); closeModal(); };
+  if(p) pwHash(p).then(apply).catch(e=>alert(e.message||e)); else apply(null);
 }
 function addModel(){
   const name = document.getElementById("newModelName").value.trim().toUpperCase();
@@ -6014,21 +6768,24 @@ function exportData(){
   a.download = "radar-data.json";
   a.click();
 }
-function clearTestData(){
+async function clearTestData(){
+  if(!(currentUser && currentUser.role==="admin")){ alert("Hanya Admin."); return; }
   if(!confirm("Hapus riwayat unit (terkirim/dikeluarkan) dan ILS selesai di semua perangkat? Unit yang sedang di stall tetap aman.")) return;
+  if(!(await wipeGate("Bersihkan Riwayat Uji"))){ alert("Dibatalkan. Tidak ada data yang dihapus."); return; }
   DB.set(d=>{ d.logClearTs = Date.now(); });
   alert("Riwayat uji dibersihkan.");
   render();
 }
 /* ===== MULAI TRIAL: hapus data operasional, akun & pengaturan tetap aman ===== */
 const TRIAL_KEYS_OBJ=["units","cc","drvByPlat"], TRIAL_KEYS_ARR=["queue","hold","ils","manifest","ccCalls","ccOutLog","swapLog","defects","speedAlerts"];
-function resetTrial(){
+async function resetTrial(){
   if(!(currentUser && currentUser.role==="admin")){ alert("Hanya Admin."); return; }
   if(FBS.enabled && !(FBS.authed && FBS.conn && FBS.ready)){ alert("Perangkat belum Online (tanda hijau di pojok atas). Tunggu hijau, lalu ulangi, supaya semua HP ikut bersih."); return; }
   if(!confirm("MULAI TRIAL: hapus data operasional di SEMUA perangkat?\n\nDihapus: stall & unit, antrean, Parkir Luar, ILS, manifest, surat jalan (PDF), log, posisi CC, laporan defect, riwayat kecepatan.\nAMAN (tidak dihapus): akun & password, TTD, lokasi yard, pengaturan TLS, daftar LP.\n\nTidak bisa dibatalkan.")) return;
   const delDccp = confirm("Hapus juga JADWAL DCCP hari ini?\n\nOK = hapus jadwal DCCP (upload ulang nanti)\nBatal = jadwal DCCP tetap ada");
   const typed = prompt("Ketik MULAI untuk melanjutkan:", "");
   if(String(typed||"").trim().toUpperCase()!=="MULAI"){ alert("Dibatalkan."); return; }
+  if(!(await wipeGate("Mulai Trial (hapus data operasional"+(delDccp?" + jadwal DCCP":"")+")"))){ alert("Dibatalkan. Tidak ada data yang dihapus."); return; }
   const fresh = normalizeData(seedDB());
   DB.set(d=>{
     TRIAL_KEYS_OBJ.forEach(k=>{ d[k] = (fresh[k]!==undefined) ? cloneJ(fresh[k]) : {}; });
@@ -6040,9 +6797,16 @@ function resetTrial(){
   try{ localStorage.removeItem("radar_spd_seen"); }catch(e){}
   alert("Selesai. Data operasional bersih, siap mulai trial. Akun & pengaturan tetap aman."); render();
 }
-function resetData(){
+async function resetData(){
+  if(!(currentUser && currentUser.role==="admin")){ alert("Hanya Admin."); return; }
+  if(FBS.enabled && !(FBS.authed && FBS.conn && FBS.ready)){ alert("Reset DIBATALKAN: perangkat ini belum Online (lihat tanda di pojok kiri atas). Tunggu sampai hijau 'Online', lalu ulangi, supaya semua HP ikut ter-reset."); return; }
   if(!confirm("Yakin reset semua data di SEMUA perangkat? Tindakan ini tidak bisa dibatalkan.")) return;
+  const typed = prompt("Ketik RESET untuk melanjutkan:", "");
+  if(String(typed||"").trim().toUpperCase()!=="RESET"){ alert("Dibatalkan."); return; }
+  if(!(await wipeGate("Reset Semua Data (termasuk akun)"))){ alert("Dibatalkan. Tidak ada data yang dihapus."); return; }
+  const keepLog = cloneJ(wipeLogList());
   const fresh = normalizeData(seedDB());
+  fresh.wipeLog = keepLog;
   if(FBS.enabled){
     if(!(FBS.authed && FBS.conn && FBS.ready)){ alert("Reset DIBATALKAN: perangkat ini belum Online (lihat tanda di pojok kiri atas). Tunggu sampai hijau 'Online', lalu ulangi, supaya semua HP ikut ter-reset."); return; }
     const o = {}; dbKeys(fresh).forEach(k=>{ o[k] = cloneJ(fresh[k]); });
@@ -6054,7 +6818,7 @@ function resetData(){
     return;
   }
   try{ localStorage.removeItem(LS_KEY); }catch(e){}
-  _mem = null; DB.load(); render();
+  _mem = null; const _d=DB.load(); _d.wipeLog=keepLog; DB.save(_d); render();
 }
 
 /* ======================================================================
