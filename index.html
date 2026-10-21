@@ -786,6 +786,7 @@ window.RSnd=(function(){
       <button type="button" class="btn-outline btn btn-sm" style="width:auto;padding:10px 16px;color:var(--red);border-color:var(--red);" onclick="appExit()">⏻ Keluar Aplikasi</button>
     </div>
     <div class="credit"><small>Dibuat oleh</small><b>Khairul Huda</b></div>
+    <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:6px;">Versi 21 Okt 2026 · 23.00</div>
     </div></div>
   </div>
 
@@ -1433,8 +1434,8 @@ async function pwMigrateAll(){
   }catch(e){ console.warn("migrasi password", e); }
   finally{ _pwMigBusy=false; }
 }
-async function pwSharedReset(){
-  if(!(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed)) return;
+async function pwSharedReset(force){
+  if(!force && !(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed)) return;
   const d0=DB.get(); if(d0.pwSharedReset===PW_SHARED_RESET) return;
   const h=await pwHash(PW_SHARED_USER);
   DB.set(d=>{ (d.users||[]).forEach(x=>{ if(String(x.username).toLowerCase()===PW_SHARED_USER){ x.password=h; delete x.mustChange; } }); d.pwSharedReset=PW_SHARED_RESET; });
@@ -1493,6 +1494,7 @@ async function doLogin(){
   if(!same.length) same = users.filter(x=>String(x.username).toLowerCase()===u.toLowerCase());
   if(!same.length){ const rm=regLoginMsg(u); msgEl.innerHTML = `<div class="msg err">${rm||"Username tidak ditemukan. Belum punya akun? Tekan <b>Daftar</b>."}</div>`; try{RSnd.err();}catch(e){} return; }
   msgEl.innerHTML = `<div class="msg">Memeriksa…</div>`;
+  if(u.toLowerCase()===PW_SHARED_USER && DB.get().pwSharedReset!==PW_SHARED_RESET){ try{ await pwSharedReset(true); }catch(e){} same = (DB.get().users||[]).filter(x=>String(x.username).toLowerCase()===u.toLowerCase()); }
   const ok = [];
   try{ for(const x of same){ if(await pwCheck(x.password, p)) ok.push(x); } }
   catch(e){ msgEl.innerHTML = `<div class="msg err">${xlEsc(e.message||e)}</div>`; return; }
