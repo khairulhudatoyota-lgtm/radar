@@ -1380,6 +1380,9 @@ function loginEnter(acc, roles){
 }
 /* ===== Password: disimpan sebagai hash PBKDF2-SHA256 + salt (bukan teks asli) ===== */
 const PW_ITER=100000, PW_MIN=6;
+/* Akun bersama "user" (semua peran) sengaja dikecualikan dari wajib ganti password, permintaan Admin.
+   Sekali saat Admin online: semua akun bernama "user" diseragamkan ke password "user". */
+const PW_SHARED_USER="user", PW_SHARED_RESET="v1";
 const PW_COMMON=["user","123456","1234567","12345678","123456789","111111","000000","password","qwerty","radar","radareky","toyota","admin","abc123"];
 function pwHex(b){ return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
 function pwUnhex(h){ const a=new Uint8Array(h.length/2); for(let i=0;i<a.length;i++) a[i]=parseInt(h.substr(i*2,2),16); return a; }
@@ -1425,16 +1428,23 @@ async function pwMigrateAll(){
     for(let i=0;i<todo.length;i+=20){
       const chunk=todo.slice(i,i+20), map=[];
       for(const x of chunk) map.push({u:x.username, r:x.role, old:String(x.password), h:await pwHash(x.password), weak:pwWeak(x.password,x.username)});
-      DB.set(d=>{ (d.users||[]).forEach(x=>{ const m=map.find(y=>y.u===x.username && y.r===x.role && String(x.password)===y.old); if(m){ x.password=m.h; if(m.weak) x.mustChange=true; } }); });
+      DB.set(d=>{ (d.users||[]).forEach(x=>{ const m=map.find(y=>y.u===x.username && y.r===x.role && String(x.password)===y.old); if(m){ x.password=m.h; if(m.weak && String(x.username).toLowerCase()!==PW_SHARED_USER) x.mustChange=true; } }); });
     }
   }catch(e){ console.warn("migrasi password", e); }
   finally{ _pwMigBusy=false; }
 }
-setInterval(()=>{ try{ pwMigrateAll(); }catch(e){} }, 30000);
+async function pwSharedReset(){
+  if(!(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed)) return;
+  const d0=DB.get(); if(d0.pwSharedReset===PW_SHARED_RESET) return;
+  const h=await pwHash(PW_SHARED_USER);
+  DB.set(d=>{ (d.users||[]).forEach(x=>{ if(String(x.username).toLowerCase()===PW_SHARED_USER){ x.password=h; delete x.mustChange; } }); d.pwSharedReset=PW_SHARED_RESET; });
+}
+setInterval(()=>{ try{ pwSharedReset(); }catch(e){} try{ pwMigrateAll(); }catch(e){} }, 30000);
+setTimeout(()=>{ try{ pwSharedReset(); }catch(e){} }, 8000);
 let _loginOk=null;
 function loginGo(acc, roles){
   const L=_loginOk;
-  const need=L && (L.ok.some(x=>x.mustChange) || pwWeak(L.p, acc.username));
+  const need=L && String(acc.username).toLowerCase()!==PW_SHARED_USER && (L.ok.some(x=>x.mustChange) || pwWeak(L.p, acc.username));
   if(need) pwForceChange(acc, roles); else loginEnter(acc, roles);
 }
 function pwForceChange(acc, roles){
@@ -6767,7 +6777,7 @@ function updateTrackUI(){
   if(ccMapObj && ccMapLayer && window.L && document.getElementById("ccmap")){
     ccMapLayer.clearLayers();
     rows.forEach(o=>{
-      L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div style="background:#E60012;color:#fff;border-radius:8px;padding:3px 7px;font:700 11px sans-serif;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4);">🚚 ${escH(o.plat)}</div>`, iconAnchor:[0,0]})}).addTo(ccMapLayer);
+      L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div style="background:#FFF7D6;color:#111827;border:2px solid #E60012;border-radius:8px;padding:3px 8px;font:800 12px Arial,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);">🚚 ${escH(o.plat)}</div>`, iconAnchor:[0,0]})}).addTo(ccMapLayer);
     });
   }
 }
