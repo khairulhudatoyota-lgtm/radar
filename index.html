@@ -86,6 +86,9 @@ input,select{font-family:inherit;}
 .menuBtn{background:var(--panel2); color:var(--text); border:1px solid var(--border,#888); padding:8px 14px; border-radius:8px; font-size:12px; font-weight:700; margin-right:8px;}
 .logoutBtn{background:var(--panel2); color:var(--red); border:1px solid var(--red); padding:8px 14px; border-radius:8px; font-size:12px; font-weight:700;}
 
+html,body{max-width:100%; overflow-x:hidden;}
+.card{min-width:0; overflow-x:auto;}
+.leaflet-container{z-index:0;}
 .tabbar{display:flex; overflow-x:auto; gap:6px; padding:8px 10px; background:var(--panel); border-bottom:1px solid var(--border); scrollbar-width:none;}
 .tabbar::-webkit-scrollbar{display:none;}
 .tabbtn{flex:none; padding:9px 14px; border-radius:9px; background:var(--panel2); color:var(--text-dim); font-size:13px; font-weight:600; white-space:nowrap; border:1px solid transparent;}
@@ -3279,7 +3282,7 @@ function sjListHtml(data, pass, title, hint){
   const rows=L.map(b=>{
     const exp=fmt(b.outTs+SJ_KEEP_MS);
     return `<div class="kitem" style="margin-top:8px;"><b>📄 ${b.ccPlat}</b> · LP ${b.lp||"-"}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.units.length} unit · Delout ${fmt(b.outTs)}${b.sj?` · terbit di TLS ${fmt(b.sj.ts)} · terhapus otomatis ${exp}`:" · PDF belum diunggah"}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>${b.batam?"":`<button class="btn btn-sm" style="flex:1;min-width:110px;background:#0F2A4A;color:#fff;" onclick="esjOpen(${b.id})">🧾 e-SJKB</button>`}`:""}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
   }).join("");
   return `<div class="card"><h3>📄 ${title}</h3><div style="font-size:12px;color:var(--text-dim);">${hint}</div>${L.length?rows:`<div class="emptystate">Belum ada surat jalan.</div>`}</div>`;
 }
@@ -3969,6 +3972,236 @@ function wipePhotoOpen(ts){
   showModal(`<h3 style="margin:0 0 8px;">${xlEsc(r.action)}</h3><img src="${xlEsc(r.photo)}" style="width:100%;border-radius:10px;"><div style="font-size:12px;margin-top:8px;line-height:1.6;">${xlEsc(r.name)} (@${xlEsc(r.user)})<br>${new Date(r.ts).toLocaleString("id-ID")}<br><span style="color:var(--text-dim);">${xlEsc(r.dev)}</span></div><button class="btn btn-primary" style="margin-top:12px;" onclick="closeModal()">Tutup</button>`);
 }
 
+/* ======================================================================
+   e-SJKB (Surat Jalan Kendaraan Baru elektronik) — dibuat RADAR dari PDF surat jalan TLS,
+   format sama dengan E-SJKB_Converter.xlsm: logo, data SJKB, QR per unit, QR No. SJKB,
+   TTD Line Head / Group Head (per shift) / PIC Delivery + stempel, dan jam berlaku keluar EKY.
+   TTD & stempel disimpan di master Admin (d.sigs), tidak ditanam di file aplikasi.
+====================================================================== */
+const ESJ_LOGO_TAM="data:image/png;base64,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";
+const ESJ_VENDOR={TOPI:"PT. TOYOTA LOGISTRA PINGLOKA INDONESIA", PNJ:"PT PUNINAR JAYA", KPL:"CARRIER - PT. KARYA PUTRA LOKATIRTA MANDIRI", KPC:"CARRIER - PT. KARYA PUTRA LOKATIRTA MANDIRI", PAM:"PT. PARANI ARTAMANDIRI", KMDI:"K LINE MOBARU DIAMOND INDONESIA", KMD:"K LINE MOBARU DIAMOND INDONESIA"};
+function esjCfg(){ const c=DB.get().esjCfg||{}; return {pengirim:c.pengirim||"R&D ADM KARAWANG", pembuat:c.pembuat||"del-adm-kap", validMin:(+c.validMin>0?+c.validMin:15)}; }
+function esjSig(kind,key){ return sigGet(kind,key); }
+function esjLib(){ const s=DB.get().sigs||{}, L=s.lib||{}, N=s.names||{}; return Object.keys(L).map(k=>({k, name:N["lib_"+k]||k.replace(/_/g," "), sig:L[k]})).sort((a,b)=>a.name.localeCompare(b.name)); }
+function esjTitle(s){ return String(s||"").toLowerCase().replace(/(^|[\s(\-\/])([a-z])/g,(m,a,b)=>a+b.toUpperCase()); }
+/* ---------- baca teks PDF TLS: header + varian/warna/cabang tiap unit ---------- */
+function esjParseItems(items){
+  const out={hdr:{}, u:{}};
+  const pages=[...new Set(items.map(i=>i.pg||1))].sort((a,b)=>a-b);
+  const lines=[];
+  pages.forEach(pg=>{
+    const L=items.filter(i=>(i.pg||1)===pg && String(i.s||"").trim()).map(i=>({s:String(i.s).trim(), x:i.x, y:i.y})).sort((a,b)=>(b.y-a.y)||(a.x-b.x));
+    L.forEach(c=>{ const ln=lines.find(q=>q.pg===pg && Math.abs(q.y-c.y)<2.5); if(ln) ln.t.push(c); else lines.push({pg, y:c.y, t:[c]}); });
+  });
+  const txt=lines.map(l=>l.t.sort((a,b)=>a.x-b.x).map(c=>c.s).join(" ")).join(" ").replace(/\s+/g," ");
+  const LB={sjkb:"No\\.?\\s*SJKB", pembuat:"Pembuat", pengirim:"Pengirim", tujuan:"Tujuan", ket:"Ket", tgl:"Tgl\\s*\\/\\s*[Jj]am", nopol:"No\\.?\\s*Pol", driver:"Pengemudi|Driver", moda:"Moda", vendor:"Vendor"};
+  const any=Object.values(LB).join("|");
+  Object.entries(LB).forEach(([k,re])=>{
+    const m=txt.match(new RegExp("(?:^|\\s)(?:"+re+")\\s*:\\s*(.*?)(?=\\s*(?:"+any+")\\s*:|\\s1\\.\\s|\\s[A-Z0-9]{17}\\s|$)","i"));
+    if(m){ const v=m[1].trim().replace(/\s+/g," "); if(v && v.length<90) out.hdr[k]=v; }
+  });
+  const isColor=t=>/^[A-Z0-9]\d{2}-[A-Z][A-Z \/\-]*$/.test(t);
+  const frames=[]; items.forEach(i=>{ const s=String(i.s||"").trim(); const m=s.match(/(?:^|\s)([A-Z0-9]{17})$/); if(m && /\d/.test(m[1]) && /[A-Z]/.test(m[1])) frames.push({s:m[1], x:i.x, y:i.y, pg:i.pg||1}); });
+  frames.forEach(f=>{
+    const below=lines.filter(l=>l.pg===f.pg && l.y<f.y-1 && l.y>f.y-60).map(l=>({y:l.y, t:l.t.filter(c=>c.x>=f.x-14 && c.x<f.x+150 && !frames.some(g=>g!==f&&Math.abs(g.x-c.x)<4&&c.s.endsWith(g.s)))})).filter(l=>l.t.length);
+    const tx=[]; for(const l of below){ const s=l.t.map(c=>c.s).join(" ").replace(/\s+/g," ").trim(); if(/[A-Z0-9]{17}/.test(s)) break; if(s) tx.push(s); if(tx.length>=4) break; }
+    const ci=tx.findIndex(isColor);
+    const v=(ci>0?tx[ci-1]:(tx[0]||"")).replace(/\s+REG\d+\s*$/i,"").trim();
+    out.u[f.s]={v, c:ci>=0?tx[ci]:"", cab:ci>=0?(tx[ci+1]||""):""};
+  });
+  return out;
+}
+async function esjParsePdf(b64){
+  const lib=await pdfjsLoad();
+  const bin=atob(b64), arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  const pdf=await lib.getDocument({data:arr}).promise, items=[];
+  for(let p=1;p<=pdf.numPages;p++){ const pg=await pdf.getPage(p), tc=await pg.getTextContent(); tc.items.forEach(it=>{ if(it.str&&it.str.trim()) items.push({s:it.str, x:it.transform[4], y:it.transform[5], pg:p}); }); }
+  return {full:esjParseItems(items), base:sjParseItems(items)};
+}
+/* ---------- kumpulkan data satu ILS ---------- */
+function esjPicUsers(){ return (DB.get().users||[]).filter(u=>u.role==="delivery"); }
+function esjPicFor(b){
+  const us=esjPicUsers();
+  let u=us.find(x=>x.name===b.mp) || (currentUser&&currentUser.role==="delivery" ? us.find(x=>x.username===currentUser.username) : null) || us.find(x=>sigGet("mp",x.username));
+  return u?u.username:"";
+}
+async function esjCollect(id, picUser){
+  const data=DB.get(), b=(data.ils||[]).find(x=>x.id===id); if(!b) throw new Error("ILS tidak ditemukan");
+  let P={full:{hdr:{},u:{}}, base:{sjkb:"",cab:{}}}, parseNote="";
+  if(b.sj){ try{ const v=await sjFetch(id); P=await esjParsePdf(v.b64); }catch(e){ parseNote="PDF surat jalan TLS belum bisa dibaca ("+(e&&e.message||e)+"). Data diambil dari RADAR."; } }
+  else parseNote="PDF surat jalan TLS belum ada. No. SJKB dan cabang mungkin kosong.";
+  const H=P.full.hdr||{}, cfg=esjCfg(), tc=tlsCfg();
+  const sjkb=(H.sjkb||P.base.sjkb||b.sjkb||"").toUpperCase().replace(/\s+/g,"");
+  const cc=(data.users||[]).find(x=>x.role==="cc" && x.drvCode && x.drvCode===resolveDrvCode(data,b.ccPlat,b.drvCode));
+  const dc=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(b.ccPlat));
+  const shift=b.shift||(currentUser&&currentUser.shift)||"red";
+  const pu=picUser||esjPicFor(b), puObj=(data.users||[]).find(x=>x.username===pu);
+  const cab=(P.base.cab&&Object.keys(P.base.cab).length)?P.base.cab:(b.sjCab||{});
+  const units=(b.units||[]).map(u=>{ const f=String(u.frame||"").toUpperCase(), x=(P.full.u||{})[f]||{}; return {f, v:x.v||String(u.model||"").toUpperCase(), c:x.c||"", cab:cab[f]||x.cab||""}; });
+  const ts=b.esjTs||Date.now();
+  return { id, b, parseNote, units, ts, shift,
+    sjkb, pembuat:H.pembuat||cfg.pembuat, pengirim:H.pengirim||cfg.pengirim, tujuan:H.tujuan||tc.tujuanNama, ket:H.ket||"",
+    nopol:H.nopol||b.ccPlat||"", driver:H.driver||((cc&&cc.name)||(dc&&dc.driver)||"").toUpperCase(), moda:H.moda||esjTitle(tc.tipeNama),
+    vendor:H.vendor||ESJ_VENDOR[lpKey(b.lp)]||b.lp||"",
+    line:{name:sigName("line_main"), sig:sigGet("line","main")},
+    gh:{name:sigName("gh_"+shift), sig:sigGet("gh",shift)},
+    pic:{name:(pu&&sigName("mp_"+pu))||(puObj&&puObj.name)||"", sig:pu?sigGet("mp",pu):"", user:pu},
+    stamp:((data.sigs||{}).stamp)||"", logo:((data.sigs||{}).logo)||ESJ_LOGO_TAM, validMin:cfg.validMin };
+}
+/* ---------- gambar e-SJKB di canvas (A5 landscape) ---------- */
+function esjImg(src){ return new Promise(res=>{ if(!src) return res(null); const im=new Image(); im.onload=()=>res(im); im.onerror=()=>res(null); im.src=src; }); }
+async function esjDraw(D){
+  const K=8, W=210*K, H=148*K, c=document.createElement("canvas"); c.width=W; c.height=H;
+  const g=c.getContext("2d"), mm=v=>v*K;
+  g.fillStyle="#fff"; g.fillRect(0,0,W,H); g.fillStyle="#000"; g.strokeStyle="#000"; g.textBaseline="alphabetic";
+  const font=(pt,b,mono)=>{ g.font=(b?"bold ":"")+Math.round(pt*K*0.3528)+"px "+(mono?"'Courier New',monospace":"Arial,Helvetica,sans-serif"); };
+  const text=(t,x,y,pt,b,o)=>{ o=o||{}; font(pt,b,o.mono); g.fillStyle=o.color||"#000"; g.textAlign=o.align||"left"; let s=String(t==null?"":t); const mw=o.max?mm(o.max):0; if(mw){ while(s.length>1 && g.measureText(s).width>mw) s=s.slice(0,-1); } g.fillText(s,mm(x),mm(y)); g.textAlign="left"; };
+  const rect=(x,y,w,h,lw)=>{ g.lineWidth=(lw||0.25)*K; g.strokeRect(mm(x),mm(y),mm(w),mm(h)); };
+  const qr=(t,x,y,s)=>{ const Q=qrMatrix(t); if(!Q) return; const n=Q.length, q=mm(s)/(n+2); g.fillStyle="#fff"; g.fillRect(mm(x),mm(y),mm(s),mm(s)); g.fillStyle="#000"; for(let r=0;r<n;r++) for(let cc=0;cc<n;cc++) if(Q[r][cc]) g.fillRect(Math.floor(mm(x)+(cc+1)*q), Math.floor(mm(y)+(r+1)*q), Math.ceil(q), Math.ceil(q)); };
+  const [logo,sL,sG,sP,stamp]=await Promise.all([esjImg(D.logo),esjImg(D.line.sig),esjImg(D.gh.sig),esjImg(D.pic.sig),esjImg(D.stamp)]);
+  const put=(im,x,y,w,h,alpha)=>{ if(!im) return; const sc=Math.min(mm(w)/im.width, mm(h)/im.height); const iw=im.width*sc, ih=im.height*sc; g.globalAlpha=alpha||1; g.drawImage(im, mm(x)+(mm(w)-iw)/2, mm(y)+(mm(h)-ih)/2, iw, ih); g.globalAlpha=1; };
+  // header
+  put(logo,8,6,11,11); text("PT. TOYOTA-ASTRA MOTOR",21,11,10,true); text("Vehicle Logistic Division",21,15.5,8.5);
+  text("SURAT JALAN KENDARAAN BARU",135,13,13,true,{align:"center"});
+  // info
+  rect(8,19,194,26,0.35); g.beginPath(); g.moveTo(mm(105),mm(19)); g.lineTo(mm(105),mm(45)); g.lineWidth=0.25*K; g.stroke();
+  const L=[["No SJKB",D.sjkb],["Pembuat",D.pembuat],["Pengirim",D.pengirim],["Tujuan",D.tujuan],["Ket",D.ket]];
+  const tgl=new Date(D.ts), p2=n=>String(n).padStart(2,"0"), tglS=p2(tgl.getDate())+"-"+p2(tgl.getMonth()+1)+"-"+tgl.getFullYear()+"  "+p2(tgl.getHours())+":"+p2(tgl.getMinutes())+":"+p2(tgl.getSeconds());
+  const R=[["Tgl/jam",tglS],["Nopol",D.nopol],["Driver",D.driver],["Moda",D.moda],["Vendor",D.vendor]];
+  L.forEach((r,i)=>{ const y=24+i*4.6; text(r[0],12,y,8.5); text(":",30,y,8.5); text(r[1],33,y,8.5,i===0,{max:70}); });
+  R.forEach((r,i)=>{ const y=24+i*4.6; text(r[0],109,y,8.5); text(":",126,y,8.5); text(r[1],129,y,8.5,false,{max:72}); });
+  // units 2 kolom x 4 baris
+  rect(8,48,132,72,0.35); g.beginPath(); g.moveTo(mm(74),mm(48)); g.lineTo(mm(74),mm(120)); g.stroke();
+  for(let i=0;i<8;i++){
+    const col=i<4?0:1, row=i%4, x=8+col*66, y=48+row*18, u=D.units[i];
+    text((i+1)+".",x+1.5,y+4.2,8,true);
+    if(u){ qr(u.f,x+6,y+1.5,14.5); text(u.f,x+22,y+4.6,9,true,{max:43}); text(u.v,x+22,y+8.4,6.2,false,{max:43}); text(u.c,x+22,y+12.2,8,false,{max:43}); text(u.cab,x+22,y+15.8,6.4,false,{max:43}); }
+    else text("-",x+22,y+4.6,9);
+  }
+  // QR besar No SJKB
+  if(D.sjkb){ qr(D.sjkb,146,49,54); text(D.sjkb,173,106,7.5,true,{align:"center"}); }
+  // TTD
+  const tx=8, ty=122, cw=[33,33,33];
+  rect(tx,ty,99,23,0.35); [33,66].forEach(o=>{ g.beginPath(); g.moveTo(mm(tx+o),mm(ty)); g.lineTo(mm(tx+o),mm(ty+23)); g.stroke(); });
+  [4.5,18.5].forEach(o=>{ g.beginPath(); g.moveTo(mm(tx),mm(ty+o)); g.lineTo(mm(tx+99),mm(ty+o)); g.stroke(); });
+  ["Line Head","Group Head","PIC Delivery"].forEach((h,i)=>text(h,tx+16.5+i*33,ty+3.4,8,false,{align:"center"}));
+  put(sL,tx+2,ty+5,29,13); put(sG,tx+35,ty+5,29,13); put(sP,tx+68,ty+5,29,13);
+  put(stamp,tx+21,ty+1,22,22,0.82);
+  [D.line.name,D.gh.name,D.pic.name].forEach((n,i)=>text(n||"-",tx+16.5+i*33,ty+22,8,false,{align:"center",max:31}));
+  // note + jam berlaku
+  const until=new Date(D.ts+D.validMin*60000), hm=p2(until.getHours())+":"+p2(until.getMinutes());
+  text("Note :",112,125,8,true); text("E-SJKB ini berlaku untuk keluar EKY sampai pukul :",112,129.5,8,true);
+  g.fillStyle="#000"; g.fillRect(mm(112),mm(131.5),mm(90),mm(13.5)); text(hm,157,143,30,true,{align:"center",color:"#fff",mono:true});
+  return c;
+}
+/* PDF 1 halaman dari JPEG (tanpa pustaka luar) */
+function esjPdf(canvas){
+  const url=canvas.toDataURL("image/jpeg",0.9), bin=atob(url.split(",")[1]), jpg=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) jpg[i]=bin.charCodeAt(i);
+  const Wp=595.28, Hp=419.53, enc=new TextEncoder(), parts=[], offs=[]; let len=0;
+  const add=x=>{ const b=typeof x==="string"?enc.encode(x):x; parts.push(b); len+=b.length; };
+  const obj=(n,body)=>{ offs[n]=len; add(n+" 0 obj\n"); body(); add("\nendobj\n"); };
+  add("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+  const cs="q "+Wp+" 0 0 "+Hp+" 0 0 cm /Im0 Do Q";
+  obj(1,()=>add("<< /Type /Catalog /Pages 2 0 R >>"));
+  obj(2,()=>add("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"));
+  obj(3,()=>add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+Wp+" "+Hp+"] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>"));
+  obj(4,()=>{ add("<< /Type /XObject /Subtype /Image /Width "+canvas.width+" /Height "+canvas.height+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+jpg.length+" >>\nstream\n"); add(jpg); add("\nendstream"); });
+  obj(5,()=>add("<< /Length "+cs.length+" >>\nstream\n"+cs+"\nendstream"));
+  const xref=len; let x="xref\n0 6\n0000000000 65535 f \n"; for(let i=1;i<=5;i++) x+=String(offs[i]).padStart(10,"0")+" 00000 n \n";
+  add(x+"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF");
+  const out=new Uint8Array(len); let p=0; parts.forEach(b=>{ out.set(b,p); p+=b.length; }); return out;
+}
+function esjFileName(D){ return "E-SJKB "+(D.sjkb||("ILS-"+D.id)).replace(/\//g,"-")+" "+String(D.nopol||"").trim()+".pdf"; }
+/* ---------- layar e-SJKB ---------- */
+let _esj=null;
+async function esjOpen(id, picUser){
+  const b=sjILS(id); if(!b) return;
+  if(b.batam){ alert("ILS Batam: surat jalan Batam berbeda dan tetap dibuat manual."); return; }
+  showModal('<h3 style="margin:0 0 6px;">🧾 e-SJKB</h3><div class="msg">Menyiapkan e-SJKB…</div>');
+  try{
+    const D=await esjCollect(id, picUser);
+    if(!b.esjTs){ const ts=D.ts; DB.set(d=>{ const x=(d.ils||[]).find(y=>y.id===id); if(x && !x.esjTs) x.esjTs=ts; }); }
+    const cv=await esjDraw(D); _esj={D, pdf:esjPdf(cv), name:esjFileName(D)};
+    const miss=[]; if(!D.sjkb) miss.push("No. SJKB"); if(!D.line.sig) miss.push("TTD Line Head"); if(!D.gh.sig) miss.push("TTD Group Head shift "+String(D.shift).toUpperCase()); if(!D.pic.sig) miss.push("TTD PIC Delivery"); if(!D.stamp) miss.push("stempel");
+    const us=esjPicUsers();
+    const canShare=!!(navigator.canShare && window.File && navigator.canShare({files:[new File([_esj.pdf],_esj.name,{type:"application/pdf"})]}));
+    showModal(`<h3 style="margin:0 0 6px;">🧾 e-SJKB · ${xlEsc(D.nopol)}</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${xlEsc(D.sjkb||"No. SJKB belum terbaca")} · ${D.units.length} unit · berlaku sampai pukul <b>${(()=>{const u=new Date(D.ts+D.validMin*60000);return String(u.getHours()).padStart(2,"0")+":"+String(u.getMinutes()).padStart(2,"0");})()}</b></div>
+      ${D.parseNote?`<div class="msg" style="margin-bottom:8px;">${xlEsc(D.parseNote)}</div>`:""}
+      ${miss.length?`<div class="msg err" style="margin-bottom:8px;">Belum lengkap: ${miss.map(xlEsc).join(", ")}. Lengkapi di Admin → ✍ TTD.</div>`:""}
+      <img src="${cv.toDataURL("image/jpeg",0.8)}" alt="Pratinjau e-SJKB" style="width:100%;border:1px solid var(--border,#ccc);border-radius:8px;background:#fff;">
+      <div class="field" style="margin-top:10px;"><label>PIC Delivery</label><select id="esjPic" onchange="esjOpen(${id}, this.value)">${us.map(u=>`<option value="${xlEsc(u.username)}" ${u.username===D.pic.user?"selected":""}>${xlEsc(sigName("mp_"+u.username)||u.name)}${sigGet("mp",u.username)?"":" (belum ada TTD)"}</option>`).join("")}</select></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${canShare?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="esjShare()">📤 Kirim (WhatsApp)</button>`:""}
+        ${window.AndroidTLS&&window.AndroidTLS.openPdf?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="esjOpenPdf()">📄 Buka PDF / Bagikan</button>`:""}
+        <button type="button" class="btn btn-outline" style="flex:1;min-width:140px;" onclick="esjSave()">⬇ Simpan PDF</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Periksa isi sebelum dikirim. Data dibaca dari PDF surat jalan TLS dan dilengkapi data RADAR.</div>`);
+  }catch(e){ showModal(`<h3>🧾 e-SJKB</h3><div class="msg err">Gagal membuat e-SJKB: ${xlEsc(e&&e.message||e)}</div><button class="btn btn-primary" style="margin-top:10px;" onclick="closeModal()">Tutup</button>`); }
+}
+function esjSave(){ if(!_esj) return; mfSave(_esj.name,"application/pdf",_esj.pdf); }
+function esjB64(){ let s=""; const b=_esj.pdf; for(let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192)); return btoa(s); }
+function esjOpenPdf(){ if(!_esj) return; try{ window.AndroidTLS.openPdf(_esj.name, esjB64()); }catch(e){ esjSave(); } }
+async function esjShare(){
+  if(!_esj) return;
+  try{ await navigator.share({files:[new File([_esj.pdf],_esj.name,{type:"application/pdf"})], title:_esj.name, text:"e-SJKB "+(_esj.D.sjkb||"")+" · "+(_esj.D.nopol||"")}); }
+  catch(e){ if(e && e.name!=="AbortError") esjSave(); }
+}
+/* ---------- Admin: master TTD e-SJKB ---------- */
+function esjImportPick(){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json";
+  inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ esjImport(JSON.parse(String(r.result))); }catch(e){ alert("File bukan paket TTD e-SJKB yang valid."); } }; r.readAsText(f); };
+  inp.click();
+}
+function esjImport(P){
+  if(!P || P.kind!=="radar-esjkb-ttd" || !Array.isArray(P.people)){ alert("File bukan paket TTD e-SJKB RADAR."); return; }
+  const okUrl=u=>typeof u==="string" && /^data:image\/(png|jpeg);base64,/.test(u) && u.length<120000;
+  const us=esjPicUsers(); let mapped=0;
+  DB.set(d=>{
+    d.sigs=d.sigs||{}; ["gh","mp","names","lib","line"].forEach(k=>{ d.sigs[k]=d.sigs[k]||{}; });
+    P.people.forEach(p=>{ if(p && p.name && okUrl(p.sig)){ const k=sigKey(p.name); d.sigs.lib[k]=p.sig; d.sigs.names["lib_"+k]=p.name; } });
+    if(P.line && okUrl(P.line.sig)){ d.sigs.line.main=P.line.sig; d.sigs.names.line_main=P.line.name||""; }
+    ["red","white"].forEach(s=>{ const x=P.gh&&P.gh[s]; if(x && okUrl(x.sig)){ d.sigs.gh[s]=x.sig; d.sigs.names["gh_"+s]=x.name||""; } });
+    if(okUrl(P.stamp)) d.sigs.stamp=P.stamp; if(okUrl(P.logo)) d.sigs.logo=P.logo;
+    const first=s=>String(s||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").trim().split(/\s+/)[0]||"";
+    us.forEach(u=>{ if(d.sigs.mp[sigKey(u.username)]) return; const p=P.people.find(q=>q && first(q.name) && (first(q.name)===first(u.name) || first(q.name)===first(u.username))); if(p && okUrl(p.sig)){ d.sigs.mp[sigKey(u.username)]=p.sig; d.sigs.names["mp_"+sigKey(u.username)]=p.name; mapped++; } });
+  });
+  render(); alert("Paket TTD e-SJKB terpasang: "+P.people.length+" TTD, Line Head, Group Head Red & White, stempel."+(mapped?"\n"+mapped+" user Delivery otomatis dicocokkan dengan TTD-nya.":"")+"\n\nCek pencocokan PIC Delivery di bawah.");
+}
+function esjMapMp(username, libKey){
+  const L=esjLib().find(x=>x.k===libKey);
+  DB.set(d=>{ d.sigs=d.sigs||{}; d.sigs.mp=d.sigs.mp||{}; d.sigs.names=d.sigs.names||{}; const k=sigKey(username);
+    if(L){ d.sigs.mp[k]=L.sig; d.sigs.names["mp_"+k]=L.name; } });
+  render();
+}
+function esjSaveCfg(){
+  const g=id=>(document.getElementById(id)||{}).value||"";
+  const vm=parseInt(g("esjValid"),10);
+  if(!(vm>=5 && vm<=240)){ alert("Masa berlaku 5–240 menit."); return; }
+  DB.set(d=>{ d.esjCfg=Object.assign({}, d.esjCfg||{}, {pengirim:g("esjPengirim").trim(), pembuat:g("esjPembuat").trim(), validMin:vm}); });
+  alert("Pengaturan e-SJKB tersimpan.");
+}
+function renderAdminEsj(){
+  const data=DB.get(), s=data.sigs||{}, lib=esjLib(), cfg=esjCfg(), mps=esjPicUsers();
+  return `<div class="card"><h3>🧾 Master e-SJKB</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Dipakai untuk membuat e-SJKB (format E-SJKB Converter) dari PDF surat jalan TLS. Pasang sekali dengan <b>paket TTD</b> (.json), lalu cocokkan PIC Delivery dengan user Delivery.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><button type="button" class="btn btn-primary" style="width:auto;" onclick="esjImportPick()">📥 Import paket TTD e-SJKB</button></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:12px;margin-bottom:10px;">
+      <span>Logo: ${s.logo?`<img src="${s.logo}" alt="logo" style="height:28px;vertical-align:middle;">`:"bawaan"}</span>
+      <span>Stempel: ${s.stamp?`<img src="${s.stamp}" alt="stempel" style="height:40px;vertical-align:middle;">`:"<b style='color:#b91c1c'>belum ada</b>"}</span>
+      <span>Master TTD: <b>${lib.length}</b> orang</span></div>
+    ${sigRowHtml("line","main","Line Head","",`<div style="margin-top:6px;"><input type="text" placeholder="Nama Line Head" value="${xlEsc(sigName("line_main"))}" onchange="sigSetName('line_main',this.value)"></div>`)}
+    ${lib.length?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">${lib.map(p=>`<div style="width:104px;text-align:center;font-size:11px;"><div style="height:44px;border:1px solid var(--border,#ccc);border-radius:6px;background:#fff;display:flex;align-items:center;justify-content:center;"><img src="${p.sig}" alt="" style="max-width:96px;max-height:40px;"></div>${xlEsc(p.name)}</div>`).join("")}</div>`:""}
+    <h3 style="margin:16px 0 6px;font-size:15px;">PIC Delivery ↔ TTD</h3>
+    ${mps.length?mps.map(u=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:13px;"><b style="min-width:120px;">${xlEsc(u.name)}</b><span style="color:var(--text-dim);">@${xlEsc(u.username)}</span>
+      <select onchange="esjMapMp('${xlEsc(u.username)}',this.value)" style="flex:1;min-width:150px;"><option value="">${sigGet("mp",u.username)?("TTD: "+xlEsc(sigName("mp_"+u.username)||"sendiri")):"-- pilih TTD dari master --"}</option>${lib.map(p=>`<option value="${xlEsc(p.k)}">${xlEsc(p.name)}</option>`).join("")}</select></div>`).join(""):`<div class="msg info">Belum ada user role Delivery.</div>`}
+    <h3 style="margin:16px 0 6px;font-size:15px;">Isian bawaan</h3>
+    <div class="field"><label>Pengirim (kalau tidak terbaca dari PDF TLS)</label><input id="esjPengirim" type="text" value="${xlEsc(cfg.pengirim)}"></div>
+    <div class="field"><label>Pembuat (kalau tidak terbaca dari PDF TLS)</label><input id="esjPembuat" type="text" value="${xlEsc(cfg.pembuat)}"></div>
+    <div class="field"><label>Masa berlaku keluar EKY (menit setelah e-SJKB dibuat)</label><input id="esjValid" type="number" min="5" max="240" value="${cfg.validMin}"></div>
+    <button type="button" class="btn btn-outline" onclick="esjSaveCfg()">💾 Simpan isian</button></div>`;
+}
+
 function tlsOpenCardHtml(){
   if(!window.AndroidTLS||!window.AndroidTLS.openTls) return "";
   return `<div class="card"><h3>🌐 TLS</h3>
@@ -4047,7 +4280,8 @@ function renderAdminSig(){
     <div class="card"><h3>✍ TTD MP Delivery (per user)</h3>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Tiap user role Delivery punya TTD sendiri.</div>
       ${mps.length?mps.map(u=>sigRowHtml("mp",u.username,u.name,"username: "+u.username)).join(""):`<div class="msg info">Belum ada user dengan role Delivery.</div>`}
-    </div>`;
+    </div>
+    ${renderAdminEsj()}`;
 }
 function manifestCardHtml(data){
   const today=mfDateStr(Date.now());
@@ -6082,7 +6316,8 @@ function renderAdmin(){
         ${blk("adm","ADM KAP (Karawang Assy Plant)",mp.adm)}
         ${blk("nvdc","NVDC Karawang",mp.nvdc)}
         <button class="btn btn-primary" onclick="saveMapPoints()">💾 Simpan Titik Rute</button>
-      </div>`;
+      </div>
+      ${routeAdminHtml()}`;
   }
   if(adminTab==="models"){
     const rows = Object.entries(data.models).map(([mdl,cfg])=>`
@@ -6310,15 +6545,99 @@ function saveMapPoints(){
   const a = mapParse(document.getElementById("mp_adm").value), n = mapParse(document.getElementById("mp_nvdc").value);
   const msg = document.getElementById("mpMsg");
   if(!a || !n){ msg.innerHTML = `<div class="msg err">Isi kedua titik dengan format: -6.xxxxx, 107.xxxxx</div>`; return; }
-  DB.set(d=>{ d.mapPoints = {adm:a, nvdc:n}; });
+  DB.set(d=>{ const o=d.mapPoints||{}, same=o.adm&&o.nvdc&&o.adm.lat===a.lat&&o.adm.lng===a.lng&&o.nvdc.lat===n.lat&&o.nvdc.lng===n.lng; d.mapPoints = {adm:a, nvdc:n}; if(same && o.route) d.mapPoints.route=o.route; });
   alert("Titik rute tersimpan.");
 }
+/* ===== Rute jalan CC (ADM KAP → NVDC): garis mengikuti jalan, bukan garis lurus =====
+   Sumber: (1) otomatis dari OSRM (peta jalan OpenStreetMap), atau (2) rekaman perjalanan nyata satu CC.
+   Disimpan ringkas di mapPoints.route.p sebagai "lat,lng|lat,lng|…". */
+let routeRec={on:false, plat:"", pts:[]}, _routeTried=false, _routeCache={s:"", pts:null, cum:null};
+function routeDecode(s){ return String(s||"").split("|").map(x=>x.split(",").map(Number)).filter(p=>p.length===2 && isFinite(p[0]) && isFinite(p[1])); }
+function routeEncode(pts){ return pts.map(p=>p[0].toFixed(5)+","+p[1].toFixed(5)).join("|"); }
+function routeGet(){
+  const r=(DB.get().mapPoints||{}).route; if(!r || !r.p) return null;
+  if(_routeCache.s!==r.p){ const pts=routeDecode(r.p); const cum=[0]; for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+haversineKm(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1])); _routeCache={s:r.p, pts, cum}; }
+  return _routeCache.pts.length>1 ? {pts:_routeCache.pts, cum:_routeCache.cum, km:_routeCache.cum[_routeCache.cum.length-1], src:r.src||"", ts:r.ts||0} : null;
+}
+function routeSimplify(pts, tol){
+  if(pts.length<3) return pts.slice();
+  const keep=new Uint8Array(pts.length); keep[0]=keep[pts.length-1]=1; const st=[[0,pts.length-1]];
+  while(st.length){ const [a,b]=st.pop(); let md=0, mi=-1; const [ay,ax]=pts[a], [by,bx]=pts[b], dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+    for(let i=a+1;i<b;i++){ const [py,px]=pts[i]; let t=L2?((px-ax)*dx+(py-ay)*dy)/L2:0; t=Math.max(0,Math.min(1,t)); const qx=ax+t*dx-px, qy=ay+t*dy-py, d=qx*qx+qy*qy; if(d>md){ md=d; mi=i; } }
+    if(mi>0 && Math.sqrt(md)>tol){ keep[mi]=1; st.push([a,mi],[mi,b]); } }
+  return pts.filter((p,i)=>keep[i]);
+}
+function routeProject(R, lat, lng){
+  const k=Math.cos(lat*Math.PI/180); let best={d:Infinity, along:0};
+  for(let i=1;i<R.pts.length;i++){
+    const [ay,ax]=R.pts[i-1], [by,bx]=R.pts[i];
+    const Ax=ax*k, Bx=bx*k, Px=lng*k, dx=Bx-Ax, dy=by-ay, L2=dx*dx+dy*dy;
+    let t=L2?((Px-Ax)*dx+(lat-ay)*dy)/L2:0; t=Math.max(0,Math.min(1,t));
+    const qy=ay+t*(by-ay), qx=ax+t*(bx-ax), d=haversineKm(lat,lng,qy,qx);
+    if(d<best.d) best={d, along:R.cum[i-1]+t*(R.cum[i]-R.cum[i-1])};
+  }
+  return best;
+}
+function routeSave(pts, src){
+  const simp=routeSimplify(pts, 0.00004).slice(0,1500);
+  let km=0; for(let i=1;i<simp.length;i++) km+=haversineKm(simp[i-1][0],simp[i-1][1],simp[i][0],simp[i][1]);
+  DB.set(d=>{ d.mapPoints=d.mapPoints||{}; d.mapPoints.route={p:routeEncode(simp), src, km:+km.toFixed(2), n:simp.length, ts:Date.now(), by:(currentUser&&currentUser.name)||""}; });
+  return {n:simp.length, km};
+}
+async function routeFetchOsrm(silent){
+  const mp=DB.get().mapPoints||{}; if(!(mp.adm&&mp.nvdc)){ if(!silent) alert("Isi dan simpan dulu titik ADM KAP dan NVDC."); return false; }
+  try{
+    const u="https://router.project-osrm.org/route/v1/driving/"+mp.adm.lng+","+mp.adm.lat+";"+mp.nvdc.lng+","+mp.nvdc.lat+"?overview=full&geometries=geojson";
+    const r=await fetch(u), j=await r.json();
+    const co=j && j.routes && j.routes[0] && j.routes[0].geometry && j.routes[0].geometry.coordinates;
+    if(!co || co.length<2) throw new Error("rute tidak ditemukan");
+    const res=routeSave(co.map(c=>[c[1],c[0]]), "osrm");
+    if(!silent) alert("Rute jalan tersimpan: "+res.km.toFixed(1)+" km. Kalau CC memakai jalan lain, pakai Rekam dari perjalanan CC.");
+    if(activeTab==="ccmap") initCcMap(); else render();
+    return true;
+  }catch(e){ if(!silent) alert("Gagal mengambil rute jalan: "+(e&&e.message||e)+". Coba lagi saat internet stabil, atau rekam dari perjalanan CC."); return false; }
+}
+function routeRecStart(){
+  const plat=(document.getElementById("routeRecPlat")||{}).value||"";
+  if(!plat){ alert("Pilih CC yang sedang membagikan posisi."); return; }
+  routeRec={on:true, plat, pts:[]}; routeRecTick(); render();
+}
+function routeRecTick(){
+  if(!routeRec.on) return;
+  const r=Object.values(TRACK||{}).find(x=>x && trkKey(x.plat)===trkKey(routeRec.plat)); if(!r || typeof r.lat!=="number") return;
+  const last=routeRec.pts[routeRec.pts.length-1];
+  if(!last || haversineKm(last[0],last[1],r.lat,r.lng)>0.02) routeRec.pts.push([r.lat,r.lng]);
+  const el=document.getElementById("routeRecStat"); if(el) el.textContent=routeRec.pts.length+" titik terekam dari "+routeRec.plat;
+}
+function routeRecStop(save){
+  if(save){ if(routeRec.pts.length<10){ alert("Rekaman baru "+routeRec.pts.length+" titik. Biarkan CC berjalan lebih jauh (minimal 10 titik)."); return; }
+    const res=routeSave(routeRec.pts,"rekam:"+routeRec.plat); alert("Rute rekaman tersimpan: "+res.km.toFixed(1)+" km, "+res.n+" titik."); }
+  routeRec={on:false, plat:"", pts:[]}; render();
+}
+function routeClear(){ if(!confirm("Hapus rute jalan? Peta kembali memakai garis lurus.")) return; DB.set(d=>{ if(d.mapPoints) delete d.mapPoints.route; }); render(); }
+function routeAdminHtml(){
+  const R=routeGet(), live=Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0)<15*60000);
+  const src=R?(R.src==="osrm"?"otomatis dari peta jalan":("rekaman perjalanan "+R.src.replace(/^rekam:/,""))):"";
+  return `<div class="card"><h3>🛣 Rute Jalan CC</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Peta CC menggambar garis mengikuti jalan dan menghitung jarak sepanjang rute. Pakai rute otomatis, atau rekam rute asli dari satu CC yang sedang membagikan posisi.</p>
+    <div class="msg ${R?"ok":"info"}" style="margin-bottom:10px;">${R?`Rute aktif: <b>${R.km.toFixed(1)} km</b>, ${R.pts.length} titik, ${xlEsc(src)} · ${xlTime(R.ts)}`:"Belum ada rute jalan. Peta memakai garis lurus."}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="routeFetchOsrm(false)">🛣 Ambil rute jalan otomatis</button>
+      ${R?`<button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="routeClear()">Hapus rute</button>`:""}
+    </div>
+    ${routeRec.on?`<div class="msg ok" style="margin-bottom:8px;">⏺ Merekam… <span id="routeRecStat">${routeRec.pts.length} titik terekam dari ${xlEsc(routeRec.plat)}</span>. Biarkan layar ini terbuka sampai CC tiba di NVDC.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="routeRecStop(true)">⏹ Selesai &amp; simpan rute</button><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="routeRecStop(false)">Batal</button></div>`
+    :`<div class="field"><label>Rekam dari perjalanan CC (CC harus sedang Bagikan Posisi)</label><select id="routeRecPlat"><option value="">${live.length?"-- pilih CC --":"Belum ada CC yang membagikan posisi"}</option>${live.map(r=>`<option value="${xlEsc(r.plat)}">${xlEsc(r.plat)} · ${xlEsc(r.lp||"")}</option>`).join("")}</select></div>
+      <button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="routeRecStart()" ${live.length?"":"disabled"}>⏺ Mulai rekam</button>`}
+  </div>`;
+}
+
 const TRK_PATH = "radar_track";
 let TRACK = {}, TRKERR = "", ccMapObj = null, ccMapLayer = null, _leafP = null;
 function escH(t){ return String(t==null?"":t).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function trackAttach(){
   try{
-    FBS.db.ref(TRK_PATH).on("value", snap=>{ TRACK = snap.val() || {}; TRKERR = ""; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); },
+    FBS.db.ref(TRK_PATH).on("value", snap=>{ TRACK = snap.val() || {}; TRKERR = ""; try{ routeRecTick(); }catch(e){} if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); },
       err=>{ TRKERR = "Peta CC belum diizinkan oleh aturan Firebase (tambahkan node radar_track)."; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); });
   }catch(e){}
 }
@@ -6372,8 +6691,8 @@ function renderCcMap(){
   return `<div class="card">
     <h3>🗺 Peta CC — ADM KAP ⇄ NVDC Karawang</h3>
     <div id="ccmapMsg"></div>
-    <div id="ccmap" style="height:55vh;min-height:320px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#e8eef5;"></div>
-    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Posisi diperbarui saat aplikasi driver terbuka. Garis menghubungkan kedua titik (bukan rute jalan).</div>
+    <div id="ccmap" style="position:relative;z-index:0;isolation:isolate;height:55vh;min-height:320px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#e8eef5;"></div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Posisi diperbarui saat aplikasi driver terbuka. ${routeGet()?"Garis biru = rute jalan CC; jarak dihitung sepanjang rute.":"Garis putus-putus = garis lurus (Admin belum menyimpan rute jalan)."}</div>
   </div>
   <div class="card"><h3>🚚 CC di perjalanan</h3><div id="trkList"></div></div>`;
 }
@@ -6399,18 +6718,23 @@ function initCcMap(){
     ccMapObj = L.map("ccmap", {zoomControl:true}).setView([c.lat, c.lng], 12);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(ccMapObj);
     ccMapLayer = L.layerGroup().addTo(ccMapObj);
-    const ic = (t,bg)=>L.divIcon({className:"", html:`<div style="background:${bg};color:#fff;border-radius:8px;padding:3px 7px;font:700 11px sans-serif;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.4);">${t}</div>`, iconAnchor:[0,0]});
+    const ic = (t,bg)=>L.divIcon({className:"", html:`<div style="background:#fff;color:#111827;border:2px solid ${bg};border-radius:8px;padding:3px 8px;font:800 12px Arial,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);">${t}</div>`, iconAnchor:[0,0]});
     const pts = [];
     if(mp.adm){ L.marker([mp.adm.lat,mp.adm.lng],{icon:ic("🏭 ADM KAP","#0F2A4A")}).addTo(ccMapObj); pts.push([mp.adm.lat,mp.adm.lng]); }
     if(mp.nvdc){ L.marker([mp.nvdc.lat,mp.nvdc.lng],{icon:ic("📦 NVDC","#C77700")}).addTo(ccMapObj); pts.push([mp.nvdc.lat,mp.nvdc.lng]); }
-    if(pts.length===2){ L.polyline(pts,{color:"#0F2A4A",weight:3,dashArray:"6 8",opacity:.7}).addTo(ccMapObj); }
-    ccMapObj._fitPts = pts;
-    if(pts.length) ccMapObj.fitBounds(pts, {padding:[50,50], maxZoom:15});
+    const R = routeGet();
+    if(R){ L.polyline(R.pts,{color:"#ffffff",weight:9,opacity:.9}).addTo(ccMapObj); L.polyline(R.pts,{color:"#1D4ED8",weight:5,opacity:.95}).addTo(ccMapObj); }
+    else if(pts.length===2){ L.polyline(pts,{color:"#0F2A4A",weight:3,dashArray:"6 8",opacity:.7}).addTo(ccMapObj);
+      if(!_routeTried && currentUser && ["admin","delivery","koordinator","leader"].includes(currentUser.role)){ _routeTried=true; routeFetchOsrm(true); } }
+    ccMapObj._fitPts = R ? R.pts : pts;
+    if(ccMapObj._fitPts.length) ccMapObj.fitBounds(ccMapObj._fitPts, {padding:[40,40], maxZoom:15});
     updateTrackUI();
   }).catch(()=>{ const m=document.getElementById("ccmapMsg"); if(m) m.innerHTML = `<div class="msg err">Peta tidak bisa dimuat (butuh internet). Daftar posisi tetap tampil di bawah.</div>`; });
 }
 function trkCompute(r, mp){
   const o = {plat:r.plat, lp:r.lp, lat:r.lat, lng:r.lng, spd:r.spd||0, age:Math.max(0,Date.now()-(r.ts||0))};
+  const R = routeGet();
+  if(R){ const pj=routeProject(R, r.lat, r.lng); o.dA=pj.along; o.dB=Math.max(0,R.km-pj.along); o.t=R.km>0?pj.along/R.km:0; o.total=R.km; o.off=pj.d; return o; }
   if(mp && mp.adm && mp.nvdc){
     o.dA = haversineKm(r.lat,r.lng,mp.adm.lat,mp.adm.lng); o.dB = haversineKm(r.lat,r.lng,mp.nvdc.lat,mp.nvdc.lng);
     const k = Math.cos(mp.adm.lat*Math.PI/180);
@@ -6435,7 +6759,7 @@ function updateTrackUI(){
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);"><span>🏭 ADM KAP</span><span>NVDC 📦</span></div>` : "";
       return `<div style="border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px;${stale?'opacity:.6;':''}">
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b>${escH(o.plat)}</b><span style="font-size:11px;color:var(--text-dim);">${escH(o.lp||"")} · ${stale?'⚠ ':''}${mins<1?'baru saja':mins+' mnt lalu'}${o.spd?` · ${o.spd} km/j`:''}</span></div>
-        ${o.dA!=null ? `<div style="font-size:13px;margin-top:4px;">${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km dari NVDC</div>` : ""}
+        ${o.dA!=null ? `<div style="font-size:13px;margin-top:4px;">${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km lagi ke NVDC${o.off!=null && o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>` : ""}
         ${prog}</div>`;
     }).join("");
     list.innerHTML = h;
