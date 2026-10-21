@@ -774,7 +774,7 @@ window.RSnd=(function(){
     <div class="field"><label>Shift (wajib)</label>
       <div class="shiftrow"><button type="button" id="shiftRed" class="shiftchip red" onclick="setLoginShift('red')">🔴 SHIFT RED</button><button type="button" id="shiftWhite" class="shiftchip white" onclick="setLoginShift('white')">⚪ SHIFT WHITE</button></div>
     </div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0 12px;"><input type="checkbox" id="loginRemember" checked> Ingat saya di HP ini (tidak perlu login ulang selama 30 hari)</label>
+    <label style="display:none;align-items:center;gap:8px;font-size:13px;margin:4px 0 12px;"><input type="checkbox" id="loginRemember"> Ingat saya di HP ini (tidak perlu login ulang selama 30 hari)</label>
     <button class="btn btn-primary" onclick="doLogin()">➜ Masuk</button>
     <button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="regOpen()">📝 Belum punya akun? Daftar</button>
 
@@ -1023,11 +1023,13 @@ function shiftChangeDo(sh){
   const el=document.getElementById("curUserRole"); if(el) el.textContent=((ROLES.find(r=>r.key===currentUser.role)||{label:"DISPLAY"}).label||"DISPLAY")+" · SHIFT "+rsShift(sh);
   render();
 }
+const SAVE_LOGIN = false;   // sementara: user & password TIDAK disimpan / diisi otomatis. Ubah ke true untuk menyalakan lagi.
+try{ if(!SAVE_LOGIN){ localStorage.removeItem("radar_lastpass"); localStorage.removeItem("radar_lastuser"); } }catch(e){}
 const SESS_KEY = "apcc_session_v1";
-function rememberOn(){ try{ return localStorage.getItem("radar_remember")!=="0"; }catch(e){ return true; } }
-function lastPass(){ try{ const v=localStorage.getItem("radar_lastpass"); return v ? decodeURIComponent(escape(atob(v))) : ""; }catch(e){ return ""; } }
-function savePass(p){ try{ if(p) localStorage.setItem("radar_lastpass", btoa(unescape(encodeURIComponent(p)))); else localStorage.removeItem("radar_lastpass"); }catch(e){} }
-function lastUser(){ try{ return localStorage.getItem("radar_lastuser")||""; }catch(e){ return ""; } }
+function rememberOn(){ if(!SAVE_LOGIN) return false; try{ return localStorage.getItem("radar_remember")!=="0"; }catch(e){ return true; } }
+function lastPass(){ if(!SAVE_LOGIN) return ""; try{ const v=localStorage.getItem("radar_lastpass"); return v ? decodeURIComponent(escape(atob(v))) : ""; }catch(e){ return ""; } }
+function savePass(p){ if(!SAVE_LOGIN){ try{ localStorage.removeItem("radar_lastpass"); }catch(e){} return; } try{ if(p) localStorage.setItem("radar_lastpass", btoa(unescape(encodeURIComponent(p)))); else localStorage.removeItem("radar_lastpass"); }catch(e){} }
+function lastUser(){ if(!SAVE_LOGIN) return ""; try{ return localStorage.getItem("radar_lastuser")||""; }catch(e){ return ""; } }
 function getSession(){
   try{
     const s = JSON.parse(localStorage.getItem(SESS_KEY) || "null");
@@ -1371,7 +1373,7 @@ function saveSpeedCfg(){
 function loginEnter(acc, roles){
   if(!TABS_BY_ROLE[acc.role]){ document.getElementById("loginMsg").innerHTML = `<div class="msg err">Akun ini belum punya otoritas yang valid. Hubungi Admin.</div>`; return; }
   selectedRole = acc.role;
-  try{ const rb=document.getElementById("loginRemember"); if(rb) localStorage.setItem("radar_remember", rb.checked?"1":"0"); localStorage.setItem("radar_lastuser", acc.username); savePass((rb&&!rb.checked)?"":document.getElementById("loginPass").value); }catch(e){}
+  try{ const rb=document.getElementById("loginRemember"); if(rb) localStorage.setItem("radar_remember", rb.checked?"1":"0"); if(SAVE_LOGIN) localStorage.setItem("radar_lastuser", acc.username); savePass((rb&&!rb.checked)?"":document.getElementById("loginPass").value); }catch(e){}
   currentUser = setSession(acc, roles);
   spdUnlock();
   try{ RSnd.login(); }catch(e){}
@@ -3810,7 +3812,7 @@ async function regSubmit(){
       d.regs=L.filter(r=>r.status!=="old");
     });
     if(dup){ btn.disabled=false; btn.textContent="📨 Kirim pendaftaran"; return err("Username baru saja dipakai orang lain. Pilih username lain."); }
-    try{ localStorage.setItem("radar_lastuser", user); }catch(e){}
+    try{ if(SAVE_LOGIN) localStorage.setItem("radar_lastuser", user); }catch(e){}
     showModal(`<h3 style="margin:0 0 6px;">✅ Pendaftaran terkirim</h3>
       <div style="font-size:13px;line-height:1.7;">Username: <b style="font-family:monospace;font-size:16px;">${xlEsc(user)}</b><br>Daftar sebagai: <b>${xlEsc((ROLES.find(r=>r.key===role)||{}).label||role)}</b>${lp?` · LP <b>${xlEsc(lp)}</b>`:""}</div>
       <div style="font-size:12px;color:var(--text-dim);margin:10px 0 14px;">Tunggu persetujuan Admin${role==="cc"?" (Admin akan mengisi Kode Driver kamu)":""}. Setelah disetujui, login dengan username dan password yang tadi kamu buat.</div>
