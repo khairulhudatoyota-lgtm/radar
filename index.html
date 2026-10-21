@@ -3692,7 +3692,9 @@ function init3DCarDiagram(){
         const model = gltf.scene;
         model.traverse(o=>{ if(o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
         carGroup.add(model);
-        const box = new THREE.Box3().setFromObject(model);
+        const _rot = carGroup.rotation.y; carGroup.rotation.y = 0; carGroup.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(model);   // kotak batas model di ruang lokal (tanpa rotasi tampilan)
+        carGroup.rotation.y = _rot; carGroup.updateMatrixWorld(true);
         car3D.bbox = box;
         car3D.loaded = true;
       },
@@ -3759,25 +3761,24 @@ function init3DCarDiagram(){
 
 function classifyCarHit(localPt, bbox, carGroup){
   if(!bbox) return null;
-  // bbox dihitung di world space model sebelum rotasi carGroup diterapkan pada frame ini;
-  // karena carGroup.worldToLocal sudah mengembalikan titik relatif terhadap grup (sebelum rotasi Y grup),
-  // kita pakai batas box asli model (bbox) yang juga dalam ruang lokal grup (karena dihitung dari objek
-  // yang sudah jadi anak carGroup sebelum ada transform tambahan lain).
+  /* Model GLB ini menghadap +Z: lampu depan di z positif, lampu belakang di z negatif.
+     Maka persen posisi dihitung dari UJUNG DEPAN (z maksimum) ke belakang.
+     Mobil menghadap +Z: sisi KIRI pengemudi ada di +X (roda "FrontLeftWheel" berada di x positif). */
   const min = bbox.min, max = bbox.max;
   const zLen = max.z - min.z;
-  const zPct = ((localPt.z - min.z) / zLen) * 100;
+  const zPct = ((max.z - localPt.z) / zLen) * 100;
   const xMid = (min.x + max.x) / 2;
-  const side = localPt.x < xMid ? "Kiri" : "Kanan";
+  const side = localPt.x > xMid ? "Kiri" : "Kanan";
 
   let part="", position="", useSide=false;
   if(zPct<9){ part="Bumper Depan"; position="Depan"; }
-  else if(zPct<21){ part="Kap Mesin"; position="Depan"; }
-  else if(zPct<30){ part="Kaca Depan"; position="Depan"; }
-  else if(zPct<45){ part="Pintu Depan"; position="Depan"; useSide=true; }
-  else if(zPct<52){ part="Pintu Tengah"; useSide=true; }
-  else if(zPct<61){ part="Pintu Belakang"; position="Belakang"; useSide=true; }
-  else if(zPct<68){ part="Kaca Belakang"; position="Belakang"; }
-  else if(zPct<80){ part="Backdoor"; position="Belakang"; }
+  else if(zPct<26){ part="Kap Mesin"; position="Depan"; }
+  else if(zPct<38){ part="Kaca Depan"; position="Depan"; }
+  else if(zPct<53){ part="Pintu Depan"; position="Depan"; useSide=true; }
+  else if(zPct<63){ part="Pintu Tengah"; useSide=true; }
+  else if(zPct<78){ part="Pintu Belakang"; position="Belakang"; useSide=true; }
+  else if(zPct<87){ part="Kaca Belakang"; position="Belakang"; }
+  else if(zPct<92){ part="Backdoor"; position="Belakang"; }
   else{ part="Bumper Belakang"; position="Belakang"; }
   return {part, side: useSide?side:"", position};
 }
