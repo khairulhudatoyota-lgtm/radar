@@ -6686,7 +6686,7 @@ function onSharePos(pos){
   shareTrk.last = now;
   const prof = getCcProfile(), ref = FBS.db.ref(TRK_PATH+"/"+shareTrk.key);
   const rec = {plat:prof.plat, lp:prof.lp, lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), acc:Math.round(pos.coords.accuracy||0), spd:Math.round((pos.coords.speed||0)*3.6), ts:now};
-  ref.set(rec).then(()=>{ try{ ref.onDisconnect().remove(); }catch(e){} shareTrk.msg = "✔ Posisi terkirim "+new Date(now).toLocaleTimeString("id-ID")+" (±"+rec.acc+" m)"; shareStatusUpdate(); })
+  ref.set(rec).then(()=>{ shareTrk.msg = "✔ Posisi terkirim "+new Date(now).toLocaleTimeString("id-ID")+" (±"+rec.acc+" m)"; shareStatusUpdate(); })
     .catch(e=>{ shareTrk.msg = "Gagal kirim posisi: "+(e&&e.message||e)+" — minta Admin menambah aturan Firebase 'radar_track'."; shareStatusUpdate(); });
 }
 /* ===== Wajib isi plat truk setiap masuk sebagai Driver CC (driver sering berganti truk) ===== */
@@ -6809,7 +6809,7 @@ function trkCompute(r, mp){
 }
 function updateTrackUI(){
   const list = document.getElementById("trkList"), mp = DB.get().mapPoints || {};
-  const rows = Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0) < 15*60000).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
+  const rows = Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0) < 45*60000).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
   if(list){
     let h = "";
     if(TRKERR) h += `<div class="msg err">${escH(TRKERR)}</div>`;
