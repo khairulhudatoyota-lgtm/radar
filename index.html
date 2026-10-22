@@ -3247,7 +3247,7 @@ function sjParseItems(items){
   const out={sjkb:"", cab:{}, n:0};
   const all=items.map(i=>String(i.s||"").trim()).filter(Boolean);
   const txt=all.join(" ");
-  let m=txt.match(/No\.?\s*SJKB\s*:?\s*([A-Z0-9][A-Z0-9\/\-\.]{6,})/i) || txt.match(/\b([A-Z0-9]{3,}\/\d{8}\/\d{3,6}\/[A-Z0-9]+)\b/);
+  let m=txt.match(/No\.?\s*SJKB\s*:?\s*([A-Z0-9]{3,}\/[A-Z0-9\/\-\.]{4,})/i) || txt.match(/\b([A-Z0-9]{3,}\/\d{8}\/\d{3,6}\/[A-Z0-9]+)\b/);
   if(m) out.sjkb=m[1].toUpperCase();
   const pages=[...new Set(items.map(i=>i.pg||1))].sort((a,b)=>a-b);
   const isColor=t=>/^[A-Z0-9]\d{2}-[A-Z][A-Z \/\-]*$/.test(t);
@@ -3356,7 +3356,7 @@ function sjListHtml(data, pass, title, hint){
   const rows=L.map(b=>{
     const exp=fmt(b.outTs+SJ_KEEP_MS);
     return `<div class="kitem" style="margin-top:8px;"><b>📄 ${b.ccPlat}</b> · LP ${b.lp||"-"}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.units.length} unit · Delout ${fmt(b.outTs)}${b.sj?` · terbit di TLS ${fmt(b.sj.ts)} · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>`}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
   }).join("");
   return `<div class="card"><h3>📄 ${title}</h3><div style="font-size:12px;color:var(--text-dim);">${hint}</div>${L.length?rows:`<div class="emptystate">Belum ada surat jalan.</div>`}</div>`;
 }
@@ -4074,6 +4074,8 @@ function esjParseItems(items){
     const m=txt.match(new RegExp("(?:^|\\s)(?:"+re+")\\s*:\\s*(.*?)(?=\\s*(?:"+any+")\\s*:|\\s1\\.\\s|\\s[A-Z0-9]{17}\\s|$)","i"));
     if(m){ const v=m[1].trim().replace(/\s+/g," "); if(v && v.length<90) out.hdr[k]=v; }
   });
+  if(out.hdr.sjkb && !/\//.test(out.hdr.sjkb)) delete out.hdr.sjkb;   // No. SJKB selalu berbentuk XXX/yyyymmdd/nnnn/Un
+  if(!out.hdr.sjkb){ const mm=txt.match(/\b([A-Z0-9]{3,}\/\d{8}\/\d{3,6}\/[A-Z0-9]+)\b/); if(mm) out.hdr.sjkb=mm[1]; }
   if(out.hdr.ket && /Frame\s*No/i.test(out.hdr.ket)) delete out.hdr.ket;   // Ket kosong: jangan terbaca judul tabel
   const isColor=t=>/^[A-Z0-9]\d{2}-[A-Z][A-Z \/\-]*$/.test(t);
   const frames=[]; items.forEach(i=>{ const s=String(i.s||"").trim(); const m=s.match(/(?:^|\s)([A-Z0-9]{17})$/); if(m && /\d/.test(m[1]) && /[A-Z]/.test(m[1])) frames.push({s:m[1], x:i.x, y:i.y, pg:i.pg||1}); });
@@ -4236,11 +4238,11 @@ async function esjOpen(id, picUser){
       ${miss.length?`<div class="msg err" style="margin-bottom:8px;">Belum lengkap: ${miss.map(xlEsc).join(", ")}. Lengkapi di Admin → ✍ TTD.</div>`:""}
       <img src="${cv.toDataURL("image/jpeg",0.8)}" alt="Pratinjau e-SJKB" style="width:100%;border:1px solid var(--border,#ccc);border-radius:8px;background:#fff;">
       <div class="field" style="margin-top:10px;${currentUser&&["delivery","admin"].includes(currentUser.role)?"":"display:none;"}"><label>PIC Delivery</label><select id="esjPic" onchange="esjOpen(${id}, this.value)">${us.map(u=>`<option value="${xlEsc(u.username)}" ${u.username===D.pic.user?"selected":""}>${xlEsc(sigName("mp_"+u.username)||u.name)}${esjPicSig(u).sig?"":" (belum ada TTD)"}</option>`).join("")}</select></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      ${!D.sjkb?`<div class="msg err">No. SJKB belum terbaca dari PDF validasi TLS, jadi e-SJKB belum bisa disimpan atau dikirim. Unggah PDF validasinya dulu.</div><button type="button" class="btn btn-outline" style="margin-top:8px;" onclick="closeModal()">Tutup</button>`:`<div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${canShare?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="esjShare()">📤 Kirim (WhatsApp)</button>`:""}
         ${window.AndroidTLS&&window.AndroidTLS.openPdf?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="esjOpenPdf()">📄 Buka PDF / Bagikan</button>`:""}
         <button type="button" class="btn btn-outline" style="flex:1;min-width:140px;" onclick="esjSave()">⬇ Simpan PDF</button>
-      </div>
+      </div>`}
       <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Data dibaca dari PDF surat jalan TLS dan dilengkapi data RADAR. e-SJKB ini juga tampil di kotak Surat Jalan milik CC, Koordinator, dan Delivery.</div>`);
   }catch(e){ showModal(`<h3>🧾 e-SJKB</h3><div class="msg err">Gagal membuat e-SJKB: ${xlEsc(e&&e.message||e)}</div><button class="btn btn-primary" style="margin-top:10px;" onclick="closeModal()">Tutup</button>`); }
 }
@@ -4248,6 +4250,7 @@ async function esjDownload(id){
   const b=sjILS(id); if(!b) return;
   try{
     const D=await esjCollect(id, b.esjPic||undefined);
+    if(!D.sjkb){ alert("e-SJKB belum bisa dibuat: No. SJKB belum terbaca dari PDF validasi TLS.\nUnggah PDF validasinya dulu (tombol Unggah PDF di kartu ILS), lalu coba lagi."); return; }
     if(!b.esjTs){ const ts=D.ts; DB.set(d=>{ const x=(d.ils||[]).find(y=>y.id===id); if(x && !x.esjTs) x.esjTs=ts; }); }
     const cv=await esjDraw(D); mfSave(esjFileName(D),"application/pdf",esjPdf(cv));
   }catch(e){ alert("Gagal membuat e-SJKB: "+(e&&e.message||e)); }
