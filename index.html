@@ -2283,6 +2283,9 @@ async function scanLoop(ts){
 let absenState = { verified:false, distanceKm:null };
 let autoWatchId = null;
 
+/* Saat layar terkunci / aplikasi di latar belakang, bunyi web (AudioContext) dibisukan HP. Di APK, dering dibunyikan oleh aplikasi native (alarm + getar, berhenti saat aplikasi dibuka). */
+function appBg(){ try{ if(window.AndroidTLS && AndroidTLS.isFg) return !AndroidTLS.isFg(); }catch(e){} return false; }
+function ringBg(title, body){ try{ if(appBg() && window.AndroidTLS && AndroidTLS.notify){ AndroidTLS.notify(String(title), String(body||"")); return true; } }catch(e){} return false; }
 function playAlarmSound(){
   try{
     const ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -2953,6 +2956,7 @@ function checkDraftAlerts(){
     if(_draftSeen.has(key)) continue;
     _draftSeen.add(key); fired = true;
     playAlarmSound(); if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
+    try{ ringBg('🚚 CC Siap Loading', txt); }catch(e){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification('🚚 CC Siap Loading', {body:txt}); }catch(e){} }
   }
   if(fired){
@@ -3165,16 +3169,19 @@ function koordStatusHtml(data){
 }
 let _koordSeen=new Set(); try{ _koordSeen=new Set(JSON.parse(localStorage.getItem("apcc_koordseen")||"[]")); }catch(e){}
 function checkKoordAlerts(){
-  if(!currentUser || currentUser.role!=="koordinator") return;
+  if(!currentUser || (currentUser.role!=="koordinator" && currentUser.role!=="delivery")) return;
+  const isDel=currentUser.role==="delivery";   // Delivery: bunyi saat CC absen (hanya yang baru, ≤10 menit); validasi ILS tetap untuk Koordinator
   const L=koordStatusList(DB.get()); let fired=false;
   for(const x of L){
     const who=`LP ${x.lp||"-"} ${x.plat}${x.driver?` · Driver ${x.driver}`:""}`;
+    if(isDel && Date.now()-(x.absenTs||0)>10*60000) continue;
     const evs=[[`abs|${normPlat(x.plat)}|${x.absenTs}`, `CC sudah absen: ${who} (Stall CC ${ccLbl(x.n)}).`]];
-    if(x.ils && x.ils.tlsTs) evs.push([`tls|${x.ils.id}`, `ILS sudah di TLS: ${who} · ${x.ils.units.length} unit di Stall CC ${ccLbl(x.n)}. Silakan validasi unit.`]);
+    if(!isDel && x.ils && x.ils.tlsTs) evs.push([`tls|${x.ils.id}`, `ILS sudah di TLS: ${who} · ${x.ils.units.length} unit di Stall CC ${ccLbl(x.n)}. Silakan validasi unit.`]);
     for(const [key,txt] of evs){
       if(_koordSeen.has(key)) continue;
       _koordSeen.add(key); fired=true;
       playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]);
+      try{ ringBg(key.startsWith('tls')?'🧾 ILS Siap Validasi':'🚚 CC Absen', txt); }catch(e){}
       if('Notification' in window && Notification.permission==='granted'){ try{ new Notification(key.startsWith('tls')?'🧾 ILS Siap Validasi':'🚚 CC Absen',{body:txt}); }catch(e){} }
     }
   }
@@ -4540,6 +4547,17 @@ function renderAdminSig(){
     </div>
     ${renderAdminEsj()}`;
 }
+async function copyManifest(){
+  const g=id=>((document.getElementById(id)||{}).value||""), msg=document.getElementById("mfCopyMsg");
+  const rows=mfRows(DB.get(), g("mfDate")||mfDateStr(Date.now()), g("mfLP"), g("mfShift"));
+  if(!rows.length){ if(msg) msg.innerHTML=`<span style="color:#b91c1c;">Tidak ada data untuk pilihan ini.</span>`; return; }
+  const cell=c=>{ if(c&&typeof c==="object"){ if(c.d!=null){ const dt=new Date(Date.UTC(1899,11,30)+c.d*86400000); return dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0")+"-"+String(dt.getUTCDate()).padStart(2,"0"); } return ""; } return String(c==null?"":c).replace(/[\t\r\n]+/g," "); };
+  const tsv=rows.map(r=>r.map(cell).join("\t")).join("\n");
+  let ok=false;
+  try{ await navigator.clipboard.writeText(tsv); ok=true; }catch(e){}
+  if(!ok){ try{ const ta=document.createElement("textarea"); ta.value=tsv; ta.style.cssText="position:fixed;left:-999px;top:0;"; document.body.appendChild(ta); ta.focus(); ta.select(); ok=document.execCommand("copy"); ta.remove(); }catch(e){} }
+  if(msg) msg.innerHTML = ok ? `<span style="color:#1E9E5A;font-weight:700;">✔ ${rows.length} baris disalin. Tempel di Excel (Ctrl+V).</span>` : `<span style="color:#b91c1c;">Gagal menyalin. Izinkan akses clipboard, atau pakai Download Excel.</span>`;
+}
 function manifestCardHtml(data){
   const today=mfDateStr(Date.now());
   const lps=[...new Set([...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean))];
@@ -4551,6 +4569,9 @@ function manifestCardHtml(data){
     <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (00:00–23:59)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 tanggal ini – 06:59 hari berikutnya)</option></select></div>
     <div class="field"><label>Isi file</label><select id="mfLP"><option value="">Semua LP (sheet ALL + satu sheet per LP)</option>${lps.map(l=>`<option value="${l}">Hanya LP ${l}</option>`).join("")}</select></div>
     <button class="btn btn-primary" onclick="downloadManifest()">⬇ Download Excel</button>
+    <button class="btn btn-outline" style="margin-top:8px;" onclick="copyManifest()">📋 Salin baris (tempel ke tabel Excel)</button>
+    <div id="mfCopyMsg" style="font-size:12px;margin-top:6px;"></div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Tanpa judul kolom. Di Excel Online klik sel pertama di bawah baris terakhir tabel Manifest, lalu Ctrl+V. Pilih tanggal, shift, dan LP seperti Download di atas.</div>
     ${(xlCfg().client&&xlCfg().link)?`<details style="margin-top:12px;"${xlLS(XL_WR)&&XL.state==="relogin"?" open":""}><summary style="cursor:pointer;font-size:13px;font-weight:600;">💻 Perangkat penulis Excel</summary><div style="margin-top:8px;">${xlDeviceHtml()}</div></details>`:""}</div>`;
 }
 
@@ -7237,17 +7258,24 @@ function initCcMap(){
 }
 /* Arah jalan CC: ke NVDC (out) atau kembali ke ADM KAP (back). Dari HP driver bila ada, selain itu dari gerak posisi berturut-turut. */
 const _trkDirMem = {};
-function trkDirOf(r, t){
-  const k = normPlat(r.plat), m = _trkDirMem[k] || (_trkDirMem[k] = {t:null, dir:null});
-  if(m.t!=null && Math.abs(t-m.t)>=0.004 && r.ts!==m.ts){ m.dir = t>m.t ? "out" : "back"; m.t=t; m.ts=r.ts; }
-  else if(m.t==null){ m.t=t; m.ts=r.ts; }
+function trkDirOf(r, t, total){
+  /* Arah hanya berganti setelah CC bergerak ≥ 0,5 km searah (bukan goyangan GPS), dan gerakan nyata mengalahkan arah kiriman HP
+     (arah di HP bisa basi dari perjalanan sebelumnya, atau tidak terkirim saat layar terkunci). */
+  const k = normPlat(r.plat), m = _trkDirMem[k] || (_trkDirMem[k] = {a:null, dir:null, ts:0, seen:0});
+  const tot = (total>0) ? total : 20, th = Math.max(0.006, 0.5/tot);
+  if(r.ts!==m.ts){
+    if(m.a==null || (r.ts-m.seen)>10*60000) m.a=t;                       // data pertama / terputus lama: mulai ukur dari sini
+    else if(Math.abs(t-m.a)>=th){ m.dir = t>m.a ? "out" : "back"; m.a=t; }
+    m.ts=r.ts; m.seen=r.ts;
+  }
+  if(m.dir) return m.dir;
   if(r.dir==="out"||r.dir==="back") return r.dir;
-  return m.dir || "out";
+  return "out";
 }
 function trkCompute(r, mp){
   const o = {plat:r.plat, lp:r.lp, lat:r.lat, lng:r.lng, spd:r.spd||0, age:Math.max(0,Date.now()-(r.ts||0))};
   const R = routeGet();
-  if(R){ const pj=routeProject(R, r.lat, r.lng); o.dA=pj.along; o.dB=Math.max(0,R.km-pj.along); o.t=R.km>0?pj.along/R.km:0; o.total=R.km; o.off=pj.d; o.dir=trkDirOf(r,o.t); return o; }
+  if(R){ const pj=routeProject(R, r.lat, r.lng); o.dA=pj.along; o.dB=Math.max(0,R.km-pj.along); o.t=R.km>0?pj.along/R.km:0; o.total=R.km; o.off=pj.d; o.dir=trkDirOf(r,o.t,R.km); return o; }
   if(mp && mp.adm && mp.nvdc){
     o.dA = haversineKm(r.lat,r.lng,mp.adm.lat,mp.adm.lng); o.dB = haversineKm(r.lat,r.lng,mp.nvdc.lat,mp.nvdc.lng);
     const k = Math.cos(mp.adm.lat*Math.PI/180);
@@ -7255,7 +7283,7 @@ function trkCompute(r, mp){
     const L2 = (bx-ax)*(bx-ax)+(by-ay)*(by-ay);
     o.t = L2>0 ? Math.max(0, Math.min(1, ((px-ax)*(bx-ax)+(py-ay)*(by-ay))/L2)) : 0;   // 0 = di ADM KAP, 1 = di NVDC
     o.total = haversineKm(mp.adm.lat,mp.adm.lng,mp.nvdc.lat,mp.nvdc.lng);
-    o.dir = trkDirOf(r,o.t);
+    o.dir = trkDirOf(r,o.t,o.total);
   }
   return o;
 }
@@ -7344,6 +7372,7 @@ function lapAlert(r){
     const p=window._myPos, d=(p&&Date.now()-p.ts<10*60000)?haversineKm(p.lat,p.lng,r.lat,r.lng):null;
     if(d!=null && d>25) return;   // laporan jauh dari posisi kamu: tidak perlu membunyikan alarm
     playAlarmSound(); if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
+    try{ ringBg(T.ic+" "+T.t+" dilaporkan"+(r.plat?" — "+r.plat:""), (r.text||"Buka Peta CC untuk melihat titiknya.")+(d!=null?" · ±"+d.toFixed(1)+" km dari kamu":"")); }catch(e){}
     if('Notification' in window && Notification.permission==='granted'){
       try{ new Notification(T.ic+" "+T.t+" dilaporkan"+(r.plat?" — "+r.plat:""), {body:(r.text||"Buka Peta CC untuk melihat titiknya.")+(d!=null?" · ±"+d.toFixed(1)+" km dari kamu":"")}); }catch(e){}
     }
@@ -7519,6 +7548,7 @@ function chatRing(m){
   document.body.appendChild(el);
   let n=0; const go=()=>{ playAlarmSound(); try{ if(navigator.vibrate) navigator.vibrate([400,150,400,150,400]); }catch(e){} if(++n>=8) { clearInterval(_ringT); _ringT=null; } };
   go(); _ringT=setInterval(go,1500);
+  try{ ringBg("📣 "+(m.plat||m.by||"CC")+" mengajak bicara", m.text||"Buka RADAR untuk membalas."); }catch(e){}
   try{ if('Notification' in window && Notification.permission==='granted') new Notification("📣 "+(m.plat||m.by||"CC")+" mengajak bicara", {body:(m.text||"Buka RADAR untuk membalas."), requireInteraction:true}); }catch(e){}
 }
 function chatList(lapId){
