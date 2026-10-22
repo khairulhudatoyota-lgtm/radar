@@ -841,7 +841,7 @@ const CONFIG = {
   SLOTS_PER_STALL: 6,
   CC_TOTAL: 5,
   CC_ACTIVE_DEFAULT: [1,2,3],
-  CC_EMERGENCY: [4,5],
+  CC_EMERGENCY: [4,5],   // nomor internal; yang tampil ke pengguna lewat ccLbl() (dihitung dari kanan: internal 5 = Stall 1)
   ENDPOINTS: {
     // TODO: isi nanti dengan URL webhook Power Automate, contoh:
     // getUnits: "https://prod-xx.westus.logic.azure.com/workflows/xxxx/triggers/manual/paths/invoke?...",
@@ -2407,7 +2407,7 @@ function doAutoRegister(dist){
   autoAbsen.state = "done";
   autoAbsen.msg = res.dup ? `Truk ${prof.plat} sudah tercatat di stall / antrian.`
                 : res.hold ? `🕒 Absen tercatat. Jadwal loading ${prof.plat} jam ${holdHm(res.due)} — belum masuk slot / waiting list. Tunggu di luar, otomatis masuk ${ccEarlyMin()} menit sebelum jadwal.`
-                : res.stall ? `✔ Absen otomatis berhasil — ${prof.plat} masuk STALL ${res.stall}. Silakan masuk area.`
+                : res.stall ? `✔ Absen otomatis berhasil — ${prof.plat} masuk STALL ${ccLbl(res.stall)}. Silakan masuk area.`
                 : `⏳ Absen otomatis berhasil — semua stall penuh, ${prof.plat} masuk antrian nomor ${res.queue}.`;
   playAlarmSound();
   if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
@@ -2535,11 +2535,11 @@ function ccCardsHtml(data){
     const isOpen = !isEmergency || data.ccOpen[i];
     const occ = data.cc[i];
     if(!isOpen){
-      html += `<div class="cccard closed"><div class="num">STALL ${i}</div><div class="status" style="color:var(--text-dim);">DITUTUP</div><div class="lp">Cadangan/darurat</div></div>`;
+      html += `<div class="cccard closed"><div class="num">STALL ${ccLbl(i)}</div><div class="status" style="color:var(--text-dim);">DITUTUP</div><div class="lp">Cadangan/darurat</div></div>`;
     }else if(occ){
-      html += `<div class="cccard filled"><div class="num">STALL ${i}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div></div>`;
+      html += `<div class="cccard filled"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div></div>`;
     }else{
-      html += `<div class="cccard empty"><div class="num">STALL ${i}</div><div class="status">KOSONG</div><div class="lp">TERSEDIA</div></div>`;
+      html += `<div class="cccard empty"><div class="num">STALL ${ccLbl(i)}</div><div class="status">KOSONG</div><div class="lp">TERSEDIA</div></div>`;
     }
   }
   return html;
@@ -2630,7 +2630,7 @@ function submitOrderStall(){
   const res = registerCC(plat, lp, absenState.distanceKm, false, !!absenState.manual);
   if(res.dup) msgEl.innerHTML = `<div class="msg info">Truk ${plat} sudah terdaftar di stall / antrian.</div>`;
   else if(res.hold) msgEl.innerHTML = `<div class="msg info">🕒 Absen ${plat} tercatat. Jadwal loading kamu jam <b>${holdHm(res.due)}</b>, jadi belum masuk slot / waiting list. Tunggu di luar, otomatis masuk antrian ${ccEarlyMin()} menit sebelum jadwal.</div>`;
-  else if(res.stall) msgEl.innerHTML = `<div class="msg ok">✔ Truk ${plat} masuk STALL ${res.stall}. Silakan masuk area.</div>`;
+  else if(res.stall) msgEl.innerHTML = `<div class="msg ok">✔ Truk ${plat} masuk STALL ${ccLbl(res.stall)}. Silakan masuk area.</div>`;
   else msgEl.innerHTML = `<div class="msg info">⏳ Semua stall penuh. Truk ${plat} masuk antrian nomor ${res.queue}.</div>`;
   document.getElementById("ccPlat").value = "";
   document.getElementById("ccLP").value = "";
@@ -2677,13 +2677,13 @@ function renderDelivery(){
     : `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${nBelum} CC belum dibuatkan ILS · ${ccOptions.length-nBelum} sudah. Ketuk CC untuk memilih.</div>`+ccRowsSorted.map(n=>{
         const c=data.cc[n], b=ilsOfCC(n), sel=deliverySelCC==n, col=ccColor(c.plat), st=b?ilsStage(b):null;
         return `<div onclick="deliverySelCC='${n}';render()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;border:${sel?'3px':'1.5px'} solid ${sel?col:'var(--border)'};border-left:8px solid ${col};border-radius:12px;padding:9px 12px;margin-bottom:7px;${b&&!sel?'opacity:.8;':''}background:${sel?'var(--panel2)':'transparent'};">
-          <div><b style="background:${col};color:#fff;border-radius:6px;padding:1px 8px;font-weight:900;">${escH(c.plat)}</b> <span style="font-size:12px;color:var(--text-dim);">Stall ${n} · ${escH(c.lp||"-")}</span></div>
+          <div><b style="background:${col};color:#fff;border-radius:6px;padding:1px 8px;font-weight:900;">${escH(c.plat)}</b> <span style="font-size:12px;color:var(--text-dim);">Stall ${ccLbl(n)} · ${escH(c.lp||"-")}</span></div>
           <span style="font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;white-space:nowrap;${b?`background:${st.bg};color:${st.c};`:'background:#ffedd5;color:#b45309;'}">${b?`✔ ILS #${b.id} · ${b.units.length} unit`:"○ Belum ada ILS"}</span></div>`; }).join("");
 
   const loadingBatches = data.ils.filter(b=>b.status==="open");
   const batchHtml = loadingBatches.map(b=>`
     <div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};">
-      <h3>🚚 ILS #${b.id} — CC <span style="background:${ccColor(b.ccPlat)};color:#fff;border-radius:6px;padding:1px 8px;">${escH(b.ccPlat)}</span> (Stall ${b.ccNum}) ${b.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 8px;font-size:12px;">BATAM</span>`:""}</h3>
+      <h3>🚚 ILS #${b.id} — CC <span style="background:${ccColor(b.ccPlat)};color:#fff;border-radius:6px;padding:1px 8px;">${escH(b.ccPlat)}</span> (Stall ${ccLbl(b.ccNum)}) ${b.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 8px;font-size:12px;">BATAM</span>`:""}</h3>
       <div style="margin:0 0 8px;"><span style="font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;background:${ilsStage(b).bg};color:${ilsStage(b).c};">${ilsStage(b).t}</span></div>
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">${b.units.length} unit · dibuat ${new Date(b.ts).toLocaleString('id-ID')}</p>
       <table><thead><tr><th>QR</th><th>No. Rangka</th><th>Model</th><th>Stall</th></tr></thead><tbody>
@@ -3052,7 +3052,7 @@ function printILS(id){
   w.document.write(`
     <html><head><title>ILS #${b.id}</title></head><body style="font-family:sans-serif;padding:20px;">
     <h2>Instruksi Loading System (ILS)</h2>
-    <p><b>No. Polisi CC:</b> ${b.ccPlat} &nbsp; | &nbsp; <b>LP:</b> ${b.lp} &nbsp; | &nbsp; <b>Stall CC:</b> ${b.ccNum}</p>
+    <p><b>No. Polisi CC:</b> ${b.ccPlat} &nbsp; | &nbsp; <b>LP:</b> ${b.lp} &nbsp; | &nbsp; <b>Stall CC:</b> ${ccLbl(b.ccNum)}</p>
     <p><b>MP Delivery:</b> ${b.mp} &nbsp; | &nbsp; <b>Waktu:</b> ${new Date(b.ts).toLocaleString('id-ID')}</p>
     <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%; margin-top:12px;">
     <tr><th>No</th><th>QR</th><th>No. Rangka</th><th>Model</th><th>Asal Stall</th></tr>
@@ -3093,14 +3093,14 @@ function koordStatusHtml(data){
     const st=(t,done,txt)=>`<span class="${done?'ok':''}">${done?'✔ ':''}${txt}${done&&t?' '+hhmm(t):''}</span>`;
     const steps=`<div class="steps">${st(x.absenTs,true,'Absen')}${st(b&&b.ts,!!b,b?'ILS dibuat':'ILS belum dibuat')}${st(b&&b.tlsTs,!!(b&&b.tlsTs),b&&b.tlsTs?'Di TLS':'Input ke TLS')}${st(b&&b.valTs,!!(b&&b.valTs),b&&b.valTs?'Validasi selesai':'Validasi unit')}${st(b&&b.loadTs,!!(b&&b.loadTs),b&&b.loadTs?'Loading selesai':'Loading')}<span>Delout</span></div>`;
     if(b && !b.tlsTs){
-      return `<div class="kitem wait"><b>⏳ ILS dibuat di RADAR — menunggu Delivery input ke TLS</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${x.n} · ${b.units.length} unit${b.batam?' (BATAM)':''} · belum bisa divalidasi sampai ILS ada di TLS</div>${steps}</div>`;
+      return `<div class="kitem wait"><b>⏳ ILS dibuat di RADAR — menunggu Delivery input ke TLS</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${ccLbl(x.n)} · ${b.units.length} unit${b.batam?' (BATAM)':''} · belum bisa divalidasi sampai ILS ada di TLS</div>${steps}</div>`;
     }
     if(b){
       const stalls=[...new Set(b.units.map(u=>u.loc?'luar stall':groupOf(u.slot)))].join(", ");
       const head=!b.valStartTs?'✅ ILS sudah di TLS — siap validasi unit':(!b.valTs?'🔍 Sedang validasi unit':(!b.loadTs?'🚚 Validasi selesai — proses loading':'📄 Loading selesai — siap Delout'));
-      return `<div class="kitem"><b>${head}</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${x.n} · ${b.units.length} unit${b.batam?' (BATAM)':''} dari stall ${stalls} · oleh ${b.mp||'-'}</div>${steps}${sjActionsHtml(b)}</div>`;
+      return `<div class="kitem"><b>${head}</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${ccLbl(x.n)} · ${b.units.length} unit${b.batam?' (BATAM)':''} dari stall ${stalls} · oleh ${b.mp||'-'}</div>${steps}${sjActionsHtml(b)}</div>`;
     }
-    return `<div class="kitem wait"><b>⏳ CC sudah absen — ILS belum dibuat</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${x.n} · menunggu Delivery membuat ILS</div>${steps}</div>`;
+    return `<div class="kitem wait"><b>⏳ CC sudah absen — ILS belum dibuat</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${ccLbl(x.n)} · menunggu Delivery membuat ILS</div>${steps}</div>`;
   }).join("");
   const _ml=myKoordLP();
   return `<div class="card kstatus"><h3>📋 Status Loading CC${_ml?` <span class="badge">LP ${_ml}</span>`:''}${ready?` <span class="badge gold">${ready} siap validasi</span>`:''}</h3>${L.length?items:`<div class="emptystate">Belum ada CC ${_ml?'LP '+_ml+' ':''}di stall.</div>`}</div>`;
@@ -3111,8 +3111,8 @@ function checkKoordAlerts(){
   const L=koordStatusList(DB.get()); let fired=false;
   for(const x of L){
     const who=`LP ${x.lp||"-"} ${x.plat}${x.driver?` · Driver ${x.driver}`:""}`;
-    const evs=[[`abs|${normPlat(x.plat)}|${x.absenTs}`, `CC sudah absen: ${who} (Stall CC ${x.n}).`]];
-    if(x.ils && x.ils.tlsTs) evs.push([`tls|${x.ils.id}`, `ILS sudah di TLS: ${who} · ${x.ils.units.length} unit di Stall CC ${x.n}. Silakan validasi unit.`]);
+    const evs=[[`abs|${normPlat(x.plat)}|${x.absenTs}`, `CC sudah absen: ${who} (Stall CC ${ccLbl(x.n)}).`]];
+    if(x.ils && x.ils.tlsTs) evs.push([`tls|${x.ils.id}`, `ILS sudah di TLS: ${who} · ${x.ils.units.length} unit di Stall CC ${ccLbl(x.n)}. Silakan validasi unit.`]);
     for(const [key,txt] of evs){
       if(_koordSeen.has(key)) continue;
       _koordSeen.add(key); fired=true;
@@ -3136,7 +3136,7 @@ function renderKoordinator(){
     cards += `<div class="card" style="margin-bottom:10px;">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <b>Stall CC ${i}</b> ${isEmergency?'<span class="badge gold">Darurat</span>':''}<br>
+          <b>Stall CC ${ccLbl(i)}</b> ${isEmergency?'<span class="badge gold">Darurat</span>':''}<br>
           <span style="font-size:12px; color:var(--text-dim);">
             ${!isOpen ? 'Ditutup oleh Admin' : (occ ? `${occ.plat} · ${occ.lp}` : 'Kosong / Tersedia')}
           </span>
@@ -3210,7 +3210,7 @@ function loadingSelesai(id){
 function delout(id){
   const b=sjILS(id); if(!b||b.status!=="open") return;
   const data=DB.get(), q=(data.queue||[])[0];
-  const msg=`Delout ${b.ccPlat}?\n\n• CC keluar dari Stall ${b.ccNum}\n• ${b.units.length} unit dihapus dari stall (sudah loading)\n`+(q?`• CC berikutnya naik ke stall: ${q.plat} (${q.lp||"-"})\n`:"")+(b.sj?"• Surat jalan jadi terlihat oleh CC & Koordinator":"• PDF surat jalan belum masuk — bisa diunggah nanti")+"\n\nBisa dibatalkan dalam 5 menit.";
+  const msg=`Delout ${b.ccPlat}?\n\n• CC keluar dari Stall ${ccLbl(b.ccNum)}\n• ${b.units.length} unit dihapus dari stall (sudah loading)\n`+(q?`• CC berikutnya naik ke stall: ${q.plat} (${q.lp||"-"})\n`:"")+(b.sj?"• Surat jalan jadi terlihat oleh CC & Koordinator":"• PDF surat jalan belum masuk — bisa diunggah nanti")+"\n\nBisa dibatalkan dalam 5 menit.";
   if(!confirm(msg)) return;
   DB.set(d=>{
     const x=(d.ils||[]).find(y=>y.id===id); if(!x||x.status!=="open") return;
@@ -4504,13 +4504,13 @@ function ccCallClose(){
 function ccCallShow(c){
   ccCallClose(); _ccCallId=c.id;
   const o=document.createElement("div"); o.id="ccCallOv";
-  o.innerHTML=`<div class="box"><div style="font-size:13px;font-weight:800;color:#1a7f3c;letter-spacing:.08em;">🅿️ GILIRAN KAMU PARKIR</div><div class="big">STALL ${escH(c.stall)}</div><div class="row" style="font-size:17px;margin-top:10px;"><b>${escH(c.plat)}</b></div><div class="row">Segera masuk ke stall ${escH(c.stall)}.<br>Alarm berbunyi sampai OK ditekan.</div><button type="button" class="okbtn" onclick="ccCallOk('${escH(c.id)}')">✔ OK, saya menuju stall</button></div>`;
+  o.innerHTML=`<div class="box"><div style="font-size:13px;font-weight:800;color:#1a7f3c;letter-spacing:.08em;">🅿️ GILIRAN KAMU PARKIR</div><div class="big">STALL ${ccLbl(c.stall)}</div><div class="row" style="font-size:17px;margin-top:10px;"><b>${escH(c.plat)}</b></div><div class="row">Segera masuk ke stall ${escH(c.stall)}.<br>Alarm berbunyi sampai OK ditekan.</div><button type="button" class="okbtn" onclick="ccCallOk('${escH(c.id)}')">✔ OK, saya menuju stall</button></div>`;
   document.body.appendChild(o);
   spdSiren(3);
   _ccCallTimer=setInterval(()=>{ if(!document.getElementById("ccCallOv")){ clearInterval(_ccCallTimer); _ccCallTimer=null; return; } spdSiren(3); }, 2400);
   try{
-    if(window.AndroidTLS && AndroidTLS.alarmStart) AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+c.stall, c.plat+": segera masuk ke stall "+c.stall);
-    else if('Notification' in window && Notification.permission==='granted') new Notification("🅿️ Giliran parkir — Stall "+c.stall, {body:c.plat+": segera masuk ke stall "+c.stall});
+    if(window.AndroidTLS && AndroidTLS.alarmStart) AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), c.plat+": segera masuk ke stall "+ccLbl(c.stall));
+    else if('Notification' in window && Notification.permission==='granted') new Notification("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), {body:c.plat+": segera masuk ke stall "+ccLbl(c.stall)});
   }catch(e){}
 }
 function ccCallOk(id){
@@ -4530,14 +4530,14 @@ function ccOutLogHtml(data){
   const mid=prodMidnight(), L=(data.ccOutLog||[]).filter(x=>x.ts>=mid).slice().reverse();
   if(!L.length) return "";
   const hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-  return `<div class="card"><h3>🚪 CC Dikeluarkan (hari produksi ini)</h3>${L.map(x=>`<div class="kitem" style="margin-top:8px;"><b>${x.plat}</b> · LP ${x.lp||"-"} · Stall ${x.ccNum}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${hm(x.ts)} · dipulangkan oleh <b>${x.by||"-"}</b>${x.ilsId?" · ILS dibatalkan":""}</div><div style="font-size:13px;margin-top:4px;">Alasan: ${String(x.why||"").replace(/</g,"&lt;")}</div></div>`).join("")}</div>`;
+  return `<div class="card"><h3>🚪 CC Dikeluarkan (hari produksi ini)</h3>${L.map(x=>`<div class="kitem" style="margin-top:8px;"><b>${x.plat}</b> · LP ${x.lp||"-"} · Stall ${ccLbl(x.ccNum)}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${hm(x.ts)} · dipulangkan oleh <b>${x.by||"-"}</b>${x.ilsId?" · ILS dibatalkan":""}</div><div style="font-size:13px;margin-top:4px;">Alasan: ${String(x.why||"").replace(/</g,"&lt;")}</div></div>`).join("")}</div>`;
 }
 function keluarkanCC(n){
   if(!canKeluarkanCC()){ alert("Hanya Delivery yang boleh memulangkan CC."); return; }
-  const d0=DB.get(), c=d0.cc[n]; if(!c){ alert("Stall "+n+" sudah kosong."); return; }
+  const d0=DB.get(), c=d0.cc[n]; if(!c){ alert("Stall "+ccLbl(n)+" sudah kosong."); return; }
   const ils=(d0.ils||[]).find(b=>b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat));
   const q=(d0.queue||[])[0];
-  const why=prompt(`Keluarkan CC ${c.plat} dari Stall ${n}?\n`+(ils?`• ILS #${ils.id} ikut dibatalkan, unit kembali ke stall\n`:"")+`• Stall ${n} dikosongkan`+(q?`\n• CC berikutnya naik: ${q.plat}`:"")+`\n\nDikeluarkan oleh: ${(currentUser&&currentUser.name)||"-"} (otomatis dari akun login)\n\nKetik alasan (wajib, mis. tidak lolos verifikasi / unit NG):`, "");
+  const why=prompt(`Keluarkan CC ${c.plat} dari Stall ${ccLbl(n)}?\n`+(ils?`• ILS #${ils.id} ikut dibatalkan, unit kembali ke stall\n`:"")+`• Stall ${ccLbl(n)} dikosongkan`+(q?`\n• CC berikutnya naik: ${q.plat}`:"")+`\n\nDikeluarkan oleh: ${(currentUser&&currentUser.name)||"-"} (otomatis dari akun login)\n\nKetik alasan (wajib, mis. tidak lolos verifikasi / unit NG):`, "");
   if(why===null) return;
   if(String(why).trim().length<3){ alert("Alasan wajib diketik (minimal 3 huruf). CC tidak jadi dikeluarkan."); return; }
   DB.set(d=>{
@@ -5286,7 +5286,7 @@ function renderDccpUpload(){
         const a = withActual ? findActualArrival(r.police,data) : null;
         if(withActual && !lpMine(r.lp)) return "";
         return `<tr><td>${r.lp}</td><td><b>${platFmt(r.police)}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
-        ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${a.stall})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> ${canTukarJam()?`<button class="btn btn-sm" onclick="tukarOpen(${ri})">🔄 Tukar Jam</button>`:""} <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
+        ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${ccLbl(a.stall)})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> ${canTukarJam()?`<button class="btn btn-sm" onclick="tukarOpen(${ri})">🔄 Tukar Jam</button>`:""} <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
       }).join("")}
     </table></div>`;
   return `
@@ -6526,7 +6526,7 @@ function renderAdmin(){
       <div class="card" style="margin-bottom:10px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <b>Stall CC ${n}</b> <span class="badge gold">Darurat</span><br>
+            <b>Stall CC ${ccLbl(n)}</b> <span class="badge gold">Darurat</span><br>
             <span style="font-size:12px; color:var(--text-dim);">${data.ccOpen[n] ? 'Sedang dibuka untuk umum' : 'Ditutup, hanya darurat'}</span>
           </div>
           <div class="toggle" onclick="toggleEmergency(${n})">
@@ -6538,7 +6538,7 @@ function renderAdmin(){
     return `${tabsHtml}
       <div class="card">
         <h3>🚦 Kelola Stall CC Darurat</h3>
-        <p style="font-size:12px; color:var(--text-dim);">Stall 1-3 selalu aktif. Stall darurat (${CONFIG.CC_EMERGENCY.join(", ")}) cuma bisa dibuka/ditutup dari sini oleh Admin — Koordinator tidak bisa mengubah ini.</p>
+        <p style="font-size:12px; color:var(--text-dim);">Stall ${Array.from({length:CONFIG.CC_TOTAL},(_,k)=>k+1).filter(n=>!CONFIG.CC_EMERGENCY.includes(n)).map(ccLbl).sort((a,b)=>a-b).join(", ")} selalu aktif. Stall darurat (${CONFIG.CC_EMERGENCY.map(ccLbl).sort((a,b)=>a-b).join(", ")}) cuma bisa dibuka/ditutup dari sini oleh Admin — Koordinator tidak bisa mengubah ini.</p>
       </div>
       ${rows}
       <div class="card">
@@ -7310,6 +7310,9 @@ function chatMsgHtml(m){
 }
 /* ===== Warna per CC, profil di peta, tanda plat di chat, dering saat diajak bicara ===== */
 const CC_PAL=["#E60012","#0057B8","#00875A","#F28C00","#7B2CBF","#00A3A3","#C2185B","#5D4037","#2E7D32","#1565C0","#D84315","#455A64"];
+/* Nomor stall CC dihitung dari KANAN: Stall 1 paling kanan (darurat/terkunci: 1 dan 2), Stall 5 paling kiri.
+   Data tetap memakai nomor internal 1..5 (kiri ke kanan); hanya tampilan yang dibalik. */
+function ccLbl(n){ const k=+n; return (k>=1 && k<=CONFIG.CC_TOTAL) ? (CONFIG.CC_TOTAL+1-k) : n; }
 function ccColor(plat){ const k=normPlat(plat); let h=7; for(let i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0; return CC_PAL[h%CC_PAL.length]; }
 let chatTo=[];
 function chatTagToggle(plat){ const k=normPlat(plat); const i=chatTo.findIndex(x=>normPlat(x)===k); if(i>=0) chatTo.splice(i,1); else chatTo.push(platFmt(plat)); chatTagUpdate(); }
@@ -8069,11 +8072,11 @@ function ccBayRowHtml(data){
     const isOpen = !isEmergency || data.ccOpen[i];
     const occ = data.cc[i];
     if(!isOpen){
-      html += `<div class="ccbay closed" onclick="openCCDetail(${i})"><div class="num">STALL ${i}</div><div class="status" style="color:var(--text-dim);">TUTUP</div></div>`;
+      html += `<div class="ccbay closed" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status" style="color:var(--text-dim);">TUTUP</div></div>`;
     }else if(occ){
-      html += `<div class="ccbay filled" onclick="openCCDetail(${i})"><div class="num">STALL ${i}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div></div>`;
+      html += `<div class="ccbay filled" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div></div>`;
     }else{
-      html += `<div class="ccbay empty" onclick="openCCDetail(${i})"><div class="num">STALL ${i}</div><div class="status">KOSONG</div></div>`;
+      html += `<div class="ccbay empty" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status">KOSONG</div></div>`;
     }
   }
   return html;
@@ -8086,7 +8089,7 @@ function openCCDetail(num){
   const isOpen = !isEmergency || data.ccOpen[num];
   let body;
   if(!isOpen){
-    body = `<div class="emptystate">Stall CC ${num} sedang ditutup (slot cadangan/darurat).</div>`;
+    body = `<div class="emptystate">Stall CC ${ccLbl(num)} sedang ditutup (slot cadangan/darurat).</div>`;
   }else if(occ){
     body = `
       <div class="field"><label>Nomor Polisi</label><div class="mono" style="font-size:15px; font-weight:700;">${occ.plat}</div></div>
@@ -8094,9 +8097,9 @@ function openCCDetail(num){
       <div class="field"><label>Waktu Masuk</label><div>${new Date(occ.ts).toLocaleString('id-ID')}</div></div>
     `;
   }else{
-    body = `<div class="emptystate">Stall CC ${num} kosong, tersedia untuk truk berikutnya.</div>`;
+    body = `<div class="emptystate">Stall CC ${ccLbl(num)} kosong, tersedia untuk truk berikutnya.</div>`;
   }
-  showModal(`<h3>🚚 Detail Stall CC ${num}</h3>${body}`);
+  showModal(`<h3>🚚 Detail Stall CC ${ccLbl(num)}</h3>${body}`);
 }
 
 function renderDisplay(){
@@ -8154,7 +8157,7 @@ function renderDisplay(){
           ${sched.map(r=>{ const a=findActualArrival(r.police,data);
             return `<tr><td><b>${platFmt(r.police)}</b>${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${r.origPolice}</div>`:""}</td><td>${r.lp}<div style="font-size:11px;color:var(--text-dim);">${r.driver||""}</div></td><td>${ccTripChipsHtml(r,data)}</td>
             <td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):"-"}</td>
-            <td>${a?(a.stall?`Stall ${a.stall} `:"Antri ")+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum datang</span>"}</td></tr>`;}).join("")}
+            <td>${a?(a.stall?`Stall ${ccLbl(a.stall)} `:"Antri ")+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum datang</span>"}</td></tr>`;}).join("")}
         </table></div>
       </div>` : "";
   return `
