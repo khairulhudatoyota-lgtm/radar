@@ -802,6 +802,7 @@ window.RSnd=(function(){
     <div class="topbar">
       <div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMEYyQTRBIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDgxNzJCIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTE2IiBmaWxsPSJ1cmwoI2cpIi8+CjxnIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CjxwYXRoIGQ9Ik0xNzAgMzkyVjEzMkgyNjJBNzggNzggMCAwIDEgMjYyIDI4OEgxNzAiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI1NCIvPgo8cGF0aCBkPSJNMjU4IDI5MkwzNDYgMzkyIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iNTQiLz4KPHBhdGggZD0iTTI1OCAzMDZMMzMwIDM4NiIgc3Ryb2tlPSIjMEYyQTRBIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1kYXNoYXJyYXk9IjIgMTYiLz4KPHBhdGggZD0iTTMzNiAxMThBNjYgNjYgMCAwIDEgNDAyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2Ii8+CjxwYXRoIGQ9Ik0zMzYgNzhBMTA2IDEwNiAwIDAgMSA0NDIgMTg0IiBzdHJva2U9IiNGRkIwMjAiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1vcGFjaXR5PSIuNyIvPgo8cGF0aCBkPSJNMzM2IDM4QTE0NiAxNDYgMCAwIDEgNDgyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2IiBzdHJva2Utb3BhY2l0eT0iLjQiIC8+CjwvZz4KPHBhdGggZD0iTTI0MCAyMzhDMjIyIDIxNCAyMTYgMjA0IDIxNiAxOTJBMjQgMjQgMCAwIDEgMjY0IDE5MkMyNjQgMjA0IDI1OCAyMTQgMjQwIDIzOFoiIGZpbGw9IiNGRkIwMjAiLz4KPGNpcmNsZSBjeD0iMjQwIiBjeT0iMTkyIiByPSI5IiBmaWxsPSIjMDgxNzJCIi8+Cjwvc3ZnPg==" alt="" style="width:28px;height:28px;border-radius:7px;display:block"><h1>RADAR</h1><span id="syncBadge" class="syncb sync-local">● Lokal</span></div>
       <div class="sub">Real-time Arrival, Dispatch &amp; Release</div>
+      <div id="clockBadge" style="font-size:12px;font-weight:700;color:var(--text);margin-top:6px;font-variant-numeric:tabular-nums;"></div>
       <div class="userchip">
         <div class="who">Login sebagai <b id="curUserName">-</b> · <span id="curUserRole" class="badge gold" onclick="shiftChangeOpen()" style="cursor:pointer;">ROLE</span></div>
         <button class="menuBtn" id="menuBtn" onclick="backToRoleMenu()" style="display:none;">☰ Menu</button>
@@ -1022,6 +1023,7 @@ function shiftChangeDo(sh){
   if(!currentUser) return;
   loginShift=sh; try{ localStorage.setItem("radar_shift", sh); }catch(e){}
   currentUser=Object.assign({}, currentUser, {shift:sh});
+  if(currentUser.role==="cc"){ try{ if(shareTrk.on) stopShare(true); }catch(e){} ccPlatOk=false; setTimeout(ccPlatGateCheck,120); }   // ganti shift: plat diisi lagi seperti awal shift
   try{ const x=getSession()||{}; x.shift=sh; localStorage.setItem(SESS_KEY, JSON.stringify(x)); }catch(e){}
   closeModal();
   const el=document.getElementById("curUserRole"); if(el) el.textContent=((ROLES.find(r=>r.key===currentUser.role)||{label:"DISPLAY"}).label||"DISPLAY")+" · SHIFT "+rsShift(sh);
@@ -2340,7 +2342,9 @@ function saveCcProfile(){
   const lp = (document.getElementById("ccpLP").value||"").trim();
   const drvCode = getCcProfile().drvCode||"";
   if(!plat || !lp){ alert("Isi nomor polisi dan LP dulu."); return; }
+  if(currentUser && currentUser.role==="cc" && !ccPlatRegistered(plat)){ alert(plat+" belum terdaftar di Jadwal DCCP, Spot Order, atau CC Pengganti. Minta Koordinator atau Delivery menambahkannya."); return; }
   try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode})); }catch(e){}
+  if(currentUser && currentUser.role==="cc"){ ccPlatOk=true; try{ ccPlatRememberSave(plat); ccShiftPlatSave(plat); }catch(e){} try{ ccAutoTrack(); }catch(e){} }
   render();
 }
 async function acquireWake(){
@@ -6304,8 +6308,9 @@ function renderAdmin(){
   if(adminTab==="xl") return tabsHtml + renderAdminXl();
   if(adminTab==="users"){
     const rows = data.users.map((u,i)=>`
-      <tr><td>${u.username}</td><td>${u.name}</td><td><span class="badge gold">${u.role}</span>${u.lp?` <span class="badge">LP ${u.lp}</span>`:''}${u.drvCode?` <span class="badge">${u.drvCode}</span>`:''}</td>
+      <tr><td>${u.username}</td><td>${u.name}</td><td><span class="badge gold">${u.role}</span>${u.lp?` <span class="badge">LP ${u.lp}</span>`:''}${u.drvCode?` <span class="badge">${u.drvCode}</span>`:''}${u.skipPlat?` <span class="badge" style="background:#1a7f3c;color:#fff;">BEBAS PLAT</span>`:''}</td>
       <td style="white-space:nowrap;">
+        ${u.role==="cc"?`<button class="btn-outline btn btn-sm" onclick="toggleSkipPlat(${i})">${u.skipPlat?"✖ Cabut bebas plat":"✔ Bebas plat"}</button>`:""}
         <button class="btn-outline btn btn-sm" onclick="pwResetOpen(${i})">🔑 Reset</button>
         <button class="btn-outline btn btn-sm" onclick="editUser(${i})">Edit</button>
         <button class="btn-danger btn btn-sm" onclick="deleteUser(${i})">Hapus</button>
@@ -6787,7 +6792,7 @@ function ccRecentPlats(){ try{ const a=JSON.parse(localStorage.getItem(CC_PLATS_
 function ccPlatNorm(v){ const t=String(v||"").toUpperCase().replace(/[^A-Z0-9]/g,""); const m=t.match(/^([A-Z]{1,2})(\d{1,4})([A-Z]{0,3})$/); return m?[m[1],m[2],m[3]].filter(Boolean).join(" "):""; }
 /* Plat diingat selama SATU shift di hari produksi yang sama (untuk user yang sama), supaya driver tidak mengetik ulang setiap aplikasi dibuka ulang */
 const CC_PLATDAY_KEY="radar_cc_platday";
-function ccPlatRememberSave(plat){ try{ localStorage.setItem(CC_PLATDAY_KEY, JSON.stringify({u:currentUser.username, plat:plat, shift:loginShift||"", day:prodDayStart(Date.now())})); }catch(e){} }
+function ccPlatRememberSave(plat){ try{ localStorage.setItem(CC_PLATDAY_KEY, JSON.stringify({u:currentUser.username, plat:plat, shift:loginShift||"", day:prodDayStart(Date.now()), slot:currentShift()})); }catch(e){} }
 function ccPlatRememberedOk(){
   try{
     if(!currentUser || currentUser.role!=="cc") return false;
@@ -6805,13 +6810,62 @@ function ccPlatRememberedOk(){
     if(o.u!==currentUser.username || !pr.plat || !pr.lp) return false;
     if(trkKey(pr.plat)!==trkKey(o.plat)) return false;
     if((o.shift||"")!==(loginShift||"")) return false;
-    return o.day===prodDayStart(Date.now());
+    if((o.slot||"")!==currentShift()) return false;   // pergantian shift (07.00 / 20.00): isi plat lagi seperti awal shift
+    return o.day===prodDayStart(Date.now()) && ccPlatRegistered(pr.plat);
   }catch(e){ return false; }
 }
+/* Plat WAJIB terdaftar di Jadwal DCCP (termasuk Spot Order dan CC Pengganti yang ditambah / diedit Koordinator atau Delivery). */
+function ccPlatRegistered(plat){ const k=normPlat(plat); return !!k && (DB.get().dccpSchedule||[]).some(r=>normPlat(r.police)===k); }
+function ccPlatRow(plat){ const k=normPlat(plat); return (DB.get().dccpSchedule||[]).find(r=>normPlat(r.police)===k)||null; }
+/* Plat diingat per AKUN selama SATU shift di hari produksi yang sama (di database, jadi berlaku juga di HP lain). Login lagi dengan akun sama di shift itu tidak ditanya plat lagi. */
+function ccShiftPlatSave(plat){
+  try{
+    const un=currentUser.username, sh=loginShift||"", day=prodDayStart(Date.now());
+    DB.set(d=>{ const a=(d.ccShiftPlat||[]).filter(x=>x.u!==un && x.day>=day-2*86400000); a.push({u:un, plat:ccPlatNorm(plat)||plat, shift:sh, day, slot:currentShift(), ts:Date.now()}); d.ccShiftPlat=a; });
+  }catch(e){}
+}
+function ccPlatDbOk(){
+  try{
+    if(!currentUser || currentUser.role!=="cc") return false;
+    const e=(DB.get().ccShiftPlat||[]).find(x=>x.u===currentUser.username && (x.shift||"")===(loginShift||"") && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift());
+    if(!e || !ccPlatRegistered(e.plat)) return false;
+    const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), row=ccPlatRow(e.plat), pr=getCcProfile();
+    const lp=(acc&&acc.lp)||(row&&row.lp)||pr.lp||""; if(!lp) return false;
+    if(shareTrk.on && trkKey(pr.plat)!==trkKey(e.plat)) stopShare(true);
+    localStorage.setItem(CCP_KEY, JSON.stringify({plat:ccPlatNorm(e.plat)||e.plat, lp, drvCode:pr.drvCode||""}));
+    ccPlatRememberSave(e.plat);
+    return true;
+  }catch(e){ return false; }
+}
+function clockTick(){
+  try{
+    const el=document.getElementById("clockBadge"); if(!el) return;
+    const d=new Date(), H=["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"], B=["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+    const p=n=>String(n).padStart(2,"0");
+    el.textContent="📅 "+H[d.getDay()]+", "+d.getDate()+" "+B[d.getMonth()]+" "+d.getFullYear()+" · 🕒 "+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());
+  }catch(e){}
+}
+setInterval(clockTick,1000); setTimeout(clockTick,300);
+function ccShiftWatch(){
+  try{
+    if(!currentUser || currentUser.role!=="cc" || !ccPlatOk || document.getElementById("cgPlat")) return;
+    const o=JSON.parse(localStorage.getItem(CC_PLATDAY_KEY)||"null");
+    if(o && o.slot && o.slot!==currentShift()){ ccPlatRelock(); }
+  }catch(e){}
+}
+function ccPlatRelock(){ try{ if(shareTrk.on) stopShare(true); }catch(e){} ccPlatOk=false; try{ render(); }catch(e){} setTimeout(ccPlatGateCheck,60); }
+setInterval(ccShiftWatch, 30000);
+/* Akun bebas plat (diatur Admin): boleh melewati pengisian plat. Posisi truk dan absen otomatis baru aktif kalau plat diisi. */
+function ccPlatExempt(){ try{ const a=(DB.get().users||[]).find(u=>u.username===currentUser.username && u.role==="cc"); return !!(a&&a.skipPlat); }catch(e){ return false; } }
+function ccPlatSkip(){
+  try{ const pr=getCcProfile(); if(shareTrk.on) stopShare(true); localStorage.setItem(CCP_KEY, JSON.stringify({plat:"", lp:pr.lp||"", drvCode:""})); }catch(e){}
+  try{ closeModal(); }catch(e){} try{ render(); }catch(e){}
+}
+function toggleSkipPlat(i){ DB.set(d=>{ const u=(d.users||[])[i]; if(u) u.skipPlat=!u.skipPlat; }); render(); }
 function ccPlatChange(){ try{ if(document.getElementById("cgPlat")) return; ccPlatGateOpen(true); const bg=document.querySelector("#modalRoot .modal-bg"); if(bg) bg.onclick=()=>closeModal(); }catch(e){} }
 function ccPlatGateCheck(){
   if(currentUser && currentUser.role==="cc" && !ccPlatOk && !document.getElementById("cgPlat")){
-    if(ccPlatRememberedOk()){
+    if(ccPlatRememberedOk() || ccPlatDbOk()){
       ccPlatOk=true;
       try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){}
       try{ render(); }catch(e){}
@@ -6839,13 +6893,13 @@ function ccPlatGateOpen(cancelable){
   const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), pr=getCcProfile();
   const accLp=(acc&&acc.lp)||"", rec=ccRecentPlats();
   showModal(`<h3 style="margin:0 0 4px;">🚚 Plat truk hari ini</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">${cancelable?"Ganti plat hanya kalau kamu benar-benar berpindah truk. Kalau tidak, tekan Batal.":"Cukup ketuk plat truk kamu (dari Jadwal DCCP) atau ketik sekali per shift. Plat bisa dipakai driver mana pun, jadi tidak terikat ke akun. Posisi dan absen otomatis memakai plat ini."}</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">${cancelable?"Ganti plat hanya kalau kamu benar-benar berpindah truk. Kalau tidak, tekan Batal.":"Wajib diisi sekali per shift. Ketuk plat truk kamu dari Jadwal DCCP, atau ketik. Plat harus terdaftar di Jadwal DCCP, Spot Order, atau CC Pengganti. Login lagi di shift yang sama tidak perlu mengisi ulang."}</div>
     ${(()=>{ const C=ccPlatCands(acc); return C.length?`<div style="font-size:12px;margin-bottom:6px;">Jadwal DCCP hari ini${accLp?" · LP "+xlEsc(accLp):""} (ketuk plat truk kamu):</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${C.map(c=>`<button type="button" class="btn ${c.me?'btn-primary':'btn-outline'} btn-sm" style="width:auto;font-weight:800;line-height:1.2;" onclick="document.getElementById('cgPlat').value='${xlEsc(c.plat)}';ccPlatGateSave()">${xlEsc(c.plat)}${c.drv?`<br><span style="font-weight:600;font-size:10px;">${xlEsc(c.drv)}</span>`:""}</button>`).join("")}</div>`:""; })()}
     ${rec.length?`<div style="font-size:12px;margin-bottom:6px;">Pernah dipakai di HP ini (ketuk untuk memilih):</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${rec.map(p=>`<button type="button" class="btn btn-outline btn-sm" style="width:auto;font-weight:800;" onclick="document.getElementById('cgPlat').value='${xlEsc(p)}';ccPlatGateSave()">${xlEsc(p)}</button>`).join("")}</div>`:""}
     <div class="field"><label>Nomor polisi truk</label><input id="cgPlat" type="text" placeholder="B 1234 ABC" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;font-size:20px;font-weight:800;letter-spacing:1px;" onkeydown="if(event.key==='Enter')ccPlatGateSave()"></div>
     <div class="field"><label>LP</label>${accLp?`<input type="text" value="${xlEsc(accLp)}" disabled><input type="hidden" id="cgLp" value="${xlEsc(accLp)}">`:`<select id="cgLp"><option value="">-- pilih LP --</option>${(d.lpList||[]).map(l=>`<option value="${xlEsc(l)}" ${lpKey(l)===lpKey(pr.lp)?"selected":""}>${xlEsc(l)}</option>`).join("")}</select>`}</div>
     <div id="cgMsg"></div>
-    <div style="display:flex;gap:8px;">${cancelable?`<button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal()">Batal</button>`:`<button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal();doLogout()">Keluar</button>`}
+    <div style="display:flex;gap:8px;">${cancelable?`<button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal()">Batal</button>`:`<button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal();doLogout()">Keluar</button>${ccPlatExempt()?`<button type="button" class="btn btn-outline" style="flex:1.2;" onclick="ccPlatSkip()">Lewati dulu</button>`:""}`}
     <button type="button" class="btn btn-primary" style="flex:2;" onclick="ccPlatGateSave()">✔ Lanjut</button></div>`);
   const bg=document.querySelector("#modalRoot .modal-bg"); if(bg) bg.onclick=null;
   const x=document.querySelector("#modalRoot .close-x"); if(x) x.remove();
@@ -6855,12 +6909,13 @@ function ccPlatGateSave(){
   const plat=ccPlatNorm((document.getElementById("cgPlat")||{}).value), lp=((document.getElementById("cgLp")||{}).value||"").trim(), msg=document.getElementById("cgMsg");
   if(!plat){ msg.innerHTML=`<div class="msg err">Format plat tidak dikenali. Contoh: B 9660 TEJ</div>`; return; }
   if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
+  if(!ccPlatRegistered(plat)){ msg.innerHTML=`<div class="msg err"><b>${xlEsc(plat)}</b> belum terdaftar di Jadwal DCCP, Spot Order, atau CC Pengganti. Minta Koordinator atau Delivery menambahkannya, lalu coba lagi.</div>`; return; }
   const pr=getCcProfile();
   if(shareTrk.on && trkKey(pr.plat)!==trkKey(plat)) stopShare(true);
   try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:pr.drvCode||""})); }catch(e){}
   try{ const r=[plat].concat(ccRecentPlats().filter(p=>p!==plat)).slice(0,4); localStorage.setItem(CC_PLATS_KEY, JSON.stringify(r)); }catch(e){}
   ccPlatOk=true; closeModal();
-  ccPlatRememberSave(plat);
+  ccPlatRememberSave(plat); ccShiftPlatSave(plat);
   try{ syncCcProfileFromAccount(); }catch(e){}
   try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){}
   render(); try{ ccAutoTrack(); }catch(e){}
@@ -6888,7 +6943,7 @@ function shareStatusHtml(){
 function shareCardHtml(){
   return `<div class="card">
     <h3>📡 Posisi Truk (otomatis)</h3>
-    ${(()=>{ const pr=getCcProfile(); return pr.plat?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px;"><div style="font-size:13px;">Plat aktif: <b style="font-size:16px;">${escH(pr.plat)}</b> <span style="color:var(--text-dim);">· ${escH(pr.lp||"-")}</span></div><button type="button" class="btn btn-outline btn-sm" onclick="ccPlatChange()">✎ Ganti plat</button></div>`:""; })()}
+    ${(()=>{ const pr=getCcProfile(); return pr.plat?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px;"><div style="font-size:13px;">Plat aktif: <b style="font-size:16px;">${escH(pr.plat)}</b> <span style="color:var(--text-dim);">· ${escH(pr.lp||"-")}</span></div><button type="button" class="btn btn-outline btn-sm" onclick="ccPlatChange()">✎ Ganti plat</button></div>`:`<div style="margin:2px 0 8px;"><button type="button" class="btn btn-primary btn-sm" onclick="ccPlatChange()">🚚 Isi plat truk</button><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Posisi truk dan absen otomatis aktif setelah plat diisi.</div></div>`; })()}
     <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Posisi truk terkirim <b>otomatis</b> ke Peta CC selama kamu login sebagai Driver CC. Tidak perlu menekan apa pun. Tutup aplikasi dengan <b>Minimize</b>, jangan Keluar.</p>
     <div id="shareStat" style="margin:8px 0;">${shareStatusHtml()}</div>
   </div>`;
