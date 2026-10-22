@@ -3357,6 +3357,22 @@ async function sjStore(id,name,b64,mime){
   return true;
 }
 window.radarSJ=function(id,name,b64){ return sjStore(Number(id),name,b64,"application/pdf"); };
+/* Dari penampil PDF di APK: tombol "Jadikan surat jalan" -> pilih ILS tujuan lalu simpan */
+let _sjPick=null;
+function sjPickStore(name,b64){
+  _sjPick={name:name,b64:b64};
+  const now=Date.now(), L=(DB.get().ils||[]).filter(b=>!b.sj && !b.batam && (b.status==="open" || (b.outTs && now-b.outTs<SJ_KEEP_MS))).sort((a,b)=>(b.outTs||b.ts||0)-(a.outTs||a.ts||0)).slice(0,12);
+  if(!L.length){ alert("Tidak ada ILS yang menunggu PDF surat jalan."); return; }
+  showModal(`<h3 style="margin:0 0 6px;">💾 Jadikan surat jalan</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Pilih ILS yang PDF validasinya baru kamu buka (${escH(name)}).</div>`+
+    L.map(b=>`<button class="btn btn-outline" style="width:100%;text-align:left;margin-bottom:6px;" onclick="sjPickDo(${b.id})"><b>${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")} · ${b.units.length} unit<br><span style="font-size:11px;color:var(--text-dim);">${b.outTs?"Delout "+sjFmt(b.outTs):"ILS "+sjFmt(b.ts)+" (belum Delout)"}</span></button>`).join(""));
+}
+async function sjPickDo(id){
+  const p=_sjPick; if(!p) return;
+  closeModal();
+  const ok=await sjStore(id,p.name,p.b64,"application/pdf");
+  _sjPick=null;
+  if(ok) alert("Surat jalan tersimpan. e-SJKB akan muncul setelah No. SJKB terbaca.");
+}
 function sjUploadPick(id){
   const inp=document.createElement("input"); inp.type="file"; inp.accept="application/pdf,.pdf";
   inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
