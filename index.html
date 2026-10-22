@@ -1132,6 +1132,7 @@ function backToRoleSelect(){
   document.getElementById("roleSelectScreen").classList.remove("hidden");
 }
 
+function pwEye(id,btn){ const i=document.getElementById(id); if(!i) return; const show=i.type==='password'; i.type=show?'text':'password'; btn.textContent=show?'🙈':'👁'; }
 function togglePassVisibility(){
   const inp = document.getElementById("loginPass");
   const btn = document.getElementById("passEyeBtn");
@@ -1469,8 +1470,8 @@ function loginGo(acc, roles){
 function pwForceChange(acc, roles){
   showModal(`<h3 style="margin:0 0 6px;">🔒 Ganti password dulu</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Password akun <b>${xlEsc(acc.username)}</b> masih password awal atau terlalu mudah ditebak. Buat password baru sebelum masuk.<br>${pwRule()}</div>
-    <div class="field"><label>Password baru</label><input id="pwNew1" type="password" autocomplete="new-password"></div>
-    <div class="field"><label>Ulangi password baru</label><input id="pwNew2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')document.getElementById('pwSaveBtn').click()"></div>
+    <div class="field"><label>Password baru</label><div style="position:relative;"><input id="pwNew1" type="password" autocomplete="new-password" style="padding-right:44px;"><button type="button" onclick="pwEye('pwNew1',this)" style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button></div></div>
+    <div class="field"><label>Ulangi password baru</label><div style="position:relative;"><input id="pwNew2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')document.getElementById('pwSaveBtn').click()" style="padding-right:44px;"><button type="button" onclick="pwEye('pwNew2',this)" style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button></div></div>
     <div id="pwMsg"></div>
     <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal();loginCancel();">Batal</button>
     <button type="button" id="pwSaveBtn" class="btn btn-primary" style="flex:2;">💾 Simpan &amp; Masuk</button></div>`);
@@ -1945,7 +1946,7 @@ function pwConfirm(title, detail){
     _pcResolve=res;
     showModal(`<h3 style="margin:0 0 6px;">🔒 ${xlEsc(title)}</h3>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">${detail||""}<br>Masukkan password akun <b>${xlEsc(currentUser.username)}</b> untuk melanjutkan.</div>
-      <div class="field"><label>Password</label><input id="pcPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')pwConfirmGo()"></div>
+      <div class="field"><label>Password</label><div style="position:relative;"><input id="pcPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')pwConfirmGo()" style="padding-right:44px;"><button type="button" onclick="pwEye('pcPass',this)" style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button></div></div>
       <div id="pcMsg"></div>
       <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="pwConfirmEnd(false)">Batal</button>
       <button type="button" id="pcBtn" class="btn btn-danger" style="flex:2;" onclick="pwConfirmGo()">Lanjutkan</button></div>`);
@@ -2431,7 +2432,8 @@ function doAutoRegister(dist){
 }
 function autoStatusHtml(){
   const y = DB.get().yardLocation, a = autoAbsen;
-  if(!a.on) return `<div class="msg info">Absen otomatis belum aktif.</div>`;
+  if(!a.on && (()=>{ try{ return localStorage.getItem("apcc_autooff")==="1"; }catch(e){ return false; } })()) return `<div class="msg info">Absen otomatis dimatikan. Tekan tombol di bawah untuk menyalakan lagi, atau pakai Absen Manual.</div>`;
+  if(!a.on) return `<div class="msg info">Absen otomatis menyiapkan diri… Kalau tidak berubah dalam beberapa detik, pakai <b>Absen Manual</b> di bawah.</div>`;
   if(a.err) return `<div class="msg err">${a.err}</div>`;
   if(a.lock) return `<div class="msg ok"><b>✔ Delout tercatat.</b> Absen otomatis aktif lagi setelah truk keluar dari area yard.</div>`;
   if(a.state==="done") return `<div class="msg ok">${a.msg}</div><div style="font-size:11px;color:var(--text-dim);">Pantau tetap jalan. Absen otomatis siap lagi begitu kamu keluar area dan kembali.</div>`;
@@ -2512,9 +2514,9 @@ function renderOrderStall(){
   const autoCard = `
     <div class="card">
       <h3>🤖 Absen Otomatis (GPS HP)</h3>
-      <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Aktifkan sekali. Begitu HP-mu masuk radius ${data.yardLocation.radiusKm} km dari yard, truk <b>otomatis terdaftar</b> ke stall kosong / antrian tanpa klik. <b>Biarkan aplikasi terbuka</b> selama perjalanan (layar dijaga tetap menyala).</p>
+      <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;"><b>Aktif sendiri, tidak perlu klik.</b> Begitu HP-mu masuk radius ${data.yardLocation.radiusKm} km dari yard, truk <b>otomatis terdaftar</b> ke stall kosong / antrian. Kalau status di bawah belum hijau atau otomatis tidak jalan, pakai <b>Absen Manual</b> di bawah.</p>
       <div id="autoStatus" style="margin:8px 0;">${autoStatusHtml()}</div>
-      <button class="btn ${autoAbsen.on?'btn-danger':'btn-primary'}" onclick="${autoAbsen.on?'stopAutoAbsen()':'startAutoAbsen()'}">${autoAbsen.on?'⏹ Matikan Absen Otomatis':'🤖 Aktifkan Absen Otomatis'}</button>
+      <button class="btn ${autoAbsen.on?'btn-danger':'btn-primary'}" onclick="${autoAbsen.on?'userStopAuto()':'userStartAuto()'}">${autoAbsen.on?'⏹ Matikan Absen Otomatis':'🤖 Aktifkan Absen Otomatis'}</button>
     </div>`;
   const manualCard = `
     <div class="card">
@@ -3926,13 +3928,13 @@ function regOpen(){
   const lps=DB.get().lpList||[];
   showModal(`<h3 style="margin:0 0 4px;">📝 Daftar akun baru</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Isi data di bawah. Akun bisa dipakai setelah <b>disetujui Admin</b>.</div>
-    <div class="field"><label>Nama lengkap</label><input id="rgName" type="text" autocomplete="name" placeholder="contoh: Budi Santoso"></div>
-    <div class="field"><label>Username (untuk login)</label><input id="rgUser" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="huruf kecil/angka, tanpa spasi"></div>
+    <div class="field"><label>Nama lengkap</label><input id="rgName" type="text" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="contoh: Budi Santoso"></div>
+    <div class="field"><label>Username (untuk login)</label><input id="rgUser" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="huruf kecil/angka, tanpa spasi"></div>
     <div class="field"><label>Daftar sebagai</label><select id="rgRole" onchange="document.getElementById('rgLpBox').style.display=(this.value==='cc'||this.value==='koordinator')?'':'none'">
       <option value="">-- pilih --</option>${ROLES.filter(r=>REG_ROLES.includes(r.key)).map(r=>`<option value="${r.key}">${r.icon} ${r.label}</option>`).join("")}</select></div>
     <div class="field" id="rgLpBox" style="display:none;"><label>LP (wajib untuk Driver CC &amp; Koordinator)</label><select id="rgLp"><option value="">-- pilih LP --</option>${lps.map(l=>`<option value="${xlEsc(l)}">${xlEsc(l)}</option>`).join("")}</select></div>
-    <div class="field"><label>Password</label><input id="rgP1" type="password" autocomplete="new-password"></div>
-    <div class="field"><label>Ulangi password</label><input id="rgP2" type="password" autocomplete="new-password"></div>
+    <div class="field"><label>Password</label><div style="position:relative;"><input id="rgP1" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" style="padding-right:44px;"><button type="button" onclick="pwEye('rgP1',this)" style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button></div></div>
+    <div class="field"><label>Ulangi password</label><div style="position:relative;"><input id="rgP2" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" style="padding-right:44px;"><button type="button" onclick="pwEye('rgP2',this)" style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button></div></div>
     <div style="font-size:11px;color:var(--text-dim);margin:-4px 0 10px;">${pwRule()} Ingat baik-baik password ini.</div>
     <div id="rgMsg"></div>
     <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal()">Batal</button>
@@ -4069,7 +4071,7 @@ function wipeGate(actionLabel){
         <button type="button" id="wgSnap" class="btn btn-outline btn-sm" style="width:auto;" onclick="wipeSnap()" disabled>📸 Ambil foto wajah</button>
         <button type="button" id="wgRe" class="btn btn-outline btn-sm" style="width:auto;display:none;" onclick="wipeRetake()">↺ Ulangi</button>
       </div>
-      <div class="field"><label>Password Admin (${xlEsc(currentUser&&currentUser.username||"")})</label><input id="wgPass" type="password" autocomplete="current-password"></div>
+      <div class="field"><label>Password Admin (${xlEsc(currentUser&&currentUser.username||"")})</label><div style="position:relative;"><input id="wgPass" type="password" autocomplete="current-password" style="padding-right:44px;"><button type="button" onclick="pwEye('wgPass',this)" style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button></div></div>
       <div id="wgMsg"></div>
       <div style="display:flex;gap:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="wipeGateClose(false)">Batal</button>
       <button type="button" id="wgOk" class="btn btn-danger" style="flex:2;" onclick="wipeGateConfirm(${JSON.stringify(String(actionLabel)).replace(/"/g,"&quot;")})">Verifikasi &amp; lanjut</button></div>`);
@@ -7102,9 +7104,23 @@ function ccPlatGateSave(){
   render(); try{ ccAutoTrack(); }catch(e){}
 }
 /* Bagikan posisi OTOMATIS: Driver CC yang sudah mengisi Data Truk langsung mengirim posisi tanpa tombol */
+/* Absen otomatis NYALA SENDIRI untuk Driver CC (tanpa klik). Hanya berhenti kalau driver menekan Matikan, atau memilih mode manual. */
+function ccAutoAbsenEnsure(){
+  try{
+    if(!currentUser || currentUser.role!=="cc" || !ccPlatOk || autoAbsen.on) return;
+    if(absenMode()==="manual") return;
+    if(localStorage.getItem("apcc_autooff")==="1") return;
+    const pr=getCcProfile(); if(!pr.plat || !pr.lp) return;
+    startAutoAbsen(true);
+    if(autoAbsen.on) updateAutoStatus();
+  }catch(e){}
+}
+function userStopAuto(){ try{ localStorage.setItem("apcc_autooff","1"); }catch(e){} stopAutoAbsen(); }
+function userStartAuto(){ try{ localStorage.removeItem("apcc_autooff"); }catch(e){} startAutoAbsen(); }
 function ccAutoTrack(){
   if(!currentUser || currentUser.role!=="cc"){ if(shareTrk.on && shareTrk.auto) stopShare(true); return; }
   if(!ccPlatOk) return;
+  ccAutoAbsenEnsure();
   const prof=getCcProfile(); if(!prof.plat || !prof.lp) return;
   if(shareTrk.on && shareTrk.key!==trkKey(prof.plat)){ stopShare(true); }
   if(shareTrk.on || shareTrk.denied) return;
