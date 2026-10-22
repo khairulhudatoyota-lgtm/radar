@@ -2762,8 +2762,11 @@ function renderDelivery(){
       <button class="linechip" style="padding:7px 14px;" onclick="dlJump('dlSecBuat')">🧾 Buat ILS</button>
       <button class="linechip" style="padding:7px 14px;" onclick="dlJump('dlSecAktif')">🚚 ILS Aktif <span class="badge gold">${loadingBatches.length}</span></button>
       <button class="linechip" style="padding:7px 14px;" onclick="dlJump('dlSecSj')">📄 Surat Jalan</button></div>`;
+  const _hn=(data.hold||[]).length, _ea=!!(data.earlyAll&&data.earlyAll.ts>=prodDayStart(Date.now()));
+  const earlyBox=`<details class="card" style="margin:0 0 10px;" ${_hn&&!_ea?"open":""}><summary style="cursor:pointer;font-weight:800;">🔓 Izin masuk sebelum jadwal${_ea?` <span class="badge" style="background:#1E9E5A;color:#fff;">SEMUA DIIZINKAN</span>`:""}${_hn?` <span class="badge gold">Parkir Luar ${_hn}</span>`:""}</summary><div style="margin-top:8px;">${earlyCardHtml(data)}${holdCardHtml(data,false)}</div></details>`;
   return `
     ${jump}
+    ${earlyBox}
     ${batamAlertHtml(data)}
     ${draftCardsHtml(data)}
     <div id="dlSecBuat" style="height:0;"></div>
