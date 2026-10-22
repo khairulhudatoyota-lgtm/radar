@@ -2571,7 +2571,46 @@ function ccNextDue(d, plat){   // ts jam ritase berikutnya milik plat ini; null 
   const done=dccpDoneCount(r,d); if(done>=times.length) return null;
   return ccTimeToTs(times[done], prodMidnight());
 }
+/* Izin masuk SEBELUM jadwal DCCP (hanya Delivery & Admin yang boleh memberi). Berlaku sampai ganti hari produksi (07:00).
+   d.earlyAll = {ts,by}  -> semua CC boleh masuk tanpa menunggu jadwal (mis. shift malam sepi / jalan lancar)
+   d.earlyOk[plat] = {ts,by} -> hanya CC tertentu */
+function ccEarlyPermit(d, plat){
+  try{
+    const from = prodDayStart(Date.now());
+    if(d.earlyAll && d.earlyAll.ts>=from) return true;
+    const e = (d.earlyOk||{})[normPlat(plat)]; return !!(e && e.ts>=from);
+  }catch(x){ return false; }
+}
+function earlyAllToggle(){
+  if(!canKeluarkanCC()) return;
+  const cur = !!(DB.get().earlyAll && DB.get().earlyAll.ts>=prodDayStart(Date.now()));
+  if(!cur && !confirm("Izinkan SEMUA CC masuk (absen) tanpa menunggu jadwal DCCP?\n\nBerlaku sampai pergantian hari produksi (07:00) atau sampai kamu matikan.")) return;
+  DB.set(d=>{ d.earlyAll = cur ? null : {ts:Date.now(), by:(currentUser&&currentUser.name)||""}; });
+  try{ holdRelease(); }catch(e){}
+  render();
+}
+function earlyOne(plat, on){
+  if(!canKeluarkanCC()) return;
+  if(on && !confirm("Izinkan "+plat+" masuk sebelum jadwal DCCP-nya?")) return;
+  const k=normPlat(plat);
+  DB.set(d=>{ d.earlyOk=d.earlyOk||{}; if(on) d.earlyOk[k]={ts:Date.now(), by:(currentUser&&currentUser.name)||""}; else delete d.earlyOk[k]; });
+  try{ holdRelease(); }catch(e){}
+  render();
+}
+function earlyCardHtml(data){
+  if(!canKeluarkanCC()) return "";
+  const from=prodDayStart(Date.now()), all=data.earlyAll&&data.earlyAll.ts>=from ? data.earlyAll : null;
+  const ok=Object.keys(data.earlyOk||{}).filter(k=>data.earlyOk[k].ts>=from);
+  return `<div class="card" style="border-left:5px solid ${all?"#1E9E5A":"#8896AB"};">
+    <h3>🔓 Izin Masuk Sebelum Jadwal</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Biasanya CC yang absen sebelum jam DCCP-nya menunggu di Parkir Luar. Kalau jalan lancar / CC sedikit, Delivery dan Admin bisa mengizinkan CC masuk lebih awal. Berlaku sampai pergantian hari produksi (07:00).</div>
+    ${all?`<div class="msg ok" style="margin-bottom:8px;">✔ Semua CC boleh masuk tanpa menunggu jadwal. Diizinkan ${xlEsc(all.by||"-")} jam ${holdHm(all.ts)}.</div>`:""}
+    <button class="btn ${all?"btn-danger":"btn-primary"}" style="width:100%;" onclick="earlyAllToggle()">${all?"⏹ Cabut izin semua CC":"🔓 Izinkan SEMUA CC masuk sebelum jadwal"}</button>
+    ${ok.length&&!all?`<div style="font-size:12px;margin-top:10px;"><b>Diizinkan per CC:</b> ${ok.map(k=>`<span class="badge">${xlEsc(platFmt(k))} <a href="#" onclick="earlyOne('${xlEsc(k)}',false);return false;" style="margin-left:4px;">✕</a></span>`).join(" ")}</div>`:""}
+  </div>`;
+}
 function ccHoldDue(d, plat){   // ts jadwal bila CC ini masih harus menunggu di luar, selain itu null
+  if(ccEarlyPermit(d,plat)) return null;
   const due=ccNextDue(d,plat); if(due==null) return null;
   return Date.now() < due - ccEarlyMin(d)*60000 ? due : null;
 }
@@ -3176,6 +3215,7 @@ function renderKoordinator(){
       <p style="font-size:12px; color:var(--text-dim);">Kosongkan stall setelah truk CC benar-benar keluar area. Antrian berikutnya otomatis masuk.</p>
     </div>
     ${cards}
+    ${earlyCardHtml(data)}
     ${holdCardHtml(data,false)}
     <div class="card">
       <h3>⏳ Waiting List</h3>
@@ -5318,7 +5358,7 @@ function renderDccpUpload(){
         const a = withActual ? findActualArrival(r.police,data) : null;
         if(withActual && !lpMine(r.lp)) return "";
         return `<tr><td>${r.lp}</td><td><b>${platFmt(r.police)}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
-        ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${ccLbl(a.stall)})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> ${canTukarJam()?`<button class="btn btn-sm" onclick="tukarOpen(${ri})">🔄 Tukar Jam</button>`:""} <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
+        ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${ccLbl(a.stall)})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> ${canTukarJam()?`<button class="btn btn-sm" onclick="tukarOpen(${ri})">🔄 Tukar Jam</button>`:""} ${canKeluarkanCC()?`<button class="btn btn-sm" onclick="earlyOne('${xlEsc(r.police)}',true)">🔓 Izin masuk awal</button>`:""} <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
       }).join("")}
     </table></div>`;
   return `
@@ -8272,6 +8312,7 @@ function renderDisplay(){
       </div>
 
       ${offUnitEntries(data).length?`<div class="y-off">${offListHtml(data,false)}</div>`:""}
+      ${earlyCardHtml(data)}
       ${holdCardHtml(data,false)}
       <div class="card y-queue">
         <h3>⏳ Antrian CC Menunggu (${data.queue.length})</h3>
