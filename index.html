@@ -89,6 +89,14 @@ input,select{font-family:inherit;}
 html,body{max-width:100%; overflow-x:hidden;}
 .card{min-width:0; overflow-x:auto;}
 .leaflet-container{z-index:0;}
+.mapLbl{position:absolute;left:0;top:0;background:#fff;color:#111827;border:2px solid #0F2A4A;border-radius:8px;padding:2px 7px;font:800 12px/1.3 "Inter",Arial,Helvetica,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);pointer-events:none;}
+.truckMk{width:38px;height:38px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:19px;cursor:pointer;position:relative;}
+.truckLb{position:absolute;left:50%;top:42px;transform:translateX(-50%);color:#fff;font:900 13px/1.2 "Inter",Arial,Helvetica,sans-serif;letter-spacing:.3px;padding:3px 8px;border-radius:7px;border:2px solid #fff;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.5);text-shadow:0 1px 1px rgba(0,0,0,.35);}
+.tagChip{display:inline-block;border:2px solid;border-radius:999px;padding:3px 10px;font-weight:800;font-size:12px;margin:0 6px 6px 0;cursor:pointer;background:#fff;}
+#chatRing{position:fixed;left:10px;right:10px;top:10px;z-index:99999;background:#E60012;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 8px 28px rgba(0,0,0,.5);animation:ringPulse .8s infinite alternate;}
+@keyframes ringPulse{from{transform:scale(1)}to{transform:scale(1.025)}}
+#ccProf{position:fixed;left:0;right:0;bottom:0;z-index:9998;background:var(--panel,#fff);color:var(--text);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.4);padding:0 0 14px;max-height:75vh;overflow:auto;}
+.mapDot{position:absolute;left:-6px;top:-6px;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);}
 .tabbar{display:flex; overflow-x:auto; gap:6px; padding:8px 10px; background:var(--panel); border-bottom:1px solid var(--border); scrollbar-width:none;}
 .tabbar::-webkit-scrollbar{display:none;}
 .tabbtn{flex:none; padding:9px 14px; border-radius:9px; background:var(--panel2); color:var(--text-dim); font-size:13px; font-weight:600; white-space:nowrap; border:1px solid transparent;}
@@ -6982,7 +6990,7 @@ function initCcMap(){
     ccMapObj = L.map("ccmap", {zoomControl:true}).setView([c.lat, c.lng], 12);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(ccMapObj);
     ccMapLayer = L.layerGroup().addTo(ccMapObj);
-    const ic = (t,bg)=>L.divIcon({className:"", html:`<div style="background:#fff;color:#111827;border:2px solid ${bg};border-radius:8px;padding:3px 8px;font:800 12px Arial,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);">${t}</div>`, iconAnchor:[0,0]});
+    const ic = (t,bg)=>L.divIcon({className:"", html:`<div class="mapLbl" style="border-color:${bg};transform:translate(-50%,-135%);">${t}</div><div class="mapDot" style="background:${bg};"></div>`, iconSize:null, iconAnchor:[0,0]});
     const pts = [];
     if(mp.adm){ L.marker([mp.adm.lat,mp.adm.lng],{icon:ic("🏭 ADM KAP","#0F2A4A")}).addTo(ccMapObj); pts.push([mp.adm.lat,mp.adm.lng]); }
     if(mp.nvdc){ L.marker([mp.nvdc.lat,mp.nvdc.lng],{icon:ic("📦 NVDC","#C77700")}).addTo(ccMapObj); pts.push([mp.nvdc.lat,mp.nvdc.lng]); }
@@ -7012,6 +7020,7 @@ function trkCompute(r, mp){
 function updateTrackUI(){
   const list = document.getElementById("trkList"), mp = DB.get().mapPoints || {};
   const rows = Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0) < 45*60000).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
+  window._trkRows=rows; try{ chatTagUpdate(); ccProfRefresh(); }catch(e){}
   if(list){
     let h = "";
     if(TRKERR) h += `<div class="msg err">${escH(TRKERR)}</div>`;
@@ -7021,8 +7030,8 @@ function updateTrackUI(){
       const mins = Math.round(o.age/60000), stale = o.age > 3*60000;
       const prog = o.t!=null ? `<div style="position:relative;height:10px;background:var(--border);border-radius:6px;margin:8px 0 2px;"><div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(o.t*100)}%;background:var(--gold);border-radius:6px;"></div><div style="position:absolute;top:-4px;left:calc(${Math.round(o.t*100)}% - 9px);font-size:16px;">🚚</div></div>
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);"><span>🏭 ADM KAP</span><span>NVDC 📦</span></div>` : "";
-      return `<div style="border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:8px;${stale?'opacity:.6;':''}">
-        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b>${escH(o.plat)}</b><span style="font-size:11px;color:var(--text-dim);">${escH(o.lp||"")} · ${stale?'⚠ ':''}${mins<1?'baru saja':mins+' mnt lalu'}${o.spd?` · ${o.spd} km/j`:''}</span></div>
+      return `<div onclick="ccProfOpen('${escH(o.plat)}')" style="cursor:pointer;border:1px solid var(--border);border-left:7px solid ${ccColor(o.plat)};border-radius:12px;padding:10px 12px;margin-bottom:8px;${stale?'opacity:.6;':''}">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b style="background:${ccColor(o.plat)};color:#fff;border-radius:7px;padding:2px 9px;font-weight:900;">${escH(o.plat)}</b><span style="font-size:11px;color:var(--text-dim);">${escH(o.lp||"")} · ${stale?'⚠ ':''}${mins<1?'baru saja':mins+' mnt lalu'}${o.spd?` · ${o.spd} km/j`:''}</span></div>
         ${o.dA!=null ? `<div style="font-size:13px;margin-top:4px;">${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km lagi ke NVDC${o.off!=null && o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>` : ""}
         ${prog}</div>`;
     }).join("");
@@ -7033,7 +7042,8 @@ function updateTrackUI(){
     try{ lapDrawMarkers(); }catch(e){}
     try{ trailDraw(); }catch(e){}
     rows.forEach(o=>{
-      L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div style="background:#FFF7D6;color:#111827;border:2px solid #E60012;border-radius:8px;padding:3px 8px;font:800 12px Arial,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);">🚚 ${escH(o.plat)}</div>`, iconAnchor:[0,0]})}).addTo(ccMapLayer);
+      const cl=ccColor(o.plat), pl=o.plat;
+      L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div class="truckMk" style="background:${cl};${o.age>3*60000?'opacity:.6;':''}">🚚<div class="truckLb" style="background:${cl};">${escH(o.plat)}</div></div>`, iconSize:[38,38], iconAnchor:[19,19]}), zIndexOffset:500}).on("click",()=>ccProfOpen(pl)).addTo(ccMapLayer);
     });
   }
 }
@@ -7065,6 +7075,7 @@ function lapAttach(){
     }, err=>{ LAPERR="Laporan titik belum diizinkan oleh aturan Firebase (tambahkan node radar_lapor, radar_chat, radar_foto)."; if(activeTab==="ccmap") lapListUpdate(); });
     FBS.db.ref(CHAT_PATH).limitToLast(150).on("value", snap=>{
       CHAT=snap.val()||{}; _chatReady=true;
+      try{ chatNewCheck(); }catch(e){}
       if(activeTab==="ccmap") chatBoxUpdate();
       lapOvRefresh();
     }, err=>{ LAPERR="Chat belum diizinkan oleh aturan Firebase (tambahkan node radar_lapor, radar_chat, radar_foto)."; if(activeTab==="ccmap") chatBoxUpdate(); });
@@ -7172,17 +7183,96 @@ async function chatSend(lapId){
   try{
     const ref=FBS.db.ref(CHAT_PATH).push(), key=ref.key;
     if(D.foto) await FBS.db.ref(FOTO_PATH+"/"+key).set({b64:D.foto.split(",")[1], ts:Date.now()});
-    await ref.set(Object.assign(lapMeta(),{ts:Date.now(), text:text.slice(0,300), foto:!!D.foto}, lapId?{lapor:lapId}:{}));
-    D.text=""; D.foto=null; if(inp) inp.value=""; lapPrevUpdate();
+    const tg=(!lapId && chatTo.length)?{to:chatTo.slice(0,6)}:{};
+    await ref.set(Object.assign(lapMeta(),{ts:Date.now(), text:text.slice(0,300), foto:!!D.foto}, tg, lapId?{lapor:lapId}:{}));
+    D.text=""; D.foto=null; if(inp) inp.value=""; if(!lapId){ chatTo=[]; chatTagUpdate(); } lapPrevUpdate();
   }catch(e){ alert(lapRulesMsg(e)); }
 }
 function chatMsgHtml(m){
   const mine=m.dev===lapDev(), who=escH(m.plat||m.by||"-"), rl=ROLE_LBL[m.role]||"";
-  return `<div style="display:flex;justify-content:${mine?'flex-end':'flex-start'};margin:6px 0;"><div style="max-width:84%;background:${mine?'#DCF8C6':'var(--panel2,#f1f4f8)'};border:1px solid var(--border);border-radius:12px;padding:6px 10px;">
-    <div style="font-size:11px;font-weight:800;">${who}${m.by&&m.plat?` <span style="font-weight:600;color:var(--text-dim);">· ${escH(m.by)}</span>`:""}${rl?` <span style="font-weight:600;color:var(--text-dim);">· ${rl}</span>`:""}</div>
-    ${m.text?`<div style="font-size:14px;white-space:pre-wrap;word-break:break-word;">${escH(m.text)}</div>`:""}
+  const to=Array.isArray(m.to)?m.to:[], toMe=!!lapMyPlat() && to.some(x=>normPlat(x)===normPlat(lapMyPlat()));
+  const toH=to.length?`<div style="margin:2px 0 3px;">${to.map(x=>`<span style="background:${ccColor(x)};color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:900;margin-right:4px;">➡ ${escH(x)}</span>`).join("")}</div>`:"";
+  return `<div style="display:flex;justify-content:${mine?'flex-end':'flex-start'};margin:6px 0;"><div style="max-width:84%;background:${toMe?'#FFE9E7':mine?'#DCF8C6':'var(--panel2,#f1f4f8)'};border:${toMe?'2px solid #E60012':'1px solid var(--border)'};border-radius:12px;padding:6px 10px;">
+    ${toMe?`<div style="font-size:11px;font-weight:900;color:#E60012;">📣 Untuk kamu</div>`:""}
+    <div style="font-size:11px;font-weight:800;">${m.plat?`<span style="background:${ccColor(m.plat)};color:#fff;border-radius:6px;padding:1px 7px;">${who}</span>`:who}${m.by&&m.plat?` <span style="font-weight:600;color:var(--text-dim);">· ${escH(m.by)}</span>`:""}${rl?` <span style="font-weight:600;color:var(--text-dim);">· ${rl}</span>`:""}</div>
+    ${toH}${m.text?`<div style="font-size:14px;white-space:pre-wrap;word-break:break-word;">${escH(m.text)}</div>`:""}
     ${m.foto?`<button class="btn btn-outline btn-sm" style="margin-top:4px;" onclick="lapShowFoto('${m.id}')">📷 Lihat foto</button>`:""}
     <div style="font-size:10px;color:var(--text-dim);text-align:right;">${lapAgo(m.ts)}</div></div></div>`;
+}
+/* ===== Warna per CC, profil di peta, tanda plat di chat, dering saat diajak bicara ===== */
+const CC_PAL=["#E60012","#0057B8","#00875A","#F28C00","#7B2CBF","#00A3A3","#C2185B","#5D4037","#2E7D32","#1565C0","#D84315","#455A64"];
+function ccColor(plat){ const k=normPlat(plat); let h=7; for(let i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0; return CC_PAL[h%CC_PAL.length]; }
+let chatTo=[];
+function chatTagToggle(plat){ const k=normPlat(plat); const i=chatTo.findIndex(x=>normPlat(x)===k); if(i>=0) chatTo.splice(i,1); else chatTo.push(platFmt(plat)); chatTagUpdate(); }
+function chatTagHtml(){
+  const me=normPlat(lapMyPlat()), seen=new Set(), L=[];
+  (window._trkRows||[]).forEach(o=>{ const k=normPlat(o.plat); if(k&&k!==me&&!seen.has(k)){ seen.add(k); L.push(platFmt(o.plat)); } });
+  chatTo.forEach(x=>{ const k=normPlat(x); if(!seen.has(k)){ seen.add(k); L.push(x); } });
+  if(!L.length) return `<span style="font-size:12px;color:var(--text-dim);">Belum ada CC aktif di peta.</span>`;
+  return L.map(x=>{ const on=chatTo.some(t=>normPlat(t)===normPlat(x)), c=ccColor(x);
+    return `<span class="tagChip" onclick="chatTagToggle('${escH(x)}')" style="border-color:${c};${on?`background:${c};color:#fff;`:`color:${c};`}">${on?"✔ ":""}${escH(x)}</span>`; }).join("");
+}
+function chatTagUpdate(){ const el=document.getElementById("chatTagRow"); if(el) el.innerHTML=chatTagHtml(); }
+function ccDriverName(plat){ const k=normPlat(plat); const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===k && x.driver); return r?r.driver:""; }
+let ccProfPlat=null;
+function ccProfOpen(plat){ ccProfPlat=plat; ccProfRefresh(true); }
+function ccProfClose(){ ccProfPlat=null; const e=document.getElementById("ccProf"); if(e) e.remove(); }
+function ccProfRefresh(force){
+  if(!ccProfPlat) return;
+  if(activeTab!=="ccmap"){ ccProfClose(); return; }
+  const k=normPlat(ccProfPlat), o=(window._trkRows||[]).find(x=>normPlat(x.plat)===k);
+  let el=document.getElementById("ccProf"); if(!el){ el=document.createElement("div"); el.id="ccProf"; document.body.appendChild(el); }
+  const c=ccColor(ccProfPlat), who=ccDriverName(ccProfPlat) || ((Object.values(CHAT||{}).filter(m=>normPlat(m.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0]||{}).by) || "-";
+  const mins=o?Math.round(o.age/60000):null, stale=o&&o.age>3*60000;
+  const last=Object.keys(CHAT||{}).map(i=>CHAT[i]).filter(m=>m&&!m.lapor&&normPlat(m.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,3);
+  el.innerHTML=`<div style="background:${c};color:#fff;padding:14px 16px;border-radius:18px 18px 0 0;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div><div style="font-size:11px;opacity:.9;">PROFIL CC</div><div style="font-size:22px;font-weight:900;letter-spacing:.5px;">🚚 ${escH(platFmt(ccProfPlat))}</div></div>
+      <button onclick="ccProfClose()" style="background:rgba(255,255,255,.25);color:#fff;border:0;border-radius:10px;font-size:18px;padding:6px 12px;">✕</button></div>
+    <div style="padding:12px 16px;font-size:14px;line-height:1.6;">
+      <div><b>Driver:</b> ${escH(who)}</div>
+      ${o?`<div><b>LP:</b> ${escH(o.lp||"-")}</div>
+      <div><b>Posisi:</b> ${stale?'⚠ ':'🟢 '}${mins<1?"baru saja":mins+" mnt lalu"}${o.spd?` · ${o.spd} km/j`:" · berhenti"}</div>
+      ${o.dA!=null?`<div><b>Rute:</b> ${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km lagi ke NVDC${o.off!=null&&o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>`:""}`:`<div style="color:var(--text-dim);">CC ini sudah tidak membagikan posisi.</div>`}
+      ${last.length?`<div style="margin-top:6px;"><b>Chat terakhir:</b>${last.map(m=>`<div style="font-size:13px;background:var(--panel2,#f1f4f8);border-radius:8px;padding:4px 8px;margin-top:3px;">${escH(m.text||"📷 foto")} <span style="color:var(--text-dim);font-size:11px;">· ${lapAgo(m.ts)}</span></div>`).join("")}</div>`:""}
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn btn-primary" style="flex:1;background:${c};border-color:${c};" onclick="ccProfChat()">💬 Ajak bicara</button>
+        ${o?`<button class="btn btn-outline" style="flex:1;" onclick="ccProfFocus()">📍 Lihat di peta</button>`:""}</div></div>`;
+}
+function ccProfFocus(){ const o=(window._trkRows||[]).find(x=>normPlat(x.plat)===normPlat(ccProfPlat)); ccProfClose(); try{ if(o&&ccMapObj){ ccMapObj.setView([o.lat,o.lng],16); document.getElementById("ccmap").scrollIntoView({behavior:"smooth",block:"center"}); } }catch(e){} }
+function ccProfChat(){
+  const pl=platFmt(ccProfPlat); if(!chatTo.some(x=>normPlat(x)===normPlat(pl))) chatTo.push(pl);
+  ccProfClose(); chatTagUpdate();
+  const i=document.getElementById("chatTxt"); if(i){ i.scrollIntoView({behavior:"smooth",block:"center"}); setTimeout(()=>{ try{ i.focus(); }catch(e){} },350); }
+}
+/* dering saat plat saya ditandai */
+let _chatSeen=new Set(), _chatFirst=true, _ringT=null;
+try{ _chatSeen=new Set(JSON.parse(localStorage.getItem("radar_chatseen")||"[]")); }catch(e){}
+function chatNewCheck(){
+  const first=_chatFirst; _chatFirst=false; const me=normPlat(lapMyPlat()); let ch=false;
+  Object.keys(CHAT||{}).forEach(id=>{
+    if(_chatSeen.has(id)) return; const m=CHAT[id]; if(!m) return;
+    _chatSeen.add(id); ch=true;
+    if(!me || m.lapor || m.dev===lapDev() || !Array.isArray(m.to)) return;
+    const age=Date.now()-(m.ts||0);
+    if(age>(first?3:10)*60000) return;
+    if(m.to.some(x=>normPlat(x)===me)) chatRing(m);
+  });
+  if(ch){ try{ localStorage.setItem("radar_chatseen", JSON.stringify([..._chatSeen].slice(-300))); }catch(e){} }
+}
+function chatRingStop(){ if(_ringT){ clearInterval(_ringT); _ringT=null; } const e=document.getElementById("chatRing"); if(e) e.remove(); try{ if(navigator.vibrate) navigator.vibrate(0); }catch(e2){} }
+function chatRingOpen(){ chatRingStop(); try{ if(activeTab!=="ccmap") switchTab("ccmap"); }catch(e){} setTimeout(()=>{ const b=document.getElementById("chatBox"); if(b){ b.scrollIntoView({behavior:"smooth",block:"center"}); b.scrollTop=b.scrollHeight; } },400); }
+function chatRing(m){
+  chatRingStop();
+  const el=document.createElement("div"); el.id="chatRing";
+  el.innerHTML=`<div style="font-size:12px;font-weight:700;opacity:.9;">📣 KAMU DIAJAK BICARA — ${escH(lapMyPlat())}</div>
+    <div style="font-size:17px;font-weight:900;margin:2px 0;">${escH(m.plat||m.by||"-")}${m.by&&m.plat?" · "+escH(m.by):""}</div>
+    <div style="font-size:14px;margin-bottom:10px;word-break:break-word;">${escH((m.text||"📷 foto").slice(0,120))}</div>
+    <div style="display:flex;gap:8px;"><button onclick="chatRingOpen()" style="flex:1;background:#fff;color:#E60012;border:0;border-radius:10px;font-weight:900;padding:10px;">💬 Buka chat</button>
+    <button onclick="chatRingStop()" style="flex:1;background:rgba(255,255,255,.2);color:#fff;border:2px solid #fff;border-radius:10px;font-weight:800;padding:10px;">OK, diam</button></div>`;
+  document.body.appendChild(el);
+  let n=0; const go=()=>{ playAlarmSound(); try{ if(navigator.vibrate) navigator.vibrate([400,150,400,150,400]); }catch(e){} if(++n>=8) { clearInterval(_ringT); _ringT=null; } };
+  go(); _ringT=setInterval(go,1500);
+  try{ if('Notification' in window && Notification.permission==='granted') new Notification("📣 "+(m.plat||m.by||"CC")+" mengajak bicara", {body:(m.text||"Buka RADAR untuk membalas."), requireInteraction:true}); }catch(e){}
 }
 function chatList(lapId){
   return Object.keys(CHAT||{}).map(k=>Object.assign({id:k},CHAT[k])).filter(m=>m && (lapId? m.lapor===lapId : !m.lapor)).sort((a,b)=>(a.ts||0)-(b.ts||0));
@@ -7212,7 +7302,9 @@ function lapChatCardsHtml(){
       <div id="lapList">${lapListHtml()}</div></div>
     <div class="card"><h3>💬 Chat CC</h3>
       <div id="chatBox" style="max-height:300px;overflow-y:auto;padding:2px 2px 6px;">${chatBoxHtml()}</div>
-      <div style="display:flex;gap:6px;margin-top:8px;align-items:center;"><button class="btn btn-outline btn-sm" onclick="lapPick('chat')">📷</button>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Tandai CC yang diajak bicara (HP-nya akan berdering):</div>
+      <div id="chatTagRow" style="margin-top:4px;">${chatTagHtml()}</div>
+      <div style="display:flex;gap:6px;margin-top:2px;align-items:center;"><button class="btn btn-outline btn-sm" onclick="lapPick('chat')">📷</button>
         <input id="chatTxt" type="text" maxlength="300" placeholder="Tulis pesan…" value="${escH(chatDraft.text)}" oninput="chatDraft.text=this.value" onkeydown="if(event.key==='Enter')chatSend()" style="flex:1;min-width:0;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:15px;background:var(--panel3,#fff);color:var(--text);">
         <button class="btn btn-primary btn-sm" onclick="chatSend()">Kirim</button></div>
       <div id="chatPrev" style="margin-top:6px;">${chatDraft.foto?`<img src="${chatDraft.foto}" style="height:54px;border-radius:8px;border:1px solid var(--border);vertical-align:middle;"> <button class="btn btn-outline btn-sm" onclick="lapDropFoto('chatPrev')">✕</button>`:""}</div>
