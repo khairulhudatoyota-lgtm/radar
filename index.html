@@ -3197,6 +3197,7 @@ function delout(id){
     const snap={units:[],cc:null,promoted:null};
     x.units.forEach(u=>{ snap.units.push({slot:u.slot,v:d.units[u.slot]||null}); if(isOffKey(u.slot)) delete d.units[u.slot]; else d.units[u.slot]=null; });
     x.status="done"; x.doneTs=Date.now(); x.outTs=x.doneTs; x.outBy=sjWho();
+    if(currentUser && currentUser.role==="delivery" && !x.esjPic) x.esjPic=currentUser.username;
     const c=d.cc[x.ccNum];
     if(c && normPlat(c.plat)===normPlat(x.ccPlat)){
       snap.cc=c; d.cc[x.ccNum]=null;
@@ -3350,12 +3351,12 @@ async function sjDownload(id){
 }
 function sjListHtml(data, pass, title, hint){
   const now=Date.now();
-  const L=(data.ils||[]).filter(b=>b.outTs && ((b.sj && now-b.outTs<SJ_KEEP_MS) || (b.undo && now-b.outTs<DELOUT_UNDO_MS)) && pass(b)).sort((a,b)=>b.outTs-a.outTs);
+  const L=(data.ils||[]).filter(b=>b.outTs && ((now-b.outTs<SJ_KEEP_MS && !b.batam) || (b.sj && now-b.outTs<SJ_KEEP_MS) || (b.undo && now-b.outTs<DELOUT_UNDO_MS)) && pass(b)).sort((a,b)=>b.outTs-a.outTs);
   const fmt=t=>new Date(t).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
   const rows=L.map(b=>{
     const exp=fmt(b.outTs+SJ_KEEP_MS);
-    return `<div class="kitem" style="margin-top:8px;"><b>📄 ${b.ccPlat}</b> · LP ${b.lp||"-"}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.units.length} unit · Delout ${fmt(b.outTs)}${b.sj?` · terbit di TLS ${fmt(b.sj.ts)} · terhapus otomatis ${exp}`:" · PDF belum diunggah"}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>${b.batam?"":`<button class="btn btn-sm" style="flex:1;min-width:110px;background:#0F2A4A;color:#fff;" onclick="esjOpen(${b.id})">🧾 e-SJKB</button>`}`:""}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
+    return `<div class="kitem" style="margin-top:8px;"><b>📄 ${b.ccPlat}</b> · LP ${b.lp||"-"}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.units.length} unit · Delout ${fmt(b.outTs)}${b.sj?` · terbit di TLS ${fmt(b.sj.ts)} · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
   }).join("");
   return `<div class="card"><h3>📄 ${title}</h3><div style="font-size:12px;color:var(--text-dim);">${hint}</div>${L.length?rows:`<div class="emptystate">Belum ada surat jalan.</div>`}</div>`;
 }
@@ -4073,6 +4074,7 @@ function esjParseItems(items){
     const m=txt.match(new RegExp("(?:^|\\s)(?:"+re+")\\s*:\\s*(.*?)(?=\\s*(?:"+any+")\\s*:|\\s1\\.\\s|\\s[A-Z0-9]{17}\\s|$)","i"));
     if(m){ const v=m[1].trim().replace(/\s+/g," "); if(v && v.length<90) out.hdr[k]=v; }
   });
+  if(out.hdr.ket && /Frame\s*No/i.test(out.hdr.ket)) delete out.hdr.ket;   // Ket kosong: jangan terbaca judul tabel
   const isColor=t=>/^[A-Z0-9]\d{2}-[A-Z][A-Z \/\-]*$/.test(t);
   const frames=[]; items.forEach(i=>{ const s=String(i.s||"").trim(); const m=s.match(/(?:^|\s)([A-Z0-9]{17})$/); if(m && /\d/.test(m[1]) && /[A-Z]/.test(m[1])) frames.push({s:m[1], x:i.x, y:i.y, pg:i.pg||1}); });
   frames.forEach(f=>{
@@ -4082,6 +4084,23 @@ function esjParseItems(items){
     const v=(ci>0?tx[ci-1]:(tx[0]||"")).replace(/\s+REG\d+\s*$/i,"").trim();
     out.u[f.s]={v, c:ci>=0?tx[ci]:"", cab:ci>=0?(tx[ci+1]||""):""};
   });
+  /* tata letak tabel ILS (kolom: Frame No. | Engine No. | Warna | Model | Parkir | Cabang): baca per kolom berdasarkan posisi judul kolom */
+  try{
+    pages.forEach(pg=>{
+      const L=items.filter(i=>(i.pg||1)===pg && String(i.s||"").trim()).map(i=>({s:String(i.s).trim(), x:i.x, y:i.y}));
+      const H={}; ["Frame No.","Engine No.","Warna","Model","Parkir","Cabang"].forEach(n=>{ const h=L.find(c=>c.s.toLowerCase()===n.toLowerCase()); if(h) H[n]=h; });
+      if(!(H["Frame No."]&&H["Engine No."]&&H["Warna"]&&H["Model"]&&H["Cabang"])) return;
+      const cols=["Frame No.","Engine No.","Warna","Model","Parkir","Cabang"].filter(n=>H[n]).map(n=>({n, x:H[n].x-3})).sort((a,b)=>a.x-b.x);
+      const hy=H["Frame No."].y;
+      const fr=L.filter(c=>c.y<hy-2 && c.x>=cols[0].x && c.x<cols[1].x && /^[A-Z0-9]{17}$/.test(c.s)).sort((a,b)=>b.y-a.y);
+      fr.forEach((f,i)=>{
+        const top=f.y+11, bot=(i+1<fr.length)?fr[i+1].y+11:f.y-14;
+        const cell=n=>{ const k=cols.findIndex(c=>c.n===n); if(k<0) return ""; const x0=cols[k].x, x1=k+1<cols.length?cols[k+1].x:1e9;
+          return L.filter(c=>c.x>=x0&&c.x<x1&&c.y<=top&&c.y>bot&&c.y<hy-2).sort((a,b)=>(b.y-a.y)||(a.x-b.x)).map(c=>c.s).join(" ").replace(/\s+/g," ").trim(); };
+        out.u[f.s]={v:cell("Model"), c:cell("Warna"), cab:cell("Cabang"), e:cell("Engine No."), pk:cell("Parkir")};
+      });
+    });
+  }catch(e){}
   return out;
 }
 async function esjParsePdf(b64){
@@ -4092,12 +4111,25 @@ async function esjParsePdf(b64){
   return {full:esjParseItems(items), base:sjParseItems(items)};
 }
 /* ---------- kumpulkan data satu ILS ---------- */
+/* TTD PIC Delivery: milik user sendiri; kalau belum ada, dicari dari master (Group Head, Line Head, daftar TTD) dengan nama yang sama.
+   Jadi Group Head yang juga punya akun Delivery otomatis memakai TTD yang sama. */
+function esjNameTok(x){ return String(x||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").trim().split(/\s+/)[0]||""; }
+function esjSameName(a,b){ a=esjNameTok(a); b=esjNameTok(b); return !!a && !!b && (a===b || (a.length>=4 && b.endsWith(a)) || (b.length>=4 && a.endsWith(b))); }
+function esjPicSig(u){
+  if(!u) return {name:"", sig:""};
+  const own=sigGet("mp",u.username);
+  if(own) return {name:sigName("mp_"+u.username)||u.name||"", sig:own};
+  const C=[{name:sigName("gh_white"),sig:sigGet("gh","white")},{name:sigName("gh_red"),sig:sigGet("gh","red")},{name:sigName("line_main"),sig:sigGet("line","main")}].concat(esjLib().map(x=>({name:x.name,sig:x.sig})));
+  const m=C.find(c=>c.sig && c.name && (esjSameName(c.name,u.name)||esjSameName(c.name,u.username)));
+  return m?{name:m.name, sig:m.sig}:{name:u.name||"", sig:""};
+}
 function esjPicUsers(){ return (DB.get().users||[]).filter(u=>u.role==="delivery"); }
 function esjPicFor(b){
   const us=esjPicUsers();
   let u=us.find(x=>x.name===b.mp) || (currentUser&&currentUser.role==="delivery" ? us.find(x=>x.username===currentUser.username) : null) || us.find(x=>sigGet("mp",x.username));
   return u?u.username:"";
 }
+function esjTgl(t){ const m=String(t||"").match(/(\d{1,2})-(\d{1,2})-(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/); if(!m) return 0; const d=new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5],+(m[6]||0)); return isNaN(d)?0:d.getTime(); }
 async function esjCollect(id, picUser){
   const data=DB.get(), b=(data.ils||[]).find(x=>x.id===id); if(!b) throw new Error("ILS tidak ditemukan");
   let P={full:{hdr:{},u:{}}, base:{sjkb:"",cab:{}}}, parseNote="";
@@ -4108,17 +4140,17 @@ async function esjCollect(id, picUser){
   const cc=(data.users||[]).find(x=>x.role==="cc" && x.drvCode && x.drvCode===resolveDrvCode(data,b.ccPlat,b.drvCode));
   const dc=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(b.ccPlat));
   const shift=b.shift||(currentUser&&currentUser.shift)||"red";
-  const pu=picUser||esjPicFor(b), puObj=(data.users||[]).find(x=>x.username===pu);
+  const pu=picUser||b.esjPic||esjPicFor(b), puObj=(data.users||[]).find(x=>x.username===pu);
   const cab=(P.base.cab&&Object.keys(P.base.cab).length)?P.base.cab:(b.sjCab||{});
-  const units=(b.units||[]).map(u=>{ const f=String(u.frame||"").toUpperCase(), x=(P.full.u||{})[f]||{}; return {f, v:x.v||String(u.model||"").toUpperCase(), c:x.c||"", cab:cab[f]||x.cab||""}; });
-  const ts=b.esjTs||Date.now();
+  const units=(b.units||[]).map(u=>{ const f=String(u.frame||"").toUpperCase(), x=(P.full.u||{})[f]||{}; return {f, v:x.v||String(u.model||"").toUpperCase(), c:x.c||"", cab:cab[f]||x.cab||"", e:x.e||"", pk:x.pk||""}; });
+  const ts=esjTgl(H.tgl)||b.esjTs||b.valTs||Date.now();
   return { id, b, parseNote, units, ts, shift,
     sjkb, pembuat:H.pembuat||cfg.pembuat, pengirim:H.pengirim||cfg.pengirim, tujuan:H.tujuan||tc.tujuanNama, ket:H.ket||"",
     nopol:H.nopol||b.ccPlat||"", driver:H.driver||((cc&&cc.name)||(dc&&dc.driver)||"").toUpperCase(), moda:H.moda||esjTitle(tc.tipeNama),
     vendor:H.vendor||ESJ_VENDOR[lpKey(b.lp)]||b.lp||"",
     line:{name:sigName("line_main"), sig:sigGet("line","main")},
     gh:{name:sigName("gh_"+shift), sig:sigGet("gh",shift)},
-    pic:{name:(pu&&sigName("mp_"+pu))||(puObj&&puObj.name)||"", sig:pu?sigGet("mp",pu):"", user:pu},
+    pic:Object.assign(esjPicSig(puObj),{user:pu}),
     stamp:((data.sigs||{}).stamp)||"", logo:((data.sigs||{}).logo)||ESJ_LOGO_TAM, validMin:cfg.validMin };
 }
 /* ---------- gambar e-SJKB di canvas (A5 landscape) ---------- */
@@ -4168,9 +4200,9 @@ async function esjDraw(D){
   return c;
 }
 /* PDF 1 halaman dari JPEG (tanpa pustaka luar) */
-function esjPdf(canvas){
+function esjPdf(canvas,PW,PH){
   const url=canvas.toDataURL("image/jpeg",0.9), bin=atob(url.split(",")[1]), jpg=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) jpg[i]=bin.charCodeAt(i);
-  const Wp=595.28, Hp=419.53, enc=new TextEncoder(), parts=[], offs=[]; let len=0;
+  const Wp=PW||595.28, Hp=PH||419.53, enc=new TextEncoder(), parts=[], offs=[]; let len=0;
   const add=x=>{ const b=typeof x==="string"?enc.encode(x):x; parts.push(b); len+=b.length; };
   const obj=(n,body)=>{ offs[n]=len; add(n+" 0 obj\n"); body(); add("\nendobj\n"); };
   add("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
@@ -4203,14 +4235,22 @@ async function esjOpen(id, picUser){
       ${D.parseNote?`<div class="msg" style="margin-bottom:8px;">${xlEsc(D.parseNote)}</div>`:""}
       ${miss.length?`<div class="msg err" style="margin-bottom:8px;">Belum lengkap: ${miss.map(xlEsc).join(", ")}. Lengkapi di Admin → ✍ TTD.</div>`:""}
       <img src="${cv.toDataURL("image/jpeg",0.8)}" alt="Pratinjau e-SJKB" style="width:100%;border:1px solid var(--border,#ccc);border-radius:8px;background:#fff;">
-      <div class="field" style="margin-top:10px;"><label>PIC Delivery</label><select id="esjPic" onchange="esjOpen(${id}, this.value)">${us.map(u=>`<option value="${xlEsc(u.username)}" ${u.username===D.pic.user?"selected":""}>${xlEsc(sigName("mp_"+u.username)||u.name)}${sigGet("mp",u.username)?"":" (belum ada TTD)"}</option>`).join("")}</select></div>
+      <div class="field" style="margin-top:10px;${currentUser&&["delivery","admin"].includes(currentUser.role)?"":"display:none;"}"><label>PIC Delivery</label><select id="esjPic" onchange="esjOpen(${id}, this.value)">${us.map(u=>`<option value="${xlEsc(u.username)}" ${u.username===D.pic.user?"selected":""}>${xlEsc(sigName("mp_"+u.username)||u.name)}${esjPicSig(u).sig?"":" (belum ada TTD)"}</option>`).join("")}</select></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${canShare?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="esjShare()">📤 Kirim (WhatsApp)</button>`:""}
         ${window.AndroidTLS&&window.AndroidTLS.openPdf?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="esjOpenPdf()">📄 Buka PDF / Bagikan</button>`:""}
         <button type="button" class="btn btn-outline" style="flex:1;min-width:140px;" onclick="esjSave()">⬇ Simpan PDF</button>
       </div>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Periksa isi sebelum dikirim. Data dibaca dari PDF surat jalan TLS dan dilengkapi data RADAR.</div>`);
+      <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Data dibaca dari PDF surat jalan TLS dan dilengkapi data RADAR. e-SJKB ini juga tampil di kotak Surat Jalan milik CC, Koordinator, dan Delivery.</div>`);
   }catch(e){ showModal(`<h3>🧾 e-SJKB</h3><div class="msg err">Gagal membuat e-SJKB: ${xlEsc(e&&e.message||e)}</div><button class="btn btn-primary" style="margin-top:10px;" onclick="closeModal()">Tutup</button>`); }
+}
+async function esjDownload(id){
+  const b=sjILS(id); if(!b) return;
+  try{
+    const D=await esjCollect(id, b.esjPic||undefined);
+    if(!b.esjTs){ const ts=D.ts; DB.set(d=>{ const x=(d.ils||[]).find(y=>y.id===id); if(x && !x.esjTs) x.esjTs=ts; }); }
+    const cv=await esjDraw(D); mfSave(esjFileName(D),"application/pdf",esjPdf(cv));
+  }catch(e){ alert("Gagal membuat e-SJKB: "+(e&&e.message||e)); }
 }
 function esjSave(){ if(!_esj) return; mfSave(_esj.name,"application/pdf",_esj.pdf); }
 function esjB64(){ let s=""; const b=_esj.pdf; for(let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192)); return btoa(s); }
@@ -4237,7 +4277,7 @@ function esjImport(P){
     ["red","white"].forEach(s=>{ const x=P.gh&&P.gh[s]; if(x && okUrl(x.sig)){ d.sigs.gh[s]=x.sig; d.sigs.names["gh_"+s]=x.name||""; } });
     if(okUrl(P.stamp)) d.sigs.stamp=P.stamp; if(okUrl(P.logo)) d.sigs.logo=P.logo;
     const first=s=>String(s||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").trim().split(/\s+/)[0]||"";
-    us.forEach(u=>{ if(d.sigs.mp[sigKey(u.username)]) return; const p=P.people.find(q=>q && first(q.name) && (first(q.name)===first(u.name) || first(q.name)===first(u.username))); if(p && okUrl(p.sig)){ d.sigs.mp[sigKey(u.username)]=p.sig; d.sigs.names["mp_"+sigKey(u.username)]=p.name; mapped++; } });
+    us.forEach(u=>{ if(d.sigs.mp[sigKey(u.username)]) return; const p=P.people.find(q=>q && first(q.name) && (first(q.name)===first(u.name) || first(q.name)===first(u.username) || esjSameName(q.name,u.name) || esjSameName(q.name,u.username))); if(p && okUrl(p.sig)){ d.sigs.mp[sigKey(u.username)]=p.sig; d.sigs.names["mp_"+sigKey(u.username)]=p.name; mapped++; } });
   });
   render(); alert("Paket TTD e-SJKB terpasang: "+P.people.length+" TTD, Line Head, Group Head Red & White, stempel."+(mapped?"\n"+mapped+" user Delivery otomatis dicocokkan dengan TTD-nya.":"")+"\n\nCek pencocokan PIC Delivery di bawah.");
 }
