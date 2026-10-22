@@ -775,6 +775,10 @@ window.RSnd=(function(){
       <div class="shiftrow"><button type="button" id="shiftRed" class="shiftchip red" onclick="setLoginShift('red')">🔴 SHIFT RED</button><button type="button" id="shiftWhite" class="shiftchip white" onclick="setLoginShift('white')">⚪ SHIFT WHITE</button></div>
     </div>
     <label style="display:none;align-items:center;gap:8px;font-size:13px;margin:4px 0 12px;"><input type="checkbox" id="loginRemember"> Ingat saya di HP ini (tidak perlu login ulang selama 30 hari)</label>
+    <div id="bioBox" style="display:none;margin-bottom:10px;">
+      <button type="button" class="btn btn-primary" style="background:#1a7f3c;border-color:#1a7f3c;" onclick="bioLogin()">👆 Masuk dengan sidik jari<span id="bioWho" style="font-weight:600;font-size:12px;"></span></button>
+      <div style="text-align:center;margin-top:6px;"><button type="button" class="btn-outline btn btn-sm" style="width:auto;padding:5px 12px;font-size:11px;" onclick="bioForgetUi()">Hapus sidik jari di HP ini</button></div>
+    </div>
     <button class="btn btn-primary" onclick="doLogin()">➜ Masuk</button>
     <button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="regOpen()">📝 Belum punya akun? Daftar</button>
 
@@ -1075,11 +1079,11 @@ const ROLES = [
 ];
 const TABS_BY_ROLE = {
   dispatcher:  [{key:"dispatcher", label:"Scan Unit"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
-  cc:          [{key:"orderstall", label:"Order Stall"}, {key:"display", label:"Display"}],
-  delivery:    [{key:"delivery", label:"Delivery"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
-  koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
-  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
-  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
+  cc:          [{key:"orderstall", label:"Order Stall"}, {key:"ccmap", label:"Peta & Chat"}, {key:"display", label:"Display"}],
+  delivery:    [{key:"delivery", label:"Delivery"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
+  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
+  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
 let selectedRole = null;
@@ -1371,6 +1375,7 @@ function saveSpeedCfg(){
 }
 
 function loginEnter(acc, roles){
+  const _bioPw=(typeof _loginOk!=="undefined" && _loginOk && _loginOk.p) || (document.getElementById("loginPass")||{}).value || "";
   if(!TABS_BY_ROLE[acc.role]){ document.getElementById("loginMsg").innerHTML = `<div class="msg err">Akun ini belum punya otoritas yang valid. Hubungi Admin.</div>`; return; }
   selectedRole = acc.role;
   try{ const rb=document.getElementById("loginRemember"); if(rb) localStorage.setItem("radar_remember", rb.checked?"1":"0"); if(SAVE_LOGIN) localStorage.setItem("radar_lastuser", acc.username); savePass((rb&&!rb.checked)?"":document.getElementById("loginPass").value); }catch(e){}
@@ -1380,6 +1385,7 @@ function loginEnter(acc, roles){
   document.getElementById("loginMsg").innerHTML = "";
   document.getElementById("loginPass").value = "";
   enterApp();   // langsung ke menu sesuai role akun
+  try{ bioOffer(acc, _bioPw); }catch(e){}
 }
 /* ===== Password: disimpan sebagai hash PBKDF2-SHA256 + salt (bukan teks asli) ===== */
 const PW_ITER=100000, PW_MIN=6;
@@ -1484,6 +1490,41 @@ function loginPickRole(role){
   const roles=[...new Set(L.ok.map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
   if(acc) loginGo(acc, roles);
 }
+/* ===== Login sidik jari (hanya di APK; HP tanpa sidik jari tetap mengetik user dan password) ===== */
+let _bioFlow=false;
+function bioApk(){ return !!(window.AndroidTLS && window.AndroidTLS.bioAvail && window.AndroidTLS.bioHas); }
+function bioRefresh(){
+  try{ const box=document.getElementById("bioBox"); if(!box) return;
+    const on=bioApk() && AndroidTLS.bioHas();
+    box.style.display=on?"block":"none";
+    if(on){ const w=document.getElementById("bioWho"); if(w) w.textContent=" · "+AndroidTLS.bioUser(); } }catch(e){}
+}
+setInterval(bioRefresh,1500); setTimeout(bioRefresh,600);
+function bioLogin(){
+  const m=document.getElementById("loginMsg");
+  if(!loginShift){ m.innerHTML=`<div class="msg err">Pilih shift dulu (Red atau White), lalu tekan tombol sidik jari.</div>`; try{RSnd.err();}catch(e){} return; }
+  m.innerHTML=`<div class="msg info">Tempelkan jari…</div>`;
+  try{ AndroidTLS.bioLogin(); }catch(e){ m.innerHTML=`<div class="msg err">Sidik jari tidak tersedia.</div>`; }
+}
+window.radarBioResult=function(u,p){
+  _bioFlow=true;
+  try{ document.getElementById("loginUser").value=u; document.getElementById("loginPass").value=p; }catch(e){}
+  Promise.resolve().then(()=>doLogin()).catch(()=>{}).then(()=>{ setTimeout(()=>{ _bioFlow=false; },1500); });
+};
+window.radarBioErr=function(m){ const el=document.getElementById("loginMsg"); if(!el) return; el.innerHTML = m ? `<div class="msg err">${escH(m)}</div>` : ""; };
+window.radarBioEnrolled=function(){ bioRefresh(); setTimeout(()=>alert("✅ Login sidik jari aktif. Berikutnya cukup pilih shift lalu tempelkan jari."),200); };
+function bioForgetUi(){ if(!confirm("Hapus login sidik jari di HP ini? Setelah itu login harus mengetik user dan password.")) return; try{ AndroidTLS.bioForget(); }catch(e){} bioRefresh(); }
+function bioOffer(acc, pw){
+  if(_bioFlow || !bioApk() || !pw) return;
+  if(!AndroidTLS.bioAvail()) return;   // HP tanpa sidik jari / belum ada sidik jari terdaftar: tetap ketik manual
+  if(AndroidTLS.bioHas() && AndroidTLS.bioUser()===acc.username) return;
+  const k="radar_bio_no_"+acc.username; let n=0; try{ n=parseInt(localStorage.getItem(k)||"0",10)||0; }catch(e){}
+  if(n>=2) return;
+  setTimeout(()=>{
+    if(confirm("Mau masuk dengan sidik jari saja di HP ini?\n\nUser dan password disimpan terenkripsi dan hanya bisa dibuka dengan sidik jari kamu. Berikutnya tidak perlu mengetik lagi.")){ try{ AndroidTLS.bioEnroll(acc.username, pw); }catch(e){} }
+    else { try{ localStorage.setItem(k, String(n+1)); }catch(e){} }
+  }, 900);
+}
 async function doLogin(){
   const u = document.getElementById("loginUser").value.trim();
   const p = document.getElementById("loginPass").value;
@@ -1494,12 +1535,14 @@ async function doLogin(){
   const users = data.users || [];
   let same = users.filter(x=>x.username===u);
   if(!same.length) same = users.filter(x=>String(x.username).toLowerCase()===u.toLowerCase());
+  if(!same.length && _bioFlow){ try{ AndroidTLS.bioForget(); }catch(e){} bioRefresh(); msgEl.innerHTML=`<div class="msg err">Akun untuk sidik jari ini sudah tidak ada. Login ketik manual.</div>`; return; }
   if(!same.length){ const rm=regLoginMsg(u); msgEl.innerHTML = `<div class="msg err">${rm||"Username tidak ditemukan. Belum punya akun? Tekan <b>Daftar</b>."}</div>`; try{RSnd.err();}catch(e){} return; }
   msgEl.innerHTML = `<div class="msg">Memeriksa…</div>`;
   if(u.toLowerCase()===PW_SHARED_USER && DB.get().pwSharedReset!==PW_SHARED_RESET){ try{ await pwSharedReset(true); }catch(e){} same = (DB.get().users||[]).filter(x=>String(x.username).toLowerCase()===u.toLowerCase()); }
   const ok = [];
   try{ for(const x of same){ if(await pwCheck(x.password, p)) ok.push(x); } }
   catch(e){ msgEl.innerHTML = `<div class="msg err">${xlEsc(e.message||e)}</div>`; return; }
+  if(!ok.length && _bioFlow){ try{ AndroidTLS.bioForget(); }catch(e){} bioRefresh(); msgEl.innerHTML=`<div class="msg err">Password akun berubah. Login ketik sekali lagi, lalu aktifkan sidik jari lagi.</div>`; try{RSnd.err();}catch(e){} return; }
   if(!ok.length){ savePass(""); msgEl.innerHTML = `<div class="msg err">Password salah.</div>`; try{RSnd.err();}catch(e){} return; }
   msgEl.innerHTML = "";
   _loginOk = {p, ok};
@@ -1648,6 +1691,7 @@ function renderInner(){
   else if(activeTab==="dccp") setVP(vp, renderDccpUpload());
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
+  else if(activeTab==="ccreport"){ setVP(vp, renderCcReport()); if(_vpChanged) setTimeout(()=>tripLoad().then(rptUpdate),0); }
   else if(activeTab==="admin") setVP(vp, renderAdmin());
   else if(activeTab==="display") setVP(vp, renderDisplay());
 }
@@ -2327,12 +2371,13 @@ function stopAutoAbsen(silent){
   if(!silent) render();
 }
 /* posisi dari layanan latar belakang aplikasi Android (tetap jalan saat layar terkunci / aplikasi diminimalkan) */
-window.radarBgPos=function(lat,lng,acc){ const P={coords:{latitude:lat,longitude:lng,accuracy:acc,speed:null}}; try{ if(autoAbsen.on) onAutoPos(P); }catch(e){} try{ if(shareTrk.on) onSharePos(P); }catch(e){} };
+window.radarBgPos=function(lat,lng,acc){ window._myPos={lat:lat,lng:lng,ts:Date.now()}; const P={coords:{latitude:lat,longitude:lng,accuracy:acc,speed:null}}; try{ if(autoAbsen.on) onAutoPos(P); }catch(e){} try{ if(shareTrk.on) onSharePos(P); }catch(e){} };
 function onAutoErr(err){
   if(err && err.code===1){ autoAbsen.err = "Izin lokasi ditolak. Aktifkan izin lokasi (pilih 'Izinkan') lalu aktifkan ulang."; updateAutoStatus(); }
 }
 function onAutoPos(pos){
   if(!autoAbsen.on) return;
+  try{ window._myPos={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:Date.now()}; }catch(e){}
   const d = DB.get(), y = d.yardLocation; if(y.lat==null) return;
   const dist = haversineKm(pos.coords.latitude, pos.coords.longitude, y.lat, y.lng);
   autoAbsen.dist = dist; autoAbsen.acc = pos.coords.accuracy; autoAbsen.ts = Date.now(); autoAbsen.err = "";
@@ -2455,8 +2500,8 @@ function renderOrderStall(){
   const absenBlock = verifiedForm + profileCard + autoCard + manualCard;
 
   return `
+    ${sjListHtml(data, b=>!!myCcPlatKey() && normPlat(b.ccPlat)===myCcPlatKey(), "Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah Delout. Terhapus otomatis 7 hari.":"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
     ${absenBlock}
-    ${myCcPlatKey()?sjListHtml(data, b=>normPlat(b.ccPlat)===myCcPlatKey(), "Surat Jalan Saya", "Muncul setelah Delout. Terhapus otomatis 7 hari."):""}
     ${shareCardHtml()}
 
     ${holdCardHtml(data, true)}
@@ -3320,7 +3365,7 @@ function sjCleanup(){
   }catch(e){}
 }
 setInterval(sjCleanup, 600000); setTimeout(sjCleanup, 9000);
-function myCcPlatKey(){ try{ return normPlat((getCcProfile()||{}).plat||""); }catch(e){ return ""; } }
+function myCcPlatKey(){ try{ let k=normPlat((getCcProfile()||{}).plat||""); if(!k){ const o=JSON.parse(localStorage.getItem(CC_PLATDAY_KEY)||"null"); if(o&&o.plat) k=normPlat(o.plat); } return k; }catch(e){ return ""; } }
 
 /* ======================================================================
    MANIFEST DELIVERY OUT — unduh Excel (semua LP / per LP)
@@ -6643,6 +6688,10 @@ function routeAdminHtml(){
       <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="routeFetchOsrm(false)">🛣 Ambil rute jalan otomatis</button>
       ${R?`<button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="routeClear()">Hapus rute</button>`:""}
     </div>
+    ${(()=>{ const mp=DB.get().mapPoints||{};
+      if(mp.refPlat) return `<div class="msg ok" style="margin-bottom:10px;">🛣 Rute <b>otomatis mengikuti ${xlEsc(mp.refName||mp.refPlat)}</b>. Diperbarui tiap ±1 menit dari HP CC itu, berhenti sendiri saat tiba di NVDC.<div style="margin-top:8px;"><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="routeFollowStop()">⏹ Berhenti ikuti</button></div></div>`;
+      return `<div class="field" style="margin-bottom:12px;"><label>Ikuti jalur satu CC (otomatis, layar ini tidak perlu terbuka)</label><select id="routeFollowPlat"><option value="">${live.length?"-- pilih CC acuan --":"Belum ada CC yang membagikan posisi"}</option>${live.map(r=>`<option value="${xlEsc(r.plat)}">${xlEsc(r.plat)} · ${xlEsc(r.lp||"")}</option>`).join("")}</select></div>
+      <button type="button" class="btn btn-primary btn-sm" style="width:auto;margin-bottom:12px;" onclick="routeFollowStart()" ${live.length?"":"disabled"}>▶ Mulai ikuti jalur CC</button>`; })()}
     ${routeRec.on?`<div class="msg ok" style="margin-bottom:8px;">⏺ Merekam… <span id="routeRecStat">${routeRec.pts.length} titik terekam dari ${xlEsc(routeRec.plat)}</span>. Biarkan layar ini terbuka sampai CC tiba di NVDC.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="routeRecStop(true)">⏹ Selesai &amp; simpan rute</button><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="routeRecStop(false)">Batal</button></div>`
     :`<div class="field"><label>Rekam dari perjalanan CC (CC harus sedang Bagikan Posisi)</label><select id="routeRecPlat"><option value="">${live.length?"-- pilih CC --":"Belum ada CC yang membagikan posisi"}</option>${live.map(r=>`<option value="${xlEsc(r.plat)}">${xlEsc(r.plat)} · ${xlEsc(r.lp||"")}</option>`).join("")}</select></div>
@@ -6650,10 +6699,43 @@ function routeAdminHtml(){
   </div>`;
 }
 
+/* ===== Rute otomatis: mengikuti jalur SATU CC acuan =====
+   Admin memilih CC acuan. HP CC itu merekam jalurnya sendiri dan memperbarui rute di server tiap ~1 menit,
+   berhenti otomatis saat CC tiba di NVDC. Tidak perlu layar Admin terbuka. */
+const REFTR_KEY="radar_reftrail"; let _refFlush=0;
+function refTrailTick(pos){
+  const mp=(DB.get().mapPoints||{}), ref=mp.refPlat||"";
+  if(!ref || ref!==shareTrk.key) return;
+  let st=null; try{ st=JSON.parse(localStorage.getItem(REFTR_KEY)||"null"); }catch(e){}
+  if(!st || st.k!==ref || st.start!==(mp.refStart||0)) st={k:ref, start:mp.refStart||0, pts:[], n:0};
+  const lat=pos.coords.latitude, lng=pos.coords.longitude, acc=pos.coords.accuracy||0;
+  if(acc>60) return;
+  const last=st.pts[st.pts.length-1];
+  if(!last || haversineKm(last[0],last[1],lat,lng)>0.025){ st.pts.push([+lat.toFixed(5), +lng.toFixed(5)]); st.n=(st.n||0)+1; }
+  const nv=mp.nvdc, now=Date.now();
+  const near=!!(nv && (st.n||0)>=10 && haversineKm(lat,lng,nv.lat,nv.lng)<0.3);
+  if((st.n||0)>=10 && (near || now-_refFlush>60000)){
+    _refFlush=now;
+    st.pts=routeSimplify(st.pts, 0.00004);
+    try{ routeSave(st.pts, "ikut:"+((getCcProfile().plat)||ref)); }catch(e){}
+    if(near){ try{ DB.set(d=>{ if(d.mapPoints){ d.mapPoints.refPlat=""; } }); }catch(e){} }
+  }
+  try{ localStorage.setItem(REFTR_KEY, JSON.stringify(st)); }catch(e){}
+}
+function routeFollowStart(){
+  const plat=(document.getElementById("routeFollowPlat")||{}).value||"";
+  if(!plat){ alert("Pilih CC yang akan diikuti jalurnya."); return; }
+  if(!confirm("Mulai ikuti jalur "+plat+"?\n\nPastikan CC ini baru berangkat dari ADM KAP menuju NVDC. Rute lama diganti dengan jalur yang dilalui CC ini, dan berhenti otomatis saat CC tiba di NVDC.")) return;
+  DB.set(d=>{ d.mapPoints=d.mapPoints||{}; d.mapPoints.refPlat=trkKey(plat); d.mapPoints.refName=plat; d.mapPoints.refStart=Date.now(); });
+  try{ localStorage.removeItem(REFTR_KEY); }catch(e){}
+  render();
+}
+function routeFollowStop(){ DB.set(d=>{ if(d.mapPoints){ d.mapPoints.refPlat=""; } }); render(); }
 const TRK_PATH = "radar_track";
 let TRACK = {}, TRKERR = "", ccMapObj = null, ccMapLayer = null, _leafP = null;
 function escH(t){ return String(t==null?"":t).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function trackAttach(){
+  try{ lapAttach(); }catch(e){}
   try{
     FBS.db.ref(TRK_PATH).on("value", snap=>{ TRACK = snap.val() || {}; TRKERR = ""; try{ routeRecTick(); }catch(e){} if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); },
       err=>{ TRKERR = "Peta CC belum diizinkan oleh aturan Firebase (tambahkan node radar_track)."; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); });
@@ -6687,11 +6769,14 @@ function stopShare(silent){
   if(!silent) render();
 }
 function onSharePos(pos){
+  try{ window._myPos={lat:pos.coords.latitude,lng:pos.coords.longitude,ts:Date.now()}; }catch(e){}
   if(!shareTrk.on) return;
+  try{ tripTick(pos); }catch(e){}
   const now = Date.now(); if(now - shareTrk.last < 15000) return;
   shareTrk.last = now;
   const prof = getCcProfile(), ref = FBS.db.ref(TRK_PATH+"/"+shareTrk.key);
   const rec = {plat:prof.plat, lp:prof.lp, lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), acc:Math.round(pos.coords.accuracy||0), spd:Math.round((pos.coords.speed||0)*3.6), ts:now};
+  try{ refTrailTick(pos); }catch(e){}
   ref.set(rec).then(()=>{ shareTrk.msg = "✔ Posisi terkirim "+new Date(now).toLocaleTimeString("id-ID")+" (±"+rec.acc+" m)"; shareStatusUpdate(); })
     .catch(e=>{ shareTrk.msg = "Gagal kirim posisi: "+(e&&e.message||e)+" — minta Admin menambah aturan Firebase 'radar_track'."; shareStatusUpdate(); });
 }
@@ -6736,11 +6821,26 @@ function ccPlatGateCheck(){
     ccPlatGateOpen();
   }
 }
+/* Saran plat dari Jadwal DCCP hari ini (LP yang sama dengan akun). Plat bisa dipakai driver mana pun, jadi hanya saran: driver cukup mengetuk satu tombol. */
+function ccNameTokens(n){ return String(n||"").toLowerCase().replace(/[^a-z\s]/g," ").split(/\s+/).filter(w=>w.length>=3); }
+function ccPlatCands(acc){
+  const d=DB.get(), lp=(acc&&acc.lp)||getCcProfile().lp||"", mine=ccNameTokens((acc&&acc.name)||(currentUser&&currentUser.name)||"");
+  const seen=new Set(), out=[];
+  (d.dccpSchedule||[]).forEach(r=>{
+    const plat=ccPlatNorm(r.police); if(!plat || seen.has(plat)) return;
+    if(lp && r.lp && lpKey(r.lp)!==lpKey(lp)) return;
+    seen.add(plat);
+    const dt=ccNameTokens(r.driver||""), me=!!mine.length && dt.some(w=>mine.some(m=>m===w||m.includes(w)||w.includes(m)));
+    out.push({plat, drv:r.driver||"", me});
+  });
+  return out.sort((a,b)=>(b.me-a.me)||a.plat.localeCompare(b.plat)).slice(0,10);
+}
 function ccPlatGateOpen(cancelable){
   const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), pr=getCcProfile();
   const accLp=(acc&&acc.lp)||"", rec=ccRecentPlats();
   showModal(`<h3 style="margin:0 0 4px;">🚚 Plat truk hari ini</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">${cancelable?"Ganti plat hanya kalau kamu benar-benar berpindah truk. Kalau tidak, tekan Batal.":"Diisi sekali per shift, karena truk bisa berganti. Posisi dan absen otomatis memakai plat ini."}</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">${cancelable?"Ganti plat hanya kalau kamu benar-benar berpindah truk. Kalau tidak, tekan Batal.":"Cukup ketuk plat truk kamu (dari Jadwal DCCP) atau ketik sekali per shift. Plat bisa dipakai driver mana pun, jadi tidak terikat ke akun. Posisi dan absen otomatis memakai plat ini."}</div>
+    ${(()=>{ const C=ccPlatCands(acc); return C.length?`<div style="font-size:12px;margin-bottom:6px;">Jadwal DCCP hari ini${accLp?" · LP "+xlEsc(accLp):""} (ketuk plat truk kamu):</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${C.map(c=>`<button type="button" class="btn ${c.me?'btn-primary':'btn-outline'} btn-sm" style="width:auto;font-weight:800;line-height:1.2;" onclick="document.getElementById('cgPlat').value='${xlEsc(c.plat)}';ccPlatGateSave()">${xlEsc(c.plat)}${c.drv?`<br><span style="font-weight:600;font-size:10px;">${xlEsc(c.drv)}</span>`:""}</button>`).join("")}</div>`:""; })()}
     ${rec.length?`<div style="font-size:12px;margin-bottom:6px;">Pernah dipakai di HP ini (ketuk untuk memilih):</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${rec.map(p=>`<button type="button" class="btn btn-outline btn-sm" style="width:auto;font-weight:800;" onclick="document.getElementById('cgPlat').value='${xlEsc(p)}';ccPlatGateSave()">${xlEsc(p)}</button>`).join("")}</div>`:""}
     <div class="field"><label>Nomor polisi truk</label><input id="cgPlat" type="text" placeholder="B 1234 ABC" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;font-size:20px;font-weight:800;letter-spacing:1px;" onkeydown="if(event.key==='Enter')ccPlatGateSave()"></div>
     <div class="field"><label>LP</label>${accLp?`<input type="text" value="${xlEsc(accLp)}" disabled><input type="hidden" id="cgLp" value="${xlEsc(accLp)}">`:`<select id="cgLp"><option value="">-- pilih LP --</option>${(d.lpList||[]).map(l=>`<option value="${xlEsc(l)}" ${lpKey(l)===lpKey(pr.lp)?"selected":""}>${xlEsc(l)}</option>`).join("")}</select>`}</div>
@@ -6800,8 +6900,10 @@ function renderCcMap(){
     <div id="ccmapMsg"></div>
     <div id="ccmap" style="position:relative;z-index:0;isolation:isolate;height:55vh;min-height:320px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#e8eef5;"></div>
     <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Posisi diperbarui saat aplikasi driver terbuka. ${routeGet()?"Garis biru = rute jalan CC; jarak dihitung sepanjang rute.":"Garis putus-putus = garis lurus (Admin belum menyimpan rute jalan)."}</div>
+    ${trailCardHtml()}
   </div>
-  <div class="card"><h3>🚚 CC di perjalanan</h3><div id="trkList"></div></div>`;
+  <div class="card"><h3>🚚 CC di perjalanan</h3><div id="trkList"></div></div>
+  ${lapChatCardsHtml()}`;
 }
 function ensureLeaflet(){
   if(window.L) return Promise.resolve();
@@ -6873,12 +6975,429 @@ function updateTrackUI(){
   }
   if(ccMapObj && ccMapLayer && window.L && document.getElementById("ccmap")){
     ccMapLayer.clearLayers();
+    try{ lapDrawMarkers(); }catch(e){}
+    try{ trailDraw(); }catch(e){}
     rows.forEach(o=>{
       L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div style="background:#FFF7D6;color:#111827;border:2px solid #E60012;border-radius:8px;padding:3px 8px;font:800 12px Arial,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);">🚚 ${escH(o.plat)}</div>`, iconAnchor:[0,0]})}).addTo(ccMapLayer);
     });
   }
 }
 setInterval(()=>{ if(activeTab==="ccmap") updateTrackUI(); }, 15000);
+
+/* ===== LAPORAN TITIK (macet / kecelakaan) + CHAT PETA =====
+   radar_lapor/<id>  = titik laporan di peta (tersimpan 12 jam)
+   radar_chat/<id>   = pesan chat (tersimpan 24 jam); pesan dengan field "lapor" = balasan di titik laporan
+   radar_foto/<id>   = foto (JPEG base64, diperkecil) untuk laporan / pesan; dimuat hanya saat dilihat */
+const LAP_PATH="radar_lapor", CHAT_PATH="radar_chat", FOTO_PATH="radar_foto";
+const LAP_KEEP_MS=12*3600*1000, CHAT_KEEP_MS=24*3600*1000;
+const LAP_TYPES={macet:{ic:"🚦",t:"Macet",c:"#E8A317"}, kecelakaan:{ic:"🚨",t:"Kecelakaan",c:"#D64545"}, rusak:{ic:"🕳",t:"Jalan rusak / banjir",c:"#7C3AED"}, lain:{ic:"ℹ️",t:"Lainnya",c:"#2F6FB5"}};
+const ROLE_LBL={cc:"Driver CC",delivery:"Delivery",koordinator:"Koordinator",leader:"Leader",admin:"Admin",dispatcher:"Dispatcher"};
+let LAPOR={}, CHAT={}, LAPERR="", _lapReady=false, _chatReady=false, _lapSeen=new Set(), _lapCleaned=false, lapOpenId=null;
+let lapDraft={type:"macet",text:"",foto:null}, chatDraft={text:"",foto:null}, thrDraft={text:"",foto:null};
+try{ _lapSeen=new Set(JSON.parse(localStorage.getItem("radar_lapseen")||"[]")); }catch(e){}
+window._myPos=window._myPos||null;
+function lapDev(){ try{ let v=localStorage.getItem("radar_devid"); if(!v){ v=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem("radar_devid",v); } return v; }catch(e){ return "x"; } }
+function lapMyPlat(){ try{ return platFmt((getCcProfile()||{}).plat||""); }catch(e){ return ""; } }
+function lapMeta(){ return {by:(currentUser&&currentUser.name)||"-", role:(currentUser&&currentUser.role)||"", plat:lapMyPlat(), dev:lapDev()}; }
+function lapAgo(ts){ const m=Math.max(0,Math.round((Date.now()-(ts||0))/60000)); return m<1?"baru saja":m<60?m+" mnt lalu":Math.round(m/60)+" jam lalu"; }
+function lapAttach(){
+  try{
+    FBS.db.ref(LAP_PATH).on("value", snap=>{
+      LAPOR=snap.val()||{}; LAPERR="";
+      lapNewCheck(); lapCleanup();
+      if(activeTab==="ccmap"){ lapListUpdate(); try{ updateTrackUI(); }catch(e){} }
+      lapOvRefresh();
+    }, err=>{ LAPERR="Laporan titik belum diizinkan oleh aturan Firebase (tambahkan node radar_lapor, radar_chat, radar_foto)."; if(activeTab==="ccmap") lapListUpdate(); });
+    FBS.db.ref(CHAT_PATH).limitToLast(150).on("value", snap=>{
+      CHAT=snap.val()||{}; _chatReady=true;
+      if(activeTab==="ccmap") chatBoxUpdate();
+      lapOvRefresh();
+    }, err=>{ LAPERR="Chat belum diizinkan oleh aturan Firebase (tambahkan node radar_lapor, radar_chat, radar_foto)."; if(activeTab==="ccmap") chatBoxUpdate(); });
+  }catch(e){}
+}
+function lapActive(){
+  const now=Date.now();
+  return Object.keys(LAPOR||{}).map(k=>Object.assign({id:k},LAPOR[k])).filter(r=>r && typeof r.lat==="number" && !r.done && now-(r.ts||0)<LAP_KEEP_MS).sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
+function lapNewCheck(){
+  const first=!_lapReady; _lapReady=true; let ch=false;
+  for(const r of lapActive()){
+    if(_lapSeen.has(r.id)) continue;
+    _lapSeen.add(r.id); ch=true;
+    if(!first && r.dev!==lapDev()) lapAlert(r);
+  }
+  if(ch){ try{ localStorage.setItem("radar_lapseen", JSON.stringify([..._lapSeen].slice(-200))); }catch(e){} }
+}
+function lapAlert(r){
+  try{
+    const T=LAP_TYPES[r.type]||LAP_TYPES.lain;
+    const p=window._myPos, d=(p&&Date.now()-p.ts<10*60000)?haversineKm(p.lat,p.lng,r.lat,r.lng):null;
+    if(d!=null && d>25) return;   // laporan jauh dari posisi kamu: tidak perlu membunyikan alarm
+    playAlarmSound(); if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
+    if('Notification' in window && Notification.permission==='granted'){
+      try{ new Notification(T.ic+" "+T.t+" dilaporkan"+(r.plat?" — "+r.plat:""), {body:(r.text||"Buka Peta CC untuk melihat titiknya.")+(d!=null?" · ±"+d.toFixed(1)+" km dari kamu":"")}); }catch(e){}
+    }
+  }catch(e){}
+}
+function lapCleanup(){
+  if(_lapCleaned) return; _lapCleaned=true;
+  try{
+    const now=Date.now();
+    Object.keys(LAPOR||{}).forEach(k=>{ const r=LAPOR[k]; if(r && now-(r.ts||0)>LAP_KEEP_MS+6*3600*1000){ FBS.db.ref(LAP_PATH+"/"+k).remove(); FBS.db.ref(FOTO_PATH+"/"+k).remove(); } });
+    setTimeout(()=>{ Object.keys(CHAT||{}).forEach(k=>{ const m=CHAT[k]; if(m && now-(m.ts||0)>CHAT_KEEP_MS){ FBS.db.ref(CHAT_PATH+"/"+k).remove(); if(m.foto) FBS.db.ref(FOTO_PATH+"/"+k).remove(); } }); },4000);
+  }catch(e){}
+}
+function lapGetPos(){
+  return new Promise((res,rej)=>{
+    const p=window._myPos; if(p && Date.now()-p.ts<2*60000){ res(p); return; }
+    if(!navigator.geolocation){ rej(new Error("HP tidak mendukung GPS")); return; }
+    navigator.geolocation.getCurrentPosition(g=>{ window._myPos={lat:g.coords.latitude,lng:g.coords.longitude,ts:Date.now()}; res(window._myPos); },
+      ()=>{ if(p && Date.now()-p.ts<15*60000) res(p); else rej(new Error("Posisi belum didapat. Aktifkan GPS lalu coba lagi.")); }, {enableHighAccuracy:true, timeout:9000, maximumAge:30000});
+  });
+}
+function lapCompress(file){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader(); fr.onerror=()=>rej(new Error("Foto gagal dibaca"));
+    fr.onload=()=>{ const im=new Image(); im.onerror=()=>rej(new Error("Berkas bukan foto"));
+      im.onload=()=>{ const M=900, s=Math.min(1,M/Math.max(im.width,im.height)); const c=document.createElement("canvas"); c.width=Math.max(1,Math.round(im.width*s)); c.height=Math.max(1,Math.round(im.height*s)); c.getContext("2d").drawImage(im,0,0,c.width,c.height); res(c.toDataURL("image/jpeg",0.6)); };
+      im.src=fr.result; };
+    fr.readAsDataURL(file);
+  });
+}
+function lapPick(kind){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept="image/*"; inp.setAttribute("capture","environment");
+  inp.onchange=async()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
+    try{ const d=await lapCompress(f); if(kind==="lap") lapDraft.foto=d; else if(kind==="thr") thrDraft.foto=d; else chatDraft.foto=d; lapPrevUpdate(); }
+    catch(e){ alert(e.message||e); } };
+  inp.click();
+}
+function lapPrevUpdate(){
+  [["lapPrev",lapDraft],["chatPrev",chatDraft],["thrPrev",thrDraft]].forEach(([id,D])=>{ const el=document.getElementById(id); if(el) el.innerHTML=D.foto?`<img src="${D.foto}" style="height:54px;border-radius:8px;border:1px solid var(--border);vertical-align:middle;"> <button class="btn btn-outline btn-sm" onclick="lapDropFoto('${id}')">✕</button>`:""; });
+}
+function lapDropFoto(id){ if(id==="lapPrev") lapDraft.foto=null; else if(id==="thrPrev") thrDraft.foto=null; else chatDraft.foto=null; lapPrevUpdate(); }
+function lapRulesMsg(e){ return "Gagal: "+(e&&e.message||e)+"\nPastikan aturan (Rules) Firebase sudah memuat node radar_lapor, radar_chat dan radar_foto."; }
+/* --- kirim laporan --- */
+function lapFormOpen(){
+  if(!FBS.enabled||!FBS.db){ alert("Laporan titik butuh koneksi Firebase (mode online)."); return; }
+  lapDraft={type:"macet",text:"",foto:null};
+  const ov=lapOv(); 
+  ov.innerHTML=`<div class="box"><h3 style="margin:0 0 8px;">⚠ Lapor titik di jalan</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Lokasi memakai posisi GPS HP kamu sekarang. Jangan mengetik sambil menyetir.</div>
+    <div id="lapTypes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${Object.keys(LAP_TYPES).map(k=>`<button class="btn btn-sm ${k===lapDraft.type?'btn-primary':'btn-outline'}" data-k="${k}" onclick="lapSetType('${k}')">${LAP_TYPES[k].ic} ${LAP_TYPES[k].t}</button>`).join("")}</div>
+    <textarea id="lapTxt" rows="3" maxlength="300" placeholder="Keterangan singkat (mis. macet panjang, truk mogok, kecelakaan di KM 47)" style="width:100%;" oninput="lapDraft.text=this.value"></textarea>
+    <div style="margin:8px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="lapPick('lap')">📷 Foto</button><span id="lapPrev"></span></div>
+    <div id="lapMsg"></div>
+    <div style="display:flex;gap:8px;"><button class="btn btn-outline" style="flex:1;" onclick="lapOvClose()">Batal</button><button class="btn btn-primary" style="flex:2;" id="lapSendBtn" onclick="lapSend()">Kirim laporan</button></div></div>`;
+}
+function lapSetType(k){ lapDraft.type=k; document.querySelectorAll("#lapTypes button").forEach(b=>{ b.className="btn btn-sm "+(b.dataset.k===k?"btn-primary":"btn-outline"); }); }
+async function lapSend(){
+  const btn=document.getElementById("lapSendBtn"), msg=document.getElementById("lapMsg");
+  if(!lapDraft.text.trim() && !lapDraft.foto && lapDraft.type==="lain"){ msg.innerHTML=`<div class="msg err">Isi keterangan atau tambah foto.</div>`; return; }
+  btn.disabled=true; msg.innerHTML=`<div class="msg info">Mengambil posisi GPS…</div>`;
+  try{
+    const p=await lapGetPos();
+    const ref=FBS.db.ref(LAP_PATH).push(), id=ref.key;
+    if(lapDraft.foto) await FBS.db.ref(FOTO_PATH+"/"+id).set({b64:lapDraft.foto.split(",")[1], ts:Date.now()});
+    await ref.set(Object.assign(lapMeta(),{ts:Date.now(), type:lapDraft.type, text:lapDraft.text.trim().slice(0,300), lat:Math.round(p.lat*1e6)/1e6, lng:Math.round(p.lng*1e6)/1e6, foto:!!lapDraft.foto}));
+    _lapSeen.add(id); lapDraft={type:"macet",text:"",foto:null};
+    lapOvClose(); if(activeTab==="ccmap"){ lapListUpdate(); try{ updateTrackUI(); }catch(e){} }
+    try{ if(ccMapObj) ccMapObj.setView([p.lat,p.lng],15); }catch(e){}
+  }catch(e){ msg.innerHTML=`<div class="msg err">${escH(String(e&&e.message||e))}</div>`; btn.disabled=false; if(e&&/permission|PERMISSION/.test(String(e.message))) alert(lapRulesMsg(e)); }
+}
+async function lapDone(id){
+  if(!confirm("Tandai titik ini sudah lancar / selesai? Marker akan hilang dari peta.")) return;
+  try{ await FBS.db.ref(LAP_PATH+"/"+id).update({done:true, doneBy:(currentUser&&currentUser.name)||"-", doneTs:Date.now()}); lapOvClose(); }catch(e){ alert(lapRulesMsg(e)); }
+}
+/* --- chat --- */
+async function chatSend(lapId){
+  const thr=!!lapId, D=thr?thrDraft:chatDraft, inp=document.getElementById(thr?"thrTxt":"chatTxt");
+  const text=((inp&&inp.value)||D.text||"").trim();
+  if(!text && !D.foto) return;
+  if(!FBS.enabled||!FBS.db){ alert("Chat butuh koneksi Firebase (mode online)."); return; }
+  try{
+    const ref=FBS.db.ref(CHAT_PATH).push(), key=ref.key;
+    if(D.foto) await FBS.db.ref(FOTO_PATH+"/"+key).set({b64:D.foto.split(",")[1], ts:Date.now()});
+    await ref.set(Object.assign(lapMeta(),{ts:Date.now(), text:text.slice(0,300), foto:!!D.foto}, lapId?{lapor:lapId}:{}));
+    D.text=""; D.foto=null; if(inp) inp.value=""; lapPrevUpdate();
+  }catch(e){ alert(lapRulesMsg(e)); }
+}
+function chatMsgHtml(m){
+  const mine=m.dev===lapDev(), who=escH(m.plat||m.by||"-"), rl=ROLE_LBL[m.role]||"";
+  return `<div style="display:flex;justify-content:${mine?'flex-end':'flex-start'};margin:6px 0;"><div style="max-width:84%;background:${mine?'#DCF8C6':'var(--panel2,#f1f4f8)'};border:1px solid var(--border);border-radius:12px;padding:6px 10px;">
+    <div style="font-size:11px;font-weight:800;">${who}${m.by&&m.plat?` <span style="font-weight:600;color:var(--text-dim);">· ${escH(m.by)}</span>`:""}${rl?` <span style="font-weight:600;color:var(--text-dim);">· ${rl}</span>`:""}</div>
+    ${m.text?`<div style="font-size:14px;white-space:pre-wrap;word-break:break-word;">${escH(m.text)}</div>`:""}
+    ${m.foto?`<button class="btn btn-outline btn-sm" style="margin-top:4px;" onclick="lapShowFoto('${m.id}')">📷 Lihat foto</button>`:""}
+    <div style="font-size:10px;color:var(--text-dim);text-align:right;">${lapAgo(m.ts)}</div></div></div>`;
+}
+function chatList(lapId){
+  return Object.keys(CHAT||{}).map(k=>Object.assign({id:k},CHAT[k])).filter(m=>m && (lapId? m.lapor===lapId : !m.lapor)).sort((a,b)=>(a.ts||0)-(b.ts||0));
+}
+function chatBoxHtml(){
+  if(LAPERR && !_chatReady) return `<div class="msg err">${escH(LAPERR)}</div>`;
+  const L=chatList(null).slice(-60);
+  return L.length? L.map(chatMsgHtml).join("") : `<div class="emptystate">Belum ada chat. Tulis pesan untuk driver CC lain.</div>`;
+}
+function chatBoxUpdate(){ const el=document.getElementById("chatBox"); if(!el) return; const atEnd=el.scrollTop+el.clientHeight>=el.scrollHeight-40; el.innerHTML=chatBoxHtml(); if(atEnd||!el._init){ el.scrollTop=el.scrollHeight; el._init=true; } }
+/* --- daftar laporan + kartu di halaman peta --- */
+function lapListHtml(){
+  let h=""; if(LAPERR) h+=`<div class="msg err">${escH(LAPERR)}</div>`;
+  const A=lapActive(), p=window._myPos;
+  if(!A.length) return h+`<div style="font-size:13px;color:var(--text-dim);">Tidak ada laporan aktif. Jalan lancar.</div>`;
+  return h+A.map(r=>{ const T=LAP_TYPES[r.type]||LAP_TYPES.lain, n=chatList(r.id).length, d=(p&&Date.now()-p.ts<10*60000)?haversineKm(p.lat,p.lng,r.lat,r.lng):null;
+    return `<div style="border:1px solid var(--border);border-left:6px solid ${T.c};border-radius:12px;padding:10px 12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b>${T.ic} ${T.t}</b><span style="font-size:11px;color:var(--text-dim);">${lapAgo(r.ts)}${d!=null?` · ±${d.toFixed(1)} km dari kamu`:""}</span></div>
+      ${r.text?`<div style="font-size:13px;margin-top:3px;">${escH(r.text)}</div>`:""}
+      <div style="font-size:11px;color:var(--text-dim);margin-top:3px;">Dilaporkan ${escH(r.plat||r.by||"-")}${r.foto?" · 📷 ada foto":""}</div>
+      <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="lapOpen('${r.id}')">💬 Buka${n?` (${n} balasan)`:""}</button></div>`; }).join("");
+}
+function lapListUpdate(){ const el=document.getElementById("lapList"); if(el) el.innerHTML=lapListHtml(); }
+function lapChatCardsHtml(){
+  return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">⚠ Laporan di jalan</h3><button class="btn btn-primary btn-sm" onclick="lapFormOpen()">＋ Lapor macet / kecelakaan</button></div>
+      <div style="font-size:11px;color:var(--text-dim);margin:6px 0 8px;">Titik laporan muncul di peta (ikon warna). Ketuk titik atau tombol Buka untuk balas dan melihat foto. Tersimpan 12 jam.</div>
+      <div id="lapList">${lapListHtml()}</div></div>
+    <div class="card"><h3>💬 Chat CC</h3>
+      <div id="chatBox" style="max-height:300px;overflow-y:auto;padding:2px 2px 6px;">${chatBoxHtml()}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;align-items:center;"><button class="btn btn-outline btn-sm" onclick="lapPick('chat')">📷</button>
+        <input id="chatTxt" type="text" maxlength="300" placeholder="Tulis pesan…" value="${escH(chatDraft.text)}" oninput="chatDraft.text=this.value" onkeydown="if(event.key==='Enter')chatSend()" style="flex:1;min-width:0;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:15px;background:var(--panel3,#fff);color:var(--text);">
+        <button class="btn btn-primary btn-sm" onclick="chatSend()">Kirim</button></div>
+      <div id="chatPrev" style="margin-top:6px;">${chatDraft.foto?`<img src="${chatDraft.foto}" style="height:54px;border-radius:8px;border:1px solid var(--border);vertical-align:middle;"> <button class="btn btn-outline btn-sm" onclick="lapDropFoto('chatPrev')">✕</button>`:""}</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Semua role bisa membaca chat ini. Jangan mengetik sambil menyetir. Pesan tersimpan 24 jam.</div></div>`;
+}
+/* --- marker di peta --- */
+function lapDrawMarkers(){
+  if(!ccMapObj||!ccMapLayer||!window.L) return;
+  lapActive().forEach(r=>{ const T=LAP_TYPES[r.type]||LAP_TYPES.lain;
+    const m=L.marker([r.lat,r.lng],{icon:L.divIcon({className:"", html:`<div style="width:36px;height:36px;border-radius:50%;background:#fff;border:4px solid ${T.c};display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.4);">${T.ic}</div>`, iconSize:[36,36], iconAnchor:[18,18]})}).addTo(ccMapLayer);
+    m.on("click",()=>lapOpen(r.id));
+  });
+}
+/* --- overlay (formulir, balasan, foto) --- */
+function lapOv(){
+  let ov=document.getElementById("lapOv");
+  if(!ov){ ov=document.createElement("div"); ov.id="lapOv"; ov.style.cssText="position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:14px;";
+    ov.innerHTML=""; document.body.appendChild(ov);
+    const st=document.createElement("style"); st.textContent="#lapOv .box{background:var(--panel,#fff);color:var(--text,#16213E);border-radius:16px;padding:16px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;}"; document.head.appendChild(st); }
+  ov.style.display="flex"; return ov;
+}
+function lapOvClose(){ lapOpenId=null; const ov=document.getElementById("lapOv"); if(ov){ ov.style.display="none"; ov.innerHTML=""; } }
+function lapOpen(id){ lapOpenId=id; thrDraft={text:"",foto:null}; lapOvRender(true); }
+function lapOvRefresh(){ if(lapOpenId) lapOvRender(false); }
+function lapOvRender(full){
+  const r=LAPOR[lapOpenId]; if(!r){ if(full) lapOvClose(); return; }
+  const T=LAP_TYPES[r.type]||LAP_TYPES.lain, ov=lapOv(), th=chatList(lapOpenId);
+  const canDone=!r.done && currentUser && (r.dev===lapDev() || ["koordinator","leader","admin","delivery"].includes(currentUser.role));
+  if(!full){ const tb=document.getElementById("thrBox"); if(tb){ const atEnd=tb.scrollTop+tb.clientHeight>=tb.scrollHeight-40; tb.innerHTML=th.length?th.map(chatMsgHtml).join(""):`<div style="font-size:12px;color:var(--text-dim);">Belum ada balasan.</div>`; if(atEnd) tb.scrollTop=tb.scrollHeight; } return; }
+  ov.innerHTML=`<div class="box"><div style="display:flex;justify-content:space-between;gap:8px;"><h3 style="margin:0;">${T.ic} ${T.t}${r.done?" · selesai":""}</h3><button class="btn btn-outline btn-sm" onclick="lapOvClose()">✕ Tutup</button></div>
+    <div style="font-size:11px;color:var(--text-dim);margin:4px 0;">${escH(r.plat||r.by||"-")} · ${ROLE_LBL[r.role]||""} · ${lapAgo(r.ts)}</div>
+    ${r.text?`<div style="font-size:14px;margin:6px 0;white-space:pre-wrap;word-break:break-word;">${escH(r.text)}</div>`:""}
+    ${r.foto?`<div id="lapFotoBox" style="margin:6px 0;"><button class="btn btn-outline btn-sm" onclick="lapShowFoto('${lapOpenId}','lapFotoBox')">📷 Lihat foto laporan</button></div>`:""}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;"><button class="btn btn-outline btn-sm" onclick="lapFocus('${lapOpenId}')">📍 Tampilkan di peta</button><a class="btn btn-outline btn-sm" style="text-decoration:none;" href="https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}" target="_blank" rel="noopener">🗺 Google Maps</a>${canDone?`<button class="btn btn-primary btn-sm" onclick="lapDone('${lapOpenId}')">✔ Sudah lancar</button>`:""}</div>
+    <div style="font-weight:800;font-size:13px;margin-top:8px;">Balasan</div>
+    <div id="thrBox" style="max-height:34vh;overflow-y:auto;">${th.length?th.map(chatMsgHtml).join(""):`<div style="font-size:12px;color:var(--text-dim);">Belum ada balasan.</div>`}</div>
+    <div style="display:flex;gap:6px;margin-top:8px;align-items:center;"><button class="btn btn-outline btn-sm" onclick="lapPick('thr')">📷</button>
+      <input id="thrTxt" type="text" maxlength="300" placeholder="Balas…" oninput="thrDraft.text=this.value" onkeydown="if(event.key==='Enter')chatSend('${lapOpenId}')" style="flex:1;min-width:0;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:15px;background:var(--panel3,#fff);color:var(--text);"><button class="btn btn-primary btn-sm" onclick="chatSend('${lapOpenId}')">Kirim</button></div>
+    <div id="thrPrev" style="margin-top:6px;"></div></div>`;
+  const tb=document.getElementById("thrBox"); if(tb) tb.scrollTop=tb.scrollHeight;
+}
+function lapFocus(id){ const r=LAPOR[id]; if(!r) return; lapOvClose(); try{ if(ccMapObj){ ccMapObj.setView([r.lat,r.lng],16); document.getElementById("ccmap").scrollIntoView({behavior:"smooth",block:"center"}); } }catch(e){} }
+async function lapShowFoto(id,boxId){
+  try{
+    const snap=await FBS.db.ref(FOTO_PATH+"/"+id).once("value"), v=snap.val();
+    if(!v||!v.b64){ alert("Foto sudah terhapus."); return; }
+    const src="data:image/jpeg;base64,"+v.b64;
+    if(boxId){ const b=document.getElementById(boxId); if(b){ b.innerHTML=`<img src="${src}" style="width:100%;border-radius:10px;border:1px solid var(--border);" onclick="lapZoomFoto(this.src)">`; return; } }
+    lapZoomFoto(src);
+  }catch(e){ alert(lapRulesMsg(e)); }
+}
+function lapZoomFoto(src){
+  const z=document.createElement("div"); z.style.cssText="position:fixed;inset:0;z-index:9995;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:8px;";
+  z.innerHTML=`<img src="${src}" style="max-width:100%;max-height:100%;border-radius:8px;"><button style="position:absolute;top:12px;right:12px;border:0;border-radius:10px;padding:10px 14px;font-weight:800;">✕</button>`;
+  z.onclick=()=>z.remove(); document.body.appendChild(z);
+}
+
+/* ===== REKAM JEJAK PERJALANAN CC + LAPORAN + JALUR TERBANYAK =====
+   Direkam di HP driver (lewat berbagi posisi) mulai keluar dari ADM KAP / NVDC sampai tiba di tujuan.
+   Tersimpan di radar_trip/<id> (30 hari). Laporan: Koordinator, Delivery, Leader, Admin.
+   Jalur terbanyak = jejak yang paling mirip dengan jejak CC lain (dipakai sebagai rute di peta). */
+const TRIP_PATH="radar_trip", TRIP_KEEP_MS=30*86400*1000, TRIP_ST_KEY="radar_trip_st", TRIP_Q_KEY="radar_trip_q";
+let TRIPS=[], _tripLoadedTs=0, _tripLoading=null, _tripCleaned=false, rptDays=7, rptDir="out", _tripMap=null, trailOn=false;
+function tripSt(){ try{ const o=JSON.parse(localStorage.getItem(TRIP_ST_KEY)||"null"); if(o&&typeof o==="object") return o; }catch(e){} return {armed:"",buf:[],t:null}; }
+function tripPersist(S){ try{ localStorage.setItem(TRIP_ST_KEY, JSON.stringify(S)); }catch(e){} }
+function tripQ(){ try{ const q=JSON.parse(localStorage.getItem(TRIP_Q_KEY)||"[]"); return Array.isArray(q)?q:[]; }catch(e){ return []; } }
+function tripQSave(q){ try{ localStorage.setItem(TRIP_Q_KEY, JSON.stringify(q.slice(-12))); }catch(e){} }
+let _tripPersistN=0;
+function tripTick(pos){
+  try{
+    if(!currentUser || currentUser.role!=="cc") return;
+    const mp=(DB.get().mapPoints||{}); if(!(mp.adm&&mp.nvdc)) return;
+    const lat=pos.coords.latitude, lng=pos.coords.longitude, acc=pos.coords.accuracy||0; if(!isFinite(lat)||!isFinite(lng)||acc>150) return;
+    const now=Date.now(), S=tripSt();
+    const dA=haversineKm(lat,lng,mp.adm.lat,mp.adm.lng), dB=haversineKm(lat,lng,mp.nvdc.lat,mp.nvdc.lng);
+    if(!S.t){
+      if(dA<0.6){ if(S.armed!=="adm") S.buf=[]; S.armed="adm"; } else if(dB<0.6){ if(S.armed!=="nvdc") S.buf=[]; S.armed="nvdc"; }
+      const from=S.armed==="adm"?dA:S.armed==="nvdc"?dB:null;
+      if(S.armed && from!=null){
+        const lb=S.buf[S.buf.length-1];
+        if(!lb || haversineKm(lb[0],lb[1],lat,lng)>=0.03){ S.buf.push([lat,lng,now]); if(S.buf.length>14) S.buf.shift(); }
+        if(from>0.8){ S.t={dir:S.armed==="adm"?"out":"back", start:(S.buf[0]||[0,0,now])[2], pts:S.buf.slice()}; S.armed=""; S.buf=[]; }
+      }
+      tripPersist(S); return;
+    }
+    const T=S.t, last=T.pts[T.pts.length-1];
+    if(now-last[2]>45*60000){ S.t=null; S.armed=""; S.buf=[]; tripPersist(S); return; }   // sinyal terputus terlalu lama: jejak tidak utuh, dibuang
+    if(haversineKm(last[0],last[1],lat,lng)>=0.04) T.pts.push([lat,lng,now]);
+    const dest=T.dir==="out"?dB:dA;
+    if(dest<0.4){ T.pts.push([lat,lng,now]); S.t=null; S.armed=T.dir==="out"?"nvdc":"adm"; S.buf=[]; tripPersist(S); tripFinish(T, now, mp); return; }
+    if(now-T.start>5*3600*1000 || T.pts.length>2500){ S.t=null; S.armed=""; S.buf=[]; tripPersist(S); return; }
+    if(++_tripPersistN%6===0) tripPersist(S);
+  }catch(e){}
+}
+function tripFinish(T, endTs, mp){
+  try{
+    const pts=T.pts.map(p=>[p[0],p[1]]); let km=0; for(let i=1;i<pts.length;i++) km+=haversineKm(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]);
+    const straight=haversineKm(mp.adm.lat,mp.adm.lng,mp.nvdc.lat,mp.nvdc.lng);
+    if(pts.length<8 || km<straight*0.6 || km>straight*3.5) return;   // jejak terlalu pendek / terlalu panjang: tidak dipakai
+    let simp=routeSimplify(pts,0.00005); if(simp.length>400) simp=routeSimplify(pts,0.0001).slice(0,400);
+    const dur=Math.max(1,Math.round((endTs-T.start)/60000)), prof=getCcProfile();
+    const rec={plat:platFmt(prof.plat||""), lp:prof.lp||"", driver:(currentUser&&currentUser.name)||"", dir:T.dir, start:T.start, end:endTs, km:+km.toFixed(2), dur, avg:+(km/(dur/60)).toFixed(1), n:simp.length, p:routeEncode(simp)};
+    const q=tripQ(); q.push(rec); tripQSave(q); tripFlush();
+  }catch(e){}
+}
+function tripFlush(){
+  try{
+    if(!(FBS.enabled && FBS.db && FBS.authed)) return;
+    const q=tripQ(); if(!q.length) return;
+    const rec=q[0];
+    FBS.db.ref(TRIP_PATH).push().set(rec).then(()=>{ const q2=tripQ(); q2.shift(); tripQSave(q2); if(q2.length) setTimeout(tripFlush,500); }).catch(()=>{});
+  }catch(e){}
+}
+setInterval(tripFlush, 60000);
+/* --- memuat data (hanya saat laporan / jejak dibuka) --- */
+function tripLoad(force){
+  if(!(FBS.enabled && FBS.db)) return Promise.resolve(TRIPS);
+  if(!force && Date.now()-_tripLoadedTs<120000) return Promise.resolve(TRIPS);
+  if(_tripLoading) return _tripLoading;
+  _tripLoading=FBS.db.ref(TRIP_PATH).limitToLast(400).once("value").then(snap=>{
+    const v=snap.val()||{}; TRIPS=Object.keys(v).map(k=>Object.assign({id:k},v[k])).filter(t=>t&&t.p&&t.start).sort((a,b)=>b.start-a.start);
+    _tripLoadedTs=Date.now(); _tripLoading=null; tripCleanup(); tripAutoPopular(); return TRIPS;
+  }).catch(e=>{ _tripLoading=null; TRIPERR="Rekam jejak belum diizinkan oleh aturan Firebase (tambahkan node radar_trip)."; return TRIPS; });
+  return _tripLoading;
+}
+let TRIPERR="";
+function tripCleanup(){
+  if(_tripCleaned) return; _tripCleaned=true;
+  try{ FBS.db.ref(TRIP_PATH).limitToFirst(40).once("value").then(s=>{ const v=s.val()||{}, now=Date.now(); Object.keys(v).forEach(k=>{ if(now-(v[k].end||v[k].start||0)>TRIP_KEEP_MS) FBS.db.ref(TRIP_PATH+"/"+k).remove(); }); }); }catch(e){}
+}
+/* --- jalur terbanyak --- */
+function tripDensify(pts){
+  const o=[pts[0]]; for(let i=1;i<pts.length;i++){ const a=pts[i-1], b=pts[i], d=haversineKm(a[0],a[1],b[0],b[1]), n=Math.max(1,Math.ceil(d/0.04)); for(let k=1;k<=n;k++) o.push([a[0]+(b[0]-a[0])*k/n, a[1]+(b[1]-a[1])*k/n]); }
+  return o;
+}
+function tripPopular(){
+  const now=Date.now(), L=TRIPS.filter(t=>t.dir==="out" && now-(t.end||t.start)<TRIP_KEEP_MS).slice(0,150);
+  if(L.length<5) return null;
+  const G=0.0008, key=(la,ln)=>Math.round(la/G)+","+Math.round(ln/G);
+  const info=L.map(t=>{ const pts=routeDecode(t.p), cells=new Set(); tripDensify(pts).forEach(p=>cells.add(key(p[0],p[1])));
+    const ex=new Set(); cells.forEach(c=>{ const [a,b]=c.split(",").map(Number); for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) ex.add((a+i)+","+(b+j)); });
+    return {t, pts, cells:[...cells], ex}; });
+  let best=null, bs=-1;
+  info.forEach((A,i)=>{ let sc=0; info.forEach((B,j)=>{ if(i===j) return; let hit=0; for(const c of A.cells) if(B.ex.has(c)) hit++; sc+=hit/A.cells.length; }); if(sc>bs){ bs=sc; best=A; } });
+  return best?{pts:best.pts, n:L.length, score:+(bs/(L.length-1)).toFixed(2), by:best.t.plat}:null;
+}
+function tripApplyPopular(manual){
+  const P=tripPopular(); if(!P){ if(manual) alert("Belum cukup jejak. Butuh minimal 5 perjalanan ADM KAP → NVDC yang terekam."); return false; }
+  routeSave(P.pts, "populer:"+P.n);
+  DB.set(d=>{ d.mapPoints=d.mapPoints||{}; d.mapPoints.popTs=Date.now(); d.mapPoints.popN=P.n; d.mapPoints.popScore=P.score; });
+  if(manual) alert("Rute peta diperbarui dari jalur terbanyak ("+P.n+" perjalanan, kemiripan "+Math.round(P.score*100)+"%).");
+  try{ _routeCache={s:"",pts:[],cum:[]}; }catch(e){}
+  return true;
+}
+function tripAutoPopular(){
+  try{
+    if(!currentUser || !["admin","leader","koordinator","delivery"].includes(currentUser.role)) return;
+    const mp=DB.get().mapPoints||{}; if(mp.autoPop===false || !(mp.adm&&mp.nvdc)) return;
+    if(Date.now()-(mp.popTs||0)<12*3600*1000) return;
+    tripApplyPopular(false);
+  }catch(e){}
+}
+/* --- halaman laporan --- */
+function rptSince(){ return rptDays===1 ? prodDayStart() : Date.now()-rptDays*86400*1000; }
+function rptList(){ const s=rptSince(); return TRIPS.filter(t=>t.start>=s && (rptDir==="all"||t.dir===rptDir)); }
+const fmtT=ts=>new Date(ts).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+function rptBodyHtml(){
+  const L=rptList(); let h="";
+  if(TRIPERR) h+=`<div class="msg err">${escH(TRIPERR)}</div>`;
+  if(!L.length) return h+`<div class="emptystate">Belum ada perjalanan terekam pada periode ini.</div>`;
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0, plats={};
+  L.forEach(t=>{ (plats[t.plat||"-"]=plats[t.plat||"-"]||[]).push(t); });
+  h+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
+    <div class="kitem" style="margin:0;text-align:center;"><div style="font-size:22px;font-weight:800;">${L.length}</div><div style="font-size:11px;">perjalanan</div></div>
+    <div class="kitem" style="margin:0;text-align:center;"><div style="font-size:22px;font-weight:800;">${Object.keys(plats).length}</div><div style="font-size:11px;">truk</div></div>
+    <div class="kitem" style="margin:0;text-align:center;"><div style="font-size:22px;font-weight:800;">${Math.round(avg(L.map(t=>t.dur)))}</div><div style="font-size:11px;">rata-rata menit</div></div></div>`;
+  h+=`<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="text-align:left;"><th>Truk</th><th>Trip</th><th>Rata-rata</th><th>Tercepat</th><th>Terlama</th></tr></thead><tbody>`+
+    Object.keys(plats).sort().map(k=>{ const a=plats[k], d=a.map(t=>t.dur); return `<tr style="border-top:1px solid var(--border);"><td><b>${escH(k)}</b></td><td>${a.length}</td><td>${Math.round(avg(d))} mnt</td><td>${Math.min(...d)} mnt</td><td>${Math.max(...d)} mnt</td></tr>`; }).join("")+`</tbody></table></div>`;
+  h+=`<div style="font-weight:800;font-size:13px;margin:14px 0 6px;">Daftar perjalanan (${Math.min(L.length,100)} terbaru)</div>`+L.slice(0,100).map(t=>`<div style="border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:6px;">
+    <div style="display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;"><b>${escH(t.plat||"-")}</b><span style="font-size:11px;color:var(--text-dim);">${fmtT(t.start)} → ${fmtT(t.end).slice(-5)}</span></div>
+    <div style="font-size:12px;">${t.dir==="out"?"ADM KAP → NVDC":"NVDC → ADM KAP"} · ${t.dur} mnt · ${t.km} km · ${t.avg} km/j${t.driver?` · ${escH(t.driver)}`:""}${t.lp?` · ${escH(t.lp)}`:""}</div>
+    <button class="btn btn-outline btn-sm" style="margin-top:4px;" onclick="tripShow('${t.id}')">🗺 Lihat jejak</button></div>`).join("");
+  return h;
+}
+function renderCcReport(){
+  const mp=DB.get().mapPoints||{}, adm=currentUser&&currentUser.role==="admin";
+  const chip=(v,l,cur,fn)=>`<button class="btn btn-sm ${cur===v?'btn-primary':'btn-outline'}" onclick="${fn}(${typeof v==='number'?v:`'${v}'`})">${l}</button>`;
+  return `<div class="card"><h3>📊 Laporan Perjalanan CC</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Direkam otomatis dari HP driver: mulai keluar ADM KAP / NVDC sampai tiba di tujuan. Tersimpan 30 hari.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${chip(1,"Hari produksi ini",rptDays,"rptSetDays")}${chip(7,"7 hari",rptDays,"rptSetDays")}${chip(30,"30 hari",rptDays,"rptSetDays")}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${chip("out","ADM → NVDC",rptDir,"rptSetDir")}${chip("back","NVDC → ADM",rptDir,"rptSetDir")}${chip("all","Semua",rptDir,"rptSetDir")}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"><button class="btn btn-outline btn-sm" onclick="rptCsv()">⬇ Unduh Excel (CSV)</button><button class="btn btn-outline btn-sm" onclick="tripLoad(true).then(rptUpdate)">🔄 Muat ulang</button>${adm?`<button class="btn btn-outline btn-sm" onclick="tripApplyPopular(true)">🛣 Pakai jalur terbanyak sekarang</button>`:""}</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Rute peta: ${mp.route&&String(mp.route.src||"").startsWith("populer")?`otomatis dari jalur terbanyak (${mp.popN||""} perjalanan, kemiripan ${Math.round((mp.popScore||0)*100)}%)`:"belum memakai jalur terbanyak (butuh minimal 5 perjalanan ADM → NVDC terekam)"}.${adm?` <label style="white-space:nowrap;"><input type="checkbox" ${mp.autoPop===false?"":"checked"} onchange="DB.set(d=>{d.mapPoints=d.mapPoints||{}; d.mapPoints.autoPop=this.checked;})"> Perbarui otomatis</label>`:""}</div>
+    <div id="rptBody"><div class="emptystate">Memuat…</div></div></div>`;
+}
+function rptUpdate(){ const el=document.getElementById("rptBody"); if(el) el.innerHTML=rptBodyHtml(); }
+function rptSetDays(n){ rptDays=n; render(); setTimeout(()=>tripLoad().then(rptUpdate),0); }
+function rptSetDir(d){ rptDir=d; render(); setTimeout(()=>tripLoad().then(rptUpdate),0); }
+function rptCsv(){
+  const L=rptList(); if(!L.length){ alert("Tidak ada data pada periode ini."); return; }
+  const f=ts=>{ const d=new Date(ts), p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes()); };
+  const q=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+  const rows=[["Mulai","Selesai","Plat","LP","Driver","Arah","Durasi (menit)","Jarak (km)","Kecepatan rata-rata (km/j)"]].concat(L.map(t=>[f(t.start),f(t.end),t.plat,t.lp,t.driver,t.dir==="out"?"ADM KAP - NVDC":"NVDC - ADM KAP",t.dur,String(t.km).replace(".",","),String(t.avg).replace(".",",")]));
+  const csv="﻿"+rows.map(r=>r.map(q).join(";")).join("\r\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"})); a.download="laporan-perjalanan-cc.csv"; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),500);
+}
+function tripShow(id){
+  const t=TRIPS.find(x=>x.id===id); if(!t) return;
+  const ov=lapOv(); lapOpenId=null;
+  ov.innerHTML=`<div class="box"><div style="display:flex;justify-content:space-between;gap:8px;"><h3 style="margin:0;">🛣 ${escH(t.plat||"-")}</h3><button class="btn btn-outline btn-sm" onclick="tripClose()">✕ Tutup</button></div>
+    <div style="font-size:12px;color:var(--text-dim);margin:4px 0;">${t.dir==="out"?"ADM KAP → NVDC":"NVDC → ADM KAP"} · ${fmtT(t.start)} · ${t.dur} mnt · ${t.km} km</div>
+    <div id="tripMap" style="height:46vh;min-height:280px;border-radius:12px;border:1px solid var(--border);background:#e8eef5;"></div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Garis merah = jejak perjalanan ini. Garis biru = rute peta (jalur terbanyak).</div></div>`;
+  ensureLeaflet().then(()=>{
+    const el=document.getElementById("tripMap"); if(!el) return; try{ if(_tripMap) _tripMap.remove(); }catch(e){}
+    const pts=routeDecode(t.p), mp=DB.get().mapPoints||{};
+    _tripMap=L.map("tripMap",{zoomControl:true}); L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(_tripMap);
+    const R=routeGet(); if(R) L.polyline(R.pts,{color:"#1D4ED8",weight:4,opacity:.55}).addTo(_tripMap);
+    L.polyline(pts,{color:"#E60012",weight:5,opacity:.9}).addTo(_tripMap);
+    if(mp.adm) L.marker([mp.adm.lat,mp.adm.lng]).addTo(_tripMap).bindTooltip("ADM KAP"); if(mp.nvdc) L.marker([mp.nvdc.lat,mp.nvdc.lng]).addTo(_tripMap).bindTooltip("NVDC");
+    _tripMap.fitBounds(pts,{padding:[24,24]});
+  }).catch(()=>{});
+}
+function tripClose(){ try{ if(_tripMap) _tripMap.remove(); }catch(e){} _tripMap=null; lapOvClose(); }
+/* --- jejak semua CC di Peta CC (Koordinator / Delivery / Leader / Admin) --- */
+function trailCanSee(){ return !!(currentUser && ["admin","leader","koordinator","delivery"].includes(currentUser.role)); }
+function trailCardHtml(){
+  if(!trailCanSee()) return "";
+  return `<label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-top:8px;"><input type="checkbox" id="trailChk" ${trailOn?"checked":""} onchange="trailToggle(this.checked)"> Tampilkan jejak perjalanan CC 7 hari terakhir (garis tipis)</label>`;
+}
+function trailToggle(on){
+  trailOn=!!on;
+  if(ccMapObj && ccMapObj._trail){ try{ ccMapObj.removeLayer(ccMapObj._trail); }catch(e){} ccMapObj._trail=null; }
+  if(trailOn) tripLoad().then(trailDraw);
+}
+function trailDraw(){
+  if(!trailOn || !ccMapObj || !window.L || ccMapObj._trail) return;
+  const s=Date.now()-7*86400*1000; ccMapObj._trail=L.layerGroup().addTo(ccMapObj);
+  TRIPS.filter(t=>t.start>=s).slice(0,80).forEach(t=>{ try{ L.polyline(routeDecode(t.p),{color:t.dir==="out"?"#E60012":"#7C3AED",weight:2,opacity:.28}).addTo(ccMapObj._trail); }catch(e){} });
+}
 
 function haversineKm(lat1,lng1,lat2,lng2){
   const R = 6371;
