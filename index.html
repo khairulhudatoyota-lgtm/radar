@@ -2793,7 +2793,7 @@ function renderDelivery(){
 
     <div class="dl-right"><div class="dlbatches" id="dlSecAktif">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
-    </div>${deliverySjHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
+    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
   `;
 }
 function toggleUnitSel(id){
@@ -3010,6 +3010,17 @@ function tlsSaveDrv(id,btn){
   if(btn){ const o=btn.textContent; btn.textContent="✔ Tersimpan"; setTimeout(()=>{ btn.textContent=o; },1200); }
 }
 function tlsHeadVal(k){ const b=window._tlsB; return k==="vendor"?tlsVendor(b.lp):k==="plat"?(b.ccPlat||""):k==="driver"?tlsDriver(b):""; }
+/* Pengingat Delivery: ILS sudah dibuat tapi belum ditandai "Sudah di-input ke TLS" (Koordinator baru dapat info setelah ditandai) */
+function ilsPendingList(data){
+  const me=(currentUser&&currentUser.name)||"", now=Date.now();
+  return (data.ils||[]).filter(b=>b && b.status==="open" && !b.tlsTs && !b.valStartTs && !b.outTs && now-(b.ts||0)>3*60000 && now-(b.ts||0)<6*3600000 && (!b.mp || !me || b.mp===me || (currentUser&&currentUser.role==="admin"))).sort((a,b)=>b.ts-a.ts);
+}
+function ilsPendingHtml(data){
+  const L=ilsPendingList(data); if(!L.length) return "";
+  const hh=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+  return `<div class="card" style="border:2px solid #E8A317;background:#FFF7E0;"><h3 style="margin:0 0 6px;">⚠ ILS belum ditandai "Sudah di TLS"</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Koordinator baru tahu ILS siap divalidasi setelah kamu menandainya. Tandai kalau sudah selesai di-input ke TLS.</div>`+
+    L.map(b=>`<div style="display:flex;align-items:center;gap:8px;margin-top:6px;"><div style="flex:1;font-size:13px;"><b>${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")} · ${b.units.length} unit<br><span style="font-size:11px;color:var(--text-dim);">ILS dibuat ${hh(b.ts)}</span></div><button class="btn btn-sm" style="width:auto;background:#1f9d55;color:#fff;" onclick="markTLS(${b.id})">✔ Sudah di TLS</button></div>`).join("")+`</div>`;
+}
 function markTLS(id){
   DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.tlsTs=Date.now(); b.tlsBy=(currentUser&&currentUser.name)||""; } });
   closeModal(); render();
@@ -3172,6 +3183,13 @@ function checkKoordAlerts(){
   if(!currentUser || (currentUser.role!=="koordinator" && currentUser.role!=="delivery")) return;
   const isDel=currentUser.role==="delivery";   // Delivery: bunyi saat CC absen (hanya yang baru, ≤10 menit); validasi ILS tetap untuk Koordinator
   const L=koordStatusList(DB.get()); let fired=false;
+  if(isDel){ ilsPendingList(DB.get()).forEach(b=>{
+    if(Date.now()-(b.ts||0)<6*60000) return;
+    const key="tlsp|"+b.id; if(_koordSeen.has(key)) return; _koordSeen.add(key); fired=true;
+    const txt="ILS "+b.ccPlat+" ("+b.units.length+" unit) belum ditandai 'Sudah di-input ke TLS'. Tandai supaya Koordinator bisa validasi.";
+    playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⚠ ILS belum ditandai Sudah di TLS", txt); }catch(e){}
+    if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("⚠ ILS belum ditandai Sudah di TLS",{body:txt}); }catch(e){} }
+  }); }
   for(const x of L){
     const who=`LP ${x.lp||"-"} ${x.plat}${x.driver?` · Driver ${x.driver}`:""}`;
     if(isDel && Date.now()-(x.absenTs||0)>10*60000) continue;
@@ -3404,31 +3422,80 @@ async function sjStore(id,name,b64,mime){
   const ts=Date.now();
   try{ await FBS.db.ref(SJ_PATH+"/"+id).set({name:name||"surat-jalan.pdf", mime:mime||"application/pdf", ts, b64}); }
   catch(e){ alert("Gagal menyimpan PDF: "+(e&&e.message||e)+"\nPeriksa aturan (Rules) Firebase Realtime Database untuk path radar_sj."); return false; }
-  DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b) b.sj={name:name||"surat-jalan.pdf", size, ts}; });
+  DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.sj={name:name||"surat-jalan.pdf", size, ts}; if(!b.tlsTs){ b.tlsTs=ts; b.tlsBy=((currentUser&&currentUser.name)||"")+" (otomatis, PDF masuk)"; } } });   // PDF dari TLS sudah ada = ILS sudah di TLS
   sjIndex(id,b64);   // baca No. SJKB & Cabang di latar belakang (untuk manifest)
   return true;
 }
 window.radarSJ=function(id,name,b64){ return sjStore(Number(id),name,b64,"application/pdf"); };
 /* Dari penampil PDF di APK: tombol "Jadikan surat jalan" -> pilih ILS tujuan lalu simpan */
 let _sjPick=null;
-function sjPickStore(name,b64){
-  _sjPick={name:name,b64:b64};
-  const now=Date.now(), L=(DB.get().ils||[]).filter(b=>!b.sj && !b.batam && (b.status==="open" || (b.outTs && now-b.outTs<SJ_KEEP_MS))).sort((a,b)=>(b.outTs||b.ts||0)-(a.outTs||a.ts||0)).slice(0,12);
+let _sjPickAll=false;
+function sjPickMore(){ _sjPickAll=true; closeModal(); sjPickStore(_sjPick.name,_sjPick.b64,true); }
+async function sjPickStore(name,b64,showAll){
+  _sjPick={name:name,b64:b64}; if(!showAll) _sjPickAll=false;
+  let flat=""; try{ flat=await sjPdfFlat(b64); }catch(e){}
+  const m=flat?sjMatchIls(flat):null;
+  if(m && !m.b.sj){ await sjPickDo(m.b.id); return; }      // nomor rangka di PDF cocok dengan satu ILS: simpan otomatis
+  const now=Date.now(), me=(currentUser&&currentUser.name)||"";
+  /* hanya ILS yang BELUM punya PDF; yang cocok nomor rangka di atas, lalu ILS buatanmu, lalu yang terbaru */
+  const L=(DB.get().ils||[]).filter(b=>!b.batam && !b.sj && (b.status==="open" || (b.outTs && now-b.outTs<SJ_KEEP_MS)))
+    .sort((a,b)=>(((m&&b.id===m.b.id)?2:0)+((me&&b.mp===me)?1:0))-(((m&&a.id===m.b.id)?2:0)+((me&&a.mp===me)?1:0)) || (b.ts||0)-(a.ts||0));
   if(!L.length){ alert("Tidak ada ILS yang menunggu PDF surat jalan."); return; }
-  showModal(`<h3 style="margin:0 0 6px;">💾 Jadikan surat jalan</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Pilih ILS yang PDF validasinya baru kamu buka (${escH(name)}).</div>`+
-    L.map(b=>`<button class="btn btn-outline" style="width:100%;text-align:left;margin-bottom:6px;" onclick="sjPickDo(${b.id})"><b>${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")} · ${b.units.length} unit<br><span style="font-size:11px;color:var(--text-dim);">${b.outTs?"Delout "+sjFmt(b.outTs):"ILS "+sjFmt(b.ts)+" (belum Delout)"}</span></button>`).join(""));
+  const row=b=>{ const fr=(b.units||[]).map(u=>u.frame).filter(Boolean)[0]||"";
+    return `<button class="btn btn-primary" style="width:100%;text-align:left;margin-bottom:6px;" onclick="sjPickDo(${b.id})"><b>${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")} · ${b.units.length} unit<br><span style="font-size:11px;opacity:.85;">ILS dibuat ${sjFmt(b.ts)}${fr?" · "+escH(fr):""}</span></button>`; };
+  const shown=_sjPickAll ? L.slice(0,5) : L.slice(0,1);
+  showModal(`<h3 style="margin:0 0 6px;">💾 Jadikan surat jalan</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${_sjPickAll?"ILS yang belum punya PDF":"PDF ini untuk ILS berikut?"} (${escH(name)})</div>`+shown.map(row).join("")+
+    (!_sjPickAll && L.length>1?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:2px;" onclick="sjPickMore()">Bukan ini — lihat ILS lain yang belum punya PDF</button>`:""));
 }
 async function sjPickDo(id){
   const p=_sjPick; if(!p) return;
   closeModal();
-  const ok=await sjStore(id,p.name,p.b64,"application/pdf");
+  const b=sjILS(id), ok=await sjStore(id,p.name,p.b64,"application/pdf");
   _sjPick=null;
-  if(ok) alert("Surat jalan tersimpan. e-SJKB akan muncul setelah No. SJKB terbaca.");
+  if(ok) alert("✔ Surat jalan tersimpan di ILS "+(b?b.ccPlat+" (LP "+(b.lp||"-")+", "+b.units.length+" unit)":"")+". e-SJKB akan muncul setelah No. SJKB terbaca.");
 }
 function sjUploadPick(id){
   const inp=document.createElement("input"); inp.type="file"; inp.accept="application/pdf,.pdf";
   inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
     const r=new FileReader(); r.onload=async()=>{ const u=String(r.result); const ok=await sjStore(id,f.name,u.substring(u.indexOf(",")+1),"application/pdf"); if(ok) alert("Surat jalan tersimpan."); }; r.readAsDataURL(f); };
+  inp.click();
+}
+/* ===== Upload PDF ILS (akun Delivery di PC): aplikasi membaca PDF, mencocokkan ke ILS lewat nomor rangka unit, lalu menyimpannya ===== */
+async function sjPdfFlat(b64){
+  const lib=await pdfjsLoad();
+  const bin=atob(b64), arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  const pdf=await lib.getDocument({data:arr}).promise; let t="";
+  for(let p=1;p<=pdf.numPages;p++){ const pg=await pdf.getPage(p), tc=await pg.getTextContent(); tc.items.forEach(it=>{ if(it.str) t+=it.str; }); }
+  return t.toUpperCase().replace(/[^A-Z0-9]/g,"");
+}
+function sjMatchIls(flat){
+  const now=Date.now(); let best=null, tie=false;
+  (DB.get().ils||[]).filter(b=>b && (b.status==="open" || (b.outTs && now-b.outTs<SJ_KEEP_MS))).forEach(b=>{
+    const fr=(b.units||[]).map(u=>String(u.frame||"").toUpperCase().replace(/[^A-Z0-9]/g,"")).filter(f=>f.length>=8);
+    const hit=fr.filter(f=>flat.indexOf(f)>=0).length; if(!hit) return;
+    const score=hit*1000-Math.abs(fr.length-hit)+(b.sj?0:1);       // lebih banyak unit cocok lebih diutamakan; ILS yang belum punya PDF sedikit diutamakan
+    if(!best || score>best.score){ best={b, hit, total:fr.length, score}; tie=false; } else if(score===best.score) tie=true;
+  });
+  return best && !tie ? best : null;
+}
+function sjIlsUpload(){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept="application/pdf,.pdf"; inp.multiple=true;
+  inp.onchange=async()=>{
+    const files=[...(inp.files||[])]; if(!files.length) return; const ok=[], bad=[];
+    for(const f of files){
+      try{
+        const b64=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>{ const u=String(r.result); res(u.substring(u.indexOf(",")+1)); }; r.onerror=rej; r.readAsDataURL(f); });
+        let m=null; try{ m=sjMatchIls(await sjPdfFlat(b64)); }catch(e){}
+        if(!m){ bad.push({name:f.name,b64}); continue; }
+        if(m.b.sj && !confirm("ILS "+m.b.ccPlat+" sudah punya PDF. Ganti dengan "+f.name+"?")) continue;
+        if(await sjStore(m.b.id,f.name,b64,"application/pdf")) ok.push(m.b.ccPlat+" ("+m.hit+"/"+m.total+" unit cocok)"); else bad.push({name:f.name,b64,stored:false});
+      }catch(e){ bad.push({name:f.name,b64:null}); }
+    }
+    if(ok.length) alert("✔ PDF ILS tersimpan:\n"+ok.join("\n")+"\n\nNo. SJKB dan cabang dibaca otomatis beberapa detik lagi.");
+    const pick=bad.find(x=>x.b64);
+    if(pick){ if(bad.length>1) alert(bad.length+" file tidak cocok otomatis ke ILS mana pun. Pilih ILS untuk file pertama ("+pick.name+"); sisanya unggah ulang satu per satu."); sjPickStore(pick.name,pick.b64); }
+    else if(bad.length) alert("File tidak bisa dibaca: "+bad.map(x=>x.name).join(", "));
+  };
   inp.click();
 }
 async function sjFetch(id){
@@ -3457,10 +3524,11 @@ function sjRows(data, pass){
   return (data.ils||[]).filter(b=>b.outTs && ((now-b.outTs<SJ_KEEP_MS && !b.batam) || (b.sj && now-b.outTs<SJ_KEEP_MS) || (b.undo && now-b.outTs<DELOUT_UNDO_MS)) && pass(b)).sort((a,b)=>b.outTs-a.outTs);
 }
 function sjRowHtml(b, now){
+  const sjCanUp=!!currentUser && currentUser.role!=="cc" && currentUser.role!=="display";   // CC tidak mengunggah; Delivery/Koordinator/Leader/Admin boleh
   const exp=sjFmt(b.outTs+SJ_KEEP_MS), sh=String(b.shift||"").toUpperCase();
   return `<div class="kitem" style="margin-top:8px;border-left:6px solid ${ccColor(b.ccPlat)};"><b>📄 ${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")}${sh?` · <span class="badge">${sh}</span>`:""}
       <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${b.units.length} unit · Delout ${sjFmt(b.outTs)}${b.sj?` · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>`}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>${sjCanUp?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="sjUploadPick(${b.id})">⬆ Unggah PDF validasi</button>`:""}`}${(sjCanUp && (b.sj||b.sjkb) && !b.batam)?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjUploadPick(${b.id})">⬆ Ganti PDF</button>`:""}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
 }
 /* kotak ringkas di halaman; daftar lengkap + pencarian dibuka lewat tombol */
 function sjScopePass(scope){
@@ -3471,7 +3539,7 @@ function sjScopePass(scope){
 function sjBoxHtml(scope, title, hint){
   const data=DB.get(), now=Date.now(), L=sjRows(data, sjScopePass(scope)), n=L.length;
   const last=L[0];
-  return `<div class="card" id="dlSecSj"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">📄 ${title} <span class="badge gold">${n}</span></h3><button class="btn btn-primary btn-sm" style="width:auto;" onclick="sjOvOpen('${scope}')">${scope==="cc"?"Lihat semua":"🔎 Buka"}</button></div>
+  return `<div class="card" id="dlSecSj"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">📄 ${title} <span class="badge gold">${n}</span></h3><button class="btn btn-primary btn-sm" style="width:auto;" onclick="sjOvOpen('${scope}')">${scope==="cc"?"Lihat semua":"🔎 Buka"}</button></div>${(scope==="del" && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"))?`<button class="btn btn-green btn-sm" style="width:100%;margin-top:8px;" onclick="sjIlsUpload()">⬆ Upload PDF ILS (dibaca & dicocokkan otomatis)</button>`:""}
     <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">${hint}</div>
     ${n? (scope==="cc"? sjRowHtml(last,now) : `<div style="font-size:12px;margin-top:6px;">Terbaru: <b>${escH(last.ccPlat)}</b> · ${sjFmt(last.outTs)}${last.sjkb?" · "+escH(last.sjkb):""}</div>`) : `<div class="emptystate" style="margin-top:6px;">Belum ada surat jalan.</div>`}</div>`;
 }
@@ -7258,19 +7326,35 @@ function initCcMap(){
 }
 /* Arah jalan CC: ke NVDC (out) atau kembali ke ADM KAP (back). Dari HP driver bila ada, selain itu dari gerak posisi berturut-turut. */
 const _trkDirMem = {};
+const TRKDIR_KEY="radar_trkdir";
+function trkDirLoad(k){ try{ const o=JSON.parse(localStorage.getItem(TRKDIR_KEY)||"{}")[k]; if(o && Date.now()-o.seen<30*60000) return o; }catch(e){} return null; }
+function trkDirSave(k,m){ try{ const all=JSON.parse(localStorage.getItem(TRKDIR_KEY)||"{}"); all[k]={a:m.a,dir:m.dir,seen:m.seen}; Object.keys(all).forEach(x=>{ if(Date.now()-all[x].seen>3*3600000) delete all[x]; }); localStorage.setItem(TRKDIR_KEY,JSON.stringify(all)); }catch(e){} }
+/* Tebakan awal arah (sebelum ada gerakan yang teramati): CC yang baru Delout dan masih dekat ADM KAP pasti sedang KE NVDC.
+   Kalau Delout-nya sudah lama (lebih lama dari waktu tempuh sejauh itu), berarti sedang KEMBALI. */
+function trkDirGuess(r, alongKm){
+  try{
+    const np=normPlat(r.plat); let lo=0;
+    (DB.get().ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===np && x.outTs>lo) lo=x.outTs; });
+    if(lo && Date.now()-lo<8*3600000){
+      const ageMin=(Date.now()-lo)/60000, goMin=alongKm/30*60;      // waktu tempuh dari ADM KAP pada ±30 km/j
+      return ageMin <= goMin*1.5+20 ? "out" : "back";
+    }
+  }catch(e){}
+  return (r.dir==="out"||r.dir==="back") ? r.dir : "out";
+}
 function trkDirOf(r, t, total){
-  /* Arah hanya berganti setelah CC bergerak ≥ 0,5 km searah (bukan goyangan GPS), dan gerakan nyata mengalahkan arah kiriman HP
-     (arah di HP bisa basi dari perjalanan sebelumnya, atau tidak terkirim saat layar terkunci). */
-  const k = normPlat(r.plat), m = _trkDirMem[k] || (_trkDirMem[k] = {a:null, dir:null, ts:0, seen:0});
-  const tot = (total>0) ? total : 20, th = Math.max(0.006, 0.5/tot);
+  /* Arah hanya berganti setelah CC bergerak ≥ 0,3 km searah (bukan goyangan GPS). Gerakan nyata mengalahkan arah kiriman HP
+     (arah di HP bisa basi atau tidak terkirim saat layar terkunci). Tanpa gerakan teramati: tebakan dari waktu Delout. */
+  const k = normPlat(r.plat); let m = _trkDirMem[k];
+  if(!m){ const sv=trkDirLoad(k); m = _trkDirMem[k] = sv ? {a:sv.a, dir:sv.dir, ts:0, seen:sv.seen} : {a:null, dir:null, ts:0, seen:0}; }
+  const tot = (total>0) ? total : 20, th = Math.max(0.006, 0.3/tot);
   if(r.ts!==m.ts){
-    if(m.a==null || (r.ts-m.seen)>10*60000) m.a=t;                       // data pertama / terputus lama: mulai ukur dari sini
+    if(m.a==null || (r.ts-m.seen)>10*60000){ m.a=t; if((r.ts-m.seen)>10*60000) m.dir=null; }   // data pertama / terputus lama: ukur ulang
     else if(Math.abs(t-m.a)>=th){ m.dir = t>m.a ? "out" : "back"; m.a=t; }
-    m.ts=r.ts; m.seen=r.ts;
+    m.ts=r.ts; m.seen=r.ts; trkDirSave(k,m);
   }
   if(m.dir) return m.dir;
-  if(r.dir==="out"||r.dir==="back") return r.dir;
-  return "out";
+  return trkDirGuess(r, t*(total>0?total:20));
 }
 function trkCompute(r, mp){
   const o = {plat:r.plat, lp:r.lp, lat:r.lat, lng:r.lng, spd:r.spd||0, age:Math.max(0,Date.now()-(r.ts||0))};
@@ -7300,7 +7384,7 @@ function updateTrackUI(){
     h += rows.map(o=>{
       const mins = Math.round(o.age/60000), stale = o.age > 3*60000;
       const pt = o.t==null ? 0 : (o.dir==="back" ? 1-o.t : o.t), pp = Math.round(pt*100);
-      const prog = o.t!=null ? `<div style="position:relative;height:10px;background:var(--border);border-radius:6px;margin:8px 0 2px;"><div style="position:absolute;left:0;top:0;bottom:0;width:${pp}%;background:${o.dir==="back"?"#C77700":"var(--gold)"};border-radius:6px;"></div><div style="position:absolute;top:-4px;left:calc(${pp}% - 9px);font-size:16px;">🚚</div></div>
+      const prog = o.t!=null ? `<div style="position:relative;height:10px;background:var(--border);border-radius:6px;margin:8px 0 2px;"><div style="position:absolute;left:0;top:0;bottom:0;width:${pp}%;background:${o.dir==="back"?"#C77700":"var(--gold)"};border-radius:6px;"></div><div style="position:absolute;top:-4px;left:calc(${pp}% - 9px);font-size:16px;transform:scaleX(-1);">🚚</div></div>
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);">${o.dir==="back"?"<span>📦 NVDC</span><span>ADM KAP 🏭</span>":"<span>🏭 ADM KAP</span><span>NVDC 📦</span>"}</div>` : "";
       return `<div onclick="ccProfOpen('${escH(o.plat)}')" style="cursor:pointer;border:1px solid var(--border);border-left:7px solid ${ccColor(o.plat)};border-radius:12px;padding:10px 12px;margin-bottom:8px;${stale?'opacity:.6;':''}">
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b style="background:${ccColor(o.plat)};color:#fff;border-radius:7px;padding:2px 9px;font-weight:900;">${escH(o.plat)}</b><span style="font-size:11px;color:var(--text-dim);">${escH(o.lp||"")} · ${stale?'⚠ ':''}${mins<1?'baru saja':mins+' mnt lalu'}${o.spd?` · ${o.spd} km/j`:''}</span></div>
@@ -7315,7 +7399,7 @@ function updateTrackUI(){
     try{ trailDraw(); }catch(e){}
     rows.forEach(o=>{
       const cl=ccColor(o.plat), pl=o.plat;
-      L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div class="truckMk" style="background:${cl};${o.age>3*60000?'opacity:.6;':''}">🚚<div class="truckLb" style="background:${cl};">${escH(o.plat)}</div></div>`, iconSize:[38,38], iconAnchor:[19,19]}), zIndexOffset:500}).on("click",()=>ccProfOpen(pl)).addTo(ccMapLayer);
+      L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div class="truckMk" style="background:${cl};${o.age>3*60000?'opacity:.6;':''}"><span style="display:inline-block;${(()=>{ const tg=(o.dir==="back"?mp.adm:mp.nvdc); return (tg&&tg.lng>o.lng)?'transform:scaleX(-1);':''; })()}">🚚</span><div class="truckLb" style="background:${cl};">${escH(o.plat)}</div></div>`, iconSize:[38,38], iconAnchor:[19,19]}), zIndexOffset:500}).on("click",()=>ccProfOpen(pl)).addTo(ccMapLayer);
     });
   }
 }
