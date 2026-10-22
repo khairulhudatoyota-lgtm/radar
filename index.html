@@ -1702,7 +1702,7 @@ function renderInner(){
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
   else if(activeTab==="ccreport"){ setVP(vp, renderCcReport()); if(_vpChanged) setTimeout(()=>tripLoad().then(rptUpdate),0); }
-  else if(activeTab==="admin") setVP(vp, renderAdmin());
+  else if(activeTab==="admin"){ setVP(vp, renderAdmin()); if(adminTab==="users") usrRender(); }
   else if(activeTab==="display") setVP(vp, renderDisplay());
 }
 
@@ -6399,6 +6399,33 @@ function confirmDefect(id){
    5) ADMIN VIEW
 ====================================================================== */
 let adminTab = "users";
+let usrQ="", usrRole="", usrN=20;
+function usrRender(){
+  const el=document.getElementById("usrList"); if(!el) return;
+  const users=DB.get().users||[];
+  const q=String(usrQ||"").trim().toLowerCase();
+  const hit=[];
+  users.forEach((u,i)=>{
+    if(usrRole && u.role!==usrRole) return;
+    if(q){ const hay=[u.username,u.name,u.role,u.lp,u.drvCode].join(" ").toLowerCase(); if(hay.indexOf(q)<0) return; }
+    hit.push([u,i]);
+  });
+  const c=document.getElementById("usrCnt"); if(c) c.textContent="("+hit.length+" dari "+users.length+")";
+  const show=hit.slice(0,usrN);
+  const esc=t=>String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+  el.innerHTML=(show.map(([u,i])=>`<div style="border-top:1px solid var(--line,#e5e7eb);padding:10px 0;">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+      <div style="min-width:0;"><b>${esc(u.name)}</b><div style="font-size:12px;color:var(--text-dim);word-break:break-all;">${esc(u.username)}</div></div>
+      <div style="text-align:right;"><span class="badge gold">${esc(u.role)}</span>${u.lp?` <span class="badge">LP ${esc(u.lp)}</span>`:''}${u.drvCode?` <span class="badge">${esc(u.drvCode)}</span>`:''}${String(u.username).toLowerCase()==="user"?` <span class="badge" style="background:#1a7f3c;color:#fff;">BEBAS PLAT</span>`:''}</div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="btn-outline btn btn-sm" onclick="pwResetOpen(${i})">🔑 Reset</button>
+      <button class="btn-outline btn btn-sm" onclick="editUser(${i})">Edit</button>
+      <button class="btn-danger btn btn-sm" onclick="deleteUser(${i})">Hapus</button>
+    </div></div>`).join(""))
+    + (hit.length===0?`<div style="padding:14px 0;color:var(--text-dim);font-size:13px;">Tidak ada user yang cocok.</div>`:"")
+    + (hit.length>usrN?`<button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="usrN+=30;usrRender()">Tampilkan lagi (${hit.length-usrN} sisa)</button>`:"");
+}
 function renderAdmin(){
   const data = DB.get();
   const tabsHtml = `
@@ -6424,18 +6451,15 @@ function renderAdmin(){
   if(adminTab==="tls") return tabsHtml + renderAdminTls();
   if(adminTab==="xl") return tabsHtml + renderAdminXl();
   if(adminTab==="users"){
-    const rows = data.users.map((u,i)=>`
-      <tr><td>${u.username}</td><td>${u.name}</td><td><span class="badge gold">${u.role}</span>${u.lp?` <span class="badge">LP ${u.lp}</span>`:''}${u.drvCode?` <span class="badge">${u.drvCode}</span>`:''}${String(u.username).toLowerCase()==="user"?` <span class="badge" style="background:#1a7f3c;color:#fff;">BEBAS PLAT</span>`:''}</td>
-      <td style="white-space:nowrap;">
-        
-        <button class="btn-outline btn btn-sm" onclick="pwResetOpen(${i})">🔑 Reset</button>
-        <button class="btn-outline btn btn-sm" onclick="editUser(${i})">Edit</button>
-        <button class="btn-danger btn btn-sm" onclick="deleteUser(${i})">Hapus</button>
-      </td></tr>`).join("");
     return `${tabsHtml}
       ${renderRegCard()}
-      <div class="card">
-        <h3>➕ Tambah User</h3>
+      <div class="card"><h3>Daftar User <span style="font-size:12px;color:var(--text-dim);font-weight:500;" id="usrCnt"></span></h3>
+        <input id="usrQBox" type="search" placeholder="🔍 Cari username, nama, LP, kode driver…" value="${String(usrQ||"").replace(/"/g,"&quot;")}" oninput="usrQ=this.value;usrN=20;usrRender()" style="width:100%;margin-bottom:8px;">
+        <select id="usrRoleBox" onchange="usrRole=this.value;usrN=20;usrRender()" style="width:100%;margin-bottom:10px;"><option value="">Semua role</option>${ROLES.map(r=>`<option value="${r.key}" ${usrRole===r.key?"selected":""}>${r.label}</option>`).join("")}</select>
+        <div id="usrList"></div>
+      </div>
+      <details class="card" style="cursor:pointer;"><summary style="font-weight:700;font-size:15px;">➕ Tambah User</summary>
+        <div style="margin-top:10px;cursor:default;">
         <div class="field"><label>Username</label><input id="newUname" type="text"></div>
         <div class="field"><label>Nama</label><input id="newName" type="text"></div>
         <div class="field"><label>Password</label><input id="newPass" type="text"></div>
@@ -6445,9 +6469,10 @@ function renderAdmin(){
         <div class="field"><label>LP (wajib untuk Koordinator &amp; Driver CC)</label><select id="newLP"><option value="">-- pilih LP --</option>${(data.lpList||[]).map(l=>`<option value="${l}">${l}</option>`).join("")}</select></div>
         <div class="field"><label>Kode Driver (opsional, biasanya diisi Delivery)</label><input id="newDrv" type="text" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></div>
         <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
-      </div>
-      <div class="card">
-        <h3>👥 Buat Akun Massal</h3>
+        </div>
+      </details>
+      <details class="card" ${bulkResult?"open":""}><summary style="font-weight:700;font-size:15px;cursor:pointer;">👥 Buat Akun Massal</summary>
+        <div style="margin-top:10px;">
         <p style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">Buat banyak akun sekaligus. Contoh: Role Dispatcher, jumlah 10, awalan <b>dispatcher</b> → dispatcher01 … dispatcher10. Username yang sudah ada dilewati.</p>
         <div class="field"><label>Role</label>
           <select id="bkRole" onchange="bulkRoleChange()">${ROLES.map(r=>`<option value="${r.key}">${r.label}</option>`).join("")}</select>
@@ -6467,10 +6492,8 @@ function renderAdmin(){
           <div style="display:flex; gap:8px; margin:8px 0;"><button class="btn btn-outline btn-sm" onclick="bulkDownload()">⬇ Unduh CSV</button><button class="btn btn-outline btn-sm" onclick="bulkCopy()">📋 Salin</button><button class="btn btn-outline btn-sm" onclick="bulkResult=null;render()">Tutup</button></div>
           <table><thead><tr><th>Username</th><th>Password</th><th>Nama</th></tr></thead><tbody>${bulkResult.made.map(x=>`<tr><td class="mono">${x.username}</td><td class="mono">${x.password}</td><td>${x.name}</td></tr>`).join("")}</tbody></table>
         </div>`:''}
-      </div>
-      <div class="card"><h3>Daftar User</h3>
-        <table><thead><tr><th>Username</th><th>Nama</th><th>Role</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-      </div>`;
+        </div>
+      </details>`;
   }
 
   if(adminTab==="rute"||adminTab==="titik"){
