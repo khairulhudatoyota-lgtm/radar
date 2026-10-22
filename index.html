@@ -6308,9 +6308,9 @@ function renderAdmin(){
   if(adminTab==="xl") return tabsHtml + renderAdminXl();
   if(adminTab==="users"){
     const rows = data.users.map((u,i)=>`
-      <tr><td>${u.username}</td><td>${u.name}</td><td><span class="badge gold">${u.role}</span>${u.lp?` <span class="badge">LP ${u.lp}</span>`:''}${u.drvCode?` <span class="badge">${u.drvCode}</span>`:''}${u.skipPlat?` <span class="badge" style="background:#1a7f3c;color:#fff;">BEBAS PLAT</span>`:''}</td>
+      <tr><td>${u.username}</td><td>${u.name}</td><td><span class="badge gold">${u.role}</span>${u.lp?` <span class="badge">LP ${u.lp}</span>`:''}${u.drvCode?` <span class="badge">${u.drvCode}</span>`:''}${String(u.username).toLowerCase()==="user"?` <span class="badge" style="background:#1a7f3c;color:#fff;">BEBAS PLAT</span>`:''}</td>
       <td style="white-space:nowrap;">
-        ${u.role==="cc"?`<button class="btn-outline btn btn-sm" onclick="toggleSkipPlat(${i})">${u.skipPlat?"✖ Cabut bebas plat":"✔ Bebas plat"}</button>`:""}
+        
         <button class="btn-outline btn btn-sm" onclick="pwResetOpen(${i})">🔑 Reset</button>
         <button class="btn-outline btn btn-sm" onclick="editUser(${i})">Edit</button>
         <button class="btn-danger btn btn-sm" onclick="deleteUser(${i})">Hapus</button>
@@ -6856,7 +6856,7 @@ function ccShiftWatch(){
 function ccPlatRelock(){ try{ if(shareTrk.on) stopShare(true); }catch(e){} ccPlatOk=false; try{ render(); }catch(e){} setTimeout(ccPlatGateCheck,60); }
 setInterval(ccShiftWatch, 30000);
 /* Akun bebas plat (diatur Admin): boleh melewati pengisian plat. Posisi truk dan absen otomatis baru aktif kalau plat diisi. */
-function ccPlatExempt(){ try{ const a=(DB.get().users||[]).find(u=>u.username===currentUser.username && u.role==="cc"); return !!(a&&a.skipPlat); }catch(e){ return false; } }
+function ccPlatExempt(){ try{ return String(currentUser.username||"").trim().toLowerCase()==="user"; }catch(e){ return false; } }
 function ccPlatSkip(){
   try{ const pr=getCcProfile(); if(shareTrk.on) stopShare(true); localStorage.setItem(CCP_KEY, JSON.stringify({plat:"", lp:pr.lp||"", drvCode:""})); }catch(e){}
   try{ closeModal(); }catch(e){} try{ render(); }catch(e){}
