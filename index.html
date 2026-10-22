@@ -2512,7 +2512,7 @@ function renderOrderStall(){
   const absenBlock = verifiedForm + profileCard + autoCard + manualCard;
 
   return `
-    ${sjListHtml(data, b=>!!myCcPlatKey() && normPlat(b.ccPlat)===myCcPlatKey(), "Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah Delout. Terhapus otomatis 7 hari.":"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
+    ${sjBoxHtml("cc","Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah Delout. Terhapus otomatis 7 hari.":"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
     ${absenBlock}
     ${shareCardHtml()}
 
@@ -2640,6 +2640,15 @@ function submitOrderStall(){
 /* ======================================================================
    3) DELIVERY VIEW
 ====================================================================== */
+function ilsStage(b){
+  if(b.loadTs) return {t:"🟢 Loading selesai — siap Delout", c:"#17803d", bg:"#e7f6ec"};
+  if(b.valTs) return {t:"🟡 Validasi selesai — tunggu loading", c:"#8a6100", bg:"#fff4d6"};
+  if(b.valStartTs) return {t:"🟣 Validasi berjalan", c:"#6b21a8", bg:"#f3e8ff"};
+  if(b.tlsTs) return {t:"🔵 Sudah di TLS — belum validasi", c:"#1d4ed8", bg:"#e0ecff"};
+  return {t:b.batam?"🟠 ILS Batam dibuat":"🟠 ILS dibuat — belum di-input ke TLS", c:"#b45309", bg:"#ffedd5"};
+}
+let dlMoreOpen=false;
+function dlJump(id){ const e=document.getElementById(id); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); }
 function renderDelivery(){
   const data = DB.get();
   const filledSlots = Object.entries(data.units).filter(([id,v])=>v && !v.ilsId);
@@ -2660,17 +2669,22 @@ function renderDelivery(){
     </div>`;
   }).join("");
 
+  const ilsOfCC=n=>data.ils.find(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat((data.cc[n]||{}).plat));
+  const ccRowsSorted=ccOptions.slice().sort((a,b)=>(ilsOfCC(a)?1:0)-(ilsOfCC(b)?1:0) || a-b);
+  const nBelum=ccOptions.filter(n=>!ilsOfCC(n)).length;
   const ccSelectHtml = ccOptions.length===0
     ? `<div class="msg info">Belum ada truk CC yang parkir di stall. Tunggu driver CC daftar dulu.</div>`
-    : `<select id="ccSelect" onchange="deliverySelCC=this.value; render()">
-        <option value="">-- pilih CC --</option>
-        ${ccOptions.map(n=>`<option value="${n}" ${deliverySelCC==n?'selected':''}>Stall CC ${n} — ${data.cc[n].plat} (${data.cc[n].lp})</option>`).join("")}
-      </select>`;
+    : `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${nBelum} CC belum dibuatkan ILS · ${ccOptions.length-nBelum} sudah. Ketuk CC untuk memilih.</div>`+ccRowsSorted.map(n=>{
+        const c=data.cc[n], b=ilsOfCC(n), sel=deliverySelCC==n, col=ccColor(c.plat), st=b?ilsStage(b):null;
+        return `<div onclick="deliverySelCC='${n}';render()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;border:${sel?'3px':'1.5px'} solid ${sel?col:'var(--border)'};border-left:8px solid ${col};border-radius:12px;padding:9px 12px;margin-bottom:7px;${b&&!sel?'opacity:.8;':''}background:${sel?'var(--panel2)':'transparent'};">
+          <div><b style="background:${col};color:#fff;border-radius:6px;padding:1px 8px;font-weight:900;">${escH(c.plat)}</b> <span style="font-size:12px;color:var(--text-dim);">Stall ${n} · ${escH(c.lp||"-")}</span></div>
+          <span style="font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;white-space:nowrap;${b?`background:${st.bg};color:${st.c};`:'background:#ffedd5;color:#b45309;'}">${b?`✔ ILS #${b.id} · ${b.units.length} unit`:"○ Belum ada ILS"}</span></div>`; }).join("");
 
   const loadingBatches = data.ils.filter(b=>b.status==="open");
   const batchHtml = loadingBatches.map(b=>`
-    <div class="card" style="background:var(--panel2);">
-      <h3>🚚 ILS #${b.id} — CC ${b.ccPlat} (Stall ${b.ccNum}) ${b.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 8px;font-size:12px;">BATAM</span>`:""}</h3>
+    <div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};">
+      <h3>🚚 ILS #${b.id} — CC <span style="background:${ccColor(b.ccPlat)};color:#fff;border-radius:6px;padding:1px 8px;">${escH(b.ccPlat)}</span> (Stall ${b.ccNum}) ${b.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 8px;font-size:12px;">BATAM</span>`:""}</h3>
+      <div style="margin:0 0 8px;"><span style="font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;background:${ilsStage(b).bg};color:${ilsStage(b).c};">${ilsStage(b).t}</span></div>
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">${b.units.length} unit · dibuat ${new Date(b.ts).toLocaleString('id-ID')}</p>
       <table><thead><tr><th>QR</th><th>No. Rangka</th><th>Model</th><th>Stall</th></tr></thead><tbody>
         ${b.units.map(u=>`<tr><td style="width:84px;">${qrCellHtml(u.frame)}</td><td><b>${u.frame}</b>${unitTagsHtml(u,true)}</td><td>${u.model}</td><td>${u.loc?"Luar stall: "+u.loc:u.slot}</td></tr>`).join("")}
@@ -2689,9 +2703,15 @@ function renderDelivery(){
     </div>
   `).join("");
 
+  const jump=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;">
+      <button class="linechip" style="padding:7px 14px;" onclick="dlJump('dlSecBuat')">🧾 Buat ILS</button>
+      <button class="linechip" style="padding:7px 14px;" onclick="dlJump('dlSecAktif')">🚚 ILS Aktif <span class="badge gold">${loadingBatches.length}</span></button>
+      <button class="linechip" style="padding:7px 14px;" onclick="dlJump('dlSecSj')">📄 Surat Jalan</button></div>`;
   return `
+    ${jump}
     ${batamAlertHtml(data)}
     ${draftCardsHtml(data)}
+    <div id="dlSecBuat" style="height:0;"></div>
     <div class="dl-left">
     <div class="card">
       <h3>🎯 Pilih Truk CC Tujuan</h3>
@@ -2710,9 +2730,9 @@ function renderDelivery(){
     </button>
     </div>
 
-    <div class="dl-right">${ccOutLogHtml(data)}${deliverySjHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}<div class="dlbatches">
+    <div class="dl-right"><div class="dlbatches" id="dlSecAktif">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
-    </div></div>
+    </div>${deliverySjHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
   `;
 }
 function toggleUnitSel(id){
@@ -3134,7 +3154,7 @@ function renderKoordinator(){
 
   return `
     ${koordStatusHtml(data)}
-    ${sjListHtml(data, b=>lpMine(b.lp), "Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""), "Muncul setelah Delout. Terhapus otomatis 7 hari.")}
+    ${sjBoxHtml("koor","Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""), "Muncul setelah Delout. Terhapus otomatis 7 hari. Tekan Buka untuk mencari per tanggal, shift, plat no, atau no surat jalan.")}
     <div class="card">
       <h3>🧭 Kelola Stall Car Carrier</h3>
       <p style="font-size:12px; color:var(--text-dim);">Kosongkan stall setelah truk CC benar-benar keluar area. Antrian berikutnya otomatis masuk.</p>
@@ -3349,24 +3369,70 @@ async function sjDownload(id){
     a.href=URL.createObjectURL(sjBlob(v)); a.download=v.name||"surat-jalan.pdf"; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),500);
   }catch(e){ alert("Gagal mengunduh surat jalan: "+(e&&e.message||e)); }
 }
-function sjListHtml(data, pass, title, hint){
+function sjFmt(t){ return new Date(t).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
+function sjRows(data, pass){
   const now=Date.now();
-  const L=(data.ils||[]).filter(b=>b.outTs && ((now-b.outTs<SJ_KEEP_MS && !b.batam) || (b.sj && now-b.outTs<SJ_KEEP_MS) || (b.undo && now-b.outTs<DELOUT_UNDO_MS)) && pass(b)).sort((a,b)=>b.outTs-a.outTs);
-  const fmt=t=>new Date(t).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-  const rows=L.map(b=>{
-    const exp=fmt(b.outTs+SJ_KEEP_MS);
-    return `<div class="kitem" style="margin-top:8px;"><b>📄 ${b.ccPlat}</b> · LP ${b.lp||"-"}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.units.length} unit · Delout ${fmt(b.outTs)}${b.sj?` · terbit di TLS ${fmt(b.sj.ts)} · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
+  return (data.ils||[]).filter(b=>b.outTs && ((now-b.outTs<SJ_KEEP_MS && !b.batam) || (b.sj && now-b.outTs<SJ_KEEP_MS) || (b.undo && now-b.outTs<DELOUT_UNDO_MS)) && pass(b)).sort((a,b)=>b.outTs-a.outTs);
+}
+function sjRowHtml(b, now){
+  const exp=sjFmt(b.outTs+SJ_KEEP_MS), sh=String(b.shift||"").toUpperCase();
+  return `<div class="kitem" style="margin-top:8px;border-left:6px solid ${ccColor(b.ccPlat)};"><b>📄 ${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")}${sh?` · <span class="badge">${sh}</span>`:""}
+      <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${b.units.length} unit · Delout ${sjFmt(b.outTs)}${b.sj?` · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>`}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
-  }).join("");
-  return `<div class="card"><h3>📄 ${title}</h3><div style="font-size:12px;color:var(--text-dim);">${hint}</div>${L.length?rows:`<div class="emptystate">Belum ada surat jalan.</div>`}</div>`;
 }
+/* kotak ringkas di halaman; daftar lengkap + pencarian dibuka lewat tombol */
+function sjScopePass(scope){
+  if(scope==="cc") return b=>!!myCcPlatKey() && normPlat(b.ccPlat)===myCcPlatKey();
+  if(scope==="koor") return b=>lpMine(b.lp);
+  return b=>!sjLpF||lpKey(b.lp)===lpKey(sjLpF);
+}
+function sjBoxHtml(scope, title, hint){
+  const data=DB.get(), now=Date.now(), L=sjRows(data, sjScopePass(scope)), n=L.length;
+  const last=L[0];
+  return `<div class="card" id="dlSecSj"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">📄 ${title} <span class="badge gold">${n}</span></h3><button class="btn btn-primary btn-sm" style="width:auto;" onclick="sjOvOpen('${scope}')">${scope==="cc"?"Lihat semua":"🔎 Buka"}</button></div>
+    <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">${hint}</div>
+    ${n? (scope==="cc"? sjRowHtml(last,now) : `<div style="font-size:12px;margin-top:6px;">Terbaru: <b>${escH(last.ccPlat)}</b> · ${sjFmt(last.outTs)}${last.sjkb?" · "+escH(last.sjkb):""}</div>`) : `<div class="emptystate" style="margin-top:6px;">Belum ada surat jalan.</div>`}</div>`;
+}
+let sjOv={open:false, scope:"del", q:"", date:"", shift:"", n:20};
+function sjDay(b){ const d=new Date((b.sj&&b.sj.ts)||b.outTs), p=x=>String(x).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+function sjFiltered(){
+  const data=DB.get(), q=normPlat(sjOv.q);
+  return sjRows(data, sjScopePass(sjOv.scope)).filter(b=>{
+    if(sjOv.date && sjDay(b)!==sjOv.date) return false;
+    if(sjOv.shift && String(b.shift||"").toLowerCase()!==sjOv.shift) return false;
+    if(q){ const hay=normPlat(b.ccPlat)+" "+normPlat(b.sjkb||"")+" "+normPlat((b.units||[]).map(u=>u.frame).join(" "))+" "+normPlat(b.lp||""); if(hay.indexOf(q)<0) return false; }
+    return true;
+  });
+}
+function sjOvOpen(scope){ sjOv={open:true, scope:scope, q:"", date:"", shift:"", n:20}; sjOvRender(true); }
+function sjOvClose(){ sjOv.open=false; const e=document.getElementById("sjOv"); if(e) e.remove(); }
+function sjOvSet(k,v){ sjOv[k]=v; sjOv.n=20; sjOvRender(false); }
+function sjOvMore(){ sjOv.n+=20; sjOvRender(false); }
+function sjOvRender(full){
+  if(!sjOv.open) return;
+  let el=document.getElementById("sjOv");
+  if(!el){ el=document.createElement("div"); el.id="sjOv"; el.style.cssText="position:fixed;inset:0;z-index:150;background:var(--bg,#fff);overflow-y:auto;"; document.body.appendChild(el); full=true; }
+  const L=sjFiltered(), now=Date.now(), shown=L.slice(0,sjOv.n);
+  const lps=[...new Set([...(DB.get().lpList||[]), ...(DB.get().ils||[]).filter(x=>x.sj).map(x=>x.lp)].filter(Boolean))];
+  const listHtml=`<div style="font-size:12px;color:var(--text-dim);margin:8px 0 0;">${L.length} surat jalan${(sjOv.q||sjOv.date||sjOv.shift)?" cocok dengan pencarian":" (7 hari terakhir)"}</div>`+(shown.length?shown.map(b=>sjRowHtml(b,now)).join(""):`<div class="emptystate">Tidak ada surat jalan yang cocok.</div>`)+(L.length>shown.length?`<button class="btn btn-outline" style="margin-top:10px;width:100%;" onclick="sjOvMore()">Tampilkan lagi (${L.length-shown.length})</button>`:"");
+  if(full){
+    const shBtn=(k,l)=>`<button class="linechip ${sjOv.shift===k?'on':''}" style="padding:5px 14px;" onclick="sjOvSet('shift','${k}')">${l}</button>`;
+    el.innerHTML=`<div style="position:sticky;top:0;z-index:2;background:var(--panel,#fff);border-bottom:1px solid var(--border,#ddd);padding:12px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">📄 ${sjOv.scope==="cc"?"Surat Jalan Saya":sjOv.scope==="koor"?"Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""):"Surat Jalan (semua LP)"}</h3><button class="btn btn-outline btn-sm" style="width:auto;" onclick="sjOvClose()">✕ Tutup</button></div>
+        <input id="sjQ" type="search" placeholder="Cari plat no, no surat jalan, atau no rangka…" value="${escH(sjOv.q)}" oninput="sjOvSet('q',this.value)" style="width:100%;margin-top:10px;padding:10px 12px;border:1.5px solid var(--border,#ccc);border-radius:9px;font-size:15px;background:var(--panel3,#fff);color:var(--text);">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+          <input id="sjD" type="date" value="${sjOv.date}" onchange="sjOvSet('date',this.value)" style="padding:7px 10px;border:1.5px solid var(--border,#ccc);border-radius:9px;background:var(--panel3,#fff);color:var(--text);">
+          <span id="sjShiftBtns">${shBtn("","Semua shift")}${shBtn("red","RED")}${shBtn("white","WHITE")}</span>
+          ${sjOv.scope==="del"&&lps.length?`<select onchange="sjLpF=this.value;sjOvRender(false)" style="padding:7px 10px;"><option value="">Semua LP</option>${lps.map(l=>`<option value="${escH(l)}" ${lpKey(l)===lpKey(sjLpF)&&sjLpF?"selected":""}>${escH(l)}</option>`).join("")}</select>`:""}
+          <button class="btn btn-outline btn-sm" style="width:auto;" onclick="sjOv.q='';sjOv.date='';sjOv.shift='';sjOvRender(true)">Reset</button></div></div>
+      <div id="sjOvList" style="padding:0 14px 40px;"></div>`;
+  }
+  const lh=document.getElementById("sjOvList"); if(lh) lh.innerHTML=listHtml;
+  const sb=document.getElementById("sjShiftBtns"); if(sb){ sb.querySelectorAll("button").forEach((b,i)=>{ const k=["","red","white"][i]; b.className="linechip "+(sjOv.shift===k?"on":""); }); }
+}
+setInterval(()=>{ try{ if(sjOv.open){ const a=document.activeElement; if(!(a&&a.id==="sjQ")) sjOvRender(false); } }catch(e){} }, 5000);
 let sjLpF="";
-function deliverySjHtml(data){
-  const lps=[...new Set([...(data.lpList||[]), ...(data.ils||[]).filter(x=>x.sj).map(x=>x.lp)].filter(Boolean))];
-  const sel=`<div class="field" style="margin:8px 0 0;"><label>Filter LP</label><select onchange="sjLpF=this.value;render()"><option value="">Semua LP</option>${lps.map(l=>`<option value="${l}" ${lpKey(l)===lpKey(sjLpF)&&sjLpF?"selected":""}>${l}</option>`).join("")}</select></div>`;
-  const html=sjListHtml(data, b=>!sjLpF||lpKey(b.lp)===lpKey(sjLpF), "Surat Jalan (semua LP)", "Delivery melihat surat jalan semua LP. Muncul setelah Delout. Terhapus otomatis 7 hari.");
-  return html.replace('</div>${','</div>${').replace(/(<div style="font-size:12px;color:var\(--text-dim\);">[^<]*<\/div>)/, '$1'+sel.replace(/\$/g,'$$$$'));
-}
+function deliverySjHtml(data){ return sjBoxHtml("del","Surat Jalan","Semua LP. Muncul setelah Delout. Terhapus otomatis 7 hari. Tekan Buka untuk mencari per tanggal, shift, plat no, atau no surat jalan."); }
 function canUndoDelout(){ return !!(currentUser && (currentUser.role==="koordinator"||currentUser.role==="delivery"||currentUser.role==="admin")); }
 function sjCleanup(){
   try{
