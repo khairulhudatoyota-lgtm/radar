@@ -5632,13 +5632,20 @@ function ccplanCompute(data){
   const [rs,re] = ldrRange(); const now = Date.now();
   const dayStart = prodMidnight() - (ldrPeriod==='yesterday'?86400000:0);
   const inShift = t=>{ if(ldrShift==='all'||ldrPeriod==='24h') return true; const h=+t.split(':')[0]; const s1 = h>=SHIFT_START_H && h<SHIFT2_START_H; return ldrShift==='1'?s1:!s1; };
-  const ils = (data.ils||[]).filter(b=>b.ts>=rs && b.ts<re);
+  const ilsAll = (data.ils||[]).filter(b=>b.ts>=rs && b.ts<re);
+  /* Spot Order = CC tambahan di luar DCCP: tidak masuk plan, tidak menutup minus plan DCCP */
+  const planKeys = new Set(), spotKeys = new Set();
+  (data.dccpSchedule||[]).forEach(r=>{ const k=normPlat(r.police); if(!r.extra) planKeys.add(k); });
+  (data.dccpSchedule||[]).forEach(r=>{ const k=normPlat(r.police); if(r.extra && !planKeys.has(k)) spotKeys.add(k); });
+  const ils = ilsAll.filter(b=>!spotKeys.has(normPlat(b.ccPlat)));
+  const spotIls = ilsAll.filter(b=>spotKeys.has(normPlat(b.ccPlat)));
   const act = {}, actU = {};
-  ils.forEach(b=>{ const k=normPlat(b.ccPlat); act[k]=(act[k]||0)+1; actU[k]=(actU[k]||0)+(b.units||[]).length; });
+  ilsAll.forEach(b=>{ const k=normPlat(b.ccPlat); act[k]=(act[k]||0)+1; actU[k]=(actU[k]||0)+(b.units||[]).length; });
   const sched = data.dccpSchedule||[];
   const keys = new Set();
   const rows = sched.map(r=>{
     const k = normPlat(r.police); keys.add(k);
+    const isSpot = spotKeys.has(k) && !!r.extra;
     const allT = (r.trips||[]).slice().sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0));
     const times = allT.filter(inShift);
     const filtered = times.length!==allT.length;
@@ -5651,19 +5658,21 @@ function ccplanCompute(data){
     const inYard = findActualArrival(r.police,data);
     let status = "ontrack";
     if(a>=planTrip) status="done"; else if(a<dueNow) status="late";
-    return {r, planTrip, planUnit, dueNow, nextT, act:a, actUnit:au, minus:planTrip-a, dueMinus:Math.max(0,dueNow-a), inYard, status, times};
+    if(isSpot) status="spot";
+    return {isSpot, r, planTrip, planUnit, dueNow, nextT, act:a, actUnit:au, minus:planTrip-a, dueMinus:Math.max(0,dueNow-a), inYard, status, times};
   });
   for(let i=rows.length-1;i>=0;i--){ if(ldrShift!=='all' && ldrPeriod!=='24h' && rows[i].planTrip===0 && rows[i].act===0) rows.splice(i,1); }
   const unplanned = Object.keys(act).filter(k=>!keys.has(k)).map(k=>({plat:k, act:act[k], actUnit:actU[k]}));
   const T = {planTrip:0, planUnit:0, act:0, actUnit:0, due:0};
-  rows.forEach(x=>{ T.planTrip+=x.planTrip; T.planUnit+=x.planUnit; T.due+=x.dueNow; });
+  rows.forEach(x=>{ if(x.isSpot) return; T.planTrip+=x.planTrip; T.planUnit+=x.planUnit; T.due+=x.dueNow; });
+  T.spotAct = spotIls.length; T.spotUnit = spotIls.reduce((a,b)=>a+(b.units||[]).length,0);
   T.act = ils.length; T.actUnit = ils.reduce((a,b)=>a+(b.units||[]).length,0);
   T.minus = T.planTrip - T.act; T.dueMinus = Math.max(0, T.due - T.act);
   // per LP
   const lp = {};
-  rows.forEach(x=>{ const o=lp[x.r.lp]=lp[x.r.lp]||{plan:0,act:0,due:0,unit:0,actUnit:0}; o.plan+=x.planTrip; o.act+=x.act; o.due+=x.dueNow; o.unit+=x.planUnit; o.actUnit+=x.actUnit; });
+  rows.forEach(x=>{ if(x.isSpot) return; const o=lp[x.r.lp]=lp[x.r.lp]||{plan:0,act:0,due:0,unit:0,actUnit:0}; o.plan+=x.planTrip; o.act+=x.act; o.due+=x.dueNow; o.unit+=x.planUnit; o.actUnit+=x.actUnit; });
   // kurva kumulatif per 30 menit
-  const allTimes = []; rows.forEach(x=>x.times.forEach(t=>allTimes.push(ccTimeToTs(t,dayStart))));
+  const allTimes = []; rows.forEach(x=>{ if(!x.isSpot) x.times.forEach(t=>allTimes.push(ccTimeToTs(t,dayStart))); });
   const slots = [];
   if(allTimes.length){
     const lo = Math.floor(Math.min(...allTimes)/LDR_SLOT_MS)*LDR_SLOT_MS;
@@ -5696,7 +5705,7 @@ function renderCCPlan(){
   const pct = (a,b)=> b>0 ? Math.min(100,Math.round(a/b*100)) : 0;
   const tile = (lbl,val,col,sub)=>`<div style="flex:1;min-width:130px;background:var(--panel);border:1px solid var(--border);border-top:4px solid ${col};border-radius:12px;padding:12px 14px;"><div style="font-size:12px;color:var(--text-dim);">${lbl}</div><div style="font-size:30px;font-weight:800;line-height:1.1;color:${col==="#D64545"?col:"inherit"};">${val}</div>${sub?`<div style="font-size:11px;color:var(--text-dim);">${sub}</div>`:""}</div>`;
   const bar = (a,b,col)=>`<div style="height:8px;min-width:70px;background:var(--panel2);border-radius:4px;overflow:hidden;"><div style="height:100%;width:${pct(a,b)}%;background:${col};"></div></div>`;
-  const stChip = {done:["✅ Selesai","#1E9E5A"], late:["⚠ Terlambat","#D64545"], ontrack:["⏳ Sesuai jadwal","#6B7686"]};
+  const stChip = {spot:["➕ Spot (di luar plan)","#E60012"], done:["✅ Selesai","#1E9E5A"], late:["⚠ Terlambat","#D64545"], ontrack:["⏳ Sesuai jadwal","#6B7686"]};
   const rows = R.rows.slice().sort((a,b)=>b.dueMinus-a.dueMinus || b.minus-a.minus);
   const worstLP = Object.entries(R.lp).map(([k,o])=>({k,m:o.plan-o.act})).sort((a,b)=>b.m-a.m)[0];
   return `
@@ -5716,6 +5725,7 @@ function renderCCPlan(){
     ${tile("Sisa / Minus Plan", T.minus>0?"−"+T.minus:(T.minus<0?"+"+(-T.minus):"0"), T.minus>0?"#D64545":"#1E9E5A", T.minus>0?"belum terpenuhi dari plan":(T.minus<0?"melebihi plan":"plan terpenuhi"))}
     ${tile("Minus vs Jadwal Saat Ini", T.dueMinus>0?"−"+T.dueMinus:"0", T.dueMinus>0?"#D64545":"#1E9E5A", "seharusnya sudah "+T.due+" ritase")}
   </div>
+  ${T.spotAct?`<div class="msg info" style="margin-bottom:14px;">➕ Spot Order: <b>${T.spotAct}</b> ritase · ${T.spotUnit} unit. Tambahan di luar DCCP, tidak dihitung ke Plan maupun Aktual di atas.</div>`:""}
   ${worstLP&&worstLP.m>0?`<div class="msg info" style="margin-bottom:14px;">LP paling minus: <b>${worstLP.k}</b> (−${worstLP.m} ritase)</div>`:""}
 
   <div class="card"><h3>Kurva Plan vs Aktual (kumulatif)</h3>${ccplanChartSVG(R.slots)}</div>
@@ -5732,7 +5742,7 @@ function renderCCPlan(){
   </table></div></div>
   ${R.unplanned.length?`<div class="card"><h3>CC di Luar Jadwal</h3><table style="font-size:13px;"><tr><th style="${th}">Plat</th><th style="${th}">Ritase</th><th style="${th}">Unit</th></tr>${R.unplanned.map(u=>`<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${u.plat}</b></td><td style="${td}">${u.act}</td><td style="${td}">${u.actUnit}</td></tr>`).join("")}</table><div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Sudah dihitung di total aktual. Tambahkan lewat menu DCCP › Spot Order bila ingin masuk plan.</div></div>`:""}
   `}
-  <div class="footnote">Plan = kolom Trip pada DCCP (ritase per CC). Aktual = jumlah ILS per plat CC pada periode terpilih.</div>`;
+  <div class="footnote">Plan = kolom Trip pada DCCP (ritase per CC). Aktual = jumlah ILS per plat CC pada periode terpilih. Spot Order adalah CC tambahan: tidak menambah plan dan tidak mengurangi minus plan DCCP.</div>`;
 }
 
 /* ======================================================================
@@ -6935,6 +6945,7 @@ function onSharePos(pos){
   shareTrk.last = now;
   const prof = getCcProfile(), ref = FBS.db.ref(TRK_PATH+"/"+shareTrk.key);
   const rec = {plat:prof.plat, lp:prof.lp, lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), acc:Math.round(pos.coords.accuracy||0), spd:Math.round((pos.coords.speed||0)*3.6), ts:now};
+  try{ const _t=tripSt().t; if(_t&&_t.dir) rec.dir=_t.dir; }catch(e){}
   try{ refTrailTick(pos); }catch(e){}
   ref.set(rec).then(()=>{ shareTrk.msg = "✔ Posisi terkirim "+new Date(now).toLocaleTimeString("id-ID")+" (±"+rec.acc+" m)"; shareStatusUpdate(); })
     .catch(e=>{ shareTrk.msg = "Gagal kirim posisi: "+(e&&e.message||e)+" — minta Admin menambah aturan Firebase 'radar_track'."; shareStatusUpdate(); });
@@ -7149,10 +7160,19 @@ function initCcMap(){
     updateTrackUI();
   }).catch(()=>{ const m=document.getElementById("ccmapMsg"); if(m) m.innerHTML = `<div class="msg err">Peta tidak bisa dimuat (butuh internet). Daftar posisi tetap tampil di bawah.</div>`; });
 }
+/* Arah jalan CC: ke NVDC (out) atau kembali ke ADM KAP (back). Dari HP driver bila ada, selain itu dari gerak posisi berturut-turut. */
+const _trkDirMem = {};
+function trkDirOf(r, t){
+  const k = normPlat(r.plat), m = _trkDirMem[k] || (_trkDirMem[k] = {t:null, dir:null});
+  if(m.t!=null && Math.abs(t-m.t)>=0.004 && r.ts!==m.ts){ m.dir = t>m.t ? "out" : "back"; m.t=t; m.ts=r.ts; }
+  else if(m.t==null){ m.t=t; m.ts=r.ts; }
+  if(r.dir==="out"||r.dir==="back") return r.dir;
+  return m.dir || "out";
+}
 function trkCompute(r, mp){
   const o = {plat:r.plat, lp:r.lp, lat:r.lat, lng:r.lng, spd:r.spd||0, age:Math.max(0,Date.now()-(r.ts||0))};
   const R = routeGet();
-  if(R){ const pj=routeProject(R, r.lat, r.lng); o.dA=pj.along; o.dB=Math.max(0,R.km-pj.along); o.t=R.km>0?pj.along/R.km:0; o.total=R.km; o.off=pj.d; return o; }
+  if(R){ const pj=routeProject(R, r.lat, r.lng); o.dA=pj.along; o.dB=Math.max(0,R.km-pj.along); o.t=R.km>0?pj.along/R.km:0; o.total=R.km; o.off=pj.d; o.dir=trkDirOf(r,o.t); return o; }
   if(mp && mp.adm && mp.nvdc){
     o.dA = haversineKm(r.lat,r.lng,mp.adm.lat,mp.adm.lng); o.dB = haversineKm(r.lat,r.lng,mp.nvdc.lat,mp.nvdc.lng);
     const k = Math.cos(mp.adm.lat*Math.PI/180);
@@ -7160,9 +7180,11 @@ function trkCompute(r, mp){
     const L2 = (bx-ax)*(bx-ax)+(by-ay)*(by-ay);
     o.t = L2>0 ? Math.max(0, Math.min(1, ((px-ax)*(bx-ax)+(py-ay)*(by-ay))/L2)) : 0;   // 0 = di ADM KAP, 1 = di NVDC
     o.total = haversineKm(mp.adm.lat,mp.adm.lng,mp.nvdc.lat,mp.nvdc.lng);
+    o.dir = trkDirOf(r,o.t);
   }
   return o;
 }
+function trkTxt(o){ return o.dir==="back" ? `${o.dB.toFixed(1)} km dari NVDC · ${o.dA.toFixed(1)} km lagi ke ADM KAP <span style="font-weight:700;color:#C77700;">↩ kembali</span>` : `${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km lagi ke NVDC`; }
 function updateTrackUI(){
   const list = document.getElementById("trkList"), mp = DB.get().mapPoints || {};
   const rows = Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0) < 45*60000).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
@@ -7174,11 +7196,12 @@ function updateTrackUI(){
     if(!rows.length) h += `<div style="font-size:13px;color:var(--text-dim);">Belum ada CC yang membagikan posisi.</div>`;
     h += rows.map(o=>{
       const mins = Math.round(o.age/60000), stale = o.age > 3*60000;
-      const prog = o.t!=null ? `<div style="position:relative;height:10px;background:var(--border);border-radius:6px;margin:8px 0 2px;"><div style="position:absolute;left:0;top:0;bottom:0;width:${Math.round(o.t*100)}%;background:var(--gold);border-radius:6px;"></div><div style="position:absolute;top:-4px;left:calc(${Math.round(o.t*100)}% - 9px);font-size:16px;">🚚</div></div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);"><span>🏭 ADM KAP</span><span>NVDC 📦</span></div>` : "";
+      const pt = o.t==null ? 0 : (o.dir==="back" ? 1-o.t : o.t), pp = Math.round(pt*100);
+      const prog = o.t!=null ? `<div style="position:relative;height:10px;background:var(--border);border-radius:6px;margin:8px 0 2px;"><div style="position:absolute;left:0;top:0;bottom:0;width:${pp}%;background:${o.dir==="back"?"#C77700":"var(--gold)"};border-radius:6px;"></div><div style="position:absolute;top:-4px;left:calc(${pp}% - 9px);font-size:16px;">🚚</div></div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);">${o.dir==="back"?"<span>📦 NVDC</span><span>ADM KAP 🏭</span>":"<span>🏭 ADM KAP</span><span>NVDC 📦</span>"}</div>` : "";
       return `<div onclick="ccProfOpen('${escH(o.plat)}')" style="cursor:pointer;border:1px solid var(--border);border-left:7px solid ${ccColor(o.plat)};border-radius:12px;padding:10px 12px;margin-bottom:8px;${stale?'opacity:.6;':''}">
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b style="background:${ccColor(o.plat)};color:#fff;border-radius:7px;padding:2px 9px;font-weight:900;">${escH(o.plat)}</b><span style="font-size:11px;color:var(--text-dim);">${escH(o.lp||"")} · ${stale?'⚠ ':''}${mins<1?'baru saja':mins+' mnt lalu'}${o.spd?` · ${o.spd} km/j`:''}</span></div>
-        ${o.dA!=null ? `<div style="font-size:13px;margin-top:4px;">${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km lagi ke NVDC${o.off!=null && o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>` : ""}
+        ${o.dA!=null ? `<div style="font-size:13px;margin-top:4px;">${trkTxt(o)}${o.off!=null && o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>` : ""}
         ${prog}</div>`;
     }).join("");
     list.innerHTML = h;
@@ -7381,7 +7404,7 @@ function ccProfRefresh(force){
       <div><b>Driver:</b> ${escH(who)}</div>
       ${o?`<div><b>LP:</b> ${escH(o.lp||"-")}</div>
       <div><b>Posisi:</b> ${stale?'⚠ ':'🟢 '}${mins<1?"baru saja":mins+" mnt lalu"}${o.spd?` · ${o.spd} km/j`:" · berhenti"}</div>
-      ${o.dA!=null?`<div><b>Rute:</b> ${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km lagi ke NVDC${o.off!=null&&o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>`:""}`:`<div style="color:var(--text-dim);">CC ini sudah tidak membagikan posisi.</div>`}
+      ${o.dA!=null?`<div><b>Rute:</b> ${trkTxt(o)}${o.off!=null&&o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>`:""}`:`<div style="color:var(--text-dim);">CC ini sudah tidak membagikan posisi.</div>`}
       ${last.length?`<div style="margin-top:6px;"><b>Chat terakhir:</b>${last.map(m=>`<div style="font-size:13px;background:var(--panel2,#f1f4f8);border-radius:8px;padding:4px 8px;margin-top:3px;">${escH(m.text||"📷 foto")} <span style="color:var(--text-dim);font-size:11px;">· ${lapAgo(m.ts)}</span></div>`).join("")}</div>`:""}
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button class="btn btn-primary" style="flex:1;background:${c};border-color:${c};" onclick="ccProfChat()">💬 Ajak bicara</button>
