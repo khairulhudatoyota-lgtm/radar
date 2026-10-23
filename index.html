@@ -1054,7 +1054,7 @@ function getSession(){
 }
 let loginShift = (function(){ try{ const v=localStorage.getItem("radar_shift"); return (v==="red"||v==="white")?v:""; }catch(e){ return ""; } })();
 function setSession(user, roles){
-  const s = { username:user.username, name:user.name, role:user.role, roles:(roles&&roles.length?roles:[user.role]), shift:loginShift||"", expiry: Date.now() + (rememberOn() ? 30*24 : CONFIG.SESSION_HOURS)*3600*1000 };
+  const s = { username:user.username, name:user.name, role:user.role, roles:(roles&&roles.length?roles:[user.role]), shift:loginShift||"", ts:Date.now(), expiry: Date.now() + (rememberOn() ? 30*24 : CONFIG.SESSION_HOURS)*3600*1000 };
   localStorage.setItem(SESS_KEY, JSON.stringify(s));
   return s;
 }
@@ -1592,6 +1592,37 @@ function switchToRole(r){
   try{ spdUnlock(); }catch(e){}
   enterApp();
 }
+/* Keluar paksa & keluar otomatis (driver CC lupa keluar dari aplikasi sehingga posisi terus dibagikan) */
+function ccAutoOutHours(){ const v=DB.get().ccAutoOutH; return (v==null||v==="")?12:Math.max(0,+v||0); }
+function forceOutUser(un, label){
+  if(!un) return;
+  if(!currentUser || !["admin","delivery"].includes(currentUser.role)){ alert("Hanya Admin dan Delivery yang bisa mengeluarkan user."); return; }
+  if(!confirm("Keluarkan "+(label||un)+" dari aplikasi?\n\nAkunnya langsung logout, posisi berhenti dibagikan, dan absen otomatis berhenti. Dia bisa login lagi kapan saja.")) return;
+  const now=Date.now();
+  DB.set(d=>{ const o=d.forceOut||{}; o[un]=now; Object.keys(o).forEach(k=>{ if(now-o[k]>2*86400000) delete o[k]; }); d.forceOut=o; });
+  alert("Perintah keluar dikirim untuk "+(label||un)+". Akan berlaku begitu aplikasinya tersambung internet.");
+}
+function ccUserOfPlat(plat){
+  const k=normPlat(plat); if(!k) return null;
+  const e=(DB.get().ccShiftPlat||[]).filter(x=>normPlat(x.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+  return e?e.u:null;
+}
+function ccProfForceOut(){ const un=ccUserOfPlat(ccProfPlat); if(!un){ alert("Akun driver untuk plat ini belum terdeteksi. Keluarkan lewat Admin → User."); return; } forceOutUser(un, platFmt(ccProfPlat)+" ("+un+")"); }
+function ccForceOutCheck(){
+  if(!currentUser || currentUser.role==="display" || !currentUser.username) return;
+  const d=DB.get(), un=currentUser.username, fo=+((d.forceOut||{})[un])||0;
+  let ack=0; try{ ack=+localStorage.getItem("radar_forceack_"+un)||0; }catch(e){}
+  const lt=+currentUser.ts||0;
+  if(fo && fo>ack && Date.now()-fo<24*3600000 && !(lt && lt>fo)){
+    try{ localStorage.setItem("radar_forceack_"+un, String(fo)); }catch(e){}
+    doLogout(); setTimeout(()=>{ try{ alert("Kamu dikeluarkan dari aplikasi oleh Admin/Delivery. Login lagi kalau masih bertugas."); }catch(e){} },300); return;
+  }
+  if(currentUser.role==="cc"){
+    const H=ccAutoOutHours();
+    if(H>0 && lt && Date.now()-lt>H*3600000){ doLogout(); setTimeout(()=>{ try{ alert("Kamu otomatis keluar karena sudah login lebih dari "+H+" jam. Login lagi kalau masih bertugas."); }catch(e){} },300); }
+  }
+}
+function ccAutoOutSave(){ const v=(document.getElementById("ccAutoOutH")||{}).value; const n=Math.max(0,Math.min(48,+v||0)); DB.set(d=>{ d.ccAutoOutH=n; }); alert(n?("Driver CC otomatis keluar setelah "+n+" jam login."):"Keluar otomatis dimatikan."); render(); }
 function doLogout(){
   ccPlatOk=false; try{ stopShare(true); }catch(e){}
   spdStop(); spdCloseOverlay();
@@ -3312,6 +3343,19 @@ function delout(id){
     { const cm=Date.now()-MF_KEEP_MS; d.manifest=d.manifest.filter(m=>m.out>=cm); }
     x.undo=snap;
   });
+  try{ mfAfterDelout(id); }catch(e){}
+}
+/* Setelah Delout (di APK, akun Delivery/Admin): buka Excel Online otomatis, baris manifest unit ini sudah disalin. Tombol Tempel manifest lalu Selesai ada di bawah layar Excel. */
+function mfAutoXlOn(){ try{ return localStorage.getItem("radar_mfautoxl")!=="0"; }catch(e){ return true; } }
+function mfAutoXlSet(on){ try{ localStorage.setItem("radar_mfautoxl", on?"1":"0"); }catch(e){} }
+function mfAfterDelout(id){
+  if(!(window.AndroidTLS && AndroidTLS.openExcel) || !currentUser || (currentUser.role!=="delivery" && currentUser.role!=="admin") || !mfAutoXlOn()) return;
+  const link=(xlCfg().link||"").trim(); if(!link) return;
+  const data=DB.get(), m=mfRecords(data).find(x=>x.id===id); if(!m) return;
+  const rows=mfRecRows(data, m, mfTujuanNama(), 0); if(!rows.length) return;
+  const tsv=rows.map(r=>r.map(mfCell).join("\t")).join("\n"), now=Date.now();
+  DB.set(d=>{ const o=d.mfSent||{}; rows.forEach(x=>{ o[String(x[1])]=now; }); Object.keys(o).forEach(k=>{ if(now-o[k]>14*86400000) delete o[k]; }); d.mfSent=o; });
+  setTimeout(()=>{ try{ AndroidTLS.openExcel(link, tsv); }catch(e){} }, 600);
 }
 function delOutUndo(id){
   const b=sjILS(id);
@@ -3715,7 +3759,7 @@ function xlArr(v){ return Array.isArray(v)?v.filter(Boolean):(v&&typeof v==="obj
 function xlCfg(){
   const c=DB.get().xlCfg||{};
   const client=String(c.client||"").trim(), link=String(c.link||"").trim();
-  return {tenant:String(c.tenant||"").trim(), client, link, table:(String(c.table||"").trim()||"Manifest"),
+  return {tenant:String(c.tenant||"").trim(), client, link, mail:String(c.mail||"").trim(), table:(String(c.table||"").trim()||"Manifest"),
     since:+c.since||0, on:c.on!==false && !!(client&&link), lastOk:+c.lastOk||0, lastBy:c.lastBy||"", err:c.err||"", errTs:+c.errTs||0};
 }
 function xlRedirectUri(){ return location.origin+location.pathname; }
@@ -3944,15 +3988,16 @@ async function xlTest(btn){
 function xlSendNow(btn){ if(btn) btn.disabled=true; xlTick(true).then(()=>{ render(); }); }
 function xlSaveCfg(){
   const g=id=>(document.getElementById(id)||{}).value||"";
-  const tenant=g("xlTenant").trim(), client=g("xlClient").trim(), link=g("xlLink").trim(), table=(g("xlTable").trim()||"Manifest");
+  const tenant=g("xlTenant").trim(), client=g("xlClient").trim(), link=g("xlLink").trim(), table=(g("xlTable").trim()||"Manifest"), mail=g("xlMail").trim();
   const on=!!(document.getElementById("xlOn")||{}).checked, old=!!(document.getElementById("xlOld")||{}).checked;
-  if(!/^[0-9a-f-]{36}$/i.test(client)){ alert("Client ID harus 36 karakter seperti xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (Application (client) ID)."); return; }
+  if(client && !/^[0-9a-f-]{36}$/i.test(client)){ alert("Client ID harus 36 karakter seperti xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (Application (client) ID). Boleh dikosongkan kalau hanya memakai tombol Buka Excel Manifest."); return; }
   if(tenant && !/^([0-9a-f-]{36}|organizations|[a-z0-9.-]+\.[a-z]{2,})$/i.test(tenant)){ alert("Tenant ID tidak valid. Isi Directory (tenant) ID, atau kosongkan untuk 'organizations'."); return; }
   if(!/^https:\/\//i.test(link)){ alert("Link Excel harus diawali https:// (dari Share → Copy link di Excel Online)."); return; }
   if(!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(table)){ alert("Nama tabel hanya huruf, angka, titik, dan garis bawah, tanpa spasi (contoh: Manifest)."); return; }
+  if(mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)){ alert("Alamat email tujuan tidak valid."); return; }
   const prev=DB.get().xlCfg||{};
   const first=!prev.client||!prev.link;
-  DB.set(d=>{ d.xlCfg=Object.assign({}, d.xlCfg||{}, {tenant, client, link, table, on, since: first?(old?0:Date.now()):(+prev.since||0), by:(currentUser&&currentUser.name)||"", ts:Date.now()}); });
+  DB.set(d=>{ d.xlCfg=Object.assign({}, d.xlCfg||{}, {tenant, client, link, table, mail, on:(client?on:false), since: first?(old?0:Date.now()):(+prev.since||0), by:(currentUser&&currentUser.name)||"", ts:Date.now()}); });
   if(prev.link!==link) xlLS(XL_RES,null);
   render(); alert("Pengaturan Excel tersimpan.");
 }
@@ -4019,6 +4064,7 @@ function renderAdminXl(){
     <div class="field"><label>Application (client) ID</label><input id="xlClient" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value="${xlEsc(c.client)}"></div>
     <div class="field"><label>Link file Excel (Share → Copy link, akses edit)</label><input id="xlLink" type="url" placeholder="https://…sharepoint.com/:x:/…" value="${xlEsc(c.link)}"></div>
     <div class="field"><label>Nama tabel di Excel</label><input id="xlTable" type="text" value="${xlEsc(c.table)}"></div>
+    <div class="field"><label>Email tujuan flow Power Automate (untuk tombol Kirim ke Excel lewat email)</label><input id="xlMail" type="email" placeholder="nama@toyota.astra.co.id" value="${xlEsc(c.mail)}"></div>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0 8px;"><input type="checkbox" id="xlOn" ${(DB.get().xlCfg||{}).on===false?"":"checked"}> Aktifkan pengiriman otomatis</label>
     ${first?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 12px;"><input type="checkbox" id="xlOld" style="margin-top:3px;"><span>Kirim juga manifest yang sudah ada (sampai 14 hari ke belakang). Kalau tidak dicentang, mulai dari Delout berikutnya.</span></label>`:""}
     <button class="btn btn-primary" onclick="xlSaveCfg()">💾 Simpan</button></div>
@@ -4615,16 +4661,43 @@ function renderAdminSig(){
     </div>
     ${renderAdminEsj()}`;
 }
-async function copyManifest(){
-  const g=id=>((document.getElementById(id)||{}).value||""), msg=document.getElementById("mfCopyMsg");
+function mfCell(c){ if(c&&typeof c==="object"){ if(c.d!=null){ const dt=new Date(Date.UTC(1899,11,30)+c.d*86400000); return dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0")+"-"+String(dt.getUTCDate()).padStart(2,"0"); } return ""; } return String(c==null?"":c).replace(/[\t\r\n]+/g," ").trim(); }
+function mfTsvBuild(){
+  const g=id=>((document.getElementById(id)||{}).value||"");
   const rows=mfRows(DB.get(), g("mfDate")||mfDateStr(Date.now()), g("mfLP"), g("mfShift"));
-  if(!rows.length){ if(msg) msg.innerHTML=`<span style="color:#b91c1c;">Tidak ada data untuk pilihan ini.</span>`; return; }
-  const cell=c=>{ if(c&&typeof c==="object"){ if(c.d!=null){ const dt=new Date(Date.UTC(1899,11,30)+c.d*86400000); return dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0")+"-"+String(dt.getUTCDate()).padStart(2,"0"); } return ""; } return String(c==null?"":c).replace(/[\t\r\n]+/g," "); };
-  const tsv=rows.map(r=>r.map(cell).join("\t")).join("\n");
+  return {n:rows.length, tsv:rows.map(r=>r.map(mfCell).join("\t")).join("\n")};
+}
+/* Kirim lewat email ke flow Power Automate: tiap baris ditulis [[kolom1|kolom2|...]] supaya mudah dipecah. Baris yang sudah pernah dikirim (nomor rangka tercatat di database) tidak dikirim ulang. */
+function mfMailBody(rows){ const cl=v=>mfCell(v).replace(/[|\[\]]/g," "); return "RADARMANIFEST\n"+rows.map(r=>"[["+r.map(cl).join("|")+"]]").join("\n"); }
+function sendManifestMail(all){
+  const g=id=>((document.getElementById(id)||{}).value||""), msg=document.getElementById("mfCopyMsg"), to=(xlCfg().mail||"").trim();
+  const say=(t,ok)=>{ if(msg) msg.innerHTML=`<span style="color:${ok?"#1E9E5A":"#b91c1c"};font-weight:700;">${t}</span>`; };
+  if(!to){ say("Isi dulu Email tujuan flow di Admin → Excel."); return; }
+  const date=g("mfDate")||mfDateStr(Date.now()), shift=g("mfShift"), all_=mfRows(DB.get(), date, g("mfLP"), shift), sent=DB.get().mfSent||{};
+  const rows=all?all_:all_.filter(r=>!sent[String(r[1])]);
+  if(!all_.length){ say("Tidak ada data untuk pilihan ini."); return; }
+  if(!rows.length){ say("Semua "+all_.length+" baris sudah pernah dikirim. Pakai tombol Kirim semua lagi kalau perlu."); return; }
+  const now=Date.now();
+  DB.set(d=>{ const o=d.mfSent||{}; rows.forEach(x=>{ o[String(x[1])]=now; }); Object.keys(o).forEach(k=>{ if(now-o[k]>14*86400000) delete o[k]; }); d.mfSent=o; });
+  const subject="RADARMANIFEST "+date+" "+(shift||"semua");
+  try{ if(window.AndroidTLS && AndroidTLS.sendMail){ AndroidTLS.sendMail(to, subject, mfMailBody(rows)); } else { location.href="mailto:"+to+"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(mfMailBody(rows)); } }catch(e){ say("Gagal membuka aplikasi email."); return; }
+  say("✔ "+rows.length+" baris disiapkan di email. Tekan Kirim di aplikasi email."+(all_.length-rows.length>0?" ("+(all_.length-rows.length)+" baris lama dilewati)":""),true);
+}
+async function copyManifest(){
+  const msg=document.getElementById("mfCopyMsg"), r=mfTsvBuild(), tsv=r.tsv;
+  if(!r.n){ if(msg) msg.innerHTML=`<span style="color:#b91c1c;">Tidak ada data untuk pilihan ini.</span>`; return; }
   let ok=false;
   try{ await navigator.clipboard.writeText(tsv); ok=true; }catch(e){}
   if(!ok){ try{ const ta=document.createElement("textarea"); ta.value=tsv; ta.style.cssText="position:fixed;left:-999px;top:0;"; document.body.appendChild(ta); ta.focus(); ta.select(); ok=document.execCommand("copy"); ta.remove(); }catch(e){} }
-  if(msg) msg.innerHTML = ok ? `<span style="color:#1E9E5A;font-weight:700;">✔ ${rows.length} baris disalin. Tempel di Excel (Ctrl+V).</span>` : `<span style="color:#b91c1c;">Gagal menyalin. Izinkan akses clipboard, atau pakai Download Excel.</span>`;
+  if(msg) msg.innerHTML = ok ? `<span style="color:#1E9E5A;font-weight:700;">✔ ${r.n} baris disalin. Tempel di Excel (Ctrl+V).</span>` : `<span style="color:#b91c1c;">Gagal menyalin. Izinkan akses clipboard, atau pakai Download Excel.</span>`;
+}
+/* Di APK: buka Excel Online (file manifest) di browser dalam aplikasi, baris manifest sudah disalin ke clipboard */
+function openExcelManifest(){
+  const msg=document.getElementById("mfCopyMsg"), link=(xlCfg().link||"").trim();
+  if(!link){ if(msg) msg.innerHTML=`<span style="color:#b91c1c;">Link Excel belum diisi. Admin → Excel → isi Link file.</span>`; return; }
+  const r=mfTsvBuild();
+  try{ if(window.AndroidTLS && AndroidTLS.openExcel){ AndroidTLS.openExcel(link, r.tsv); return; } }catch(e){}
+  copyManifest().then(()=>{ try{ window.open(link,"_blank"); }catch(e){} });
 }
 function manifestCardHtml(data){
   const today=mfDateStr(Date.now());
@@ -4637,7 +4710,11 @@ function manifestCardHtml(data){
     <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (00:00–23:59)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 tanggal ini – 06:59 hari berikutnya)</option></select></div>
     <div class="field"><label>Isi file</label><select id="mfLP"><option value="">Semua LP (sheet ALL + satu sheet per LP)</option>${lps.map(l=>`<option value="${l}">Hanya LP ${l}</option>`).join("")}</select></div>
     <button class="btn btn-primary" onclick="downloadManifest()">⬇ Download Excel</button>
+    ${(window.AndroidTLS&&window.AndroidTLS.openExcel)?`<button class="btn btn-green" style="margin-top:8px;" onclick="openExcelManifest()">📊 Buka Excel Manifest (baris sudah disalin)</button>`:""}
+    <button class="btn btn-green" style="margin-top:8px;" onclick="sendManifestMail(false)">✉ Kirim ke Excel lewat email (baris baru saja)</button>
+    <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="sendManifestMail(true)">Kirim semua baris lagi</button>
     <button class="btn btn-outline" style="margin-top:8px;" onclick="copyManifest()">📋 Salin baris (tempel ke tabel Excel)</button>
+    ${(window.AndroidTLS&&window.AndroidTLS.openExcel)?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:10px;"><input type="checkbox" ${mfAutoXlOn()?"checked":""} onchange="mfAutoXlSet(this.checked)" style="margin-top:3px;"><span>Otomatis buka Excel setelah <b>Delout</b> (di HP ini). Baris unit yang baru Delout sudah disalin; tekan <b>Tempel manifest</b> lalu <b>Selesai</b>.</span></label>`:""}
     <div id="mfCopyMsg" style="font-size:12px;margin-top:6px;"></div>
     <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Tanpa judul kolom. Di Excel Online klik sel pertama di bawah baris terakhir tabel Manifest, lalu Ctrl+V. Pilih tanggal, shift, dan LP seperti Download di atas.</div>
     ${(xlCfg().client&&xlCfg().link)?`<details style="margin-top:12px;"${xlLS(XL_WR)&&XL.state==="relogin"?" open":""}><summary style="cursor:pointer;font-size:13px;font-weight:600;">💻 Perangkat penulis Excel</summary><div style="margin-top:8px;">${xlDeviceHtml()}</div></details>`:""}</div>`;
@@ -6595,6 +6672,7 @@ function usrRender(){
     <div style="display:flex;gap:6px;margin-top:8px;">
       <button class="btn-outline btn btn-sm" onclick="pwResetOpen(${i})">🔑 Reset</button>
       <button class="btn-outline btn btn-sm" onclick="editUser(${i})">Edit</button>
+      ${currentUser&&u.username!==currentUser.username?`<button class="btn-outline btn btn-sm" onclick="forceOutUser(${JSON.stringify(u.username).replace(/"/g,"&quot;")},${JSON.stringify(u.name||u.username).replace(/"/g,"&quot;")})">🚪 Keluarkan</button>`:""}
       <button class="btn-danger btn btn-sm" onclick="deleteUser(${i})">Hapus</button>
     </div></div>`).join(""))
     + (hit.length===0?`<div style="padding:14px 0;color:var(--text-dim);font-size:13px;">Tidak ada user yang cocok.</div>`:"")
@@ -6627,6 +6705,8 @@ function renderAdmin(){
   if(adminTab==="users"){
     return `${tabsHtml}
       ${renderRegCard()}
+      <div class="card"><h3>⏱ Keluar otomatis Driver CC</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Driver CC yang lupa keluar dari aplikasi otomatis di-logout setelah sekian jam sejak login, sehingga posisinya berhenti dibagikan. Isi 0 untuk mematikan.</div>
+        <div style="display:flex;gap:8px;align-items:center;"><input id="ccAutoOutH" type="number" min="0" max="48" value="${ccAutoOutHours()}" style="width:90px;"><span style="font-size:13px;">jam</span><button class="btn btn-primary btn-sm" style="width:auto;" onclick="ccAutoOutSave()">💾 Simpan</button></div></div>
       <div class="card"><h3>Daftar User <span style="font-size:12px;color:var(--text-dim);font-weight:500;" id="usrCnt"></span></h3>
         <input id="usrQBox" type="search" placeholder="🔍 Cari username, nama, LP, kode driver…" value="${String(usrQ||"").replace(/"/g,"&quot;")}" oninput="usrQ=this.value;usrN=20;usrRender()" style="width:100%;margin-bottom:8px;">
         <select id="usrRoleBox" onchange="usrRole=this.value;usrN=20;usrRender()" style="width:100%;margin-bottom:10px;"><option value="">Semua role</option>${ROLES.map(r=>`<option value="${r.key}" ${usrRole===r.key?"selected":""}>${r.label}</option>`).join("")}</select>
@@ -7596,7 +7676,8 @@ function ccProfRefresh(force){
       ${last.length?`<div style="margin-top:6px;"><b>Chat terakhir:</b>${last.map(m=>`<div style="font-size:13px;background:var(--panel2,#f1f4f8);border-radius:8px;padding:4px 8px;margin-top:3px;">${escH(m.text||"📷 foto")} <span style="color:var(--text-dim);font-size:11px;">· ${lapAgo(m.ts)}</span></div>`).join("")}</div>`:""}
       <div style="display:flex;gap:8px;margin-top:12px;">
         <button class="btn btn-primary" style="flex:1;background:${c};border-color:${c};" onclick="ccProfChat()">💬 Ajak bicara</button>
-        ${o?`<button class="btn btn-outline" style="flex:1;" onclick="ccProfFocus()">📍 Lihat di peta</button>`:""}</div></div>`;
+        ${o?`<button class="btn btn-outline" style="flex:1;" onclick="ccProfFocus()">📍 Lihat di peta</button>`:""}</div>
+      ${(currentUser&&["admin","delivery"].includes(currentUser.role))?`<button class="btn btn-outline" style="width:100%;margin-top:8px;color:#b91c1c;border-color:#b91c1c;" onclick="ccProfForceOut()">🚪 Keluarkan dari aplikasi</button>`:""}</div>`;
 }
 function ccProfFocus(){ const o=(window._trkRows||[]).find(x=>normPlat(x.plat)===normPlat(ccProfPlat)); ccProfClose(); try{ if(o&&ccMapObj){ ccMapObj.setView([o.lat,o.lng],16); document.getElementById("ccmap").scrollIntoView({behavior:"smooth",block:"center"}); } }catch(e){} }
 function ccProfChat(){
@@ -8480,13 +8561,14 @@ try{ const rb=document.getElementById("loginRemember"); if(rb) rb.checked=rememb
 { const _d = DB.load(); syncUnitLog(_d); DB.save(_d); } // pastikan seed ada + migrasi log unit
 const existingSession = getSession();
 if(existingSession){
+  if(!existingSession.ts){ existingSession.ts=Date.now(); try{ localStorage.setItem(SESS_KEY, JSON.stringify(existingSession)); }catch(e){} }   // sesi lama: mulai hitung dari sekarang
   currentUser = existingSession;
   enterApp();
 }
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccForceOutCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
