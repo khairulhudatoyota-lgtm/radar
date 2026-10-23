@@ -2632,6 +2632,23 @@ function earlyOne(plat, on){
   try{ holdRelease(); }catch(e){}
   render();
 }
+var earlyQ="", earlyN=12;
+function earlyRowsHtml(){
+  const d=DB.get(), from=prodDayStart(Date.now()), q=String(window.earlyQ||"").toLowerCase().replace(/[^a-z0-9 ]/g,"").trim(), qn=q.replace(/ /g,"");
+  const inHold=k=>(d.hold||[]).some(x=>normPlat(x.plat)===k);
+  const inIn=k=>Object.keys(d.cc||{}).some(n=>d.cc[n]&&normPlat(d.cc[n].plat)===k)||(d.queue||[]).some(x=>normPlat(x.plat)===k);
+  let L=[];
+  (d.dccpSchedule||[]).forEach(r=>{ const k=normPlat(r.police); if(!k) return; const due=ccNextDue(d,r.police); if(due==null) return;
+    const e=(d.earlyOk||{})[k]; L.push({k, plat:r.police, lp:r.lp||"", drv:r.driver||"", due, held:inHold(k), inside:inIn(k), allowed:!!(e&&e.ts>=from)}); });
+  if(qn) L=L.filter(x=>(x.k+" "+String(x.lp)+" "+String(x.drv)).toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/ /g,"").includes(qn)||String(x.drv).toLowerCase().includes(q));
+  L.sort((a,b)=>(b.held-a.held)||(a.due-b.due));
+  if(!L.length) return `<div style="font-size:12px;color:var(--text-dim);padding:6px 0;">Tidak ada CC terjadwal yang cocok.</div>`;
+  const n=window.earlyN||12, sh=L.slice(0,n);
+  return sh.map(x=>`<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;">
+    <div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">${xlEsc(x.lp)} ${x.drv?"· "+xlEsc(x.drv):""}</span><br><span style="font-size:11px;color:var(--text-dim);">Jadwal ${holdHm(x.due)} ${x.held?"· <b style='color:#E8833A'>⏳ menunggu di luar</b>":x.inside?"· sudah di stall/antrian":"· belum absen"}</span></div>
+    ${x.inside&&!x.allowed?`<span style="font-size:11px;color:var(--text-dim);">-</span>`:`<button class="btn ${x.allowed?"btn-danger":"btn-primary"} btn-sm" onclick="earlyOne('${xlEsc(x.k)}',${x.allowed?"false":"true"})">${x.allowed?"Cabut":"Izinkan"}</button>`}
+  </div>`).join("")+(L.length>n?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:6px;" onclick="earlyN=(window.earlyN||12)+12;document.getElementById('earlyList').innerHTML=earlyRowsHtml();">Tampilkan lagi (${L.length-n})</button>`:"");
+}
 function earlyCardHtml(data){
   if(!canKeluarkanCC()) return "";
   const from=prodDayStart(Date.now()), all=data.earlyAll&&data.earlyAll.ts>=from ? data.earlyAll : null;
@@ -2641,6 +2658,9 @@ function earlyCardHtml(data){
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Biasanya CC yang absen sebelum jam DCCP-nya menunggu di Parkir Luar. Kalau jalan lancar / CC sedikit, Delivery dan Admin bisa mengizinkan CC masuk lebih awal. Berlaku sampai pergantian hari produksi (07:00).</div>
     ${all?`<div class="msg ok" style="margin-bottom:8px;">✔ Semua CC boleh masuk tanpa menunggu jadwal. Diizinkan ${xlEsc(all.by||"-")} jam ${holdHm(all.ts)}.</div>`:""}
     <button class="btn ${all?"btn-danger":"btn-primary"}" style="width:100%;" onclick="earlyAllToggle()">${all?"⏹ Cabut izin semua CC":"🔓 Izinkan SEMUA CC masuk sebelum jadwal"}</button>
+    ${all?"":`<div style="margin-top:12px;font-weight:700;font-size:13px;">Atau pilih CC tertentu saja:</div>
+    <input type="search" placeholder="Cari plat / LP / nama driver" value="${xlEsc(window.earlyQ||"")}" oninput="earlyQ=this.value;earlyN=12;var e=document.getElementById('earlyList');if(e)e.innerHTML=earlyRowsHtml();" style="width:100%;margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;">
+    <div id="earlyList">${earlyRowsHtml()}</div>`}
     ${ok.length&&!all?`<div style="font-size:12px;margin-top:10px;"><b>Diizinkan per CC:</b> ${ok.map(k=>`<span class="badge">${xlEsc(platFmt(k))} <a href="#" onclick="earlyOne('${xlEsc(k)}',false);return false;" style="margin-left:4px;">✕</a></span>`).join(" ")}</div>`:""}
   </div>`;
 }
