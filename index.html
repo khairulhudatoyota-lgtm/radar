@@ -814,6 +814,7 @@ window.RSnd=(function(){
       <div class="userchip">
         <div class="who">Login sebagai <b id="curUserName">-</b> · <span id="curUserRole" class="badge gold" onclick="shiftChangeOpen()" style="cursor:pointer;">ROLE</span></div>
         <button class="menuBtn" id="menuBtn" onclick="backToRoleMenu()" style="display:none;">☰ Menu</button>
+        <button class="logoutBtn" id="minBtn" onclick="appMinimize()" style="display:none;color:var(--text);border-color:var(--border);">⬇ Minimize</button>
         <button class="logoutBtn" onclick="doLogout()">Keluar</button>
       </div>
     </div>
@@ -8633,7 +8634,7 @@ setInterval(()=>{
   }
 }, 3000);
 </script>
-<script>if("serviceWorker" in navigator && /^https?:/.test(location.protocol)){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}try{ var _ac=document.getElementById("appCtl"); if(_ac && window.AndroidTLS && AndroidTLS.exitApp) _ac.style.display="flex"; }catch(e){}
+<script>if("serviceWorker" in navigator && /^https?:/.test(location.protocol)){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}try{ var _ac=document.getElementById("appCtl"); if(_ac && window.AndroidTLS && AndroidTLS.exitApp) _ac.style.display="flex"; var _mb=document.getElementById("minBtn"); if(_mb && window.AndroidTLS && AndroidTLS.minimizeApp) _mb.style.display=""; }catch(e){}
 </script>
 </body>
 </html>
