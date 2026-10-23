@@ -1604,7 +1604,7 @@ function forceOutUser(un, label){
 }
 function ccUserOfPlat(plat){
   const k=normPlat(plat); if(!k) return null;
-  const e=(DB.get().ccShiftPlat||[]).filter(x=>normPlat(x.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+  const e=(DB.get().ccShiftPlat||[]).filter(x=>normPlat(x.plat)===k && !x.lo).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
   return e?e.u:null;
 }
 function ccProfForceOut(){ const un=ccUserOfPlat(ccProfPlat); if(!un){ alert("Akun driver untuk plat ini belum terdeteksi. Keluarkan lewat Admin → User."); return; } forceOutUser(un, platFmt(ccProfPlat)+" ("+un+")"); }
@@ -1624,6 +1624,7 @@ function ccForceOutCheck(){
 }
 function ccAutoOutSave(){ const v=(document.getElementById("ccAutoOutH")||{}).value; const n=Math.max(0,Math.min(48,+v||0)); DB.set(d=>{ d.ccAutoOutH=n; }); alert(n?("Driver CC otomatis keluar setelah "+n+" jam login."):"Keluar otomatis dimatikan."); render(); }
 function doLogout(){
+  try{ if(currentUser && currentUser.username){ const un=currentUser.username, t=Date.now(); DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===un) x.lo=t; }); }); } }catch(e){}   // tandai sudah logout: titik petanya tidak dianggap punya akun aktif
   ccPlatOk=false; try{ stopShare(true); }catch(e){}
   spdStop(); spdCloseOverlay();
   geoStop();
@@ -7154,12 +7155,14 @@ function startShare(silent){
   try{ if(window.AndroidTLS && window.AndroidTLS.bgStart) window.AndroidTLS.bgStart(); }catch(e){}
   shareTrk = {on:true, id:null, wake:null, last:0, key:trkKey(prof.plat), msg:"Mencari sinyal GPS…"};
   try{ if(window.AndroidTLS && window.AndroidTLS.trkConfig) window.AndroidTLS.trkConfig(shareTrk.key, prof.plat, prof.lp); }catch(e){}
+  try{ if(window.AndroidTLS && window.AndroidTLS.trkUser) window.AndroidTLS.trkUser((currentUser&&currentUser.username)||""); }catch(e){}
   shareWake();
   shareTrk.id = navigator.geolocation.watchPosition(onSharePos, err=>{ shareTrk.denied = !!(err && err.code===1); shareTrk.msg = err && err.code===1 ? "Izin lokasi ditolak. Aktifkan izin lokasi lalu ulangi." : "GPS error: "+(err&&err.message||""); shareStatusUpdate(); }, {enableHighAccuracy:true, maximumAge:5000, timeout:30000});
   render();
 }
 function stopShare(silent){
   try{ if(window.AndroidTLS && window.AndroidTLS.trkConfig) window.AndroidTLS.trkConfig("","",""); }catch(e){}
+  try{ if(window.AndroidTLS && window.AndroidTLS.trkUser) window.AndroidTLS.trkUser(""); }catch(e){}
   try{ if(window.AndroidTLS && window.AndroidTLS.bgStop && !autoAbsen.on && shareTrk.on) window.AndroidTLS.bgStop(); }catch(e){}
   if(shareTrk.id!=null){ try{ navigator.geolocation.clearWatch(shareTrk.id); }catch(e){} }
   try{ if(shareTrk.wake) shareTrk.wake.release(); }catch(e){}
@@ -7174,7 +7177,7 @@ function onSharePos(pos){
   const now = Date.now(); if(now - shareTrk.last < 15000) return;
   shareTrk.last = now;
   const prof = getCcProfile(), ref = FBS.db.ref(TRK_PATH+"/"+shareTrk.key);
-  const rec = {plat:prof.plat, lp:prof.lp, lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), acc:Math.round(pos.coords.accuracy||0), spd:Math.round((pos.coords.speed||0)*3.6), ts:now};
+  const rec = {plat:prof.plat, lp:prof.lp, u:(currentUser&&currentUser.username)||"", lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), acc:Math.round(pos.coords.accuracy||0), spd:Math.round((pos.coords.speed||0)*3.6), ts:now};
   try{ const _t=tripSt().t; if(_t&&_t.dir) rec.dir=_t.dir; }catch(e){}
   try{ refTrailTick(pos); }catch(e){}
   ref.set(rec).then(()=>{ shareTrk.msg = "✔ Posisi terkirim "+new Date(now).toLocaleTimeString("id-ID")+" (±"+rec.acc+" m)"; shareStatusUpdate(); })
@@ -7224,6 +7227,7 @@ function ccPlatDbOk(){
     if(!currentUser || currentUser.role!=="cc") return false;
     const e=(DB.get().ccShiftPlat||[]).find(x=>x.u===currentUser.username && (x.shift||"")===(loginShift||"") && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift());
     if(!e || !ccPlatRegistered(e.plat)) return false;
+    if(e.lo){ const eu=e.u, et=e.ts; DB.set(d=>{ const x=(d.ccShiftPlat||[]).find(y=>y.u===eu && y.ts===et); if(x) delete x.lo; }); }
     const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), row=ccPlatRow(e.plat), pr=getCcProfile();
     const lp=(acc&&acc.lp)||(row&&row.lp)||pr.lp||""; if(!lp) return false;
     if(shareTrk.on && trkKey(pr.plat)!==trkKey(e.plat)) stopShare(true);
@@ -7422,6 +7426,18 @@ function trkDirGuess(r, alongKm){
   }catch(e){}
   return (r.dir==="out"||r.dir==="back") ? r.dir : "out";
 }
+/* Titik di peta hanya untuk CC yang punya akun aktif, dan disembunyikan bila posisi tidak diperbarui lebih dari 15 menit */
+const TRK_SHOW_MS = 15*60000;
+function trkHasAccount(r){
+  const users=DB.get().users||[];
+  const un=r.u || ccUserOfPlat(r.plat);
+  return !!un && users.some(x=>x.username===un);
+}
+function trkClearGhosts(){
+  const g=window._trkGhosts||[]; if(!g.length) return;
+  if(!confirm("Hapus "+g.length+" titik tanpa akun dari peta?\n\nKalau HP-nya masih mengirim posisi, titiknya akan muncul lagi sampai aplikasi di HP itu dibuka dan logout.")) return;
+  try{ g.forEach(x=>{ FBS.db.ref(TRK_PATH+"/"+trkKey(x.plat)).remove(); }); }catch(e){}
+}
 function trkDirOf(r, t, total){
   /* Arah hanya berganti setelah CC bergerak ≥ 0,3 km searah (bukan goyangan GPS). Gerakan nyata mengalahkan arah kiriman HP
      (arah di HP bisa basi atau tidak terkirim saat layar terkunci). Tanpa gerakan teramati: tebakan dari waktu Delout. */
@@ -7454,12 +7470,16 @@ function trkCompute(r, mp){
 function trkTxt(o){ return o.dir==="back" ? `${o.dB.toFixed(1)} km dari NVDC · ${o.dA.toFixed(1)} km lagi ke ADM KAP <span style="font-weight:700;color:#C77700;">↩ kembali</span>` : `${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km lagi ke NVDC`; }
 function updateTrackUI(){
   const list = document.getElementById("trkList"), mp = DB.get().mapPoints || {};
-  const rows = Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0) < 45*60000).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
+  const allLive = Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0) < TRK_SHOW_MS);
+  const ghosts = allLive.filter(r=>!trkHasAccount(r));
+  const rows = allLive.filter(r=>trkHasAccount(r)).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
+  window._trkGhosts = ghosts;
   window._trkRows=rows; try{ chatTagUpdate(); ccProfRefresh(); }catch(e){}
   if(list){
     let h = "";
     if(TRKERR) h += `<div class="msg err">${escH(TRKERR)}</div>`;
     if(!(mp.adm && mp.nvdc)) h += `<div class="msg info">Admin belum mengatur titik ADM KAP & NVDC (Admin Panel → 🗺 Rute CC).</div>`;
+    if(ghosts.length && currentUser && ["admin","delivery"].includes(currentUser.role)) h += `<div class="msg err" style="font-size:12px;">⚠ ${ghosts.length} titik tanpa akun aktif disembunyikan (${ghosts.map(g=>escH(g.plat||"?")).join(", ")}). HP-nya masih mengirim posisi tapi akunnya sudah logout / tidak ada. <button type="button" class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="trkClearGhosts()">🗑 Hapus titik ini</button></div>`;
     if(!rows.length) h += `<div style="font-size:13px;color:var(--text-dim);">Belum ada CC yang membagikan posisi.</div>`;
     h += rows.map(o=>{
       const mins = Math.round(o.age/60000), stale = o.age > 3*60000;
@@ -7654,6 +7674,13 @@ function chatTagHtml(){
 }
 function chatTagUpdate(){ const el=document.getElementById("chatTagRow"); if(el) el.innerHTML=chatTagHtml(); }
 function ccDriverName(plat){ const k=normPlat(plat); const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===k && x.driver); return r?r.driver:""; }
+/* Nama driver: dari Jadwal DCCP, kalau kosong dari akun yang login dengan plat itu, lalu dari chat terakhir */
+function ccDriverAny(plat){
+  const k=normPlat(plat); let n=ccDriverName(plat);
+  if(!n){ const un=ccUserOfPlat(plat); if(un){ const u=(DB.get().users||[]).find(x=>x.username===un); n=(u&&u.name)||""; } }
+  if(!n){ n=((Object.values(CHAT||{}).filter(m=>normPlat(m.plat)===k&&m.by).sort((a,b)=>(b.ts||0)-(a.ts||0))[0])||{}).by||""; }
+  return n;
+}
 let ccProfPlat=null;
 function ccProfOpen(plat){ ccProfPlat=plat; ccProfRefresh(true); }
 function ccProfClose(){ ccProfPlat=null; const e=document.getElementById("ccProf"); if(e) e.remove(); }
@@ -7662,7 +7689,7 @@ function ccProfRefresh(force){
   if(activeTab!=="ccmap"){ ccProfClose(); return; }
   const k=normPlat(ccProfPlat), o=(window._trkRows||[]).find(x=>normPlat(x.plat)===k);
   let el=document.getElementById("ccProf"); if(!el){ el=document.createElement("div"); el.id="ccProf"; document.body.appendChild(el); }
-  const c=ccColor(ccProfPlat), who=ccDriverName(ccProfPlat) || ((Object.values(CHAT||{}).filter(m=>normPlat(m.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0]||{}).by) || "-";
+  const c=ccColor(ccProfPlat), who=ccDriverAny(ccProfPlat) || "-";
   const mins=o?Math.round(o.age/60000):null, stale=o&&o.age>3*60000;
   const last=Object.keys(CHAT||{}).map(i=>CHAT[i]).filter(m=>m&&!m.lapor&&normPlat(m.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,3);
   el.innerHTML=`<div style="background:${c};color:#fff;padding:14px 16px;border-radius:18px 18px 0 0;display:flex;justify-content:space-between;align-items:center;gap:8px;">
