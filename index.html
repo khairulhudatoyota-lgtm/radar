@@ -2669,13 +2669,14 @@ function earlyCardHtml(data){
 function canCS(){ return !!(currentUser && ["delivery","koordinator","admin"].includes(currentUser.role)); }
 function csArr(d){ const a=d.csList; return Array.isArray(a)?a:(a&&typeof a==="object"?Object.values(a):[]); }
 function csUntil(){ const h=3600000, pd=prodDayStart(Date.now()), e=currentShift()==="1"?pd+13*h:pd+24*h; return e+(currentShift()==="1"?11*h:13*h); }   // sampai akhir shift berikutnya
-function csActive(d, plat){ const k=normPlat(plat); if(!k) return null; return csArr(d).find(x=>x && normPlat(x.plat)===k && x.until>Date.now() && !(d.ils||[]).some(b=>normPlat(b.ccPlat)===k && b.ts>=x.ts))||null; }
+function csActive(d, plat){ const k=normPlat(plat); if(!k) return null; return csArr(d).find(x=>x && normPlat(x.plat)===k && x.until>Date.now() && (d.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=x.ts).length < (x.n||1))||null; }
 function csOpen(){
   if(!canCS()) return; const d=DB.get();
   const rows=(d.dccpSchedule||[]).map(r=>{ const t=dccpTripList(r), dn=dccpDoneCount(r,d); return {r, sisa:t.slice(dn)}; }).filter(x=>x.sisa.length>0 && !csActive(d,x.r.police));
   showModal(`<h3 style="margin:0 0 4px;">🔁 CC Change Shift</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Pilih CC yang ritasenya belum selesai (minus) dan dilanjutkan di shift berikutnya. Saat DCCP shift berikutnya diupload, CC ini jadi <b>prioritas masuk</b>: jam berapa pun absen, langsung masuk tanpa menunggu jadwal dan didahulukan di waiting list. Berlaku sampai akhir shift berikutnya, atau sampai CC itu ILS.</div>
-    ${rows.length?rows.map((x,i)=>`<label style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--border);"><input type="checkbox" class="csChk" value="${i}"> <span><b>${xlEsc(platFmt(x.r.police))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.r.lp||"-")}${x.r.driver?" · "+xlEsc(x.r.driver):""}</span><br><span style="font-size:12px;">Sisa ${x.sisa.length} rit: ${x.sisa.map(xlEsc).join(", ")}</span></span></label>`).join(""):`<div class="msg info">Tidak ada CC dengan sisa ritase di jadwal saat ini.</div>`}
+    ${rows.length?rows.map((x,i)=>`<label style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--border);"><input type="checkbox" class="csChk" value="${i}"> <span><b>${xlEsc(platFmt(x.r.police))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.r.lp||"-")}${x.r.driver?" · "+xlEsc(x.r.driver):""}</span><br><span style="font-size:12px;">Sisa ${x.sisa.length} rit: ${x.sisa.map(xlEsc).join(", ")}</span></span></label>
+      <select class="csN" data-i="${i}" style="margin-left:auto;width:auto;" title="Jumlah ritase yang dilanjutkan">${x.sisa.map((_,j)=>`<option value="${j+1}" ${j+1===x.sisa.length?"selected":""}>${j+1} rit</option>`).join("")}</select>`).join(""):`<div class="msg info">Tidak ada CC dengan sisa ritase di jadwal saat ini.</div>`}
     <label style="display:block;margin-top:8px;">Alasan (wajib)<input id="csWhy" placeholder="mis. hujan / problem produksi / CC bermasalah"></label>
     <div id="csMsg" style="margin-top:8px;"></div>
     <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="csSave()" ${rows.length?"":"disabled"}>✔ Jadikan Change Shift</button>`);
@@ -2683,12 +2684,12 @@ function csOpen(){
 }
 function csSave(){
   const why=((document.getElementById("csWhy")||{}).value||"").trim(), msg=document.getElementById("csMsg");
-  const pick=[...document.querySelectorAll(".csChk:checked")].map(c=>(window._csRows||[])[+c.value]).filter(Boolean);
+  const pick=[...document.querySelectorAll(".csChk:checked")].map(c=>{ const x=(window._csRows||[])[+c.value]; if(!x) return null; const sel=document.querySelector('.csN[data-i="'+c.value+'"]'), n=Math.max(1,Math.min(x.sisa.length,+(sel&&sel.value)||x.sisa.length)); return {r:x.r, sisa:x.sisa.slice(0,n), n}; }).filter(Boolean);
   if(!pick.length){ msg.innerHTML=`<div class="msg err">Pilih minimal satu CC.</div>`; return; }
   if(why.length<3){ msg.innerHTML=`<div class="msg err">Alasan wajib diketik (minimal 3 huruf).</div>`; return; }
   const until=csUntil(), by=(currentUser&&currentUser.name)||"";
   DB.set(d=>{ const a=csArr(d).filter(x=>x && !pick.some(p=>normPlat(p.r.police)===normPlat(x.plat)) && x.until>Date.now());
-    pick.forEach(p=>a.push({plat:platFmt(p.r.police), lp:p.r.lp||"", driver:p.r.driver||"", sisa:p.sisa, why, by, ts:Date.now(), until}));
+    pick.forEach(p=>a.push({plat:platFmt(p.r.police), lp:p.r.lp||"", driver:p.r.driver||"", sisa:p.sisa, n:p.n, why, by, ts:Date.now(), until}));
     d.csList=a.slice(-60); });
   closeModal(); try{ holdRelease(); }catch(e){} render();
 }
@@ -2700,7 +2701,7 @@ function csCardHtml(data){
   return `<div class="card" style="border-left:5px solid #7B4FD0;"><h3>🔁 CC Change Shift${L.length?` (${L.length})`:""}</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">CC yang minus di shift ini dan dilanjutkan di shift berikutnya. Setelah DCCP baru diupload, CC ini diprioritaskan masuk, jam berapa pun hadir.</div>
     <button class="btn btn-primary" style="width:100%;" onclick="csOpen()">➕ Pilih CC Change Shift</button>
-    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:space-between;gap:8px;align-items:center;"><div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.lp||"-")}${x.driver?" · "+xlEsc(x.driver):""}</span><br><span style="font-size:12px;">Sisa ${(x.sisa||[]).length} rit (${(x.sisa||[]).map(xlEsc).join(", ")}) · ${xlEsc(x.why||"")} · ${xlEsc(x.by||"-")} ${hm(x.ts)}</span></div><button class="btn btn-outline btn-sm" onclick="csCancel('${xlEsc(normPlat(x.plat))}')">✕</button></div>`).join("")}
+    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:space-between;gap:8px;align-items:center;"><div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.lp||"-")}${x.driver?" · "+xlEsc(x.driver):""}</span><br><span style="font-size:12px;">Dilanjutkan ${x.n||1} rit (${(x.sisa||[]).map(xlEsc).join(", ")}) · ${xlEsc(x.why||"")} · ${xlEsc(x.by||"-")} ${hm(x.ts)}</span></div><button class="btn btn-outline btn-sm" onclick="csCancel('${xlEsc(normPlat(x.plat))}')">✕</button></div>`).join("")}
   </div>`;
 }
 function ccHoldDue(d, plat){   // ts jadwal bila CC ini masih harus menunggu di luar, selain itu null
@@ -5422,7 +5423,12 @@ function dccpSaveEdit(){
 function dccpTripList(r){ return ((r.trips&&r.trips.length)?r.trips:(r.schedTime?[r.schedTime]:[])).slice().sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0)); }
 /* Ritase yang sudah jalan dihitung sejak awal SHIFT milik baris jadwal itu (dari jam ritase pertamanya), bukan sejak 07.00: plat 24 jam yang sudah jalan di shift pagi tidak mengurangi jadwal shift malam */
 function dccpShiftFrom(r){ const t=dccpTripList(r), pd=prodDayStart(Date.now()); if(!t.length) return pd; const h=+String(t[0]).split(":")[0]; return (h>=SHIFT_START_H&&h<SHIFT2_START_H)?pd:pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; }
-function dccpDoneCount(r,data){ const from=dccpShiftFrom(r); const k=normPlat(r.police); return (data.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=from).length; }
+/* ILS plat ini sejak awal shift baris jadwal. ILS pertama sesudah status Change Shift adalah ritase SISA shift sebelumnya, jadi tidak mengurangi jadwal shift ini. */
+function dccpDoneList(r,data){ const from=dccpShiftFrom(r), k=normPlat(r.police);
+  const L=(data.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=from).sort((a,b)=>a.ts-b.ts);
+  try{ csArr(data).filter(x=>x && normPlat(x.plat)===k).forEach(x=>{ for(let c=0;c<(x.n||1);c++){ const i=L.findIndex(b=>b.ts>=x.ts); if(i>=0) L.splice(i,1); } }); }catch(e){}
+  return L; }
+function dccpDoneCount(r,data){ return dccpDoneList(r,data).length; }
 function dccpGantiOpen(ri){
   const data=DB.get(), r=data.dccpSchedule[ri]; if(!r) return;
   const times=dccpTripList(r), done=dccpDoneCount(r,data);
@@ -5601,7 +5607,7 @@ function ccTripChipsHtml(r, data){
   const times = ((r.trips&&r.trips.length) ? r.trips : (r.schedTime?[r.schedTime]:[])).slice().sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0));
   const mid = prodMidnight(), now=Date.now();
   const k = normPlat(r.police);
-  const _from=dccpShiftFrom(r), done = (data.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=_from).sort((a,b)=>a.ts-b.ts);
+  const done = dccpDoneList(r,data);
   if(!times.length) return r.extra ? `<span style="color:var(--text-dim);font-size:12px;">spot order${done.length?` · ${done.length}x jalan`:""}</span>` : "-";
   const chips = times.map((t,i)=>{
     const due = ccTimeToTs(t, mid);
