@@ -2647,7 +2647,7 @@ function earlyRowsHtml(){
   const n=window.earlyN||12, sh=L.slice(0,n);
   return sh.map(x=>`<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;">
     <div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">${xlEsc(x.lp)} ${x.drv?"· "+xlEsc(x.drv):""}</span><br><span style="font-size:11px;color:var(--text-dim);">Jadwal ${holdHm(x.due)} ${x.held?"· <b style='color:#E8833A'>⏳ menunggu di luar</b>":x.inside?"· sudah di stall/antrian":"· belum absen"}</span></div>
-    ${x.inside&&!x.allowed?`<span style="font-size:11px;color:var(--text-dim);">-</span>`:`<button class="btn ${x.allowed?"btn-danger":"btn-primary"} btn-sm" onclick="earlyOne('${xlEsc(x.k)}',${x.allowed?"false":"true"})">${x.allowed?"Cabut":"Izinkan"}</button>`}
+    <div style="display:flex;gap:6px;flex-shrink:0;">${!x.held&&!x.inside?`<button class="btn btn-outline btn-sm" onclick="absenkanCC('${xlEsc(x.plat)}','${xlEsc(x.lp)}')">✍ Absenkan</button>`:""}${x.inside&&!x.allowed?`<span style="font-size:11px;color:var(--text-dim);">-</span>`:`<button class="btn ${x.allowed?"btn-danger":"btn-primary"} btn-sm" onclick="earlyOne('${xlEsc(x.k)}',${x.allowed?"false":"true"})">${x.allowed?"Cabut":"Izinkan"}</button>`}</div>
   </div>`).join("")+(L.length>n?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:6px;" onclick="earlyN=(window.earlyN||12)+12;document.getElementById('earlyList').innerHTML=earlyRowsHtml();">Tampilkan lagi (${L.length-n})</button>`:"");
 }
 function earlyCardHtml(data){
@@ -2694,8 +2694,17 @@ function holdRelease(force){   // dipanggil berkala; force = daftar plat yang di
     if(!rel.length) return;
     d.hold=keep;
     rel.sort((a,b)=>(ccNextDue(d,a.plat)||a.ts||0)-(ccNextDue(d,b.plat)||b.ts||0));
-    rel.forEach(x=>{ const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall); });
+    d.holdRel=(Array.isArray(d.holdRel)?d.holdRel:[]).slice(-19);
+    rel.forEach(x=>{ const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall); d.holdRel.push({id:String(Date.now())+"-"+normPlat(x.plat), plat:x.plat, lp:x.lp||"", ts:Date.now(), stall:r.stall||0, queue:r.queue||0}); });
   });
+}
+/* Jadwal DCCP berubah (CC Pengganti / Tukar): CC yang sudah masuk waiting list tetapi ternyata belum waktunya dikembalikan ke Parkir Luar */
+function holdResync(d){
+  if(!Array.isArray(d.queue)||!d.queue.length) return;
+  const back=[], keep=[];
+  d.queue.forEach(q=>{ if(!q.manual && ccHoldDue(d,q.plat)!=null) back.push(q); else keep.push(q); });
+  if(!back.length) return;
+  d.queue=keep; d.hold=(d.hold||[]).concat(back.map(q=>({plat:q.plat, lp:q.lp, drvCode:q.drvCode||"", ts:q.ts||Date.now(), absenDistKm:q.absenDistKm, auto:!!q.auto, manual:!!q.manual})));
 }
 function holdLepas(plat){
   if(!canKeluarkanCC()) return;
@@ -3242,6 +3251,12 @@ function checkKoordAlerts(){
     const txt="ILS "+b.ccPlat+" ("+b.units.length+" unit) belum ditandai 'Sudah di-input ke TLS'. Tandai supaya Koordinator bisa validasi.";
     playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⚠ ILS belum ditandai Sudah di TLS", txt); }catch(e){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("⚠ ILS belum ditandai Sudah di TLS",{body:txt}); }catch(e){} }
+  }); }
+  if(isDel){ (Array.isArray(DB.get().holdRel)?DB.get().holdRel:[]).forEach(e=>{
+    if(!e||Date.now()-e.ts>15*60000) return; const key="rel|"+e.id; if(_koordSeen.has(key)) return; _koordSeen.add(key); fired=true;
+    const txt=`CC ${e.plat}${e.lp?" (LP "+e.lp+")":""} sudah waktunya masuk sesuai jadwal: `+(e.stall?`naik ke Stall CC ${ccLbl(e.stall)}.`:`masuk Waiting List${e.queue?" no. "+e.queue:""}.`);
+    playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⏰ CC Masuk Sesuai Jadwal", txt); }catch(x){}
+    if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("⏰ CC Masuk Sesuai Jadwal",{body:txt}); }catch(x){} }
   }); }
   for(const x of L){
     const who=`LP ${x.lp||"-"} ${x.plat}${x.driver?` · Driver ${x.driver}`:""}`;
@@ -5370,11 +5385,12 @@ function dccpGantiOpen(ri){
     ${rows}
     <div style="display:flex;gap:8px;margin:10px 0;flex-wrap:wrap;align-items:center;"><span style="font-size:12px;">Pintasan:</span>
       <select id="gFrom">${times.map((t,i)=>`<option value="${i}">Rit ${i+1} (${t}) s.d. terakhir</option>`).join("")}</select>
-      <button type="button" class="btn btn-outline btn-sm" onclick="gantiPickFrom()">Centang</button></div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="gantiPickFrom()">Centang</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="document.querySelectorAll('.gTrip:not(:disabled)').forEach(c=>c.checked=true)">✔ Semua ritase</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">
       <label>Plat CC pengganti<input id="gPlat" placeholder="B 1234 ABC" style="text-transform:uppercase;"></label>
       <label>LP<select id="gLP">${lpOpts}</select></label>
-      <label>Nama driver<input id="gDrv"></label>
+      <label>Nama driver<input id="gDrv" value="${String(r.driver||"").replace(/"/g,"&quot;")}"></label>
       ${canSetDrvCode()?`<label>Kode driver<input id="gCode" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></label>`:""}
     </div>
     <label style="display:block;margin-top:8px;">Alasan (opsional)<input id="gWhy" placeholder="mis. CC tidak hadir"></label>
@@ -5405,6 +5421,13 @@ function dccpGantiDo(ri){
     old.planTrip=Math.max(0,pt-n); old.planUnit=Math.max(0,Math.round(pu-n*per));
     old.gantiLog=(old.gantiLog||[]).concat([{ts:Date.now(), trips:chosen, to:plat, why}]);
     const tgt=d.dccpSchedule.find(x=>normPlat(x.police)===normPlat(plat));
+    if(!tgt && !rest.length && dccpDoneCount(Object.assign({},old,{police:old.police}),d)===0){
+      // seluruh ritase diganti & belum ada yang loading: plat baru menempati baris & jam yang sama persis
+      old.trips=trips.slice(); old.schedTime=trips[0]||old.schedTime||""; old.planTrip=pt; old.planUnit=pu;
+      old.origPolice=old.origPolice||old.police; old.police=plat; if(lp) old.lp=lp; { const od=old.driver||""; if(code) old.drvCode=code; else if(drv!==od) delete old.drvCode; old.driver=drv; }
+      old.pengganti=true; old.note=((old.note?old.note+"; ":"")+`pengganti ${old.origPolice}`+(why?" - "+why:""));
+      holdResync(d); return;
+    }
     const note=`pengganti ${old.police} (rit ${chosen.join(", ")})`+(why?" - "+why:"");
     if(tgt){
       const all=[...new Set([...dccpTripList(tgt), ...chosen])].sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0));
@@ -5415,8 +5438,9 @@ function dccpGantiDo(ri){
     } else {
       d.dccpSchedule.push({lp:lp||old.lp, police:plat, model:old.model||"", driver:drv, drvCode:code, schedTime:chosen[0], trips:chosen.slice(), dest:old.dest||"", note, planTrip:n, planUnit:Math.round(n*per), pengganti:true, gantiDari:old.police});
     }
+    holdResync(d);
   });
-  closeModal(); render();
+  closeModal(); try{ holdRelease(); }catch(e){} render();
 }
 /* ===== TUKAR JAM LOADING ANTAR CC =====
    - Hanya bisa sebelum loading pertama (kedua CC belum punya ILS hari ini).
@@ -5477,7 +5501,7 @@ function tukarDo(ri){
     a.tukar=ia.police; b.tukar=ib.police;
     d.swapLog=d.swapLog||[]; d.swapLog.push({ts:Date.now(), a:ia.police, lpA:ia.lp||"", drA:ia.driver||"", tA:ta.join(", "), b:ib.police, lpB:ib.lp||"", drB:ib.driver||"", tB:tb.join(", "), cross:String(ia.lp||"").toUpperCase()!==String(ib.lp||"").toUpperCase(), why, by:(currentUser&&currentUser.name)||""});
     if(d.swapLog.length>200) d.swapLog=d.swapLog.slice(-200);
-    ccQueueSort(d);
+    holdResync(d); ccQueueSort(d);
   });
   if(err){ msg.innerHTML=`<div class="msg err">${err}</div>`; return; }
   closeModal(); holdRelease(); render();
@@ -7275,6 +7299,15 @@ function ccShiftWatch(){
 }
 function ccPlatRelock(){ try{ if(shareTrk.on) stopShare(true); }catch(e){} ccPlatOk=false; try{ render(); }catch(e){} setTimeout(ccPlatGateCheck,60); }
 setInterval(ccShiftWatch, 30000);
+/* Plat tadi ditolak (belum di DCCP): begitu Koordinator/Delivery menambahkan, lanjut sendiri supaya absen otomatis langsung jalan */
+setInterval(()=>{ try{ const pl=window._cgPend; if(!pl||!currentUser||currentUser.role!=="cc") return; const i=document.getElementById("cgPlat"); if(!i){ window._cgPend=null; return; } if(ccPlatRegistered(pl)){ i.value=pl; ccPlatGateSave(); } }catch(e){} }, 2000);
+function absenkanCC(plat, lp){
+  if(!canKeluarkanCC()) return;
+  if(!confirm("Absenkan "+plat+" sekarang (atas nama driver)?\n\nPakai hanya kalau CC sudah ada di lokasi tetapi absen otomatisnya belum jalan.")) return;
+  const r=registerCC(plat, lp||((ccPlatRow(plat)||{}).lp)||"", null, false, true);
+  alert(r.dup?plat+" sudah tercatat di stall / antrian."+"":r.hold?plat+" tercatat, menunggu di Parkir Luar sampai jam "+holdHm(r.due)+".":r.stall?plat+" masuk STALL "+ccLbl(r.stall)+".":plat+" masuk antrian no. "+r.queue+".");
+  render();
+}
 /* Akun bebas plat (diatur Admin): boleh melewati pengisian plat. Posisi truk dan absen otomatis baru aktif kalau plat diisi. */
 function ccPlatExempt(){ try{ return String(currentUser.username||"").trim().toLowerCase()==="user"; }catch(e){ return false; } }
 function ccPlatSkip(){
@@ -7329,7 +7362,8 @@ function ccPlatGateSave(){
   const plat=ccPlatNorm((document.getElementById("cgPlat")||{}).value), lp=((document.getElementById("cgLp")||{}).value||"").trim(), msg=document.getElementById("cgMsg");
   if(!plat){ msg.innerHTML=`<div class="msg err">Format plat tidak dikenali. Contoh: B 9660 TEJ</div>`; return; }
   if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
-  if(!ccPlatRegistered(plat)){ msg.innerHTML=`<div class="msg err"><b>${xlEsc(plat)}</b> belum terdaftar di Jadwal DCCP, Spot Order, atau CC Pengganti. Minta Koordinator atau Delivery menambahkannya, lalu coba lagi.</div>`; return; }
+  if(!ccPlatRegistered(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="msg err"><b>${xlEsc(plat)}</b> belum terdaftar di Jadwal DCCP, Spot Order, atau CC Pengganti. Minta Koordinator atau Delivery menambahkannya. Layar ini menunggu dan otomatis lanjut begitu plat terdaftar, tidak perlu menekan apa pun.</div>`; return; }
+  window._cgPend=null;
   const pr=getCcProfile();
   if(shareTrk.on && trkKey(pr.plat)!==trkKey(plat)) stopShare(true);
   try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:pr.drvCode||""})); }catch(e){}
