@@ -5510,19 +5510,21 @@ function tukarCands(d, ri){
   const me=d.dccpSchedule[ri]; if(!me) return {all:[],same:[],allowed:[]};
   const all=[]; d.dccpSchedule.forEach((x,i)=>{ if(i!==ri && normPlat(x.police)!==normPlat(me.police) && tukarOk(x,d)) all.push(i); });
   const same=all.filter(i=>String(d.dccpSchedule[i].lp||"").trim().toUpperCase()===String(me.lp||"").trim().toUpperCase());
-  return {all, same, allowed: same.length?same:all, crossOk: !same.length};
+  const da=canKeluarkanCC();   // hanya Delivery & Admin boleh tukar beda LP
+  const cross=all.filter(i=>!same.includes(i));
+  return {all, same, cross, allowed: da?[...same,...cross]:same, crossOk: da && cross.length>0};
 }
 function tukarOpen(ri){
   if(!canTukarJam()) return;
   const d=DB.get(), me=d.dccpSchedule[ri]; if(!me) return;
   if(!tukarOk(me,d)){ alert("Tukar jam hanya bisa sebelum loading pertama. CC ini sudah pernah loading hari ini atau belum punya jam ritase."); return; }
   const c=tukarCands(d,ri);
-  if(!c.allowed.length){ alert("Tidak ada CC lain yang masih di loading pertama untuk ditukar."); return; }
-  const optP=c.allowed.map(i=>{ const x=d.dccpSchedule[i]; return `<option value="${i}">${x.police} · LP ${x.lp}</option>`; }).join("");
+  if(!c.allowed.length){ alert(c.all.length&&!canKeluarkanCC()?"Tidak ada CC LP "+me.lp+" lain yang bisa ditukar. Tukar beda LP hanya bisa dilakukan Delivery atau Admin.":"Tidak ada CC lain yang masih di loading pertama untuk ditukar."); return; }
+  const optP=c.allowed.map(i=>{ const x=d.dccpSchedule[i]; return `<option value="${i}">${x.police} · LP ${x.lp}${c.same.includes(i)?"":" (LP lain)"}</option>`; }).join("");
   showModal(`<h3 style="margin:0 0 4px;">🔄 Tukar Jam Loading</h3>
     <div style="font-size:13px;margin-bottom:4px;"><b>${me.police}</b> · LP ${me.lp}</div>
     <div style="font-size:13px;margin-bottom:8px;">Jam sekarang: <b>${dccpTripList(me).join(" · ")}</b></div>
-    <div class="msg ${c.crossOk?"err":"info"}" style="font-size:12px;margin-bottom:8px;">${c.crossOk?`Tidak ada CC LP ${me.lp} lain yang bisa ditukar, jadi boleh tukar dengan <b>LP lain</b>. Pastikan tetap sesuai heijunka.`:`Hanya boleh tukar dengan CC <b>LP ${me.lp}</b> yang sama.`}</div>
+    <div class="msg ${c.crossOk?"err":"info"}" style="font-size:12px;margin-bottom:8px;">${c.crossOk?`CC dengan <b>LP ${me.lp}</b> yang sama ada di urutan atas. Pilihan bertanda <b>(LP lain)</b> adalah tukar beda LP, hanya bisa oleh Delivery atau Admin. Pastikan tetap sesuai heijunka.`:`Hanya boleh tukar dengan CC <b>LP ${me.lp}</b> yang sama. Tukar beda LP hanya bisa dilakukan Delivery atau Admin.`}</div>
     <label style="display:block;margin-bottom:8px;">Tukar dengan CC<select id="tkP" onchange="tukarFillB()">${optP}</select></label>
     <div id="tkPrev" style="font-size:13px;margin-bottom:8px;"></div>
     <div class="msg info" style="font-size:12px;margin-bottom:8px;">Jam tetap di barisnya. Yang bertukar: plat, nama driver, dan kode driver. Hanya bisa sebelum loading pertama.</div>
@@ -5548,7 +5550,7 @@ function tukarDo(ri){
     const a=d.dccpSchedule[ri], b=d.dccpSchedule[pi]; if(!a||!b){ err="Data jadwal berubah, ulangi."; return; }
     const c=tukarCands(d,ri);
     if(!tukarOk(a,d)||!tukarOk(b,d)){ err="Salah satu CC sudah loading, tukar jam tidak bisa lagi."; return; }
-    if(!c.allowed.includes(pi)){ err = c.same.length ? `Tukar hanya boleh dengan CC LP ${a.lp} yang sama.` : "CC pasangan tidak valid."; return; }
+    if(!c.allowed.includes(pi)){ err = (c.cross||[]).includes(pi) ? "Tukar beda LP hanya bisa dilakukan Delivery atau Admin." : "CC pasangan tidak valid."; return; }
     const ta=dccpTripList(a), tb=dccpTripList(b);
     const ia={lp:a.lp, police:a.police, model:a.model, driver:a.driver, drvCode:a.drvCode, origPolice:a.origPolice}, ib={lp:b.lp, police:b.police, model:b.model, driver:b.driver, drvCode:b.drvCode, origPolice:b.origPolice};
     const put=(r,i)=>{ ["lp","police","model","driver","drvCode"].forEach(k=>{ if(i[k]!==undefined) r[k]=i[k]; else delete r[k]; }); };
