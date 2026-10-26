@@ -3252,7 +3252,12 @@ function myKoordLP(){   // LP milik koordinator yang sedang login ("" = semua LP
     return lpKey(u&&u.lp);
   }catch(e){ return ""; }
 }
-function lpCanon(x){ const k=lpKey(x); return (typeof TLS_VENDOR_MAP!=="undefined" && TLS_VENDOR_MAP[k])||k; }   // KPL/KPLM/KPC dianggap satu LP
+function lpCanon(x){   // KPL/KPLM/KPC = satu LP; KMD/KMDI/"KMD I" = satu LP (abaikan spasi, tanda baca, huruf besar/kecil)
+  const k=lpKey(x).replace(/[^A-Z0-9]/g,"");
+  if(/^KMD/.test(k)) return "KMD";
+  if(/^KP[LC]/.test(k)) return "KPC";
+  return (typeof TLS_VENDOR_MAP!=="undefined" && TLS_VENDOR_MAP[k])||k;
+}
 function lpMine(lp){ const m=myKoordLP(); return !m || lpCanon(lp)===lpCanon(m); }
 function koordStatusList(data){
   const out=[];
