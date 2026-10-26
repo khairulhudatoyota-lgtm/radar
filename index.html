@@ -3262,10 +3262,10 @@ function lpMine(lp){ const m=myKoordLP(); return !m || lpCanon(lp)===lpCanon(m);
 function koordStatusList(data){
   const out=[];
   for(let i=1;i<=CONFIG.CC_TOTAL;i++){
-    const c=data.cc[i]; if(!c || !lpMine(c.lp)) continue;
+    const c=data.cc[i]; if(!c) continue; const _sr=(data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat)); if(!lpMine(c.lp||(_sr&&_sr.lp))) continue;
     const ils=(data.ils||[]).filter(b=>b.status==="open" && b.ccNum==i && normPlat(b.ccPlat)===normPlat(c.plat)).sort((a,b)=>b.ts-a.ts)[0]||null;
     const row=(data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat));
-    out.push({n:i, plat:c.plat, lp:c.lp||"", driver:(row&&row.driver)||"", absenTs:c.ts||0, ils});
+    out.push({n:i, plat:c.plat, lp:c.lp||(_sr&&_sr.lp)||"", driver:(row&&row.driver)||"", absenTs:c.ts||0, ils});
   }
   return out.sort((a,b)=>(b.ils?1:0)-(a.ils?1:0) || (a.ils?a.ils.ts:a.absenTs)-(b.ils?b.ils.ts:b.absenTs));
 }
@@ -3287,7 +3287,9 @@ function koordStatusHtml(data){
     return `<div class="kitem wait"><b>⏳ CC sudah absen — ILS belum dibuat</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${ccLbl(x.n)} · menunggu Delivery membuat ILS</div>${steps}</div>`;
   }).join("");
   const _ml=myKoordLP();
-  return `<div class="card kstatus"><h3>📋 Status Loading CC${_ml?` <span class="badge">LP ${_ml}</span>`:''}${ready?` <span class="badge gold">${ready} siap validasi</span>`:''}</h3>${L.length?items:`<div class="emptystate">Belum ada CC ${_ml?'LP '+_ml+' ':''}di stall.</div>`}</div>`;
+  const _w=[...(data.queue||[]).map(q=>({q,t:"Antrian"})),...(data.hold||[]).map(q=>({q,t:"Ruang tunggu jadwal"}))].filter(x=>x.q && lpMine(x.q.lp));
+  const waitHtml=_w.length?`<div class="kitem wait"><b>🕒 Sudah absen, belum masuk stall (${_w.length})</b>${_w.map(x=>`<div style="font-size:13px;margin-top:4px;">${escH(x.q.plat)} · LP ${escH(x.q.lp||"-")} · ${x.t} · absen ${hhmm(x.q.ts||Date.now())}</div>`).join("")}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">ILS baru bisa dibuat setelah CC masuk stall.</div></div>`:"";
+  return `<div class="card kstatus"><h3>📋 Status Loading CC${_ml?` <span class="badge">LP ${_ml}</span>`:''}${ready?` <span class="badge gold">${ready} siap validasi</span>`:''}</h3>${waitHtml}${L.length?items:`<div class="emptystate">Belum ada CC ${_ml?'LP '+_ml+' ':''}di stall.</div>`}</div>`;
 }
 let _koordSeen=new Set(); try{ _koordSeen=new Set(JSON.parse(localStorage.getItem("apcc_koordseen")||"[]")); }catch(e){}
 function checkKoordAlerts(){
