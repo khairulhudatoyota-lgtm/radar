@@ -7547,6 +7547,7 @@ function ccPlatSkip(){
 function toggleSkipPlat(i){ DB.set(d=>{ const u=(d.users||[])[i]; if(u) u.skipPlat=!u.skipPlat; }); render(); }
 function ccPlatChange(){ try{ if(document.getElementById("cgPlat")) return; ccPlatGateOpen(true); const bg=document.querySelector("#modalRoot .modal-bg"); if(bg) bg.onclick=()=>closeModal(); }catch(e){} }
 function ccPlatGateCheck(){
+  if(noPlatUser()){ ccPlatOk=true; return; }   // akun tanpa plat: tidak ditanya plat, tidak ada plat yang dipasang
   if(currentUser && currentUser.role==="cc" && !ccPlatOk && !document.getElementById("cgPlat")){
     if(ccPlatRememberedOk() || ccPlatDbOk()){
       ccPlatOk=true;
