@@ -2500,6 +2500,8 @@ function onAutoPos(pos){
   }
   if(pos.coords.accuracy > 300){ autoAbsen.warn=`Sinyal GPS kasar (±${Math.round(pos.coords.accuracy)} m) — pindah ke tempat terbuka.`; updateAutoStatus(); return; }     // sinyal GPS terlalu kasar, abaikan
   autoAbsen.warn="";
+  if(pos.timestamp && Date.now()-pos.timestamp > 60000){ autoAbsen.hits=0; autoAbsen.warn="Posisi GPS lama (belum diperbarui). Menunggu posisi terbaru."; updateAutoStatus(); return; }   // posisi basi tidak dipakai absen
+  if(pos.coords.accuracy > 150 && dist <= y.radiusKm + 0.5){ autoAbsen.hits=0; autoAbsen.warn=`Akurasi GPS kurang (±${Math.round(pos.coords.accuracy)} m). Menunggu posisi yang lebih tepat.`; updateAutoStatus(); return; }
   if(autoOutLock(dist, y)){ autoAbsen.hits = 0; autoAbsen.lock = true; updateAutoStatus(); return; }   // baru Delout: jangan absen lagi sebelum keluar area
   autoAbsen.lock = false;
   autoAbsen.hits = dist <= y.radiusKm ? autoAbsen.hits+1 : 0;
@@ -2508,6 +2510,7 @@ function onAutoPos(pos){
 function doAutoRegister(dist){
   const prof = getCcProfile();
   const res = registerCC(prof.plat, prof.lp, dist, true);
+  if(res.far){ autoAbsen.state="armed"; autoAbsen.hits=0; autoAbsen.warn=`Masih ${dist.toFixed(1)} km dari yard (radius ${res.radius} km). Absen belum dicatat.`; updateAutoStatus(); return; }
   autoAbsen.state = "done"; autoAbsen.doneTs = Date.now();
   autoAbsen.msg = res.dup ? `Truk ${prof.plat} sudah tercatat di stall / antrian.`
                 : res.hold ? `🕒 Absen tercatat. Jadwal loading ${prof.plat} jam ${holdHm(res.due)} — belum masuk slot / waiting list. Tunggu di luar, otomatis masuk ${ccEarlyMin()} menit sebelum jadwal.`
@@ -2558,7 +2561,7 @@ function checkAbsenLocation(){
         return;
       }
       if(dist <= data.yardLocation.radiusKm){
-        absenState = {verified:true, distanceKm:dist, manual:true};
+        absenState = {verified:true, distanceKm:dist, manual:true, ts:Date.now()};
         render();
       }else{
         absenState = {verified:false, distanceKm:dist};
@@ -2770,19 +2773,28 @@ function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut ja
   let order=[...CONFIG.CC_ACTIVE_DEFAULT];
   CONFIG.CC_EMERGENCY.forEach(n=>{ if(d.ccOpen[n]) order.push(n); });
   let assigned=null; for(const n of order){ if(!d.cc[n]){ assigned=n; break; } }
-  if(assigned){ d.cc[assigned]={plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual}; return {stall:assigned}; }
+  if(assigned){ d.cc[assigned]={plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:Date.now(), absenTs:item.ts||Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual}; return {stall:assigned}; }
   d.queue.push({plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:item.ts||Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual});
   ccQueueSort(d);
   const pos=d.queue.findIndex(q=>normPlat(q.plat)===normPlat(item.plat));
   return {queue:pos+1};
 }
+/* CC yang posisinya (data peta, segar < 5 menit) masih jauh dari yard tidak dilepas dari Parkir Luar ke stall, walau jadwalnya sudah dekat. Delivery/Admin tetap bisa melepas paksa. */
+function ccFarNow(d, plat){
+  try{
+    const y=d.yardLocation||{}; if(y.lat==null) return false;
+    const k=normPlat(plat), r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
+    if(!r || typeof r.lat!=="number" || Date.now()-(r.ts||0)>5*60000) return false;   // posisi tidak diketahui: tidak ditahan
+    return haversineKm(r.lat,r.lng,y.lat,y.lng) > (+y.radiusKm||5)+0.5;
+  }catch(e){ return false; }
+}
 function holdRelease(force){   // dipanggil berkala; force = daftar plat yang dilepas paksa (Delivery/Admin)
   const d0=DB.get(), h0=d0.hold||[]; if(!h0.length) return;
   const f=(force||[]).map(normPlat);
-  if(!h0.some(x=>f.includes(normPlat(x.plat)) || !ccHoldDue(d0,x.plat))) return;
+  if(!h0.some(x=>f.includes(normPlat(x.plat)) || (!ccHoldDue(d0,x.plat) && !ccFarNow(d0,x.plat)))) return;
   DB.set(d=>{
     const all=d.hold||[], keep=[], rel=[];
-    all.forEach(x=>{ if(!f.includes(normPlat(x.plat)) && ccHoldDue(d,x.plat)) keep.push(x); else rel.push(x); });
+    all.forEach(x=>{ if(!f.includes(normPlat(x.plat)) && (ccHoldDue(d,x.plat) || ccFarNow(d,x.plat))) keep.push(x); else rel.push(x); });
     if(!rel.length) return;
     d.hold=keep;
     rel.sort((a,b)=>(ccNextDue(d,a.plat)||a.ts||0)-(ccNextDue(d,b.plat)||b.ts||0));
@@ -2824,6 +2836,7 @@ function registerCC(plat, lp, dist, auto, manual){
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
     if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:(currentUser&&currentUser.username)||"", name:(currentUser&&currentUser.name)||"", role:(currentUser&&currentUser.role)||"", auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
+    { const y=d.yardLocation||{}; if(dist!=null && y.radiusKm!=null && dist > (+y.radiusKm)+0.3){ res={far:true, dist, radius:+y.radiusKm}; return; } }   // di luar radius: ditolak, apa pun jalurnya (otomatis / manual)
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
     const _sr=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k); if(_sr && _sr.lp) lp=_sr.lp;   // LP resmi dari jadwal DCCP (sama seperti absen admin)
     const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
@@ -2864,7 +2877,9 @@ function submitOrderStall(){
   if(!plat || !lp){ msgEl.innerHTML = `<div class="msg err">Nomor polisi & nama LP wajib diisi.</div>`; return; }
   try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:getCcProfile().drvCode||""})); }catch(e){}
 
+  if(absenState.ts && Date.now()-absenState.ts > 5*60000){ absenState={verified:false,distanceKm:null}; msgEl.innerHTML=`<div class="msg err">Cek lokasi sudah kedaluwarsa (lebih dari 5 menit). Tekan Absen Manual (cek lokasi) lagi.</div>`; render(); return; }
   const res = registerCC(plat, lp, absenState.distanceKm, false, !!absenState.manual);
+  if(res.far){ absenState={verified:false,distanceKm:null}; msgEl.innerHTML=`<div class="msg err">❌ Masih ${res.dist.toFixed(1)} km dari yard (radius ${res.radius} km). Absen ditolak.</div>`; return; }
   if(res.dup) msgEl.innerHTML = `<div class="msg info">Truk ${plat} sudah terdaftar di stall / antrian.</div>`;
   else if(res.hold) msgEl.innerHTML = `<div class="msg info">🕒 Absen ${plat} tercatat. Jadwal loading kamu jam <b>${holdHm(res.due)}</b>, jadi belum masuk slot / waiting list. Tunggu di luar, otomatis masuk antrian ${ccEarlyMin()} menit sebelum jadwal.</div>`;
   else if(res.stall) msgEl.innerHTML = `<div class="msg ok">✔ Truk ${plat} masuk STALL ${ccLbl(res.stall)}. Silakan masuk area.</div>`;
@@ -3358,7 +3373,7 @@ function koordStatusList(data){
     const c=data.cc[i]; if(!c) continue; const _sr=(data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat)); if(!(lpMine(c.lp)||(_sr&&lpMine(_sr.lp)))) continue;
     const ils=(data.ils||[]).filter(b=>b.status==="open" && b.ccNum==i && normPlat(b.ccPlat)===normPlat(c.plat)).sort((a,b)=>b.ts-a.ts)[0]||null;
     const row=(data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat));
-    out.push({n:i, plat:c.plat, lp:c.lp||(_sr&&_sr.lp)||"", driver:(row&&row.driver)||"", absenTs:c.ts||0, ils});
+    out.push({n:i, plat:c.plat, lp:c.lp||(_sr&&_sr.lp)||"", driver:(row&&row.driver)||"", absenTs:c.absenTs||c.ts||0, ils});
   }
   return out.sort((a,b)=>(b.ils?1:0)-(a.ils?1:0) || (a.ils?a.ils.ts:a.absenTs)-(b.ils?b.ils.ts:b.absenTs));
 }
