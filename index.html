@@ -2967,7 +2967,7 @@ function renderDelivery(){
 
     <div class="dl-right"><div class="dlbatches" id="dlSecAktif">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
-    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
+    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
   `;
 }
 let dlUnitOpen={};
@@ -4891,6 +4891,35 @@ function manifestCardHtml(data){
 
 
 /* ===== Batal ILS & Keluarkan CC ===== */
+/* KOREKSI: hapus ILS yang dibuat karena kesalahan sistem (mis. CC sudah keluar tapi tercatat absen lagi). Hanya Delivery & Admin.
+   Menghapus ILS, surat jalan, baris manifest (di RADAR) dan hitungan ritasenya. Unit boleh dikembalikan ke stall. */
+function ilsFixCardHtml(data){
+  if(!canKeluarkanCC()) return "";
+  const hh=t=>new Date(t).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const L=(data.ils||[]).filter(b=>b && b.status==="done" && b.outTs && Date.now()-b.outTs<48*3600000).sort((a,b)=>b.outTs-a.outTs).slice(0,20);
+  return `<details class="card" style="margin-top:10px;"><summary style="cursor:pointer;font-weight:800;">🛠 Koreksi ILS salah (hapus ILS + surat jalan + manifest)</summary>
+    <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">Pakai hanya untuk ILS yang dibuat karena salah sistem. ILS, surat jalan, baris manifest di RADAR, dan hitungan ritase ikut terhapus. Baris yang sudah terlanjur ditempel ke Excel harus dihapus manual di Excel.</div>
+    ${L.length?L.map(b=>`<div style="display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding:8px 0;"><div style="flex:1;font-size:13px;"><b>${escH(b.ccPlat)}</b> · ${b.units.length} unit · Delout ${hh(b.outTs)}<br><span style="font-size:11px;color:var(--text-dim);">ILS #${b.id}${b.sj?" · ada surat jalan":""}</span></div><button class="btn btn-outline btn-sm" style="width:auto;color:var(--red);border-color:var(--red);" onclick="ilsFixDo(${b.id})">🗑 Hapus</button></div>`).join(""):`<div class="emptystate">Tidak ada ILS selesai dalam 48 jam terakhir.</div>`}
+  </details>`;
+}
+function ilsFixDo(id){
+  if(!canKeluarkanCC()){ alert("Hanya Delivery / Admin."); return; }
+  const b=(DB.get().ils||[]).find(x=>x.id===id); if(!b) return;
+  const why=prompt(`Hapus ILS #${id} (${b.ccPlat}, ${b.units.length} unit)?\n\nILS, surat jalan, manifest, dan ritasenya dihapus.\nTulis alasan (min. 3 huruf):`,"Kesalahan sistem (absen ganda)");
+  if(why===null) return; if(String(why).trim().length<3){ alert("Alasan wajib diisi. Tidak jadi dihapus."); return; }
+  const back=b.undo && (b.undo.units||[]).some(e=>e.v) ? confirm("Kembalikan "+b.units.length+" unit ke stall (kalau slotnya masih kosong)?\n\nOK = kembalikan unit\nBatal = unit tidak dikembalikan (memang sudah diangkut)") : false;
+  let nb=0;
+  DB.set(d=>{
+    const i=(d.ils||[]).findIndex(x=>x.id===id); if(i<0) return; const x=d.ils[i];
+    if(back && x.undo) (x.undo.units||[]).forEach(e=>{ if(e.v && !d.units[e.slot]){ const v=Object.assign({},e.v); delete v.ilsId; d.units[e.slot]=v; nb++; } });
+    d.ils.splice(i,1);
+    d.manifest=(d.manifest||[]).filter(m=>m.id!==id);
+    d.ilsFixLog=(d.ilsFixLog||[]).concat([{ts:Date.now(), id, plat:x.ccPlat, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", units:(x.units||[]).length}]).slice(-100);
+  });
+  try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+id).remove(); }catch(e){}
+  alert("ILS #"+id+" dihapus."+(back?" "+nb+" unit dikembalikan ke stall.":""));
+  render();
+}
 function cancelILS(id){
   const b=(DB.get().ils||[]).find(x=>x.id===id); if(!b) return;
   if(b.outTs || b.status==="done"){ alert("ILS ini sudah Delout, tidak bisa dibatalkan di sini. Gunakan Batalkan Delout (5 menit) bila perlu."); return; }
