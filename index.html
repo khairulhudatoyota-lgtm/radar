@@ -2430,7 +2430,7 @@ function autoOutLock(dist, y){
   try{
     const np = normPlat(getCcProfile().plat||""); if(!np) return false;
     let lo = 0; (DB.get().ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===np && x.outTs>lo) lo = x.outTs; });
-    if(!lo || Date.now()-lo > 12*3600*1000) return false;
+    if(!lo || Date.now()-lo > 60*60*1000) return false;   // kunci Delout maks. 1 jam (kalau aplikasi sempat mati di luar area, kunci tidak nyangkut)
     const k = "apcc_left_"+lo;
     if(dist > y.radiusKm + 1){ try{ localStorage.setItem(k,"1"); }catch(e){} return false; }
     try{ return localStorage.getItem(k)!=="1"; }catch(e){ return false; }
@@ -2452,7 +2452,8 @@ function onAutoPos(pos){
     }
     updateAutoStatus(); if(autoAbsen.state!=="done") { autoAbsen.hits = dist <= y.radiusKm ? 1 : 0; } return;
   }
-  if(pos.coords.accuracy > 300){ updateAutoStatus(); return; }     // sinyal GPS terlalu kasar, abaikan
+  if(pos.coords.accuracy > 300){ autoAbsen.warn=`Sinyal GPS kasar (±${Math.round(pos.coords.accuracy)} m) — pindah ke tempat terbuka.`; updateAutoStatus(); return; }     // sinyal GPS terlalu kasar, abaikan
+  autoAbsen.warn="";
   if(autoOutLock(dist, y)){ autoAbsen.hits = 0; autoAbsen.lock = true; updateAutoStatus(); return; }   // baru Delout: jangan absen lagi sebelum keluar area
   autoAbsen.lock = false;
   autoAbsen.hits = dist <= y.radiusKm ? autoAbsen.hits+1 : 0;
@@ -2480,7 +2481,7 @@ function autoStatusHtml(){
   if(a.lock) return `<div class="msg ok"><b>✔ Delout tercatat.</b> Absen otomatis aktif lagi setelah truk keluar dari area yard.</div>`;
   if(a.state==="done") return `<div class="msg ok">${a.msg}</div><div style="font-size:11px;color:var(--text-dim);">Pantau tetap jalan. Absen otomatis siap lagi begitu kamu keluar area dan kembali.</div>`;
   const dist = a.dist==null ? "mencari sinyal GPS…" : `${a.dist.toFixed(1)} km dari yard${a.acc!=null?` · akurasi ±${Math.round(a.acc)} m`:""}`;
-  return `<div class="msg info"><b>🟢 Aktif — menunggu masuk radius ${y.radiusKm} km</b><br><span id="autoDist">${dist}</span>${(window.AndroidTLS&&window.AndroidTLS.bgStart)?`<br><span style="font-size:11px;">Tetap berjalan walau layar terkunci. Jangan geser/tutup aplikasi dari daftar terbaru.</span>`:""}</div>`;
+  return `<div class="msg info"><b>🟢 Aktif — menunggu masuk radius ${y.radiusKm} km</b><br><span id="autoDist">${dist}</span>${a.warn?`<br><span style="color:var(--red,#c00);font-size:12px;">⚠ ${a.warn}</span>`:''}${(window.AndroidTLS&&window.AndroidTLS.bgStart)?`<br><span style="font-size:11px;">Tetap berjalan walau layar terkunci. Jangan geser/tutup aplikasi dari daftar terbaru.</span>`:""}</div>`;
 }
 function updateAutoStatus(){ const el = document.getElementById("autoStatus"); if(el) el.innerHTML = autoStatusHtml(); }
 
