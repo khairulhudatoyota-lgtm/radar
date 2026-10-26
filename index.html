@@ -603,6 +603,19 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .stallgroup.sideB .slot .id{font-size:13px; font-weight:900; color:#C98F00;}
 .stallgroup.sideA .slot{border-left:4px solid #1E6FD9;}
 .stallgroup.sideB .slot{border-left:4px solid #C98F00;}
+
+.ugroup{border:1.5px solid var(--border); border-radius:10px; margin-bottom:6px; background:var(--panel2); overflow:hidden;}
+.ugroup>summary{cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px; padding:8px 12px; font-weight:900; font-size:15px;}
+.ugroup>summary::-webkit-details-marker{display:none;}
+.ugroup>summary::before{content:"▸"; font-size:13px; color:var(--text-dim);}
+.ugroup[open]>summary::before{content:"▾";}
+.ugroup .gname{flex:1;}
+.ugroup.sideA .gname{color:#1E6FD9;} .ugroup.sideB .gname{color:#C98F00;}
+.ugroup .gcnt{font-size:11px; font-weight:800; background:var(--bg,#eef); color:var(--text-dim); border-radius:999px; padding:2px 9px;}
+.ugroup .gcnt.sel{background:#1E9E5A; color:#fff;}
+.ugroup[open]>summary{border-bottom:1px solid var(--border);}
+.unitrow.compact{padding:6px 10px; margin:6px; border-radius:8px;}
+.unitrow.compact .info b{font-size:13px;}
 </style>
 <style>
 .credit{margin:18px auto 0;text-align:center;line-height:1;user-select:none;}
@@ -2867,13 +2880,23 @@ function renderDelivery(){
   filledSlots.sort((a,b)=>(b[1].prio?1:0)-(a[1].prio?1:0));   // prioritas di atas
   const selKinds = new Set(deliverySelUnits.map(id=>data.units[id]&&data.units[id].batam?"B":"R"));
   const mixedSel = selKinds.size>1;
-  const unitRows = filledSlots.map(([id,v])=>{
+  const _unitRow = ([id,v])=>{
     const checked = deliverySelUnits.includes(id);
-    return `<div class="unitrow ${checked?'checked':''}" onclick="toggleUnitSel('${id}')">
+    return `<div class="unitrow compact ${checked?'checked':''}" onclick="toggleUnitSel('${id}')">
       <div class="info"><b>${v.frame}</b>${unitTagsHtml(v)}<span>${v.model} · ${isOffKey(id)?"📍 "+slotText(id,v):"Stall "+id}</span></div>
-      <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;margin-right:8px;" onclick="event.stopPropagation();openQR('${v.frame}')">▦ QR</button>
+      <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:3px 8px;margin-right:8px;" onclick="event.stopPropagation();openQR('${v.frame}')">▦ QR</button>
       <div class="chk"></div>
     </div>`;
+  };
+  /* Dikelompokkan per stall (bisa dibuka/ditutup) supaya tidak memanjang */
+  const _grp={};
+  filledSlots.forEach(e=>{ const k=isOffKey(e[0])?"OFF":groupOf(e[0]); (_grp[k]=_grp[k]||[]).push(e); });
+  const _gkeys=Object.keys(_grp).sort((a,b)=>{ if(a==="OFF") return 1; if(b==="OFF") return -1; const na=parseInt(a), nb=parseInt(b); return na!==nb ? na-nb : a.slice(-1).localeCompare(b.slice(-1)); });
+  const unitRows = _gkeys.map(k=>{
+    const L=_grp[k], nSel=L.filter(e=>deliverySelUnits.includes(e[0])).length, nPrio=L.filter(e=>e[1].prio).length;
+    const side=k==="OFF"?"":("side"+k.slice(-1));
+    const open = nSel>0 || !!dlUnitOpen[k];
+    return `<details class="ugroup ${side}" ${open?"open":""} ontoggle="dlUnitOpen['${k}']=this.open"><summary><span class="gname">${k==="OFF"?"📍 Luar stall":"Stall "+k}</span><span class="gcnt">${L.length} unit</span>${nPrio?`<span class="gcnt" style="background:#FFF1C2;color:#8a6100;">⭐ ${nPrio}</span>`:""}${nSel?`<span class="gcnt sel">✔ ${nSel} dipilih</span>`:""}</summary>${L.map(_unitRow).join("")}</details>`;
   }).join("");
 
   const ilsOfCC=n=>data.ils.find(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat((data.cc[n]||{}).plat));
@@ -2947,6 +2970,7 @@ function renderDelivery(){
     </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
   `;
 }
+let dlUnitOpen={};
 function toggleUnitSel(id){
   const idx = deliverySelUnits.indexOf(id);
   if(idx>=0){ deliverySelUnits.splice(idx,1); }
