@@ -2430,6 +2430,7 @@ function autoOutLock(dist, y){
   try{
     const np = normPlat(getCcProfile().plat||""); if(!np) return false;
     let lo = 0; (DB.get().ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===np && x.outTs>lo) lo = x.outTs; });
+    (DB.get().ccOutLog||[]).forEach(x=>{ if(x && x.ts && normPlat(x.plat)===np && x.ts>lo) lo = x.ts; });   // dikeluarkan Delivery: jangan absen otomatis lagi sebelum HP keluar area
     if(!lo || Date.now()-lo > 60*60*1000) return false;   // kunci Delout maks. 1 jam (kalau aplikasi sempat mati di luar area, kunci tidak nyangkut)
     const k = "apcc_left_"+lo;
     if(dist > y.radiusKm + 1){ try{ localStorage.setItem(k,"1"); }catch(e){} return false; }
@@ -2787,6 +2788,29 @@ function registerCC(plat, lp, dist, auto, manual){
   });
   return res;
 }
+/* Anti dobel: plat yang sama tidak boleh ada lebih dari satu di stall / antrian / ruang tunggu (mis. dua HP absen bersamaan sebelum sinkron).
+   Yang dipertahankan: yang paling dulu absen (stall diutamakan). Semua perangkat memakai aturan sama, jadi hasilnya seragam. */
+function ccDupFind(d){
+  const seen={}; let dup=false;
+  const mark=(plat)=>{ const k=normPlat(plat); if(!k) return; if(seen[k]) dup=true; seen[k]=1; };
+  Object.values(d.cc||{}).forEach(c=>c&&mark(c.plat)); (d.queue||[]).forEach(q=>q&&mark(q.plat)); (d.hold||[]).forEach(q=>q&&mark(q.plat));
+  return dup;
+}
+function ccDedupe(d){
+  const best={};   // plat -> {rank, where}
+  const cand=[];
+  Object.keys(d.cc||{}).forEach(n=>{ const c=d.cc[n]; if(c) cand.push({k:normPlat(c.plat), w:"cc", n, ts:c.ts||0, pri:0}); });
+  (d.queue||[]).forEach((q,i)=>{ if(q) cand.push({k:normPlat(q.plat), w:"queue", i, ts:q.ts||0, pri:1}); });
+  (d.hold||[]).forEach((q,i)=>{ if(q) cand.push({k:normPlat(q.plat), w:"hold", i, ts:q.ts||0, pri:2}); });
+  cand.forEach(c=>{ if(!c.k) return; const b=best[c.k]; if(!b || c.pri<b.pri || (c.pri===b.pri && c.ts<b.ts)) best[c.k]=c; });
+  const dropCc=[], dropQ=new Set(), dropH=new Set();
+  cand.forEach(c=>{ if(!c.k || best[c.k]===c) return; if(c.w==="cc") dropCc.push(c.n); else if(c.w==="queue") dropQ.add(c.i); else dropH.add(c.i); });
+  dropCc.forEach(n=>{ delete d.cc[n]; });
+  if(dropQ.size) d.queue=d.queue.filter((q,i)=>!dropQ.has(i));
+  if(dropH.size) d.hold=d.hold.filter((q,i)=>!dropH.has(i));
+  return dropCc.length+dropQ.size+dropH.size;
+}
+setInterval(()=>{ try{ if(currentUser && ccDupFind(DB.get())) DB.set(d=>{ ccDedupe(d); }); }catch(e){} }, 4000);
 function submitOrderStall(){
   const plat = document.getElementById("ccPlat").value.trim().toUpperCase();
   const lp = document.getElementById("ccLP").value.trim();
@@ -2935,6 +2959,8 @@ function createILS(ccNum, slots){
   if(!ccInfo){ alert("Stall CC tidak valid."); return false; }
   const units = slots.filter(slot=>data.units[slot] && !data.units[slot].ilsId).map(slot=>({slot, loc:data.units[slot].loc||"", frame:data.units[slot].frame, model:data.units[slot].model, batam:!!data.units[slot].batam, prio:!!data.units[slot].prio}));
   if(!units.length){ alert("Unit sudah tidak tersedia."); return false; }
+  const _dupI=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum!=ccNum && normPlat(b.ccPlat)===normPlat(ccInfo.plat));
+  if(_dupI){ alert("Plat "+ccInfo.plat+" sudah punya ILS #"+_dupI.id+" yang masih aktif di Stall "+ccLbl(_dupI.ccNum)+". Selesaikan atau batalkan ILS itu dulu supaya tidak dobel."); return false; }
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
   DB.set(d=>{
     const id = Date.now();
