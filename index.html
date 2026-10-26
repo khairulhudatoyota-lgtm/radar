@@ -2924,13 +2924,14 @@ function renderDelivery(){
     : `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${nBelum} CC belum dibuatkan ILS · ${ccOptions.length-nBelum} sudah. Ketuk CC untuk memilih.</div>`+ccRowsSorted.map(n=>{
         const c=data.cc[n], b=ilsOfCC(n), sel=deliverySelCC==n, col=ccColor(c.plat), st=b?ilsStage(b):null;
         return `<div onclick="deliverySelCC='${n}';render()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;border:${sel?'3px':'1.5px'} solid ${sel?col:'var(--border)'};border-left:8px solid ${col};border-radius:12px;padding:9px 12px;margin-bottom:7px;${b&&!sel?'opacity:.8;':''}background:${sel?'var(--panel2)':'transparent'};">
-          <div><b style="background:${col};color:#fff;border-radius:6px;padding:1px 8px;font-weight:900;">${escH(c.plat)}</b> <span style="font-size:12px;color:var(--text-dim);">Stall ${ccLbl(n)} · ${escH(c.lp||"-")}</span></div>
+          <div><b style="background:${col};color:#fff;border-radius:6px;padding:1px 8px;font-weight:900;">${escH(c.plat)}</b> <span style="font-size:12px;color:var(--text-dim);">Stall ${ccLbl(n)} · ${escH(c.lp||"-")}</span>${(()=>{ const dn=ccDriverAny(c.plat); return dn?`<div style="font-size:13px;font-weight:800;margin-top:2px;">👤 ${escH(dn)}</div>`:""; })()}</div>
           <span style="font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;white-space:nowrap;${b?`background:${st.bg};color:${st.c};`:'background:#ffedd5;color:#b45309;'}">${b?`✔ ILS #${b.id} · ${b.units.length} unit`:"○ Belum ada ILS"}</span></div>`; }).join("");
 
   const loadingBatches = data.ils.filter(b=>b.status==="open");
   const batchHtml = loadingBatches.map(b=>`
     <div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};">
       <h3>🚚 ILS #${b.id} — CC <span style="background:${ccColor(b.ccPlat)};color:#fff;border-radius:6px;padding:1px 8px;">${escH(b.ccPlat)}</span> (Stall ${ccLbl(b.ccNum)}) ${b.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 8px;font-size:12px;">BATAM</span>`:""}</h3>
+      ${(()=>{ const dn=ccDriverAny(b.ccPlat); return dn?`<div style="font-size:15px;font-weight:800;margin:-2px 0 6px;">👤 ${escH(dn)}</div>`:""; })()}
       <div style="margin:0 0 8px;"><span style="font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;background:${ilsStage(b).bg};color:${ilsStage(b).c};">${ilsStage(b).t}</span></div>
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">${b.units.length} unit · dibuat ${new Date(b.ts).toLocaleString('id-ID')}</p>
       <table><thead><tr><th>QR</th><th>No. Rangka</th><th>Model</th><th>Stall</th></tr></thead><tbody>
@@ -2947,6 +2948,7 @@ function renderDelivery(){
       </div>
       ${b.batam?`<div style="margin-top:10px;font-size:12px;color:var(--text-dim);">ILS BATAM: input ke TLS dilakukan manual di PC.</div>`:""}
       ${tlsBadgeHtml(b)}
+      ${canKeluarkanCC()?`<div style="margin-top:10px;padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;background:var(--panel);">${b.sj?`<div style="font-size:12px;font-weight:800;color:#17803d;">📄 PDF ILS / Surat Jalan tersimpan${b.sjkb?` · <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;">No. SJKB ${escH(b.sjkb)}</span>`:""}</div><div style="font-size:11px;color:var(--text-dim);margin:2px 0 6px;">Hanya Delivery &amp; Admin yang bisa melihat sebelum Delout. Cek dulu kalau ada kesalahan; No. SJKB dipakai untuk batal SJKB.</div><div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" style="flex:1;" onclick="sjView(${b.id})">👁 Lihat PDF</button><button class="btn btn-outline btn-sm" style="flex:1;" onclick="sjDownload(${b.id})">⬇ Unduh</button></div>`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</div>`}</div>`:""}
     </div>
   `).join("");
 
@@ -3486,7 +3488,7 @@ function sjActionsHtml(b){
   else h+=btn('btn-green','🚪 Delout','delout');
   h+=`</div>`;
   if(b.valStartTs){
-    h+=`<div style="margin-top:8px;font-size:12px;">${b.sj?`<span style="color:#17803d;font-weight:700;">📄 Surat jalan tersimpan (disembunyikan sampai Delout)</span>`:`<span style="color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</span>`} <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjUploadPick(${b.id})">${b.sj?'Ganti':'Unggah'} PDF</button></div>`;
+    h+=`<div style="margin-top:8px;font-size:12px;">${b.sj?`<span style="color:#17803d;font-weight:700;">📄 Surat jalan tersimpan (disembunyikan dari CC sampai Delout)</span>${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;font-weight:800;">SJKB ${escH(b.sjkb)}</span>`:""}${canKeluarkanCC()?` <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjView(${b.id})">👁 Lihat PDF</button> <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjDownload(${b.id})">⬇ Unduh</button>`:""}`:`<span style="color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</span>`} <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjUploadPick(${b.id})">${b.sj?'Ganti':'Unggah'} PDF</button></div>`;
   }
   return h;
 }
@@ -3505,8 +3507,9 @@ function validasiSelesai(id){
 }
 function loadingSelesai(id){
   const b=sjILS(id); if(!b||b.loadTs) return;
-  if(!confirm("CC sudah selesai loading semua unit?")) return;
-  DB.set(d=>{ const x=d.ils.find(y=>y.id===id); if(x&&!x.loadTs){ x.loadTs=Date.now(); x.loadBy=sjWho(); } });
+  if(!confirm("CC sudah selesai loading semua unit?\n\n• Slot unit di yard langsung dikosongkan (dispatcher boleh parkir unit baru)\n• CC tetap tercatat di stall sampai Delout (CC berangkat)")) return;
+  DB.set(d=>{ const x=d.ils.find(y=>y.id===id); if(x&&!x.loadTs){ x.loadTs=Date.now(); x.loadBy=sjWho();
+    x.loadSnap=[]; (x.units||[]).forEach(u=>{ const cur=d.units[u.slot]; if(cur && cur.ilsId===id){ x.loadSnap.push({slot:u.slot, v:cur}); if(isOffKey(u.slot)) delete d.units[u.slot]; else d.units[u.slot]=null; } }); } });
 }
 function delout(id){
   const b=sjILS(id); if(!b||b.status!=="open") return;
@@ -3516,7 +3519,9 @@ function delout(id){
   DB.set(d=>{
     const x=(d.ils||[]).find(y=>y.id===id); if(!x||x.status!=="open") return;
     const snap={units:[],cc:null,promoted:null};
-    x.units.forEach(u=>{ snap.units.push({slot:u.slot,v:d.units[u.slot]||null}); if(isOffKey(u.slot)) delete d.units[u.slot]; else d.units[u.slot]=null; });
+    x.units.forEach(u=>{ const cur=d.units[u.slot], own=!!(cur && cur.ilsId===id), ls=(x.loadSnap||[]).find(e=>e.slot===u.slot);
+      snap.units.push({slot:u.slot, v: own?cur:(ls?ls.v:null)});
+      if(own){ if(isOffKey(u.slot)) delete d.units[u.slot]; else d.units[u.slot]=null; } });   // slot yang sudah dikosongkan saat Loading Selesai (atau sudah diisi unit baru) tidak disentuh
     x.status="done"; x.doneTs=Date.now(); x.outTs=x.doneTs; x.outBy=sjWho();
     if(currentUser && currentUser.role==="delivery" && !x.esjPic) x.esjPic=currentUser.username;
     const c=d.cc[x.ccNum];
@@ -3555,7 +3560,7 @@ function delOutUndo(id){
       if(sn.promoted){ if(cur && normPlat(cur.plat)===normPlat(sn.promoted.plat)){ d.queue.unshift(sn.promoted); } else { ok=false; return; } }
       d.cc[x.ccNum]=sn.cc;
     }
-    sn.units.forEach(e=>{ if(e.v) d.units[e.slot]=e.v; });
+    if(!x.loadSnap) sn.units.forEach(e=>{ if(e.v && !d.units[e.slot]) d.units[e.slot]=e.v; });   // sudah Loading Selesai: unit ada di CC, tidak dikembalikan ke slot
     x.status="open"; delete x.doneTs; delete x.outTs; delete x.outBy; delete x.undo;
     d.manifest=(d.manifest||[]).filter(m=>m.id!==x.id);
   });
@@ -4934,7 +4939,7 @@ function ilsFixCardHtml(data){
   const L=(data.ils||[]).filter(b=>b && b.status==="done" && b.outTs && Date.now()-b.outTs<48*3600000).sort((a,b)=>b.outTs-a.outTs).slice(0,20);
   return `<details class="card" style="margin-top:10px;"><summary style="cursor:pointer;font-weight:800;">🛠 Koreksi ILS salah (hapus ILS + surat jalan + manifest)</summary>
     <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">Pakai hanya untuk ILS yang dibuat karena salah sistem. ILS, surat jalan, baris manifest di RADAR, dan hitungan ritase ikut terhapus. Baris yang sudah terlanjur ditempel ke Excel harus dihapus manual di Excel.</div>
-    ${L.length?L.map(b=>`<div style="display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding:8px 0;"><div style="flex:1;font-size:13px;"><b>${escH(b.ccPlat)}</b> · ${b.units.length} unit · Delout ${hh(b.outTs)}<br><span style="font-size:12px;font-weight:800;color:#C77700;">${(()=>{const r=ilsRitInfo(data,b);return r?`Rit ke-${r.n} dari ${r.total} (shift ${r.shift})`:"";})()}</span> <span style="font-size:11px;color:var(--text-dim);">· ILS #${b.id}${b.sj?" · ada surat jalan":""}</span></div><button class="btn btn-outline btn-sm" style="width:auto;color:var(--red);border-color:var(--red);" onclick="ilsFixDo(${b.id})">🗑 Hapus</button></div>`).join(""):`<div class="emptystate">Tidak ada ILS selesai dalam 48 jam terakhir.</div>`}
+    ${L.length?L.map(b=>`<div style="display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding:8px 0;"><div style="flex:1;font-size:13px;"><b>${escH(b.ccPlat)}</b>${(()=>{const dn=ccDriverAny(b.ccPlat);return dn?` · 👤 ${escH(dn)}`:"";})()} · ${b.units.length} unit · Delout ${hh(b.outTs)}<br><span style="font-size:12px;font-weight:800;color:#C77700;">${(()=>{const r=ilsRitInfo(data,b);return r?`Rit ke-${r.n} dari ${r.total} (shift ${r.shift})`:"";})()}</span> <span style="font-size:11px;color:var(--text-dim);">· ILS #${b.id}${b.sj?" · ada surat jalan":""}</span></div><button class="btn btn-outline btn-sm" style="width:auto;color:var(--red);border-color:var(--red);" onclick="ilsFixDo(${b.id})">🗑 Hapus</button></div>`).join(""):`<div class="emptystate">Tidak ada ILS selesai dalam 48 jam terakhir.</div>`}
   </details>`;
 }
 function ilsFixDo(id){
@@ -4974,6 +4979,7 @@ function cancelILS(id){
   if(!confirm(msg)) return;
   DB.set(d=>{ const i=(d.ils||[]).findIndex(x=>x.id===id); if(i<0) return; const x=d.ils[i];
     (x.units||[]).forEach(u=>{ const cur=d.units[u.slot]; if(cur && cur.ilsId===id) delete cur.ilsId; });
+    (x.loadSnap||[]).forEach(e=>{ if(e.v && !d.units[e.slot]){ const v=Object.assign({},e.v); delete v.ilsId; d.units[e.slot]=v; } });   // loading sudah ditandai selesai: kembalikan unit ke slot
     d.ils.splice(i,1); });
   try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+id).remove(); }catch(e){}
   render();
@@ -5030,7 +5036,7 @@ function keluarkanCC(n){
     const cur=d.cc[n]; if(!cur) return;
     const oi=(d.ils||[]).findIndex(b=>b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===normPlat(cur.plat));
     let ilsId=null;
-    if(oi>=0){ const x=d.ils[oi]; ilsId=x.id; (x.units||[]).forEach(u=>{ const un=d.units[u.slot]; if(un && un.ilsId===x.id) delete un.ilsId; }); d.ils.splice(oi,1); }
+    if(oi>=0){ const x=d.ils[oi]; ilsId=x.id; (x.units||[]).forEach(u=>{ const un=d.units[u.slot]; if(un && un.ilsId===x.id) delete un.ilsId; }); (x.loadSnap||[]).forEach(e=>{ if(e.v && !d.units[e.slot]){ const v=Object.assign({},e.v); delete v.ilsId; d.units[e.slot]=v; } }); d.ils.splice(oi,1); }
     d.ccOutLog=d.ccOutLog||[]; d.ccOutLog.push({ts:Date.now(), plat:cur.plat, lp:cur.lp||"", ccNum:n, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", ilsId});
     if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
     d.cc[n]=null;
@@ -5845,8 +5851,8 @@ function syncUnitLog(d){
   }
   for(const e of log){
     if((e.status==="parked"||e.status==="ils") && !present.has(e)){
-      const b = (d.ils||[]).find(x=>x.status==="done" && x.units.some(u=>u.frame===e.frame));
-      if(b){ e.status="sent"; e.sentTs=b.doneTs||now; e.ilsId=b.id; e.ilsTs=b.ts; e.ccPlat=b.ccPlat; e.lp=b.lp; }
+      const b = (d.ils||[]).find(x=>(x.status==="done"||x.loadTs) && x.units.some(u=>u.frame===e.frame));
+      if(b){ e.status="sent"; e.sentTs=b.doneTs||b.loadTs||now; e.ilsId=b.id; e.ilsTs=b.ts; e.ccPlat=b.ccPlat; e.lp=b.lp; }
       else { e.status="removed"; e.removedTs=now; }
     }
   }
