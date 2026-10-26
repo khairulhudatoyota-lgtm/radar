@@ -3252,7 +3252,8 @@ function myKoordLP(){   // LP milik koordinator yang sedang login ("" = semua LP
     return lpKey(u&&u.lp);
   }catch(e){ return ""; }
 }
-function lpMine(lp){ const m=myKoordLP(); return !m || lpKey(lp)===m; }
+function lpCanon(x){ const k=lpKey(x); return (typeof TLS_VENDOR_MAP!=="undefined" && TLS_VENDOR_MAP[k])||k; }   // KPL/KPLM/KPC dianggap satu LP
+function lpMine(lp){ const m=myKoordLP(); return !m || lpCanon(lp)===lpCanon(m); }
 function koordStatusList(data){
   const out=[];
   for(let i=1;i<=CONFIG.CC_TOTAL;i++){
@@ -3665,7 +3666,7 @@ function sjRowHtml(b, now){
 function sjScopePass(scope){
   if(scope==="cc") return b=>!!myCcPlatKey() && normPlat(b.ccPlat)===myCcPlatKey();
   if(scope==="koor") return b=>lpMine(b.lp);
-  return b=>!sjLpF||lpKey(b.lp)===lpKey(sjLpF);
+  return b=>!sjLpF||lpCanon(b.lp)===lpCanon(sjLpF);
 }
 function sjBoxHtml(scope, title, hint){
   const data=DB.get(), now=Date.now(), L=sjRows(data, sjScopePass(scope)), n=L.length;
@@ -3759,7 +3760,7 @@ function mfRows(data, dateStr, lp, shift){
     if(shift==="Day") return d===dateStr && mn>=MF_DAY_FROM && mn<=MF_DAY_TO;
     if(shift==="Night") return (d===dateStr && mn>MF_DAY_TO) || (d===nextDs && mn<MF_DAY_FROM);
     return d===dateStr; };
-  const L=mfRecords(data).filter(m=>inShift(m) && (!lp || lpKey(m.lp)===lpKey(lp))).sort((a,b)=>a.t-b.t);
+  const L=mfRecords(data).filter(m=>inShift(m) && (!lp || lpCanon(m.lp)===lpCanon(lp))).sort((a,b)=>a.t-b.t);
   const rows=[];
   L.forEach(m=>{ mfRecRows(data, m, tujuan, rows.length).forEach(r=>rows.push(r)); });
   return rows;
