@@ -1908,8 +1908,9 @@ function renderDispatcher(){
         <div class="val" ${occ?`style="color:${mc};"`:''}>${occ? (occ.model||'?') : 'KOSONG'}</div>${occ&&(occ.batam||occ.prio)?`<div>${unitTagsHtml(occ,true)}</div>`:""}
       </div>`;
     }
-    return `<div class="stallgroup side${g.slice(-1)}"><div class="lbl">Stall ${g}${isBatamStall(data,g)?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;">KHUSUS BATAM</span>`:""}</div><div class="slotgrid">${cells}</div></div>`;
+    return `<div class="stallgroup side${g.slice(-1)}"><div class="lbl">Stall ${g}${isBatamStall(data,g)?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;">KHUSUS BATAM</span>`:""}${canKeluarkanCC()&&Object.keys(data.units||{}).some(k=>data.units[k]&&!data.units[k].ilsId&&!isOffKey(k)&&groupOf(k)===g)?` <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:1px 8px;font-size:10px;margin-left:6px;color:var(--red);border-color:var(--red);" onclick="clearStallUnits('${g}')">🗑 Kosongkan</button>`:""}</div><div class="slotgrid">${cells}</div></div>`;
   }).join("");
+  const clearAllBtn = canKeluarkanCC()&&Object.keys(data.units||{}).some(k=>data.units[k]&&!data.units[k].ilsId&&!isOffKey(k)) ? `<button type="button" class="btn btn-outline btn-sm" style="width:auto;margin-bottom:10px;color:var(--red);border-color:var(--red);" onclick="clearStallUnits('*')">🗑 Kosongkan SEMUA Stall</button>` : "";
 
   return `
     <div id="geoBanner">${geoBannerHtml()}</div>
@@ -1941,7 +1942,7 @@ function renderDispatcher(){
     <div class="card d-slots ${geoIsIn()?'':'geolocked'}">
       <h3>🅿️ Pilih Slot Stall Tujuan (Opsional)</h3>
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Ketuk slot kosong (hijau) kalau mau pilih posisi manual. Ketuk slot terisi (merah) buat keluarkan/edit unit.</p>
-      <div class="stallgrid">${slotsHtml}</div>
+      ${clearAllBtn}<div class="stallgrid">${slotsHtml}</div>
     </div>
 
     <div class="card d-offin">
@@ -2051,6 +2052,19 @@ async function clearSlotForRepair(id){
   const v=(DB.get().units||{})[id]; closeModal();
   if(!(await pwConfirm("Keluarkan unit dari Stall "+id, v?("No. Rangka <b>"+xlEsc(v.frame||"-")+"</b> · "+xlEsc(v.model||"")+". Slot akan kosong lagi."):"Slot akan kosong lagi."))) return;
   DB.set(d=>{ unitOutLogAdd(d, id, d.units[id], "stall"); d.units[id] = null; });
+}
+/* Kosongkan isi 1 stall (g="12A"), luar stall (g="OFF") atau semua stall (g="*").
+   Unit yang sudah masuk ILS tidak disentuh (urus lewat ILS). CC di stall tidak berubah. Tercatat di riwayat unit dikeluarkan. */
+async function clearStallUnits(g){
+  if(!canKeluarkanCC()){ alert("Hanya Delivery / Admin yang boleh mengosongkan stall."); return; }
+  const d0=DB.get();
+  const keys=Object.keys(d0.units||{}).filter(k=>{ const u=d0.units[k]; if(!u || u.ilsId) return false; if(g==="*") return !isOffKey(k); if(g==="OFF") return isOffKey(k); return !isOffKey(k) && groupOf(k)===g; });
+  if(!keys.length){ alert("Tidak ada unit yang bisa dikosongkan (unit yang sudah masuk ILS tidak ikut)."); return; }
+  const nm=g==="*"?"SEMUA stall":(g==="OFF"?"Parkir Luar Stall":"Stall "+g);
+  if(!(await pwConfirm("Kosongkan "+nm, keys.length+" unit akan dihapus dari daftar (dicatat di Riwayat unit dikeluarkan). Unit yang sudah masuk ILS dan CC yang sedang parkir tidak ikut berubah."))) return;
+  DB.set(d=>{ keys.forEach(k=>{ const u=d.units[k]; if(!u || u.ilsId) return; unitOutLogAdd(d,k,u,isOffKey(k)?"luar":"hapus-stall"); if(isOffKey(k)) delete d.units[k]; else d.units[k]=null; }); });
+  deliverySelUnits=deliverySelUnits.filter(k=>keys.indexOf(k)<0);
+  render();
 }
 function refreshSlotSelection(){
   document.querySelectorAll('.slot[data-slot]').forEach(el=>{
@@ -2579,7 +2593,7 @@ function renderOrderStall(){
   const queueCards = data.queue.map((q,idx)=>`
     <div class="card" style="margin-bottom:10px;">
       <div style="display:flex; justify-content:space-between;">
-        <div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>
+        <div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}${(()=>{const dk=ccDistNow(data,q.plat); return dk!=null?` · 📍 ${dk.toFixed(1)} km dari yard${ccFarNow(data,q.plat)?" (masih jauh, belum dipanggil)":""}`:"";})()}</span></div>
       </div>
       ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
     </div>
@@ -2620,6 +2634,7 @@ function renderOrderStall(){
 
   return `
     ${sjBoxHtml("cc","Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah Delout. Terhapus otomatis 7 hari.":"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
+    ${ccMyPosHtml(data)}
     ${absenBlock}
     ${shareCardHtml()}
 
@@ -2655,6 +2670,12 @@ function ccCardsHtml(data){
    - CC yang absen SEBELUM jam DCCP-nya belum masuk slot maupun waiting list: ditahan di d.hold ("menunggu jadwal").
    - Begitu waktunya tiba (jam ritase berikutnya dikurangi toleransi), otomatis masuk stall / waiting list.
    - Waiting list diurutkan menurut jam jadwal DCCP, bukan menurut siapa yang datang duluan. */
+/* Jam efektif antrian = yang lebih lambat antara jam jadwal DCCP dan jam absen (toleransi telat 15 menit). Yang terlambat tidak menyalip yang sudah menunggu. */
+function ccLateTolMin(d){ const v=Number((d||DB.get()).lateTolMin); return isFinite(v)&&v>=0 ? v : 15; }
+function ccEffTs(d, plat, ts){
+  const du=ccNextDue(d,plat); if(du==null) return ts||0;
+  return (ts||0) > du + ccLateTolMin(d)*60000 ? (ts||0) : du;
+}
 function ccEarlyMin(d){ const v=Number((d||DB.get()).earlyMin); return isFinite(v)&&v>=0 ? v : 30; }
 function ccNextDue(d, plat){   // ts jam ritase berikutnya milik plat ini; null = tidak terjadwal / semua ritase sudah jalan
   const k=normPlat(plat), r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return null;
@@ -2765,9 +2786,39 @@ function ccHoldDue(d, plat){   // ts jadwal bila CC ini masih harus menunggu di 
   const due=ccNextDue(d,plat); if(due==null) return null;
   return Date.now() < due - ccEarlyMin(d)*60000 ? due : null;
 }
+/* Satu LP satu CC di stall dalam satu waktu. LP yang sudah ada di stall dilewati selama masih ada CC LP lain di waiting list;
+   kalau tidak ada LP lain yang menunggu, tetap boleh masuk (stall tidak dibiarkan kosong). Change Shift tidak dibatasi. */
+function ccLpCap(d){ const v=Number((d||DB.get()).lpCap); return isFinite(v)&&v>=1 ? v : 1; }
+function ccLpCount(d, lp){ const c=lpCanon(lp); return Object.values(d.cc||{}).filter(x=>x && lpCanon(x.lp)===c).length; }
+function ccQueueTake(d){
+  /* CC yang posisinya masih jauh dari yard tidak dipanggil. Kalau semua yang menunggu masih jauh, stall dibiarkan kosong (null). */
+  const q=d.queue||[]; if(!q.length) return null;
+  const cap=ccLpCap(d), near=q.filter(x=>!ccFarNow(d,x.plat)); if(!near.length) return null;
+  const pick=near.find(x=>csActive(d,x.plat) || ccLpCount(d,x.lp)<cap) || near[0];
+  q.splice(q.indexOf(pick),1); return pick;
+}
+function ccRitDone(d, plat){ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); return r ? dccpDoneCount(r,d) : 0; }
+function ccActiveStalls(d){ return CONFIG.CC_ACTIVE_DEFAULT.length + CONFIG.CC_EMERGENCY.filter(n=>d.ccOpen&&d.ccOpen[n]).length; }
+function ccLoadMin(d){ const v=Number((d||DB.get()).loadMin); return isFinite(v)&&v>=5 ? v : 15; }   // rata-rata waktu loading per CC
 function ccQueueSort(d){
-  (d.queue||[]).forEach(q=>{ const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; } const du=ccNextDue(d,q.plat); q.due = du!=null ? du : (q.ts||0); });
-  d.queue.sort((a,b)=>(a.due||0)-(b.due||0));
+  /* Rit pertama: jam efektif (jadwal DCCP, toleransi telat). Rit ke-2 dst: jam jadwal hanya perkiraan, jadi berdasarkan KEDATANGAN;
+     kalau dua CC tiba berdekatan (< 5 menit), yang rit-nya lebih sedikit didahulukan. */
+  const rit=q=>ccRitDone(d,q.plat);
+  (d.queue||[]).forEach(q=>{ const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; } q.due = rit(q)>=1 ? (q.ts||0) : ccEffTs(d,q.plat,q.ts); });
+  d.queue.sort((a,b)=>{ const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12 && Math.abs(da-db)<5*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; } return da-db; });
+}
+/* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
+function ccQueueAdvance(){
+  try{
+    const d0=DB.get(); if(!(d0.queue||[]).length) return;
+    const order=[...CONFIG.CC_ACTIVE_DEFAULT]; CONFIG.CC_EMERGENCY.forEach(n=>{ if(d0.ccOpen&&d0.ccOpen[n]) order.push(n); });
+    if(!order.some(n=>!d0.cc[n])) return;
+    if(!d0.queue.some(q=>!ccFarNow(d0,q.plat))) return;
+    DB.set(d=>{
+      for(const n of order){ if(d.cc[n]) continue; const nx=ccQueueTake(d); if(!nx) break;
+        d.cc[n]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now(), absenTs:nx.ts||Date.now()}; pushCcCall(d, nx, n); }
+    });
+  }catch(e){}
 }
 function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut jadwal). Return {stall:n}|{queue:n}
   let order=[...CONFIG.CC_ACTIVE_DEFAULT];
@@ -2780,6 +2831,10 @@ function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut ja
   return {queue:pos+1};
 }
 /* CC yang posisinya (data peta, segar < 5 menit) masih jauh dari yard tidak dilepas dari Parkir Luar ke stall, walau jadwalnya sudah dekat. Delivery/Admin tetap bisa melepas paksa. */
+function ccDistNow(d, plat){   // jarak (km) CC ke yard dari posisi peta yang segar (< 5 menit); null = tidak diketahui
+  try{ const y=d.yardLocation||{}; if(y.lat==null) return null; const k=normPlat(plat), r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
+    if(!r || typeof r.lat!=="number" || Date.now()-(r.ts||0)>5*60000) return null; return haversineKm(r.lat,r.lng,y.lat,y.lng); }catch(e){ return null; }
+}
 function ccFarNow(d, plat){
   try{
     const y=d.yardLocation||{}; if(y.lat==null) return false;
@@ -2797,7 +2852,7 @@ function holdRelease(force){   // dipanggil berkala; force = daftar plat yang di
     all.forEach(x=>{ if(!f.includes(normPlat(x.plat)) && (ccHoldDue(d,x.plat) || ccFarNow(d,x.plat))) keep.push(x); else rel.push(x); });
     if(!rel.length) return;
     d.hold=keep;
-    rel.sort((a,b)=>(ccNextDue(d,a.plat)||a.ts||0)-(ccNextDue(d,b.plat)||b.ts||0));
+    rel.sort((a,b)=>ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts));
     d.holdRel=(Array.isArray(d.holdRel)?d.holdRel:[]).slice(-19);
     rel.forEach(x=>{ const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall); d.holdRel.push({id:String(Date.now())+"-"+normPlat(x.plat), plat:x.plat, lp:x.lp||"", ts:Date.now(), stall:r.stall||0, queue:r.queue||0}); });
   });
@@ -2816,11 +2871,28 @@ function holdLepas(plat){
   holdRelease([plat]); render();
 }
 function holdHm(ts){ const t=new Date(ts); return String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"); }
+/* Kartu "Urutan kamu" untuk Driver CC: posisi nyata di stall / waiting list / Parkir Luar */
+function ccMyPosHtml(data){
+  try{
+    if(!currentUser || currentUser.role!=="cc") return "";
+    const k=myCcPlatKey(); if(!k) return "";
+    const rule=`<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Urutan masuk mengikuti <b>jadwal DCCP</b>. Kecepatan dan jarak <b>tidak</b> mempengaruhi urutan, jadi tidak perlu mengebut atau menyalip.</div>`;
+    const box=(col,bg,t,sub)=>`<div class="card" style="border:2px solid ${col};background:${bg};"><div style="font-size:12px;color:var(--text-dim);">Urutan kamu</div><div style="font-size:22px;font-weight:900;line-height:1.2;">${t}</div>${sub?`<div style="font-size:13px;margin-top:2px;">${sub}</div>`:""}${rule}</div>`;
+    const st=Object.keys(data.cc||{}).find(n=>data.cc[n] && normPlat(data.cc[n].plat)===k);
+    if(st) return box("#1E9E5A","#E7F6EC",`✅ Kamu di Stall ${ccLbl(st)}`,"Silakan loading. Jangan jalan sebelum Delout.");
+    const qi=(data.queue||[]).findIndex(q=>normPlat(q.plat)===k);
+    if(qi>=0){ const mine=data.queue[qi], lpFull=ccLpCount(data,mine.lp)>=ccLpCap(data) && data.queue.some(q=>q!==mine && ccLpCount(data,q.lp)<ccLpCap(data));
+      return box("#2F6FB5","#EAF2FF",`Ke-${qi+1} dari ${data.queue.length}`, lpFull?"Waiting list. LP kamu sudah ada di stall, jadi CC dari LP lain didahulukan (1 LP 1 CC). Kamu dipanggil setelah itu, atau kalau tidak ada LP lain yang menunggu.":(()=>{ const dk=ccDistNow(data,mine.plat); if(dk!=null && ccFarNow(data,mine.plat)) return `Kamu masih ${dk.toFixed(1)} km dari yard. CC yang masih jauh tidak dipanggil. Dekatlah ke yard supaya bisa dipanggil saat stall kosong.`; const st=Math.max(1,ccActiveStalls(data)), per=ccLoadMin(data), eta=Math.max(5,Math.round(((qi/st)+0.5)*per/5)*5); return `Perkiraan giliran ± ${eta} menit lagi (${st} stall aktif, loading ±${per} menit). Kamu dipanggil kalau ada stall kosong.`; })()); }
+    const H=(data.hold||[]).slice().sort((a,b)=>ccEffTs(data,a.plat,a.ts)-ccEffTs(data,b.plat,b.ts)), hi=H.findIndex(q=>normPlat(q.plat)===k);
+    if(hi>=0){ const du=ccNextDue(data,H[hi].plat); return box("#E8833A","#FFF4E5",`Parkir Luar · ke-${hi+1} dari ${H.length}`, du!=null?`Jadwal ${holdHm(du)} · masuk waiting list ${holdHm(du-ccEarlyMin(data)*60000)}`:""); }
+    return "";
+  }catch(e){ return ""; }
+}
 function holdCardHtml(data, onlyMine){
   let L=(data.hold||[]).slice();
   if(onlyMine){ const k=myCcPlatKey(); L=L.filter(x=>normPlat(x.plat)===k); }
   if(!L.length) return "";
-  L.sort((a,b)=>(ccNextDue(data,a.plat)||0)-(ccNextDue(data,b.plat)||0));
+  L.sort((a,b)=>ccEffTs(data,a.plat,a.ts)-ccEffTs(data,b.plat,b.ts));
   const em=ccEarlyMin(data);
   return `<div class="card" style="border-left:5px solid #E8833A;">
     <h3>🅿️ Parkir Luar (${L.length})</h3>
@@ -2928,8 +3000,8 @@ function renderDelivery(){
     const L=_grp[k], nSel=L.filter(e=>deliverySelUnits.includes(e[0])).length, nPrio=L.filter(e=>e[1].prio).length;
     const side=k==="OFF"?"":("side"+k.slice(-1));
     const open = nSel>0 || !!dlUnitOpen[k];
-    return `<details class="ugroup ${side}" ${open?"open":""} ontoggle="dlUnitOpen['${k}']=this.open"><summary><span class="gname">${k==="OFF"?"📍 Luar stall":"Stall "+k}</span><span class="gcnt">${L.length} unit</span>${nPrio?`<span class="gcnt" style="background:#FFF1C2;color:#8a6100;">⭐ ${nPrio}</span>`:""}${nSel?`<span class="gcnt sel">✔ ${nSel} dipilih</span>`:""}</summary>${L.map(_unitRow).join("")}</details>`;
-  }).join("");
+    return `<details class="ugroup ${side}" ${open?"open":""} ontoggle="dlUnitOpen['${k}']=this.open"><summary><span class="gname">${k==="OFF"?"📍 Luar stall":"Stall "+k}</span><span class="gcnt">${L.length} unit</span>${nPrio?`<span class="gcnt" style="background:#FFF1C2;color:#8a6100;">⭐ ${nPrio}</span>`:""}${nSel?`<span class="gcnt sel">✔ ${nSel} dipilih</span>`:""}</summary>${L.map(_unitRow).join("")}${canKeluarkanCC()&&L.some(e=>!e[1].ilsId)?`<button type="button" class="btn btn-outline btn-sm" style="margin:8px 0 2px;color:var(--red);border-color:var(--red);" onclick="event.stopPropagation();clearStallUnits('${k}')">🗑 Kosongkan ${k==="OFF"?"Luar Stall":"Stall "+k} (${L.filter(e=>!e[1].ilsId).length} unit)</button>`:""}</details>`;
+  }).join("") + (canKeluarkanCC()&&_gkeys.length>1?`<button type="button" class="btn btn-outline btn-sm" style="margin:10px 0 0;color:var(--red);border-color:var(--red);" onclick="clearStallUnits('*')">🗑 Kosongkan SEMUA Stall</button>`:"");
 
   const ilsOfCC=n=>data.ils.find(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat((data.cc[n]||{}).plat));
   const ccRowsSorted=ccOptions.slice().sort((a,b)=>(ilsOfCC(a)?1:0)-(ilsOfCC(b)?1:0) || a-b);
@@ -3542,7 +3614,7 @@ function delout(id){
     const c=d.cc[x.ccNum];
     if(c && normPlat(c.plat)===normPlat(x.ccPlat)){
       snap.cc=c; d.cc[x.ccNum]=null;
-      if(d.queue.length){ const nx=d.queue.shift(); snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now()}; pushCcCall(d, nx, x.ccNum); }
+      if(d.queue.length){ const nx=ccQueueTake(d); if(nx){ snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now(), absenTs:nx.ts||Date.now()}; pushCcCall(d, nx, x.ccNum); } }
     }
     d.manifest=d.manifest||[];
     if(!d.manifest.some(m=>m.id===x.id)) d.manifest.push(mfRecord(d,x));
@@ -5055,7 +5127,7 @@ function keluarkanCC(n){
     d.ccOutLog=d.ccOutLog||[]; d.ccOutLog.push({ts:Date.now(), plat:cur.plat, lp:cur.lp||"", ccNum:n, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", ilsId});
     if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
     d.cc[n]=null;
-    if(d.queue.length>0){ const next=d.queue.shift(); d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now()}; pushCcCall(d, next, n); }
+    if(d.queue.length>0){ const next=ccQueueTake(d); if(next){ d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d, next, n); } }
   });
   if(ils){ try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+ils.id).remove(); }catch(e){} }
   render();
@@ -5064,9 +5136,8 @@ function kosongkanCC(num){
   DB.set(d=>{
     d.cc[num] = null;
     if(d.queue.length>0){
-      const next = d.queue.shift();
-      d.cc[num] = {plat: next.plat, lp: next.lp, drvCode: next.drvCode||"", ts: Date.now()};
-      pushCcCall(d, next, num);
+      const next = ccQueueTake(d);
+      if(next){ d.cc[num] = {plat: next.plat, lp: next.lp, drvCode: next.drvCode||"", ts: Date.now(), absenTs: next.ts||Date.now()}; pushCcCall(d, next, num); }
     }
   });
 }
@@ -5960,7 +6031,8 @@ function ldrCompute(data){
     if(j>=0){ slots[j].out++; tOut++; m.out++; }
     if(e.status==="parked"||e.status==="ils") m.wip++;
   });
-  const _wip0 = (()=>{ try{ const base = ldrPeriod==="yesterday" ? prodDayStart()-86400000 : prodDayStart(); return normPlanEntry((data.prodPlan||{})[prodDateKey(base+3600000)]).wip0||0; }catch(e){ return 0; } })();
+  const _wipE = (()=>{ try{ const base = ldrPeriod==="yesterday" ? prodDayStart()-86400000 : prodDayStart(); return normPlanEntry((data.prodPlan||{})[prodDateKey(base+3600000)]); }catch(e){ return {wip0:0,wipL:{}}; } })();
+  const _wip0 = _wipE.wip0||0;
   slots.forEach(s=>{
     s.wip = _wip0 + log.filter(e=>e.parkedTs!=null && e.parkedTs<s.b && !( (e.sentTs&&e.sentTs<s.b) || (e.removedTs&&e.removedTs<s.b) )).length;
   });
@@ -5968,7 +6040,7 @@ function ldrCompute(data){
   // buang slot kosong di awal (sebelum aktivitas pertama) agar tabel ringkas
   let first = slots.findIndex(s=>s.inp||s.out);
   if(first<0) first = Math.max(0, nb-4);
-  return {slots: slots.slice(first), tIn, tOut, byModel, byLine, models:[...modelSet], wipList, wip0:_wip0, wipTotal: wipList.length+_wip0};
+  return {slots: slots.slice(first), tIn, tOut, byModel, byLine, models:[...modelSet], wipList, wip0:_wip0, wipL:_wipE.wipL||{}, wipByLine:(()=>{ const o={}; PROD_LINES.forEach(l=>{ o[l]=((_wipE.wipL||{})[l]||0)+wipList.filter(e=>(e.line||"")===l).length; }); return o; })(), wipTotal: wipList.length+_wip0};
 }
 function ldrChartSVG(slots){
   const n = slots.length;
@@ -6091,7 +6163,7 @@ function renderLeaderDashboard(){
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
     ${tile("Unit Diinput", R.tIn, "#16213E", "periode terpilih")}
     ${tile("Unit Terkirim", R.tOut, "#1E9E5A", "periode terpilih")}
-    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", (R.wip0?("termasuk "+R.wip0+" WIP awal"+(oldest?" · ":"")):"")+(oldest?("tertua "+ldrAge(oldest.parkedTs)):""))}
+    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>l+" "+(R.wipByLine[l]||0)).join(" · ")+(R.wip0?" · termasuk "+R.wip0+" WIP awal":"")+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
   </div>
 
   ${batamAlertHtml(data)}
@@ -6126,7 +6198,7 @@ function renderLeaderDashboard(){
   </div>
 
   <div class="card"><h3>📦 WIP — Unit Belum Terkirim (${R.wipTotal})</h3>
-    ${R.wip0?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Termasuk ${R.wip0} unit WIP awal (diisi Admin, tidak ada di daftar di bawah).</div>`:""}${R.wipList.length===0 ? `<div class="emptystate">${R.wip0?"Tidak ada WIP dari input RADAR.":"Tidak ada WIP."}</div>` : `
+    ${R.wip0?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Termasuk ${R.wip0} unit WIP awal (diisi Admin: ${PROD_LINES.map(l=>l+" "+((R.wipL&&R.wipL[l])||0)).join(", ")}; tidak ada di daftar di bawah).</div>`:""}${R.wipList.length===0 ? `<div class="emptystate">${R.wip0?"Tidak ada WIP dari input RADAR.":"Tidak ada WIP."}</div>` : `
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto;"><table style="font-size:13px;">
       <tr><th style="${th}">No. Rangka</th><th style="${th}">Model</th><th style="${th}">Stall</th><th style="${th}">Masuk</th><th style="${th}">Umur</th><th style="${th}">Status</th></tr>
       ${R.wipList.map(e=>{ const h=(Date.now()-(e.parkedTs||Date.now()))/3600000; const col=h>24?"#D64545":h>12?"#E8833A":"inherit";
@@ -6264,7 +6336,8 @@ function renderCCPlan(){
 function prodDateKey(ts){ const d=new Date(prodMidnight(ts)); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function normPlanEntry(e){
   e = e || {};
-  const out = {s1:{}, s2:{}, m1:{}, m2:{}, wip0:Math.max(0,parseInt(e.wip0)||0)};
+  const out = {s1:{}, s2:{}, m1:{}, m2:{}, wip0:0, wipL:{}};
+  { const L=(e.wipL&&typeof e.wipL==='object')?e.wipL:{}; let t=0; Object.keys(L).forEach(k=>{ const v=Math.max(0,parseInt(L[k])||0); if(v){ out.wipL[k]=v; t+=v; } }); const lg=Math.max(0,parseInt(e.wip0)||0); out.wip0=t+lg; if(lg) out.wipL._=lg; }
   ["1","2"].forEach(k=>{
     const src = e["s"+k]||{};
     Object.entries(src).forEach(([key,n])=>{ if(PROD_LINES.includes(key)) out["s"+k][key]=n; else out["m"+k][key]=n; });   // format lama (per model) ikut terbaca
@@ -6309,7 +6382,7 @@ function planSave(){
   Object.keys(data.models).forEach(m=>{
     ["1","2"].forEach(k=>{ const el=document.getElementById("pl_m"+k+"_"+m); const v = el?parseInt(el.value):0; if(v>0) rec["m"+k][m]=v; });
   });
-  { const w=document.getElementById("pl_wip0"); const v=w?parseInt(w.value):0; if(v>0) rec.wip0=v; }
+  { rec.wipL={}; PROD_LINES.forEach(l=>{ const w=document.getElementById("pl_wip_"+l); const v=w?parseInt(w.value):0; if(v>0) rec.wipL[l]=v; }); }
   DB.set(d=>{ d.prodPlan = d.prodPlan||{}; d.prodPlan[planKey()] = rec; });
   const el = document.getElementById("planMsg"); if(el) el.innerHTML = `<div class="msg ok">✔ Plan produksi ${planKey()} tersimpan.</div>`;
 }
@@ -6362,7 +6435,7 @@ function renderPlanAdmin(){
     <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
       <h4 style="font-size:14px;margin:0;">WIP Awal / Sebelumnya <span style="font-weight:400;font-size:12px;color:var(--text-dim);">(boleh dikosongkan)</span></h4>
       <p style="font-size:12px;color:var(--text-dim);margin:6px 0;">Isi jumlah unit yang sudah ada (belum terkirim) <b>sebelum</b> unit diinput lewat RADAR, misalnya sisa shift/hari sebelumnya atau saat masa trial. Angka ini ditambahkan ke WIP di Dashboard Leader. Kalau sebagian sudah terkirim, kecilkan angkanya. Kosong = tidak dipakai.</p>
-      <input id="pl_wip0" type="number" min="0" inputmode="numeric" value="${e.wip0||""}" placeholder="0" style="width:120px;font-size:16px;text-align:center;">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">${PROD_LINES.map(l=>`<label style="font-size:13px;font-weight:700;">${l}<br><input id="pl_wip_${l}" type="number" min="0" inputmode="numeric" value="${(e.wipL&&e.wipL[l])||""}" placeholder="0" style="width:110px;font-size:16px;text-align:center;"></label>`).join("")}</div>${(e.wipL&&e.wipL._)?`<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Ada ${e.wipL._} unit WIP lama tanpa line (isian versi sebelumnya). Isi per line di atas lalu simpan untuk menggantinya.</div>`:""}
     </div>
 
     <div id="planMsg" style="margin-top:8px;"></div>
@@ -8938,7 +9011,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccForceOutCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
