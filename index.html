@@ -7866,11 +7866,13 @@ function ccDriverName(plat){ const k=normPlat(plat); const r=(DB.get().dccpSched
 /* Nama driver: dari Jadwal DCCP, kalau kosong dari akun yang login dengan plat itu, lalu dari chat terakhir */
 function ccDriverAny(plat){
   const k=normPlat(plat); let n="";
-  /* Plat dipakai 24 jam tetapi driver beda tiap shift: akun yang sedang login dengan plat ini di shift SEKARANG didahulukan, baru nama di Jadwal DCCP */
-  try{ const e=(DB.get().ccShiftPlat||[]).filter(x=>normPlat(x.plat)===k && !x.lo && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift()).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
-    if(e){ const u=(DB.get().users||[]).find(y=>y.username===e.u); n=(u&&u.name)||""; } }catch(x){}
-  if(!n) n=ccDriverName(plat);
-  if(!n){ const un=ccUserOfPlat(plat); if(un){ const u=(DB.get().users||[]).find(x=>x.username===un); n=(u&&u.name)||""; } }
+  /* Nama driver: Jadwal DCCP / Pengganti (resmi, per shift) didahulukan. Kalau jadwal tidak punya nama, baru akun CC yang login dengan plat ini di shift SEKARANG.
+     Akun non-CC (Dispatcher, Delivery, dll.) tidak pernah dipakai sebagai nama driver. */
+  n=ccDriverName(plat)||"";
+  if(!n){ try{ const us=DB.get().users||[];
+    const e=(DB.get().ccShiftPlat||[]).filter(x=>normPlat(x.plat)===k && !x.lo && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift() && (us.find(y=>y.username===x.u)||{}).role==="cc").sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+    if(e){ const u=us.find(y=>y.username===e.u); n=(u&&u.name)||""; } }catch(x){} }
+  if(!n){ const un=ccUserOfPlat(plat); if(un){ const u=(DB.get().users||[]).find(x=>x.username===un&&x.role==="cc"); n=(u&&u.name)||""; } }
   if(!n){ n=((Object.values(CHAT||{}).filter(m=>normPlat(m.plat)===k&&m.by).sort((a,b)=>(b.ts||0)-(a.ts||0))[0])||{}).by||""; }
   return n;
 }
