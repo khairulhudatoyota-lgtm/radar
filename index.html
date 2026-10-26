@@ -587,6 +587,22 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
   41%,100%{opacity:0}}
 @keyframes lgSpin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.lgride{animation:none!important}.lgo .wp{animation:none!important;transform:scale(0)}}
+
+/* Tulisan stall lebih besar & tebal; sisi A biru, sisi B ungu supaya mudah dibedakan */
+.colhead{font-size:16px !important; font-weight:900 !important; letter-spacing:0.04em;}
+.stallcol.sideA .colhead{color:#2F6FB5 !important;}
+.stallcol.sideB .colhead{color:#9B3FC4 !important;}
+.stallcol.sideA .yardcell .id{font-size:12px; font-weight:900; color:#2F6FB5;}
+.stallcol.sideB .yardcell .id{font-size:12px; font-weight:900; color:#9B3FC4;}
+.stallcol.sideA .yardcell{border-left:4px solid #2F6FB5;}
+.stallcol.sideB .yardcell{border-left:4px solid #9B3FC4;}
+.stallgroup .lbl{font-size:15px !important; font-weight:900 !important;}
+.stallgroup.sideA .lbl{color:#2F6FB5 !important;}
+.stallgroup.sideB .lbl{color:#9B3FC4 !important;}
+.stallgroup.sideA .slot .id{font-size:13px; font-weight:900; color:#2F6FB5;}
+.stallgroup.sideB .slot .id{font-size:13px; font-weight:900; color:#9B3FC4;}
+.stallgroup.sideA .slot{border-left:4px solid #2F6FB5;}
+.stallgroup.sideB .slot{border-left:4px solid #9B3FC4;}
 </style>
 <style>
 .credit{margin:18px auto 0;text-align:center;line-height:1;user-select:none;}
@@ -1864,7 +1880,7 @@ function renderDispatcher(){
         <div class="val" ${occ?`style="color:${mc};"`:''}>${occ? (occ.model||'?') : 'KOSONG'}</div>${occ&&(occ.batam||occ.prio)?`<div>${unitTagsHtml(occ,true)}</div>`:""}
       </div>`;
     }
-    return `<div class="stallgroup"><div class="lbl">Stall ${g}${isBatamStall(data,g)?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;">KHUSUS BATAM</span>`:""}</div><div class="slotgrid">${cells}</div></div>`;
+    return `<div class="stallgroup side${g.slice(-1)}"><div class="lbl">Stall ${g}${isBatamStall(data,g)?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;">KHUSUS BATAM</span>`:""}</div><div class="slotgrid">${cells}</div></div>`;
   }).join("");
 
   return `
@@ -8673,7 +8689,7 @@ function renderDisplay(){
       </div>`;
     }
     const occ = [1,2,3,4,5,6].filter(i=>data.units[groupId+i]).length;
-    return `<div class="stallcol">
+    return `<div class="stallcol side${side}">
       <div class="colhead">${groupId}${isBatamStall(data,groupId)?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 4px;font-size:9px;">BATAM</span>':""}<span class="n">${occ}/6</span></div>
       <div class="cellstack">${cells}</div>
     </div>`;
