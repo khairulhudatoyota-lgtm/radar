@@ -1682,7 +1682,7 @@ function enterApp(forceTab){
     activeTab = forceTab || tabs[0].key;
   }
   render();
-  if(currentUser.role==="cc"){ if(ccPlatOk){ try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){} } else setTimeout(ccPlatGateCheck, 60); }
+  if(currentUser.role==="cc"){ if(ccPlatOk){ try{ startAutoAbsen(true); }catch(e){} } else setTimeout(ccPlatGateCheck, 60); }
 }
 function switchTab(t){
   if(currentUser && TABS_BY_ROLE[currentUser.role] && !TABS_BY_ROLE[currentUser.role].some(x=>x.key===t)) return;   // menu di luar otoritas role ditolak
@@ -2444,7 +2444,13 @@ function onAutoPos(pos){
   autoAbsen.dist = dist; autoAbsen.acc = pos.coords.accuracy; autoAbsen.ts = Date.now(); autoAbsen.err = "";
   if(autoAbsen.state==="done"){
     if(dist > y.radiusKm + 1){ autoAbsen.state = "armed"; autoAbsen.hits = 0; autoAbsen.msg = ""; }   // sudah keluar area → siap absen untuk ritase berikutnya
-    updateAutoStatus(); return;
+    else if(Date.now()-(autoAbsen.doneTs||0) > 90000 && !autoOutLock(dist, y)){
+      // plat sudah tidak ada di stall/antrian/ruang tunggu (dikosongkan koordinator, ditarik, dll) tapi HP masih di dalam radius → siap absen lagi
+      const kp=normPlat(getCcProfile().plat||""), dd=DB.get();
+      const ada = kp && (Object.values(dd.cc||{}).some(c=>c && normPlat(c.plat)===kp) || (dd.queue||[]).some(q=>normPlat(q.plat)===kp) || (dd.hold||[]).some(q=>normPlat(q.plat)===kp));
+      if(kp && !ada){ autoAbsen.state="armed"; autoAbsen.hits=0; autoAbsen.msg=""; }
+    }
+    updateAutoStatus(); if(autoAbsen.state!=="done") { autoAbsen.hits = dist <= y.radiusKm ? 1 : 0; } return;
   }
   if(pos.coords.accuracy > 300){ updateAutoStatus(); return; }     // sinyal GPS terlalu kasar, abaikan
   if(autoOutLock(dist, y)){ autoAbsen.hits = 0; autoAbsen.lock = true; updateAutoStatus(); return; }   // baru Delout: jangan absen lagi sebelum keluar area
@@ -2455,7 +2461,7 @@ function onAutoPos(pos){
 function doAutoRegister(dist){
   const prof = getCcProfile();
   const res = registerCC(prof.plat, prof.lp, dist, true);
-  autoAbsen.state = "done";
+  autoAbsen.state = "done"; autoAbsen.doneTs = Date.now();
   autoAbsen.msg = res.dup ? `Truk ${prof.plat} sudah tercatat di stall / antrian.`
                 : res.hold ? `🕒 Absen tercatat. Jadwal loading ${prof.plat} jam ${holdHm(res.due)} — belum masuk slot / waiting list. Tunggu di luar, otomatis masuk ${ccEarlyMin()} menit sebelum jadwal.`
                 : res.stall ? `✔ Absen otomatis berhasil — ${prof.plat} masuk STALL ${ccLbl(res.stall)}. Silakan masuk area.`
@@ -2469,7 +2475,6 @@ function doAutoRegister(dist){
 }
 function autoStatusHtml(){
   const y = DB.get().yardLocation, a = autoAbsen;
-  if(!a.on && (()=>{ try{ return localStorage.getItem("apcc_autooff")==="1"; }catch(e){ return false; } })()) return `<div class="msg info">Absen otomatis dimatikan. Tekan tombol di bawah untuk menyalakan lagi, atau pakai Absen Manual.</div>`;
   if(!a.on) return `<div class="msg info">Absen otomatis menyiapkan diri… Kalau tidak berubah dalam beberapa detik, pakai <b>Absen Manual</b> di bawah.</div>`;
   if(a.err) return `<div class="msg err">${a.err}</div>`;
   if(a.lock) return `<div class="msg ok"><b>✔ Delout tercatat.</b> Absen otomatis aktif lagi setelah truk keluar dari area yard.</div>`;
@@ -2479,7 +2484,7 @@ function autoStatusHtml(){
 }
 function updateAutoStatus(){ const el = document.getElementById("autoStatus"); if(el) el.innerHTML = autoStatusHtml(); }
 
-function absenMode(){ try{ return localStorage.getItem("radar_absen_mode")==="manual" ? "manual" : "auto"; }catch(e){ return "auto"; } }
+function absenMode(){ return "auto"; }   // absen otomatis selalu nyala; absen manual hanya absen sekali (tidak mengubah mode)
 function setAbsenMode(m){
   try{ localStorage.setItem("radar_absen_mode", m==="manual"?"manual":"auto"); }catch(e){}
   if(m==="manual"){ try{ stopAutoAbsen(true); }catch(e){} }
@@ -2551,14 +2556,13 @@ function renderOrderStall(){
   const autoCard = `
     <div class="card">
       <h3>🤖 Absen Otomatis (GPS HP)</h3>
-      <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;"><b>Aktif sendiri, tidak perlu klik.</b> Begitu HP-mu masuk radius ${data.yardLocation.radiusKm} km dari yard, truk <b>otomatis terdaftar</b> ke stall kosong / antrian. Kalau status di bawah belum hijau atau otomatis tidak jalan, pakai <b>Absen Manual</b> di bawah.</p>
+      <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;"><b>Selalu aktif sendiri selama aplikasi menyala.</b> Begitu HP-mu masuk radius ${data.yardLocation.radiusKm} km dari yard, truk <b>otomatis terdaftar</b> ke stall kosong / antrian. Kalau status di bawah belum hijau atau otomatis tidak jalan, pakai <b>Absen Manual</b> di bawah (hanya untuk absen saat ini, absen otomatis tetap menyala).</p>
       <div id="autoStatus" style="margin:8px 0;">${autoStatusHtml()}</div>
-      <button class="btn ${autoAbsen.on?'btn-danger':'btn-primary'}" onclick="${autoAbsen.on?'userStopAuto()':'userStartAuto()'}">${autoAbsen.on?'⏹ Matikan Absen Otomatis':'🤖 Aktifkan Absen Otomatis'}</button>
     </div>`;
   const manualCard = `
     <div class="card">
       <h3>✍ Absen Manual</h3>
-      <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Absen cuma bisa dilakukan kalau posisi kamu sudah dalam radius ${data.yardLocation.radiusKm} km dari lokasi loading unit. Bisa dipakai kapan saja, walaupun absen otomatis sedang aktif.</p>
+      <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Absen cuma bisa dilakukan kalau posisi kamu sudah dalam radius ${data.yardLocation.radiusKm} km dari lokasi loading unit. Dipakai kalau absen otomatis tidak jalan. Ini hanya absen satu kali sekarang, absen otomatis tetap menyala.</p>
       <div id="absenMsg"></div>
       <button class="btn btn-primary" onclick="absenManual()">✍ Absen Manual (cek lokasi)</button>
     </div>`;
@@ -7394,7 +7398,7 @@ function ccPlatGateCheck(){
   if(currentUser && currentUser.role==="cc" && !ccPlatOk && !document.getElementById("cgPlat")){
     if(ccPlatRememberedOk() || ccPlatDbOk()){
       ccPlatOk=true;
-      try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){}
+      try{ startAutoAbsen(true); }catch(e){}
       try{ render(); }catch(e){}
       try{ ccAutoTrack(); }catch(e){}
       return;
@@ -7473,7 +7477,7 @@ function ccPlatGateSave(){
   ccPlatOk=true; closeModal();
   ccPlatRememberSave(plat); ccShiftPlatSave(plat);
   try{ syncCcProfileFromAccount(); }catch(e){}
-  try{ if(localStorage.getItem(CCAUTO_KEY)==="1") startAutoAbsen(true); }catch(e){}
+  try{ startAutoAbsen(true); }catch(e){}
   render(); try{ ccAutoTrack(); }catch(e){}
 }
 /* Bagikan posisi OTOMATIS: Driver CC yang sudah mengisi Data Truk langsung mengirim posisi tanpa tombol */
@@ -7481,8 +7485,6 @@ function ccPlatGateSave(){
 function ccAutoAbsenEnsure(){
   try{
     if(!currentUser || currentUser.role!=="cc" || !ccPlatOk || autoAbsen.on) return;
-    if(absenMode()==="manual") return;
-    if(localStorage.getItem("apcc_autooff")==="1") return;
     const pr=getCcProfile(); if(!pr.plat || !pr.lp) return;
     startAutoAbsen(true);
     if(autoAbsen.on) updateAutoStatus();
