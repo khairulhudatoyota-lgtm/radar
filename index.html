@@ -5892,14 +5892,15 @@ function ldrCompute(data){
     if(j>=0){ slots[j].out++; tOut++; m.out++; }
     if(e.status==="parked"||e.status==="ils") m.wip++;
   });
+  const _wip0 = (()=>{ try{ const base = ldrPeriod==="yesterday" ? prodDayStart()-86400000 : prodDayStart(); return normPlanEntry((data.prodPlan||{})[prodDateKey(base+3600000)]).wip0||0; }catch(e){ return 0; } })();
   slots.forEach(s=>{
-    s.wip = log.filter(e=>e.parkedTs!=null && e.parkedTs<s.b && !( (e.sentTs&&e.sentTs<s.b) || (e.removedTs&&e.removedTs<s.b) )).length;
+    s.wip = _wip0 + log.filter(e=>e.parkedTs!=null && e.parkedTs<s.b && !( (e.sentTs&&e.sentTs<s.b) || (e.removedTs&&e.removedTs<s.b) )).length;
   });
   const wipList = log.filter(e=>e.status==="parked"||e.status==="ils").sort((a,b)=>(a.parkedTs||0)-(b.parkedTs||0));
   // buang slot kosong di awal (sebelum aktivitas pertama) agar tabel ringkas
   let first = slots.findIndex(s=>s.inp||s.out);
   if(first<0) first = Math.max(0, nb-4);
-  return {slots: slots.slice(first), tIn, tOut, byModel, byLine, models:[...modelSet], wipList, wipTotal: wipList.length};
+  return {slots: slots.slice(first), tIn, tOut, byModel, byLine, models:[...modelSet], wipList, wip0:_wip0, wipTotal: wipList.length+_wip0};
 }
 function ldrChartSVG(slots){
   const n = slots.length;
@@ -6022,7 +6023,7 @@ function renderLeaderDashboard(){
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
     ${tile("Unit Diinput", R.tIn, "#16213E", "periode terpilih")}
     ${tile("Unit Terkirim", R.tOut, "#1E9E5A", "periode terpilih")}
-    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", oldest?("tertua "+ldrAge(oldest.parkedTs)):"")}
+    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", (R.wip0?("termasuk "+R.wip0+" WIP awal"+(oldest?" · ":"")):"")+(oldest?("tertua "+ldrAge(oldest.parkedTs)):""))}
   </div>
 
   ${batamAlertHtml(data)}
@@ -6057,7 +6058,7 @@ function renderLeaderDashboard(){
   </div>
 
   <div class="card"><h3>📦 WIP — Unit Belum Terkirim (${R.wipTotal})</h3>
-    ${R.wipList.length===0 ? `<div class="emptystate">Tidak ada WIP.</div>` : `
+    ${R.wip0?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Termasuk ${R.wip0} unit WIP awal (diisi Admin, tidak ada di daftar di bawah).</div>`:""}${R.wipList.length===0 ? `<div class="emptystate">${R.wip0?"Tidak ada WIP dari input RADAR.":"Tidak ada WIP."}</div>` : `
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto;"><table style="font-size:13px;">
       <tr><th style="${th}">No. Rangka</th><th style="${th}">Model</th><th style="${th}">Stall</th><th style="${th}">Masuk</th><th style="${th}">Umur</th><th style="${th}">Status</th></tr>
       ${R.wipList.map(e=>{ const h=(Date.now()-(e.parkedTs||Date.now()))/3600000; const col=h>24?"#D64545":h>12?"#E8833A":"inherit";
@@ -6195,7 +6196,7 @@ function renderCCPlan(){
 function prodDateKey(ts){ const d=new Date(prodMidnight(ts)); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function normPlanEntry(e){
   e = e || {};
-  const out = {s1:{}, s2:{}, m1:{}, m2:{}};
+  const out = {s1:{}, s2:{}, m1:{}, m2:{}, wip0:Math.max(0,parseInt(e.wip0)||0)};
   ["1","2"].forEach(k=>{
     const src = e["s"+k]||{};
     Object.entries(src).forEach(([key,n])=>{ if(PROD_LINES.includes(key)) out["s"+k][key]=n; else out["m"+k][key]=n; });   // format lama (per model) ikut terbaca
@@ -6240,6 +6241,7 @@ function planSave(){
   Object.keys(data.models).forEach(m=>{
     ["1","2"].forEach(k=>{ const el=document.getElementById("pl_m"+k+"_"+m); const v = el?parseInt(el.value):0; if(v>0) rec["m"+k][m]=v; });
   });
+  { const w=document.getElementById("pl_wip0"); const v=w?parseInt(w.value):0; if(v>0) rec.wip0=v; }
   DB.set(d=>{ d.prodPlan = d.prodPlan||{}; d.prodPlan[planKey()] = rec; });
   const el = document.getElementById("planMsg"); if(el) el.innerHTML = `<div class="msg ok">✔ Plan produksi ${planKey()} tersimpan.</div>`;
 }
@@ -6287,6 +6289,12 @@ function renderPlanAdmin(){
           <td><input id="pl_m1_${m}" type="number" min="0" inputmode="numeric" value="${e.m1[m]||""}" style="width:90px;font-size:16px;text-align:center;"></td>
           <td><input id="pl_m2_${m}" type="number" min="0" inputmode="numeric" value="${e.m2[m]||""}" style="width:90px;font-size:16px;text-align:center;"></td></tr>`).join("")}
       </table></div>
+    </div>
+
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+      <h4 style="font-size:14px;margin:0;">WIP Awal / Sebelumnya <span style="font-weight:400;font-size:12px;color:var(--text-dim);">(boleh dikosongkan)</span></h4>
+      <p style="font-size:12px;color:var(--text-dim);margin:6px 0;">Isi jumlah unit yang sudah ada (belum terkirim) <b>sebelum</b> unit diinput lewat RADAR, misalnya sisa shift/hari sebelumnya atau saat masa trial. Angka ini ditambahkan ke WIP di Dashboard Leader. Kalau sebagian sudah terkirim, kecilkan angkanya. Kosong = tidak dipakai.</p>
+      <input id="pl_wip0" type="number" min="0" inputmode="numeric" value="${e.wip0||""}" placeholder="0" style="width:120px;font-size:16px;text-align:center;">
     </div>
 
     <div id="planMsg" style="margin-top:8px;"></div>
