@@ -2774,6 +2774,7 @@ function registerCC(plat, lp, dist, auto, manual){
   DB.set(d=>{
     if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; return; }
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
+    const _sr=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k); if(_sr && _sr.lp) lp=_sr.lp;   // LP resmi dari jadwal DCCP (sama seperti absen admin)
     const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
     const hd = ccHoldDue(d, plat);
     if(hd!=null){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }
@@ -3256,13 +3257,15 @@ function lpCanon(x){   // KPL/KPLM/KPC = satu LP; KMD/KMDI/"KMD I" = satu LP (ab
   const k=lpKey(x).replace(/[^A-Z0-9]/g,"");
   if(/^KMD/.test(k)) return "KMD";
   if(/^KP[LC]/.test(k)) return "KPC";
+  if(/^TOPI?$/.test(k)) return "TOP";
+  if(/^(PAM|PRN|PARANI)$/.test(k)) return "PAM";
   return (typeof TLS_VENDOR_MAP!=="undefined" && TLS_VENDOR_MAP[k])||k;
 }
 function lpMine(lp){ const m=myKoordLP(); return !m || lpCanon(lp)===lpCanon(m); }
 function koordStatusList(data){
   const out=[];
   for(let i=1;i<=CONFIG.CC_TOTAL;i++){
-    const c=data.cc[i]; if(!c) continue; const _sr=(data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat)); if(!lpMine(c.lp||(_sr&&_sr.lp))) continue;
+    const c=data.cc[i]; if(!c) continue; const _sr=(data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat)); if(!(lpMine(c.lp)||(_sr&&lpMine(_sr.lp)))) continue;
     const ils=(data.ils||[]).filter(b=>b.status==="open" && b.ccNum==i && normPlat(b.ccPlat)===normPlat(c.plat)).sort((a,b)=>b.ts-a.ts)[0]||null;
     const row=(data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat));
     out.push({n:i, plat:c.plat, lp:c.lp||(_sr&&_sr.lp)||"", driver:(row&&row.driver)||"", absenTs:c.ts||0, ils});
@@ -3287,7 +3290,7 @@ function koordStatusHtml(data){
     return `<div class="kitem wait"><b>⏳ CC sudah absen — ILS belum dibuat</b><div style="font-size:13px; margin-top:4px;">${who}</div><div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Stall CC ${ccLbl(x.n)} · menunggu Delivery membuat ILS</div>${steps}</div>`;
   }).join("");
   const _ml=myKoordLP();
-  const _w=[...(data.queue||[]).map(q=>({q,t:"Antrian"})),...(data.hold||[]).map(q=>({q,t:"Ruang tunggu jadwal"}))].filter(x=>x.q && lpMine(x.q.lp));
+  const _w=[...(data.queue||[]).map(q=>({q,t:"Antrian"})),...(data.hold||[]).map(q=>({q,t:"Ruang tunggu jadwal"}))].filter(x=>{ if(!x.q) return false; const r=(data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(x.q.plat)); return lpMine(x.q.lp)||(r&&lpMine(r.lp)); });
   const waitHtml=_w.length?`<div class="kitem wait"><b>🕒 Sudah absen, belum masuk stall (${_w.length})</b>${_w.map(x=>`<div style="font-size:13px;margin-top:4px;">${escH(x.q.plat)} · LP ${escH(x.q.lp||"-")} · ${x.t} · absen ${hhmm(x.q.ts||Date.now())}</div>`).join("")}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">ILS baru bisa dibuat setelah CC masuk stall.</div></div>`:"";
   return `<div class="card kstatus"><h3>📋 Status Loading CC${_ml?` <span class="badge">LP ${_ml}</span>`:''}${ready?` <span class="badge gold">${ready} siap validasi</span>`:''}</h3>${waitHtml}${L.length?items:`<div class="emptystate">Belum ada CC ${_ml?'LP '+_ml+' ':''}di stall.</div>`}</div>`;
 }
@@ -5518,7 +5521,7 @@ function tukarOk(r,d){ return dccpTripList(r).length>0 && dccpDoneCount(r,d)===0
 function tukarCands(d, ri){
   const me=d.dccpSchedule[ri]; if(!me) return {all:[],same:[],allowed:[]};
   const all=[]; d.dccpSchedule.forEach((x,i)=>{ if(i!==ri && normPlat(x.police)!==normPlat(me.police) && tukarOk(x,d)) all.push(i); });
-  const same=all.filter(i=>String(d.dccpSchedule[i].lp||"").trim().toUpperCase()===String(me.lp||"").trim().toUpperCase());
+  const same=all.filter(i=>lpCanon(d.dccpSchedule[i].lp)===lpCanon(me.lp));
   const da=canKeluarkanCC();   // hanya Delivery & Admin boleh tukar beda LP
   const cross=all.filter(i=>!same.includes(i));
   return {all, same, cross, allowed: da?[...same,...cross]:same, crossOk: da && cross.length>0};
@@ -7406,7 +7409,7 @@ function ccPlatCands(acc){
   const seen=new Set(), out=[];
   (d.dccpSchedule||[]).forEach(r=>{
     const plat=ccPlatNorm(r.police); if(!plat || seen.has(plat)) return;
-    if(lp && r.lp && lpKey(r.lp)!==lpKey(lp)) return;
+    if(lp && r.lp && lpCanon(r.lp)!==lpCanon(lp)) return;
     seen.add(plat);
     const dt=ccNameTokens(r.driver||""), me=!!mine.length && dt.some(w=>mine.some(m=>m===w||m.includes(w)||w.includes(m)));
     out.push({plat, drv:r.driver||"", me});
