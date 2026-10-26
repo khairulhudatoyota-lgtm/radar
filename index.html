@@ -1688,7 +1688,22 @@ function syncCcProfileFromAccount(){
 }
 function appExit(){ if(!window.AndroidTLS||!AndroidTLS.exitApp) return; if(confirm("Keluar dari aplikasi?\n\nRADAR akan berhenti di latar belakang dan absen otomatis tidak jalan. Pakai Minimize kalau mau tetap online.")) { try{AndroidTLS.exitApp();}catch(e){} } }
 function appMinimize(){ try{ if(window.AndroidTLS&&AndroidTLS.minimizeApp) AndroidTLS.minimizeApp(); }catch(e){} }
+/* Akun yang tidak boleh menyimpan / memakai plat: akun "user" dan semua akun non-Driver CC. Dibersihkan tiap login supaya tidak ikut absen / mengirim posisi truk. */
+const NO_PLAT_USERS=["user"];
+function noPlatUser(){ return !!(currentUser && NO_PLAT_USERS.includes(String(currentUser.username||"").toLowerCase())); }
+function cleanPlatForUser(){
+  try{
+    if(!currentUser || currentUser.role==="display") return;
+    if(currentUser.role==="cc" && !noPlatUser()) return;
+    try{ [CCP_KEY,CCAUTO_KEY,CC_PLATS_KEY,CC_PLATDAY_KEY].forEach(k=>localStorage.removeItem(k)); }catch(e){}
+    try{ stopAutoAbsen(true); }catch(e){}
+    try{ if(shareTrk && shareTrk.on) stopShare(true); }catch(e){}
+    const un=currentUser.username;
+    if((DB.get().ccShiftPlat||[]).some(x=>x && x.u===un)) DB.set(d=>{ d.ccShiftPlat=(d.ccShiftPlat||[]).filter(x=>x && x.u!==un); });
+  }catch(e){}
+}
 function enterApp(forceTab){
+  cleanPlatForUser();
   syncCcProfileFromAccount();
   try{ if(window.AndroidTLS && AndroidTLS.keepAlive && currentUser && currentUser.role!=="display") AndroidTLS.keepAlive(); }catch(e){}
   requestNotifPermission();
@@ -2429,6 +2444,7 @@ document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState=
 function startAutoAbsen(silent){
   const d = DB.get(), prof = getCcProfile();
   if(autoAbsen.on) return;
+  if(!currentUser || currentUser.role!=="cc" || noPlatUser()) return;   // hanya akun Driver CC (dan bukan akun tanpa plat)
   if(d.yardLocation.lat==null){ if(!silent) alert("Lokasi yard belum diatur Admin."); return; }
   if(!prof.plat || !prof.lp){ if(!silent) alert("Simpan dulu nomor polisi & LP truk kamu."); return; }
   if(!navigator.geolocation){ if(!silent) alert("HP ini tidak mendukung GPS."); return; }
@@ -2807,10 +2823,11 @@ function holdCardHtml(data, onlyMine){
 function registerCC(plat, lp, dist, auto, manual){
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
-    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; return; }
+    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:(currentUser&&currentUser.username)||"", name:(currentUser&&currentUser.name)||"", role:(currentUser&&currentUser.role)||"", auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
     const _sr=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k); if(_sr && _sr.lp) lp=_sr.lp;   // LP resmi dari jadwal DCCP (sama seperti absen admin)
     const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
+    d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:item.plat, lp:item.lp||"", u:(currentUser&&currentUser.username)||"", name:(currentUser&&currentUser.name)||"", role:(currentUser&&currentUser.role)||"", auto:!!auto, manual:!!manual, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120);
     const hd = ccHoldDue(d, plat);
     if(hd!=null){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }
     res = placeCC(d, item);
@@ -2967,7 +2984,7 @@ function renderDelivery(){
 
     <div class="dl-right"><div class="dlbatches" id="dlSecAktif">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
-    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
+    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${absenLogCardHtml(data)}${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
   `;
 }
 let dlUnitOpen={};
@@ -4900,6 +4917,16 @@ function ilsRitInfo(data, b){   // "Rit ke-N dari M" untuk plat ini pada shift I
     const i=L.findIndex(x=>x.id===b.id);
     return {n:i+1, total:L.length, shift:sh==="1"?"Day":"Night"};
   }catch(e){ return null; }
+}
+/* Log absen: siapa (akun) yang mengabsenkan plat, otomatis atau manual. Untuk melacak akun yang "nyangkut". */
+function absenLogCardHtml(data){
+  if(!canKeluarkanCC()) return "";
+  const hh=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const L=(data.absenLog||[]).slice().reverse().slice(0,40);
+  return `<details class="card" style="margin-top:10px;"><summary style="cursor:pointer;font-weight:800;">🕵 Log Absen (siapa yang absen) <span class="badge">${L.length}</span></summary>
+    <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">40 absen terakhir. Kalau satu plat absen berulang dari akun yang tidak seharusnya (mis. akun lain yang masih login dengan plat itu), akunnya kelihatan di sini. Akun bisa dikeluarkan dari Admin → User.</div>
+    ${L.length?L.map(x=>`<div style="border-top:1px solid var(--border);padding:6px 0;font-size:13px;"><b>${escH(x.plat)}</b> · ${escH(x.lp||"-")} <span style="color:var(--text-dim);">${hh(x.ts)}</span><br><span style="font-size:12px;">Akun: <b>${escH(x.name||x.u||"-")}</b> (${escH(x.u||"-")}, ${escH(x.role||"-")}) · ${x.auto?"🤖 otomatis":(x.manual?"✍ manual":"✍")}${x.dist!=null?" · "+x.dist+" km dari yard":""}${x.dup?` · <span style="color:#C77700;">ditolak (sudah terdaftar)</span>`:""}</span></div>`).join(""):`<div class="emptystate">Belum ada log absen.</div>`}
+  </details>`;
 }
 function ilsFixCardHtml(data){
   if(!canKeluarkanCC()) return "";
@@ -7392,6 +7419,7 @@ document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState=
 function startShare(silent){
   const prof = getCcProfile();
   if(shareTrk.on) return;
+  if(noPlatUser()) return;
   if(!prof.plat || !prof.lp){ if(!silent) alert("Simpan dulu nomor polisi & LP truk kamu (kartu Data Truk)."); return; }
   if(!FBS.enabled || !FBS.authed){ if(!silent) alert("Perangkat belum Online. Tunggu tanda hijau 'Online' di pojok atas."); return; }
   if(!navigator.geolocation){ if(!silent) alert("HP ini tidak mendukung GPS."); return; }
