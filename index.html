@@ -2942,23 +2942,23 @@ function ccOnlineBelumAbsenHtml(data){
     if(!L.length) return "";
     return `<div class="card" style="border-left:5px solid #8a96a8;"><h3>📡 CC Online, Belum Absen (${L.length})</h3>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Aplikasinya menyala dan terlihat di peta, tapi belum masuk radius${rad!=null?" ("+rad+" km)":""}. Otomatis absen begitu masuk radius.</div>
-      ${L.map(x=>{ const inR=(x.km!=null&&rad!=null&&x.km<=rad+0.3); return `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;"><div><b>${escH(x.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)}</span></div><div style="font-size:12px;text-align:right;${inR?"color:#C77700;font-weight:800;":""}">${x.km!=null?x.km.toFixed(1)+" km dari yard":"jarak ?"}${inR?"<br>di radius, menunggu absen":""}</div></div>`; }).join("")}
+      ${L.map(x=>{ const inR=(x.km!=null&&rad!=null&&x.km<=rad+0.3); return `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;"><div><b>${escH(x.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)}</span></div><div style="font-size:12px;text-align:right;${inR?"color:#C77700;font-weight:800;":""}">${x.km!=null?x.km.toFixed(1)+" km dari yard":"jarak ?"}${inR?"<br>di radius · "+escH(mapAbsenWhy(data,x,x.km)):""}</div></div>`; }).join("")}
     </div>`;
   }catch(e){ return ""; }
 }
 /* Daftarkan truk ke stall kosong / antrian / ruang tunggu jadwal. Return {stall:n} | {queue:n} | {hold:true,due:ts} | {dup:true} */
-function registerCC(plat, lp, dist, auto, manual){
+function registerCC(plat, lp, dist, auto, manual, src){
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
-    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:(currentUser&&currentUser.username)||"", name:(currentUser&&currentUser.name)||"", role:(currentUser&&currentUser.role)||"", auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
+    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
     { const lf=((d.ccLeft||{})[k])||0; const _own=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));   // Delivery/Admin boleh mengabsenkan manual kapan saja
       if(lf && (Date.now()<=lf || (!_own && Date.now()-lf < 20*60000))){   // absen dibuat SEBELUM CC keluar (dikirim ulang sinkronisasi / perangkat lain), atau < 20 menit sesudah keluar dari HP driver: satu CC satu catatan
-        res={dup:true, stale:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:(currentUser&&currentUser.username)||"", name:(currentUser&&currentUser.name)||"", role:(currentUser&&currentUser.role)||"", auto:!!auto, manual:!!manual, dup:true, stale:true}]).slice(-120); return; } }
+        res={dup:true, stale:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true}]).slice(-120); return; } }
     { const y=d.yardLocation||{}; if(dist!=null && y.radiusKm!=null && dist > (+y.radiusKm)+0.3){ res={far:true, dist, radius:+y.radiusKm}; return; } }   // di luar radius: ditolak, apa pun jalurnya (otomatis / manual)
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
     const _sr=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k); if(_sr && _sr.lp) lp=_sr.lp;   // LP resmi dari jadwal DCCP (sama seperti absen admin)
     const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
-    d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:item.plat, lp:item.lp||"", u:(currentUser&&currentUser.username)||"", name:(currentUser&&currentUser.name)||"", role:(currentUser&&currentUser.role)||"", auto:!!auto, manual:!!manual, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120);
+    d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:item.plat, lp:item.lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120);
     const hd = ccHoldDue(d, plat);
     if(hd!=null){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }
     res = placeCC(d, item);
@@ -7811,6 +7811,47 @@ function ccPlatRelock(){ try{ if(shareTrk.on) stopShare(true); }catch(e){} ccPla
 setInterval(ccShiftWatch, 30000);
 /* Plat tadi ditolak (belum di DCCP): begitu Koordinator/Delivery menambahkan, lanjut sendiri supaya absen otomatis langsung jalan */
 setInterval(()=>{ try{ const pl=window._cgPend; if(!pl||!currentUser||currentUser.role!=="cc") return; const i=document.getElementById("cgPlat"); if(!i){ window._cgPend=null; return; } if(ccPlatRegistered(pl)){ i.value=pl; ccPlatGateSave(); } }catch(e){} }, 2000);
+/* ===== ABSEN BERBASIS PETA =====
+   SUMBER ABSEN UTAMA: peta. CC yang posisinya terlihat di peta (HP/APK-nya membagikan lokasi) dan sudah di dalam radius yard tapi BELUM tercatat, dicatat otomatis oleh perangkat Delivery/Admin yang sedang terbuka.
+   Jadi CC yang dekat tetap terrecord walau absen otomatis di HP-nya belum jalan. Satu CC tetap satu catatan (cek dobel di registerCC).
+   CC yang baru keluar (Delout / dikeluarkan) tidak dicatat lagi sebelum terlihat keluar area (radius + 1 km), maks. 90 menit. */
+const MAPABS={hits:{}, out:{}};
+function ccLastLeft(d, plat){
+  const k=normPlat(plat); let lo=((d.ccLeft||{})[k])||0;
+  (d.ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===k && x.outTs>lo) lo=x.outTs; });
+  (d.ccOutLog||[]).forEach(x=>{ if(x && x.ts && normPlat(x.plat)===k && x.ts>lo) lo=x.ts; });
+  return lo;
+}
+function mapAbsenWhy(d, r, km){   // alasan CC di dalam radius belum tercatat (untuk kartu "CC Online, Belum Absen")
+  const y=d.yardLocation||{}; if(y.lat==null||y.radiusKm==null) return "titik yard / radius belum diatur";
+  if(!ccPlatRegistered(r.plat)) return "plat tidak ada di Jadwal DCCP";
+  const lo=ccLastLeft(d,r.plat), k=normPlat(r.plat);
+  if(lo && Date.now()-lo<90*60000 && !((MAPABS.out[k]||0)>lo)) return "baru keluar, menunggu terlihat keluar area dulu";
+  return "dibaca peta, dicatat dalam ±10 detik";
+}
+function mapAbsenTick(){
+  try{
+    if(!currentUser) return;   // perangkat apa pun yang sedang terbuka (semua role + Display) ikut membaca peta; cek dobel di registerCC menjamin satu catatan
+    const d=DB.get(), y=d.yardLocation||{}; if(y.lat==null || y.radiusKm==null || !(d.dccpSchedule||[]).length) return;
+    const now=Date.now(), rad=+y.radiusKm;
+    const have=new Set([...Object.values(d.cc||{}).filter(Boolean).map(c=>normPlat(c.plat)), ...(d.queue||[]).map(q=>normPlat(q.plat)), ...(d.hold||[]).map(q=>normPlat(q.plat))]);
+    Object.values(TRACK||{}).forEach(r=>{
+      if(!r || typeof r.lat!=="number" || !r.plat) return; const k=normPlat(r.plat); if(!k) return;
+      if(now-(r.ts||0)>90000){ delete MAPABS.hits[k]; return; }
+      if(typeof trkHasAccount==="function" && !trkHasAccount(r)) return;
+      const km=haversineKm(r.lat,r.lng,y.lat,y.lng);
+      if(km>rad+1) MAPABS.out[k]=now;
+      if(have.has(k) || !ccPlatRegistered(r.plat)){ delete MAPABS.hits[k]; return; }
+      const lo=ccLastLeft(d,r.plat);
+      if(lo && now-lo<90*60000 && !((MAPABS.out[k]||0)>lo)){ delete MAPABS.hits[k]; return; }
+      if(km<=rad){
+        MAPABS.hits[k]=(MAPABS.hits[k]||0)+1;
+        if(MAPABS.hits[k]>=2){ MAPABS.hits[k]=0; registerCC(r.plat, r.lp||"", km, true, false, "Peta (otomatis)"); }
+      } else delete MAPABS.hits[k];
+    });
+  }catch(e){}
+}
+setInterval(mapAbsenTick, 5000);
 function absenkanCC(plat, lp){
   if(!canKeluarkanCC()) return;
   if(!confirm("Absenkan "+plat+" sekarang (atas nama driver)?\n\nPakai hanya kalau CC sudah ada di lokasi tetapi absen otomatisnya belum jalan.")) return;
