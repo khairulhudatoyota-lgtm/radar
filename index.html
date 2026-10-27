@@ -2490,7 +2490,8 @@ function autoOutLock(dist, y){
   try{
     const np = normPlat(getCcProfile().plat||""); if(!np) return false;
     let lo = 0; (DB.get().ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===np && x.outTs>lo) lo = x.outTs; });
-    (DB.get().ccOutLog||[]).forEach(x=>{ if(x && x.ts && normPlat(x.plat)===np && x.ts>lo) lo = x.ts; });   // dikeluarkan Delivery: jangan absen otomatis lagi sebelum HP keluar area
+    (DB.get().ccOutLog||[]).forEach(x=>{ if(x && x.ts && normPlat(x.plat)===np && x.ts>lo) lo = x.ts; });
+    { const lf=((DB.get().ccLeft||{})[np])||0; if(lf>lo) lo=lf; }   // dikosongkan Koordinator / stall ditutup: sama, jangan absen otomatis lagi sebelum HP keluar area   // dikeluarkan Delivery: jangan absen otomatis lagi sebelum HP keluar area
     if(!lo || Date.now()-lo > 60*60*1000) return false;   // kunci Delout maks. 1 jam (kalau aplikasi sempat mati di luar area, kunci tidak nyangkut)
     const k = "apcc_left_"+lo;
     if(dist > y.radiusKm + 1){ try{ localStorage.setItem(k,"1"); }catch(e){} return false; }
@@ -2903,6 +2904,32 @@ function holdCardHtml(data, onlyMine){
       ${canKeluarkanCC()?`<button class="btn btn-outline btn-sm" onclick="holdLepas('${x.plat}')">⬆ Naikkan ke Waiting List</button>`:""}
     </div>`; }).join("")}
   </div>`;
+}
+/* Ringkasan SEMUA CC yang sudah absen, apa pun statusnya: di stall / waiting list / Parkir Luar. */
+function ccSemuaAbsenHtml(data){
+  try{
+    const hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+    const rows=[];
+    Object.keys(data.cc||{}).map(Number).sort((a,b)=>ccLbl(a)-ccLbl(b)).forEach(n=>{ const c=data.cc[n]; if(c) rows.push({plat:c.plat, lp:c.lp, st:`<span style="background:#1E9E5A;color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;">Stall ${ccLbl(n)}</span>`, ts:c.absenTs||c.ts}); });
+    (data.queue||[]).forEach((q,i)=>rows.push({plat:q.plat, lp:q.lp, st:`<span style="background:#2F6FB5;color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;">Waiting #${i+1}</span>`, ts:q.ts, km:q.absenDistKm}));
+    (data.hold||[]).slice().sort((a,b)=>ccEffTs(data,a.plat,a.ts)-ccEffTs(data,b.plat,b.ts)).forEach(q=>{ const du=ccNextDue(data,q.plat); rows.push({plat:q.plat, lp:q.lp, st:`<span style="background:#E8833A;color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;">Parkir Luar</span>${du!=null?` <span style="font-size:11px;color:var(--text-dim);">jadwal ${holdHm(du)}</span>`:""}`, ts:q.ts, km:q.absenDistKm}); });
+    if(!rows.length) return "";
+    return `<div class="card"><h3>📋 Semua CC Sudah Absen (${rows.length})</h3>${rows.map(r=>`<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>${escH(r.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(r.lp||"")}${r.ts?" · absen "+hm(r.ts):""}</span></div><div style="text-align:right;">${r.st}</div></div>`).join("")}</div>`;
+  }catch(e){ return ""; }
+}
+/* CC yang online di peta (posisi segar) tetapi BELUM absen: belum masuk stall, waiting list, maupun Parkir Luar. Supaya jelas kenapa waiting list sedikit. */
+function ccOnlineBelumAbsenHtml(data){
+  try{
+    const y=data.yardLocation||{}, rad=y.radiusKm!=null?+y.radiusKm:null, now=Date.now();
+    const have=new Set([...Object.values(data.cc||{}).filter(Boolean).map(c=>normPlat(c.plat)), ...(data.queue||[]).map(q=>normPlat(q.plat)), ...(data.hold||[]).map(q=>normPlat(q.plat))]);
+    const L=Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && r.plat && now-(r.ts||0)<5*60000 && !have.has(normPlat(r.plat)) && ccPlatRegistered(r.plat))
+      .map(r=>({plat:r.plat, lp:r.lp||"", km:(y.lat!=null)?haversineKm(r.lat,r.lng,y.lat,y.lng):null, spd:r.spd||0})).sort((a,b)=>(a.km==null?99:a.km)-(b.km==null?99:b.km));
+    if(!L.length) return "";
+    return `<div class="card" style="border-left:5px solid #8a96a8;"><h3>📡 CC Online, Belum Absen (${L.length})</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Aplikasinya menyala dan terlihat di peta, tapi belum masuk radius${rad!=null?" ("+rad+" km)":""}. Otomatis absen begitu masuk radius.</div>
+      ${L.map(x=>{ const inR=(x.km!=null&&rad!=null&&x.km<=rad+0.3); return `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;"><div><b>${escH(x.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)}</span></div><div style="font-size:12px;text-align:right;${inR?"color:#C77700;font-weight:800;":""}">${x.km!=null?x.km.toFixed(1)+" km dari yard":"jarak ?"}${inR?"<br>di radius, menunggu absen":""}</div></div>`; }).join("")}
+    </div>`;
+  }catch(e){ return ""; }
 }
 /* Daftarkan truk ke stall kosong / antrian / ruang tunggu jadwal. Return {stall:n} | {queue:n} | {hold:true,due:ts} | {dup:true} */
 function registerCC(plat, lp, dist, auto, manual){
@@ -5144,8 +5171,10 @@ function keluarkanCC(n){
   if(ils){ try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+ils.id).remove(); }catch(e){} }
   render();
 }
+function ccMarkLeft(d, c){ if(c && c.plat){ d.ccLeft=d.ccLeft||{}; d.ccLeft[normPlat(c.plat)]=Date.now(); const ks=Object.keys(d.ccLeft); if(ks.length>60) ks.sort((a,b)=>d.ccLeft[a]-d.ccLeft[b]).slice(0,ks.length-60).forEach(k=>delete d.ccLeft[k]); } }
 function kosongkanCC(num){
   DB.set(d=>{
+    ccMarkLeft(d, d.cc[num]);
     d.cc[num] = null;
     if(d.queue.length>0){
       const next = ccQueueTake(d);
@@ -5154,7 +5183,7 @@ function kosongkanCC(num){
   });
 }
 function toggleEmergency(num){
-  DB.set(d=>{ d.ccOpen[num] = !d.ccOpen[num]; if(!d.ccOpen[num]) d.cc[num]=null; });
+  DB.set(d=>{ d.ccOpen[num] = !d.ccOpen[num]; if(!d.ccOpen[num]){ ccMarkLeft(d, d.cc[num]); d.cc[num]=null; } });
 }
 
 /* ======================================================================
@@ -8776,7 +8805,7 @@ async function clearTestData(){
   render();
 }
 /* ===== MULAI TRIAL: hapus data operasional, akun & pengaturan tetap aman ===== */
-const TRIAL_KEYS_OBJ=["units","cc","drvByPlat","drvByPlatName"], TRIAL_KEYS_ARR=["queue","hold","ils","manifest","ccCalls","ccOutLog","swapLog","defects","speedAlerts"];
+const TRIAL_KEYS_OBJ=["units","cc","drvByPlat","drvByPlatName","ccLeft"], TRIAL_KEYS_ARR=["queue","hold","ils","manifest","ccCalls","ccOutLog","swapLog","defects","speedAlerts"];
 async function resetTrial(){
   if(!(currentUser && currentUser.role==="admin")){ alert("Hanya Admin."); return; }
   if(FBS.enabled && !(FBS.authed && FBS.conn && FBS.ready)){ alert("Perangkat belum Online (tanda hijau di pojok atas). Tunggu hijau, lalu ulangi, supaya semua HP ikut bersih."); return; }
@@ -8973,6 +9002,7 @@ function renderDisplay(){
       ${csCardHtml(data)}
       ${earlyCardHtml(data)}
       ${holdCardHtml(data,false)}
+      ${ccSemuaAbsenHtml(data)}
       <div class="card y-queue">
         <h3>⏳ Antrian CC Menunggu (${data.queue.length})</h3>
         ${data.queue.length===0 ? `<div class="emptystate">Tidak ada antrian.</div>` :
@@ -8983,6 +9013,7 @@ function renderDisplay(){
           </div>
         `).join("")}
       </div>
+      ${ccOnlineBelumAbsenHtml(data)}
       </div>
       <div class="ymap">
       <div class="stallblock">
