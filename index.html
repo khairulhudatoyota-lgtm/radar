@@ -2673,10 +2673,11 @@ function ccCardsHtml(data){
    - Begitu waktunya tiba (jam ritase berikutnya dikurangi toleransi), otomatis masuk stall / waiting list.
    - Waiting list diurutkan menurut jam jadwal DCCP, bukan menurut siapa yang datang duluan. */
 /* Jam efektif antrian = yang lebih lambat antara jam jadwal DCCP dan jam absen (toleransi telat 15 menit). Yang terlambat tidak menyalip yang sudah menunggu. */
+function ccReabsenMin(d){ const v=Number((d||DB.get()).reabsenMin); return isFinite(v)&&v>=0 ? v : 45; }   // jeda minimum sesudah keluar (Delout/dikeluarkan) sebelum absen otomatis/peta boleh mencatat CC itu lagi
 function ccLateTolMin(d){ const v=Number((d||DB.get()).lateTolMin); return isFinite(v)&&v>=0 ? v : 15; }
 function ccEffTs(d, plat, ts){
   const du=ccNextDue(d,plat); if(du==null) return ts||0;
-  return (ts||0) > du + ccLateTolMin(d)*60000 ? (ts||0) : du;
+  return Math.max(ts||0, du);   // jam efektif = yang lebih akhir antara jadwal dan kedatangan: sama-sama telat -> yang lebih dulu datang didahulukan
 }
 function ccEarlyMin(d){ const v=Number((d||DB.get()).earlyMin); return isFinite(v)&&v>=0 ? v : 30; }
 function ccNextDue(d, plat){   // ts jam ritase berikutnya milik plat ini; null = tidak terjadwal / semua ritase sudah jalan
@@ -2807,7 +2808,7 @@ function ccQueueSort(d){
      kalau dua CC tiba berdekatan (< 5 menit), yang rit-nya lebih sedikit didahulukan. */
   const rit=q=>ccRitDone(d,q.plat);
   (d.queue||[]).forEach(q=>{ const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; } q.due = rit(q)>=1 ? (q.ts||0) : ccEffTs(d,q.plat,q.ts); });
-  d.queue.sort((a,b)=>{ const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12 && Math.abs(da-db)<5*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; } return da-db; });
+  d.queue.sort((a,b)=>{ const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12 && Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; } return da-db; });
 }
 /* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
 function ccQueueAdvance(){
@@ -2881,6 +2882,34 @@ function ccPurgeStale(d){
   Object.keys(d.earlyOk||{}).forEach(k=>{ if(!ccRegIn(d,k)){ delete d.earlyOk[k]; n++; } });
   return n;
 }
+/* CC di waiting list / Parkir Luar yang di peta (posisi segar) terbukti sudah jauh di luar area >= 10 menit: dikeluarkan dari antrean (CC yang sudah pergi tidak boleh menahan urutan). */
+const QFAR={};
+const QFAR_MIN=10;
+function ccQueueFarPurge(){
+  try{
+    if(!currentUser) return;
+    const d=DB.get(), y=d.yardLocation||{}; if(y.lat==null||y.radiusKm==null) return;
+    const now=Date.now(), rad=+y.radiusKm, ks=[...(d.queue||[]), ...(d.hold||[])].map(q=>normPlat(q.plat)); if(!ks.length) return;
+    const gone=[];
+    ks.forEach(k=>{
+      const r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
+      if(!r || typeof r.lat!=="number" || now-(r.ts||0)>120000){ delete QFAR[k]; return; }
+      const km=haversineKm(r.lat,r.lng,y.lat,y.lng);
+      if(km>rad+1){ if(!QFAR[k]) QFAR[k]=now; if(now-QFAR[k]>=QFAR_MIN*60000) gone.push([k,km]); } else delete QFAR[k];
+    });
+    Object.keys(QFAR).forEach(k=>{ if(!ks.includes(k)) delete QFAR[k]; });
+    if(!gone.length) return;
+    DB.set(d2=>{
+      gone.forEach(([k,km])=>{
+        const q=(d2.queue||[]).find(x=>normPlat(x.plat)===k), h=(d2.hold||[]).find(x=>normPlat(x.plat)===k), it=q||h; if(!it) return;
+        d2.queue=(d2.queue||[]).filter(x=>normPlat(x.plat)!==k); d2.hold=(d2.hold||[]).filter(x=>normPlat(x.plat)!==k);
+        ccMarkLeft(d2,{plat:it.plat});
+        d2.absenLog=(d2.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(it.plat), lp:it.lp||"", u:"peta", name:"Peta: CC sudah jauh ("+km.toFixed(1)+" km), keluar dari antrean", role:"peta", auto:true, manual:false, dist:Math.round(km*10)/10, rejected:true}]).slice(-300);
+      });
+    });
+    gone.forEach(([k])=>delete QFAR[k]);
+  }catch(e){}
+}
 function ccPurgeStaleCheck(){ try{ if(currentUser && currentUser.role!=="display" && ccStaleFind(DB.get())) DB.set(d=>{ ccPurgeStale(d); }); }catch(e){} }
 function holdLepas(plat){
   if(!canKeluarkanCC()) return;
@@ -2952,9 +2981,10 @@ function registerCC(plat, lp, dist, auto, manual, src){
   DB.set(d=>{
     if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
     { const lf=((d.ccLeft||{})[k])||0; const _own=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));   // Delivery/Admin boleh mengabsenkan manual kapan saja
-      if(lf && (Date.now()<=lf || (!_own && Date.now()-lf < 20*60000))){   // absen dibuat SEBELUM CC keluar (dikirim ulang sinkronisasi / perangkat lain), atau < 20 menit sesudah keluar dari HP driver: satu CC satu catatan
+      if(lf && (Date.now()<=lf || (!_own && Date.now()-lf < ccReabsenMin(d)*60000))){   // absen dibuat SEBELUM CC keluar (dikirim ulang sinkronisasi / perangkat lain), atau < 20 menit sesudah keluar dari HP driver: satu CC satu catatan
         res={dup:true, stale:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true}]).slice(-120); return; } }
-    { const y=d.yardLocation||{}; if(dist!=null && y.radiusKm!=null && dist > (+y.radiusKm)+0.3){ res={far:true, dist, radius:+y.radiusKm}; return; } }   // di luar radius: ditolak, apa pun jalurnya (otomatis / manual)
+    { const y=d.yardLocation||{}; if(dist!=null && y.radiusKm!=null && dist > (+y.radiusKm)+0.3){ res={far:true, dist, radius:+y.radiusKm}; return; } }
+    { const _own2=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); const _dn=ccDistNow(d, plat); const _y=d.yardLocation||{}; if(!_own2 && _dn!=null && _y.radiusKm!=null && _dn > (+_y.radiusKm)+0.3){ res={far:true, dist:_dn, radius:+_y.radiusKm, map:true}; return; } }   // peta (segar < 5 menit) menunjukkan CC masih jauh: absen apa pun dari HP/otomatis ditolak   // di luar radius: ditolak, apa pun jalurnya (otomatis / manual)
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
     const _sr=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k); if(_sr && _sr.lp) lp=_sr.lp;   // LP resmi dari jadwal DCCP (sama seperti absen admin)
     const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
@@ -3399,6 +3429,98 @@ function tlsLogoutWatch(){
     if(window.AndroidTLS && AndroidTLS.logoutTls) AndroidTLS.logoutTls();
   }catch(e){}
 }
+
+/* ===== MODE WORKER: HP hanya memasukkan pekerjaan ke antrean; PC pekerja (bridge) yang mengisi TLS dan menempel manifest ===== */
+const WK_BRIDGE="http://127.0.0.1:8787";
+let WK={alive:false, chk:0, busy:false};
+function wkOn(){ try{ return DB.get().wkMode==="worker"; }catch(e){ return false; } }
+function wkIsPc(){ try{ return localStorage.getItem("radar_wkpc")==="1"; }catch(e){ return false; } }
+function wkMyId(){ try{ let i=localStorage.getItem("radar_wkid"); if(!i){ i="PC"+Math.random().toString(36).slice(2,8); localStorage.setItem("radar_wkid",i); } return i; }catch(e){ return "PC?"; } }
+function wkSetMode(on){
+  if(!confirm(on?"NYALAKAN Mode Worker?\n\nILS (kirim ke TLS) dan manifest dari semua HP masuk antrean dan dikerjakan PC pekerja. Pastikan PC pekerja sudah menyala dengan bridge berjalan.":"Kembali ke Mode Normal?\n\nHP bekerja sendiri seperti biasa. Pekerjaan yang masih antre tidak dibuang, bisa dikerjakan manual.")) return;
+  DB.set(d=>{ d.wkMode=on?"worker":"normal"; d.wkModeBy=(currentUser&&currentUser.name)||""; d.wkModeTs=Date.now(); });
+  render();
+}
+function wkSetPc(on){ try{ localStorage.setItem("radar_wkpc", on?"1":"0"); }catch(e){} render(); }
+function wkEnqueue(kind, ilsId, plat, payload){
+  const key=kind+":"+ilsId;
+  let added=false;
+  DB.set(d=>{
+    d.wq=d.wq||[];
+    if(d.wq.some(j=>j.key===key && (j.status==="pending"||j.status==="run"||j.status==="done"))) return;
+    if(kind==="tls"){ const il=(d.ils||[]).find(x=>x.id===ilsId); if(il && il.tlsOk) return; }   // ILS di TLS hanya sekali: yang sudah sukses tidak dikirim lagi
+    d.wq.push({id:"W"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), key:key, kind:kind, ilsId:ilsId, plat:plat||"", payload:payload, status:"pending", ts:Date.now(), by:(currentUser&&currentUser.name)||"", tries:0});
+    d.wq=d.wq.slice(-60);
+    added=true;
+  });
+  return true;
+}
+function wkJob(id){ return ((DB.get().wq)||[]).find(j=>j.id===id); }
+function wkUpd(id, fn){ DB.set(d=>{ const j=(d.wq||[]).find(x=>x.id===id); if(j) fn(j); }); }
+function wkRetry(id){
+  const j=wkJob(id); if(!j) return;
+  if(j.kind==="tls" && (j.risk || j.status==="run")){
+    if(!confirm("ILS di TLS hanya bisa dibuat SATU KALI.\n\nPekerjaan ini terhenti di tengah jalan, jadi ILS-nya mungkin SUDAH terbuat di TLS.\n\nCek dulu di TLS apakah ILS untuk "+(j.plat||"unit ini")+" sudah ada.\n\nTekan OK HANYA kalau di TLS belum ada, lalu pekerjaan diulang.")) return;
+  }
+  wkUpd(id, x=>{ x.status="pending"; x.msg=""; x.pc=""; x.risk=false; }); render();
+}
+function wkMarkDone(id){
+  if(!confirm("Tandai selesai tanpa mengulang?\n\nPakai ini kalau kamu sudah memastikan ILS-nya sudah ada di TLS.")) return;
+  wkUpd(id, x=>{ x.status="done"; x.msg="Ditandai selesai manual"; x.risk=false; x.doneTs=Date.now(); });
+  DB.set(d=>{ const jj=(d.wq||[]).find(x=>x.id===id); if(jj&&jj.kind==="tls"){ const il=(d.ils||[]).find(x=>x.id===jj.ilsId); if(il) il.tlsOk=Date.now(); } }); render();
+}
+function wkCancel(id){ wkUpd(id, j=>{ j.status="cancel"; j.msg="Dibatalkan"; }); render(); }
+function wkClearDone(){ DB.set(d=>{ d.wq=(d.wq||[]).filter(j=>j.status==="pending"||j.status==="run"||j.status==="fail"); }); render(); }
+async function wkPing(){
+  if(Date.now()-WK.chk<5000) return WK.alive;
+  WK.chk=Date.now();
+  try{ const c=new AbortController(); const t=setTimeout(()=>c.abort(),1500); const r=await fetch(WK_BRIDGE+"/ping",{signal:c.signal}); clearTimeout(t); const j=await r.json(); WK.alive=!!(j&&j.ok); }catch(e){ WK.alive=false; }
+  return WK.alive;
+}
+async function wkTick(){
+  try{
+    if(WK.busy || !wkOn() || !wkIsPc() || !currentUser) return;
+    if(!(await wkPing())) return;
+    const q=(DB.get().wq)||[], me=wkMyId(), now=Date.now();
+    // pekerjaan "run" milik PC ini yang menggantung > 3 menit -> gagal
+    q.filter(j=>j.status==="run" && j.pc===me && now-(j.at||0)>180000).forEach(j=>wkUpd(j.id, x=>{ x.status="fail"; x.risk=(x.kind==="tls"); x.msg="Waktu habis. CEK TLS dulu sebelum ulangi"; }));
+    const j=q.filter(x=>x.status==="pending").sort((a,b)=>a.ts-b.ts)[0]; if(!j) return;
+    WK.busy=true;
+    DB.set(d=>{ const x=(d.wq||[]).find(y=>y.id===j.id); if(x && x.status==="pending"){ x.status="run"; x.pc=me; x.at=Date.now(); x.tries=(x.tries||0)+1; } });
+    const mine=wkJob(j.id);
+    if(!mine || mine.status!=="run" || mine.pc!==me){ WK.busy=false; return; }   // PC lain yang menang
+    let res={ok:false,msg:"Bridge tidak menjawab"};
+    try{
+      const c=new AbortController(); const t=setTimeout(()=>c.abort(),170000);
+      const r=await fetch(WK_BRIDGE+"/job",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:j.id,kind:j.kind,plat:j.plat,payload:j.payload}),signal:c.signal});
+      clearTimeout(t); res=await r.json();
+    }catch(e){ res={ok:false,msg:"Bridge: "+((e&&e.message)||"gagal")}; }
+    if(res.ok && j.kind==="tls") DB.set(d=>{ const il=(d.ils||[]).find(x=>x.id===j.ilsId); if(il) il.tlsOk=Date.now(); });
+    wkUpd(j.id, x=>{ x.status=res.ok?"done":"fail"; x.msg=String(res.msg||"").slice(0,200); x.doneTs=Date.now(); x.risk=!res.ok && x.kind==="tls" && (res.stage==="simpan"||res.stage==="konfirmasi"||res.stage==="unknown"||!res.stage&&res.msg&&/^Bridge:/.test(res.msg)); });
+    WK.busy=false;
+    if(typeof render==="function" && adminTab==="tls") try{ render(); }catch(e){}
+  }catch(e){ WK.busy=false; }
+}
+function wkStatusLabel(s){ return {pending:"Menunggu PC",run:"Diproses PC",done:"Selesai",fail:"Gagal",cancel:"Dibatalkan"}[s]||s; }
+function wkCardHtml(data){
+  const on=data.wkMode==="worker", pc=wkIsPc(), q=(data.wq||[]).slice().reverse().slice(0,15);
+  const col={pending:"#8a5a00",run:"#1d4ed8",done:"#12633a",fail:"#b91c1c",cancel:"#5b6675"};
+  const rows=q.map(j=>`<div style="display:flex;gap:8px;align-items:center;font-size:12px;border-bottom:1px solid var(--border,#e5e7eb);padding:6px 0;">
+    <div style="flex:1;min-width:0;"><b>${j.kind==="tls"?"TLS":"Manifest"}</b> · ${(j.plat||j.ilsId||"").toString().replace(/</g,"&lt;")}<div style="color:var(--text-dim);">${j.by?j.by.replace(/</g,"&lt;")+" · ":""}${new Date(j.ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}${j.msg?" · "+j.msg.replace(/</g,"&lt;"):""}${j.risk?` · <b style="color:#b91c1c;">⚠ cek TLS dulu</b>`:""}</div></div>
+    <div style="font-weight:700;color:${col[j.status]||"#333"};">${wkStatusLabel(j.status)}</div>
+    ${(j.status==="fail"||j.status==="run")?`<button class="btn btn-outline btn-sm" style="width:auto;" onclick="wkRetry('${j.id}')">Ulangi</button>`:""}
+    ${(j.risk&&j.status==="fail")?`<button class="btn btn-outline btn-sm" style="width:auto;" onclick="wkMarkDone('${j.id}')">Sudah ada di TLS</button>`:""}
+    ${(j.status==="pending"||j.status==="fail")?`<button class="btn btn-outline btn-sm" style="width:auto;" onclick="wkCancel('${j.id}')">Batal</button>`:""}</div>`).join("");
+  return `<div class="card"><h3>🖥 Mode Worker (PC mengerjakan TLS &amp; manifest)</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Mode <b>Normal</b>: HP bekerja sendiri. Mode <b>Worker</b>: ILS dan manifest dari HP masuk antrean, PC pekerja yang mengisi TLS dan menempel manifest (HP tidak membuka TLS).</p>
+    <div class="msg ${on?"info":""}" style="margin-bottom:10px;"><b>${on?"🟢 MODE WORKER aktif":"⚪ MODE NORMAL"}</b>${data.wkModeBy?`<br><span style="font-size:11px;">diubah oleh ${String(data.wkModeBy).replace(/</g,"&lt;")}</span>`:""}</div>
+    <button class="btn ${on?"btn-outline":"btn-primary"}" onclick="wkSetMode(${on?"false":"true"})">${on?"Kembali ke Mode Normal":"Nyalakan Mode Worker"}</button>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:12px 0 4px;"><input type="checkbox" ${pc?"checked":""} onchange="wkSetPc(this.checked)" style="margin-top:3px;"><span><b>Perangkat ini adalah PC pekerja</b> (centang hanya di PC yang menjalankan bridge). Bridge: <b>${WK.alive?"terhubung":"tidak terdeteksi"}</b>.</span></label>
+    <div style="margin-top:12px;font-weight:700;font-size:13px;">Antrean (${(data.wq||[]).length})</div>
+    ${rows||`<div style="font-size:12px;color:var(--text-dim);padding:6px 0;">Antrean kosong.</div>`}
+    ${(data.wq||[]).some(j=>j.status==="done"||j.status==="cancel")?`<button class="btn btn-outline btn-sm" style="width:auto;margin-top:8px;" onclick="wkClearDone()">Bersihkan yang selesai</button>`:""}
+  </div>`;
+}
 function tlsInAppOk(){ try{ return !!DB.get().tlsInAppOn; }catch(e){ return false; } }
 function tlsInAppMsg(){ alert("Buka TLS lewat aplikasi (APK) dimatikan sementara oleh admin.\n\nAkun TLS terbatas jumlah loginnya. Kirim ILS lewat PC (Salin untuk TLS / Buka TLS di PC)."); }
 function tlsInAppToggle(){
@@ -3414,7 +3536,7 @@ function saveTlsCfg(){
 }
 function renderAdminTls(){
   const c=tlsCfg();
-  return `<div class="card"><h3>🔗 Pengaturan Input ILS ke TLS</h3>
+  return wkCardHtml(DB.get())+`<div class="card"><h3>🔗 Pengaturan Input ILS ke TLS</h3>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Nilai default untuk ILS reguler. Dipakai di layar "Salin untuk TLS" dan nanti oleh script pengisi TLS. Ubah di sini kalau aturan di TLS berubah.</p>
     <div class="field"><label>Tipe Pengiriman (ILS reguler)</label><select id="tlsTipe">${TLS_TIPE.map(x=>`<option value="${x[0]}" ${x[0]===c.tipe?"selected":""}>${x[0]} - ${x[1]}</option>`).join("")}</select></div>
     <div class="field"><label>Lokasi Tujuan (ILS reguler)</label><select id="tlsTuj">${TLS_TUJ.map(x=>`<option value="${x[0]}" ${x[0]===c.tujuan?"selected":""}>${x[0]} - ${x[1]}</option>`).join("")}</select></div>
@@ -3475,7 +3597,7 @@ function tlsPcGo(){
   alert("Data ILS #"+b.id+" sudah disalin.\n\nDi tab TLS (halaman Pembuatan ILS / SJKB): klik ⚡ RADAR→TLS (bookmark atau tombol Tampermonkey). Kalau browser minta izin clipboard, pilih Allow.");
 }
 function tlsCopyBm(btn){ tlsCopy(decodeURIComponent(TLS_BM), btn); }
-function tlsSendApp(){ if(!tlsInAppOk()){ tlsInAppMsg(); return; } const b=window._tlsB; if(!b||!window.AndroidTLS){ alert("Fitur ini hanya di aplikasi RADAR EKY (APK)."); return; } try{ window.AndroidTLS.send(tlsPayload(b)); }catch(e){ alert("Gagal kirim ke aplikasi: "+e.message); } }
+function tlsSendApp(){ if(wkOn() && window._tlsB){ const b0=window._tlsB; wkEnqueue("tls", b0.id, b0.ccPlat, tlsPayload(b0)); alert("Mode Worker aktif: ILS dikirim ke antrean PC pekerja. Pantau statusnya di Admin → TLS."); return; } if(!tlsInAppOk()){ tlsInAppMsg(); return; } const b=window._tlsB; if(!b||!window.AndroidTLS){ alert("Fitur ini hanya di aplikasi RADAR EKY (APK)."); return; } try{ window.AndroidTLS.send(tlsPayload(b)); }catch(e){ alert("Gagal kirim ke aplikasi: "+e.message); } }
 function tlsCopyCode(btn){ const b=window._tlsB; if(!b) return; tlsCopy(encodeURIComponent("window.__RADAR_PKG="+JSON.stringify(tlsPayload(b))+";")+TLS_BM.slice("javascript:".length), btn); }
 function setTlsModa(id,m){
   const bb=(DB.get().ils||[]).find(x=>x.id===id);
@@ -3725,6 +3847,13 @@ function delout(id){
 function mfAutoXlOn(){ try{ return localStorage.getItem("radar_mfautoxl")!=="0"; }catch(e){ return true; } }
 function mfAutoXlSet(on){ try{ localStorage.setItem("radar_mfautoxl", on?"1":"0"); }catch(e){} }
 function mfAfterDelout(id){
+  if(wkOn() && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")){
+    try{
+      const data=DB.get(), m=mfRecords(data).find(x=>x.id===id), rows=m?mfRecRows(data, m, mfTujuanNama(), 0):[];
+      if(rows.length){ const tsv=rows.map(r=>r.map(mfCell).join("\t")).join("\n"); wkEnqueue("manifest", id, m.plat||"", tsv); }
+    }catch(e){}
+    return;
+  }
   if(!(window.AndroidTLS && AndroidTLS.openExcel) || !currentUser || (currentUser.role!=="delivery" && currentUser.role!=="admin") || !mfAutoXlOn()) return;
   const link=(xlCfg().link||"").trim(); if(!link) return;
   const data=DB.get(), m=mfRecords(data).find(x=>x.id===id); if(!m) return;
@@ -7346,7 +7475,8 @@ function renderAdmin(){
         <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Titik ini <b>terpisah</b> dari titik rute di bawah. Driver CC hanya bisa absen kalau posisinya dalam radius dari titik ini. Tandai langsung dengan berdiri di lokasi, atau pilih di peta dari jauh.</p>
         <div id="yardLocMsg"></div>
         ${blk("yard","Titik absensi",yp)}
-        <div class="field"><label>Radius absen (km)</label><input id="yardRadius" type="text" value="${y.radiusKm ?? 5}"></div>
+        <div class="field"><label>Radius absen (km)</label><input id="yardRadius" type="text" value="${y.radiusKm ?? 5}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Semakin kecil semakin ketat. Pilih radius yang <b>tidak mencakup NVDC / jalan luar</b> (mis. 1–2 km), supaya CC yang masih di luar tidak terabsen.</div></div>
+        <div class="field"><label>Jeda absen ulang sesudah keluar (menit)</label><input id="reabsenMin" type="text" value="${ccReabsenMin(data)}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Sesudah Delout / dikeluarkan, absen otomatis dan peta tidak mencatat CC itu lagi selama jeda ini (dan sampai terlihat keluar area).</div></div>
         <button class="btn btn-primary" onclick="saveYardLocation()">💾 Simpan Lokasi Absensi</button>
       </div>
       <div class="card">
@@ -7546,9 +7676,11 @@ function titikPick(id){
   const inp = document.getElementById("mp_"+id), cur = mapParse(inp && inp.value);
   const D = DB.get(), mp = D.mapPoints || {}, y = D.yardLocation || {};
   const c = cur || ((y.lat!=null && y.lng!=null) ? {lat:y.lat, lng:y.lng} : null) || mp.adm || mp.nvdc || {lat:-6.33, lng:107.34};
-  window._pick = {id, pt: cur};
-  showModal(`<h3 style="margin:0 0 6px;">🗺 Pilih titik di peta</h3>
-    <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;">Geser dan zoom peta, lalu <b>ketuk lokasi</b> yang tepat.</p>
+  const _rIn=document.getElementById("yardRadius"), _r0=(id==="yard") ? (parseFloat(_rIn&&_rIn.value)||+y.radiusKm||2) : 0;
+  window._pick = {id, pt: cur, rad:_r0};
+  showModal(`<h3 style="margin:0 0 6px;">🗺 ${id==="yard"?"Titik &amp; radius absen di peta":"Pilih titik di peta"}</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;">Geser dan zoom peta, lalu <b>ketuk lokasi</b> yang tepat.${id==="yard"?" Lingkaran merah = area absen. Titik biru = posisi CC sekarang.":""}</p>
+    ${id==="yard"?`<div style="display:flex;align-items:center;gap:10px;margin:0 0 8px;"><label for="pickRad" style="font-size:12px;white-space:nowrap;">Radius: <b id="pickRadVal">${_r0.toFixed(1)}</b> km</label><input id="pickRad" type="range" min="0.2" max="10" step="0.1" value="${_r0}" style="flex:1;"></div>`:""}
     <div id="pickMap" style="height:340px;border-radius:12px;border:1px solid var(--border);"></div>
     <div id="pickInfo" style="font-size:12px;margin:8px 0;">${cur?("Titik saat ini: "+cur.lat.toFixed(6)+", "+cur.lng.toFixed(6)):"Belum ada titik dipilih."}</div>
     <div style="display:flex;gap:8px;"><button class="btn btn-primary" style="flex:1;" onclick="titikPickApply()">✔ Pakai titik ini</button><button class="btn btn-outline" style="flex:1;" onclick="closeModal()">Batal</button></div>`);
@@ -7556,9 +7688,12 @@ function titikPick(id){
     const el = document.getElementById("pickMap"); if(!el) return;
     const m = L.map("pickMap").setView([c.lat, c.lng], cur ? 17 : 13);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(m);
-    let mk = null;
-    const setPt = (lat,lng)=>{ window._pick.pt = {lat,lng}; if(mk) mk.setLatLng([lat,lng]); else mk = L.marker([lat,lng]).addTo(m); const i = document.getElementById("pickInfo"); if(i) i.textContent = "Titik dipilih: "+lat.toFixed(6)+", "+lng.toFixed(6); };
-    if(cur) setPt(cur.lat, cur.lng);
+    let mk = null, circ = null;
+    const drawCirc = ()=>{ const p=window._pick; if(p.id!=="yard"||!p.pt) return; if(circ) circ.setLatLng([p.pt.lat,p.pt.lng]).setRadius(p.rad*1000); else circ=L.circle([p.pt.lat,p.pt.lng],{radius:p.rad*1000,color:"#c8102e",weight:2,fillColor:"#c8102e",fillOpacity:.12}).addTo(m); };
+    if(id==="yard"){ try{ Object.values(TRACK||{}).forEach(t=>{ if(t && typeof t.lat==="number" && Date.now()-(t.ts||0)<10*60000) L.circleMarker([t.lat,t.lng],{radius:5,color:"#1d4ed8",fillColor:"#1d4ed8",fillOpacity:.9,weight:1}).bindTooltip(String(t.plat||t.name||"CC"),{permanent:false}).addTo(m); }); }catch(e){}
+      const sl=document.getElementById("pickRad"); if(sl) sl.oninput=()=>{ window._pick.rad=+sl.value; const v=document.getElementById("pickRadVal"); if(v) v.textContent=(+sl.value).toFixed(1); drawCirc(); try{ if(circ) m.fitBounds(circ.getBounds(),{padding:[20,20],animate:false}); }catch(e){} }; }
+    const setPt = (lat,lng)=>{ window._pick.pt = {lat,lng}; if(mk) mk.setLatLng([lat,lng]); else mk = L.marker([lat,lng]).addTo(m); drawCirc(); const i = document.getElementById("pickInfo"); if(i) i.textContent = "Titik dipilih: "+lat.toFixed(6)+", "+lng.toFixed(6); };
+    if(cur){ setPt(cur.lat, cur.lng); if(circ){ try{ m.fitBounds(circ.getBounds(),{padding:[20,20],animate:false}); }catch(e){} } }
     m.on("click", e=>setPt(e.latlng.lat, e.latlng.lng));
     setTimeout(()=>m.invalidateSize(), 250);
   }).catch(()=>{ const i = document.getElementById("pickInfo"); if(i) i.textContent = "Peta gagal dimuat (butuh internet). Isi koordinat manual."; });
@@ -7568,9 +7703,10 @@ function titikPickApply(){
   if(!p || !p.pt){ alert("Ketuk dulu lokasi di peta."); return; }
   const inp = document.getElementById("mp_"+p.id);
   if(inp) inp.value = p.pt.lat.toFixed(6)+", "+p.pt.lng.toFixed(6);
+  if(p.id==="yard" && p.rad){ const ri=document.getElementById("yardRadius"); if(ri) ri.value=String(Math.round(p.rad*10)/10); }
   closeModal();
   const msg = document.getElementById(p.id==="yard" ? "yardLocMsg" : "mpMsg");
-  if(msg) msg.innerHTML = `<div class="msg ok">✔ Titik terisi dari peta. Tekan Simpan.</div>`;
+  if(msg) msg.innerHTML = `<div class="msg ok">✔ Titik${p.id==="yard"?" dan radius":""} terisi dari peta. Tekan Simpan.</div>`;
 }
 function mapUseMyLoc(id){
   const msg = document.getElementById("mpMsg");
@@ -7853,6 +7989,7 @@ function mapAbsenWhy(d, r, km){   // alasan CC di dalam radius belum tercatat (u
   const y=d.yardLocation||{}; if(y.lat==null||y.radiusKm==null) return "titik yard / radius belum diatur";
   if(!ccPlatRegistered(r.plat)) return "plat tidak ada di Jadwal DCCP";
   const lo=ccLastLeft(d,r.plat), k=normPlat(r.plat);
+  if(lo && Date.now()-lo<ccReabsenMin(d)*60000) return "baru keluar (jeda "+ccReabsenMin(d)+" menit sebelum boleh absen lagi)";
   if(lo && Date.now()-lo<90*60000 && !((MAPABS.out[k]||0)>lo)) return "baru keluar, menunggu terlihat keluar area dulu";
   return "dibaca peta, dicatat dalam ±10 detik";
 }
@@ -7870,7 +8007,7 @@ function mapAbsenTick(){
       if(km>rad+1) MAPABS.out[k]=now;
       if(have.has(k) || !ccPlatRegistered(r.plat)){ delete MAPABS.hits[k]; return; }
       const lo=ccLastLeft(d,r.plat);
-      if(lo && now-lo<90*60000 && !((MAPABS.out[k]||0)>lo)){ delete MAPABS.hits[k]; return; }
+      if(lo && (now-lo<ccReabsenMin(d)*60000 || (now-lo<90*60000 && !((MAPABS.out[k]||0)>lo)))){ delete MAPABS.hits[k]; return; }
       if(km<=rad){
         MAPABS.hits[k]=(MAPABS.hits[k]||0)+1;
         if(MAPABS.hits[k]>=2){ MAPABS.hits[k]=0; registerCC(r.plat, r.lp||"", km, true, false, "Peta (otomatis)"); }
@@ -8716,7 +8853,8 @@ function saveYardLocation(){
   const radius = parseFloat(document.getElementById("yardRadius").value);
   const msgEl = document.getElementById("yardLocMsg");
   if(!p){ msgEl.innerHTML = `<div class="msg err">Titik absensi belum valid. Format: -6.xxxxx, 107.xxxxx</div>`; return; }
-  DB.set(d=>{ d.yardLocation = {lat:p.lat, lng:p.lng, radiusKm: (isNaN(radius)||radius<=0)?5:radius}; });
+  const rb=parseFloat((document.getElementById("reabsenMin")||{}).value);
+  DB.set(d=>{ d.yardLocation = {lat:p.lat, lng:p.lng, radiusKm: (isNaN(radius)||radius<=0)?5:radius}; if(isFinite(rb)&&rb>=0) d.reabsenMin=rb; });
   alert("Lokasi absensi tersimpan.");
 }
 /* ---- Kalibrasi area stall: Admin berjalan keliling, aplikasi merekam jejak GPS ---- */
@@ -9273,7 +9411,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); ccQueueFarPurge(); tlsLogoutWatch(); wkTick(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
