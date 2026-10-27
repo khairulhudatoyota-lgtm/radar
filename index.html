@@ -2867,6 +2867,21 @@ function holdResync(d){
   if(!back.length) return;
   d.queue=keep; d.hold=(d.hold||[]).concat(back.map(q=>({plat:q.plat, lp:q.lp, drvCode:q.drvCode||"", ts:q.ts||Date.now(), absenDistKm:q.absenDistKm, auto:!!q.auto, manual:!!q.manual})));
 }
+/* Plat yang sudah tidak ada di Jadwal DCCP (mis. diganti CC Pengganti) tidak boleh nyangkut di waiting list / Parkir Luar / daftar izin masuk.
+   CC di stall tidak disentuh (urus lewat Keluarkan CC). Absen manual Delivery/Admin tidak disentuh. Tidak jalan kalau jadwal kosong. */
+function ccRegIn(d, plat){ const k=normPlat(plat); return !!k && ((d.dccpSchedule||[]).some(r=>normPlat(r.police)===k) || !!csActive(d,plat)); }
+function ccStaleFind(d){
+  if(!(d.dccpSchedule||[]).length) return false;
+  return (d.queue||[]).some(q=>q && !q.manual && !ccRegIn(d,q.plat)) || (d.hold||[]).some(q=>q && !q.manual && !ccRegIn(d,q.plat)) || Object.keys(d.earlyOk||{}).some(k=>!ccRegIn(d,k));
+}
+function ccPurgeStale(d){
+  if(!(d.dccpSchedule||[]).length) return 0; let n=0;
+  d.queue=(d.queue||[]).filter(q=>{ const bad=q && !q.manual && !ccRegIn(d,q.plat); if(bad) n++; return !bad; });
+  d.hold=(d.hold||[]).filter(q=>{ const bad=q && !q.manual && !ccRegIn(d,q.plat); if(bad) n++; return !bad; });
+  Object.keys(d.earlyOk||{}).forEach(k=>{ if(!ccRegIn(d,k)){ delete d.earlyOk[k]; n++; } });
+  return n;
+}
+function ccPurgeStaleCheck(){ try{ if(currentUser && currentUser.role!=="display" && ccStaleFind(DB.get())) DB.set(d=>{ ccPurgeStale(d); }); }catch(e){} }
 function holdLepas(plat){
   if(!canKeluarkanCC()) return;
   if(!confirm("Naikkan "+plat+" dari Parkir Luar ke waiting list sekarang walau belum waktu jadwalnya?")) return;
@@ -3181,7 +3196,7 @@ function ccProposals(data){
     if((data.ils||[]).some(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat))) continue;
     const row = (data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat));
     const wantB = wantBOf(n,c);
-    const base = {n, plat:c.plat, lp:c.lp||"", driver:(row&&row.driver)||"", drvCode:resolveDrvCode(data, c.plat, c.drvCode), batam:wantB, ccTs:c.ts||0, dismissed:!!c.dismissed, waiting:!!c.waiting, manualStall:!!manual[n]};
+    const base = {n, plat:c.plat, lp:c.lp||"", driver:ccDriverAny(c.plat)||(row&&row.driver)||"", drvCode:resolveDrvCode(data, c.plat, c.drvCode), batam:wantB, ccTs:c.ts||0, dismissed:!!c.dismissed, waiting:!!c.waiting, manualStall:!!manual[n]};
     if(c.dismissed){ out.push({...base, ready:false, stall:null, units:[], have:0, cands:[]}); continue; }
     let pick = manual[n] || null;
     if(!pick){
@@ -3220,7 +3235,7 @@ function draftCardsHtml(data){
   const drvRow = p=>`<div style="display:flex;gap:6px;margin:6px 0;align-items:center;"><span style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Kode driver TLS:</span><input id="drvIn${p.n}" type="text" value="${escH(p.drvCode||"")}" placeholder="mis. KMDCCDRV302" onchange="draftSetDrv(${p.n},this.value)" style="flex:1;min-width:0;text-transform:uppercase;padding:6px 8px;border:1px solid ${p.drvCode?"var(--border,#ccd)":"#D64545"};border-radius:8px;"></div>${p.drvCode?"":`<div style="font-size:11px;color:#D64545;margin:-2px 0 4px;">Kode driver belum diisi — TLS akan memakai nama driver (bisa tertukar).</div>`}`;
   const outBtn = p=>!canKeluarkanCC()?"":`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`;
   return `<div class="dl-draft">` + P.map(p=>{
-    const who = `LP <b>${p.lp||"-"}</b> · <b>${p.plat}</b>${p.driver?` · Driver <b>${p.driver}</b>`:""}`;
+    const who = `LP <b>${p.lp||"-"}</b> · <b>${p.plat}</b>${p.driver?` · Driver <b>${p.driver}</b>`:` · <span style="color:#c0392b;font-weight:700;">⚠ Driver belum ada di jadwal DCCP</span>`}`;
     if(p.dismissed) return `<div class="card" style="opacity:.75;"><div style="font-size:13px;">🚚 ${who} — dilewati sementara (stall-nya tidak ditahan).</div><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="draftDismiss(${p.n},false)">↺ Tampilkan lagi</button>${canKeluarkanCC()?`<button class="btn btn-outline btn-sm" style="margin:8px 0 0 8px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`:""}</div>`;
     if(p.ready) return `<div class="card" style="border:2px solid var(--green);background:#F3FBF6;">
       <h3 style="color:var(--green);">🚚 CC Siap Loading — Draft ILS</h3>
@@ -5899,7 +5914,7 @@ function dccpGantiDo(ri){
       old.trips=trips.slice(); old.schedTime=trips[0]||old.schedTime||""; old.planTrip=pt; old.planUnit=pu;
       old.origPolice=old.origPolice||old.police; old.police=plat; if(lp) old.lp=lp; { const od=old.driver||""; if(code) old.drvCode=code; else if(drv!==od) delete old.drvCode; old.driver=drv; }
       old.pengganti=true; old.note=((old.note?old.note+"; ":"")+`pengganti ${old.origPolice}`+(why?" - "+why:""));
-      holdResync(d); return;
+      ccPurgeStale(d); holdResync(d); return;
     }
     const note=`pengganti ${old.police} (rit ${chosen.join(", ")})`+(why?" - "+why:"");
     if(tgt){
@@ -9187,7 +9202,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
