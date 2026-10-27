@@ -3383,6 +3383,22 @@ function tlsCfg(){
   const t=TLS_TIPE.find(x=>x[0]===c.tipe)||TLS_TIPE[0], j=TLS_TUJ.find(x=>x[0]===c.tujuan)||TLS_TUJ[0];
   return {tipe:t[0], tipeNama:t[1], tujuan:j[0], tujuanNama:j[1], dry:!!c.dry, valUrl:(c.valUrl||""), ilsUrl:(c.ilsUrl||"")};
 }
+function tlsLogoutAll(){
+  if(!confirm("Logout akun TLS di SEMUA HP yang memakai aplikasi RADAR (APK)?\n\nSesi TLS di HP-HP itu dikeluarkan dalam beberapa detik. Browser PC tidak ikut, harus logout manual di TLS.")) return;
+  DB.set(d=>{ d.tlsLogoutAt=Date.now(); });
+  try{ tlsLogoutWatch(); }catch(e){}
+  alert("Perintah logout dikirim.");
+}
+function tlsLogoutWatch(){
+  try{
+    const t=+(DB.get().tlsLogoutAt||0); if(!t) return;
+    let last=0; try{ last=+(localStorage.getItem("tlsLogoutSeen")||0); }catch(e){}
+    if(last===0){ try{ localStorage.setItem("tlsLogoutSeen",String(t)); }catch(e){} return; }   // perangkat baru: abaikan perintah lama
+    if(t<=last) return;
+    try{ localStorage.setItem("tlsLogoutSeen",String(t)); }catch(e){}
+    if(window.AndroidTLS && AndroidTLS.logoutTls) AndroidTLS.logoutTls();
+  }catch(e){}
+}
 function saveTlsCfg(){
   const t=document.getElementById("tlsTipe").value, j=document.getElementById("tlsTuj").value, dry=!!document.getElementById("tlsDry").checked, vu=(document.getElementById("tlsValUrl").value||"").trim(), iu=(document.getElementById("tlsIlsUrl").value||"").trim();
   DB.set(d=>{ d.tlsCfg={tipe:t, tujuan:j, dry:dry, valUrl:vu, ilsUrl:iu, by:(currentUser&&currentUser.name)||"", ts:Date.now()}; });
@@ -3398,6 +3414,7 @@ function renderAdminTls(){
     <div class="field"><label>Alamat halaman Pembuatan ILS / SJKB di TLS (https://…)</label><input id="tlsIlsUrl" type="url" placeholder="https://tls.toyota.astra.co.id/PembuatanSJKB" value="${(c.ilsUrl||"").replace(/"/g,"&quot;")}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Dipakai tombol <b>Buka TLS</b> di PC. Kosong = https://tls.toyota.astra.co.id/PembuatanSJKB.</div></div>
     <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:4px 0 12px;"><input type="checkbox" id="tlsDry" ${c.dry?"checked":""} style="margin-top:3px;"><span><b>Mode tes</b>: script mengisi form tapi <b>tidak menekan Simpan</b>. Matikan kalau sudah yakin.</span></label>
     <button class="btn btn-primary" onclick="saveTlsCfg()">💾 Simpan</button>
+    <button class="btn" style="margin-left:6px;background:#b91c1c;color:#fff;" onclick="tlsLogoutAll()">🚪 Logout TLS di semua HP RADAR</button>
     <p style="font-size:11px;color:var(--text-dim);margin:10px 0 0;">Saat ini: <b>${c.tipe}</b> · <b>${c.tujuan}</b>${c.dry?" · <b style=\"color:#b45309;\">MODE TES (tanpa Simpan)</b>":""}. ILS Batam selalu manual di TLS.</p></div>
     ${`<div class="card"><h3>⚡ Script isi otomatis TLS</h3>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Dipasang sekali di browser PC kantor (Chrome/Edge) sebagai bookmark. Alurnya: di RADAR tekan <b>Salin paket untuk script TLS</b> di ILS, buka halaman <b>Pembuatan ILS / SJKB</b> di TLS, lalu klik bookmark <b>RADAR→TLS</b>. Script mengisi Vendor, Moda, Tipe Pengiriman, No. Polisi, Driver, Tujuan, dan No. Rangka, lalu menekan Simpan. Konfirmasi <b>YA</b> di TLS tetap Anda yang menekan.</p>
@@ -9246,7 +9263,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
