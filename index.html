@@ -3399,6 +3399,14 @@ function tlsLogoutWatch(){
     if(window.AndroidTLS && AndroidTLS.logoutTls) AndroidTLS.logoutTls();
   }catch(e){}
 }
+function tlsInAppOk(){ try{ return !!DB.get().tlsInAppOn; }catch(e){ return false; } }
+function tlsInAppMsg(){ alert("Buka TLS lewat aplikasi (APK) dimatikan sementara oleh admin.\n\nAkun TLS terbatas jumlah loginnya. Kirim ILS lewat PC (Salin untuk TLS / Buka TLS di PC)."); }
+function tlsInAppToggle(){
+  const on=tlsInAppOk();
+  if(!confirm(on?"MATIKAN Buka TLS di aplikasi (APK) untuk semua HP?":"NYALAKAN Buka TLS di aplikasi (APK)?\n\nNyalakan hanya kalau APK terbaru (logout otomatis) sudah terpasang di HP yang memakai TLS.")) return;
+  DB.set(d=>{ d.tlsInAppOn=!on; });
+  render();
+}
 function saveTlsCfg(){
   const t=document.getElementById("tlsTipe").value, j=document.getElementById("tlsTuj").value, dry=!!document.getElementById("tlsDry").checked, vu=(document.getElementById("tlsValUrl").value||"").trim(), iu=(document.getElementById("tlsIlsUrl").value||"").trim();
   DB.set(d=>{ d.tlsCfg={tipe:t, tujuan:j, dry:dry, valUrl:vu, ilsUrl:iu, by:(currentUser&&currentUser.name)||"", ts:Date.now()}; });
@@ -3414,6 +3422,7 @@ function renderAdminTls(){
     <div class="field"><label>Alamat halaman Pembuatan ILS / SJKB di TLS (https://…)</label><input id="tlsIlsUrl" type="url" placeholder="https://tls.toyota.astra.co.id/PembuatanSJKB" value="${(c.ilsUrl||"").replace(/"/g,"&quot;")}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Dipakai tombol <b>Buka TLS</b> di PC. Kosong = https://tls.toyota.astra.co.id/PembuatanSJKB.</div></div>
     <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:4px 0 12px;"><input type="checkbox" id="tlsDry" ${c.dry?"checked":""} style="margin-top:3px;"><span><b>Mode tes</b>: script mengisi form tapi <b>tidak menekan Simpan</b>. Matikan kalau sudah yakin.</span></label>
     <button class="btn btn-primary" onclick="saveTlsCfg()">💾 Simpan</button>
+    <button class="btn" style="margin-left:6px;" onclick="tlsInAppToggle()">${tlsInAppOk()?"🟢 TLS di aplikasi: NYALA (tekan untuk matikan)":"🔴 TLS di aplikasi: MATI (tekan untuk nyalakan)"}</button>
     <button class="btn" style="margin-left:6px;background:#b91c1c;color:#fff;" onclick="tlsLogoutAll()">🚪 Logout TLS di semua HP RADAR</button>
     <p style="font-size:11px;color:var(--text-dim);margin:10px 0 0;">Saat ini: <b>${c.tipe}</b> · <b>${c.tujuan}</b>${c.dry?" · <b style=\"color:#b45309;\">MODE TES (tanpa Simpan)</b>":""}. ILS Batam selalu manual di TLS.</p></div>
     ${`<div class="card"><h3>⚡ Script isi otomatis TLS</h3>
@@ -3466,7 +3475,7 @@ function tlsPcGo(){
   alert("Data ILS #"+b.id+" sudah disalin.\n\nDi tab TLS (halaman Pembuatan ILS / SJKB): klik ⚡ RADAR→TLS (bookmark atau tombol Tampermonkey). Kalau browser minta izin clipboard, pilih Allow.");
 }
 function tlsCopyBm(btn){ tlsCopy(decodeURIComponent(TLS_BM), btn); }
-function tlsSendApp(){ const b=window._tlsB; if(!b||!window.AndroidTLS){ alert("Fitur ini hanya di aplikasi RADAR EKY (APK)."); return; } try{ window.AndroidTLS.send(tlsPayload(b)); }catch(e){ alert("Gagal kirim ke aplikasi: "+e.message); } }
+function tlsSendApp(){ if(!tlsInAppOk()){ tlsInAppMsg(); return; } const b=window._tlsB; if(!b||!window.AndroidTLS){ alert("Fitur ini hanya di aplikasi RADAR EKY (APK)."); return; } try{ window.AndroidTLS.send(tlsPayload(b)); }catch(e){ alert("Gagal kirim ke aplikasi: "+e.message); } }
 function tlsCopyCode(btn){ const b=window._tlsB; if(!b) return; tlsCopy(encodeURIComponent("window.__RADAR_PKG="+JSON.stringify(tlsPayload(b))+";")+TLS_BM.slice("javascript:".length), btn); }
 function setTlsModa(id,m){
   const bb=(DB.get().ils||[]).find(x=>x.id===id);
@@ -3671,6 +3680,7 @@ function validasiMulai(id){
   const b=sjILS(id); if(!b) return;
   if(!b.valStartTs) DB.set(d=>{ const x=d.ils.find(y=>y.id===id); if(x&&!x.valStartTs){ x.valStartTs=Date.now(); x.valBy=sjWho(); } });
   const url=tlsCfg().valUrl||"";
+  if(!tlsInAppOk()){ tlsInAppMsg(); return; }
   if(window.AndroidTLS && window.AndroidTLS.openValidasi){ window.AndroidTLS.openValidasi(String(id), url, b.ccPlat||""); }
   else{ alert("Buka lewat aplikasi RADAR (APK) agar surat jalan tertangkap otomatis. Di web, validasi dikerjakan di TLS lalu PDF-nya diunggah lewat tombol Unggah PDF."); try{ window.open(url||"https://tls.toyota.astra.co.id","_blank"); }catch(e){} }
 }
@@ -5061,7 +5071,7 @@ function tlsOpenCardHtml(){
   if(!window.AndroidTLS||!window.AndroidTLS.openTls) return "";
   return `<div class="card"><h3>🌐 TLS</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Buka TLS di dalam aplikasi (untuk login atau cek manual). Pembuatan ILS tetap lewat tombol <b>Kirim ke TLS</b> di kartu ILS.</div>
-    <button class="btn btn-primary" style="width:100%;" onclick="try{AndroidTLS.openTls()}catch(e){alert('Gagal membuka TLS')}">🌐 Buka TLS</button></div>`;
+    <button class="btn btn-primary" style="width:100%;" onclick="if(!tlsInAppOk()){tlsInAppMsg();return;} try{AndroidTLS.openTls()}catch(e){alert('Gagal membuka TLS')}">🌐 Buka TLS</button></div>`;
 }
 
 /* ======================================================================
