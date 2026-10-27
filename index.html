@@ -5906,12 +5906,32 @@ function handleDccpFile(evt){
       const grid = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
       const rows = parseDccpGrid(grid);
       if(!rows.length){ msg.innerHTML = `<div class="msg err">Bagian "EAST KARAWANG PLANT OPERATION" tidak ditemukan / tidak ada truk.</div>`; return; }
-      dccpParsedPreview = {fileName:f.name, rows};
+      dccpParsedPreview = {fileName:f.name, rows, shift:dccpDetectShift(grid, f.name), shiftFile:dccpDetectShift([], f.name)};
       render();
     }catch(err){ msg.innerHTML = `<div class="msg err">Gagal membaca file: ${err.message}</div>`; }
   };
   rd.readAsArrayBuffer(f);
 }
+/* Shift jadwal DCCP: dibaca dari kotak "Shift: DAY / NIGHT" di bagian atas sheet; kalau tidak ada, dari nama file ("Day Shift" / "Night Shift"). Hasil: "day" | "night" | "" */
+function dccpDetectShift(grid, fileName){
+  const txt=v=>v==null?"":String(v).trim();
+  try{
+    for(let r=0;r<Math.min(grid.length,15);r++){
+      const row=grid[r]||[];
+      for(let c=0;c<row.length;c++){
+        if(/^shift\s*:?$/i.test(txt(row[c]))){
+          for(let k=c+1;k<Math.min(row.length,c+8);k++){ const v=txt(row[k]); if(/^(day|siang|pagi)$/i.test(v)) return "day"; if(/^(night|malam)$/i.test(v)) return "night"; }
+        }
+        const t=txt(row[c]); if(/\b(day|night)\s*shift\b/i.test(t)) return /night/i.test(t)?"night":"day";
+      }
+    }
+  }catch(e){}
+  const f=String(fileName||"");
+  if(/night|malam/i.test(f)) return "night";
+  if(/day|siang|pagi/i.test(f)) return "day";
+  return "";
+}
+function dccpShiftLabel(sh){ return sh==="night"?"NIGHT SHIFT (20:00–07:00)":sh==="day"?"DAY SHIFT (07:00–20:00)":"shift tidak terbaca"; }
 function parseDccpGrid(grid){
   const txt = v=> v==null ? "" : String(v).trim();
   let start = -1;
@@ -5959,7 +5979,7 @@ function saveDccpSchedule(){
   const p = dccpParsedPreview;
   DB.set(d=>{
     d.dccpSchedule = p.rows;
-    d.dccpMeta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||""};
+    d.dccpMeta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||"", shift:p.shift||""};
     d.swapLog = [];   // jadwal DCCP baru menimpa yang lama: log tukar CC ikut bersih
   });
   dccpParsedPreview = null;
@@ -6013,7 +6033,7 @@ function dccpSaveEdit(){
 /* ===== CC PENGGANTI (per ritase atau sampai ritase terakhir) ===== */
 function dccpTripList(r){ return ((r.trips&&r.trips.length)?r.trips:(r.schedTime?[r.schedTime]:[])).slice().sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0)); }
 /* Ritase yang sudah jalan dihitung sejak awal SHIFT milik baris jadwal itu (dari jam ritase pertamanya), bukan sejak 07.00: plat 24 jam yang sudah jalan di shift pagi tidak mengurangi jadwal shift malam */
-function dccpShiftFrom(r){ const t=dccpTripList(r), pd=prodDayStart(Date.now()); if(!t.length) return pd; const h=+String(t[0]).split(":")[0]; return (h>=SHIFT_START_H&&h<SHIFT2_START_H)?pd:pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; }
+function dccpShiftFrom(r){ const t=dccpTripList(r), pd=prodDayStart(Date.now()); { const sh=((DB.get().dccpMeta)||{}).shift; if(sh==="day") return pd; if(sh==="night") return pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; } if(!t.length) return pd; const h=+String(t[0]).split(":")[0]; return (h>=SHIFT_START_H&&h<SHIFT2_START_H)?pd:pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; }
 /* ILS plat ini sejak awal shift baris jadwal. ILS pertama sesudah status Change Shift adalah ritase SISA shift sebelumnya, jadi tidak mengurangi jadwal shift ini. */
 function dccpDoneList(r,data){ const from=dccpShiftFrom(r), k=normPlat(r.police);
   const L=(data.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=from).sort((a,b)=>a.ts-b.ts);
@@ -6234,12 +6254,12 @@ function renderDccpUpload(){
       <p style="font-size:13px;color:var(--text-dim);margin:6px 0 12px;">Pilih file Excel DCCP. Hanya bagian <b>B. EAST KARAWANG PLANT OPERATION</b> yang dibaca.</p>
       <input type="file" accept=".xlsx,.xls" onchange="handleDccpFile(event)">
       <div id="dccpMsg" style="margin-top:10px;"></div>
-      ${pv?`<h4 style="margin:14px 0 6px;">Pratinjau — ${pv.fileName} (${pv.rows.length} truk)</h4>${tbl(pv.rows,false)}
+      ${pv?`<h4 style="margin:14px 0 6px;">Pratinjau — ${pv.fileName} (${pv.rows.length} truk)</h4><div class="msg ${pv.shift?"info":"err"}" style="margin-bottom:8px;"><b>Terbaca: ${dccpShiftLabel(pv.shift)}</b>${(pv.shift&&pv.shiftFile&&pv.shift!==pv.shiftFile)?`<br><span style="font-size:12px;">⚠ Nama file menunjukkan ${dccpShiftLabel(pv.shiftFile)}, isi sheet menunjukkan ${dccpShiftLabel(pv.shift)}. Pastikan file yang benar.</span>`:""}${pv.shift?"":`<br><span style="font-size:12px;">Tidak ada tulisan Day/Night di sheet atau nama file. Shift ditentukan dari jam ritase pertama.</span>`}</div>${tbl(pv.rows,false)}
         <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn" onclick="saveDccpSchedule()">✔ Simpan Jadwal</button><button class="btn btn-sm" onclick="clearDccpPreview()">Batal</button></div>`:""}
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">Jadwal Aktif (${data.dccpSchedule.length} truk)</h3><span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(-1)">➕ Tambah CC / Spot Order</button>${(data.dccpSchedule.length&&currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))?`<button class="btn-danger btn btn-sm" onclick="dccpClearAll()">🗑 Hapus Semua</button>`:""}</span></div>
-      ${meta.fileName?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${meta.fileName} · diunggah ${new Date(meta.uploadedAt).toLocaleString('id-ID')} oleh ${meta.uploadedBy}</div>`:""}
+      ${meta.fileName?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${meta.shift?`<b>${dccpShiftLabel(meta.shift)}</b> · `:""}${meta.fileName} · diunggah ${new Date(meta.uploadedAt).toLocaleString('id-ID')} oleh ${meta.uploadedBy}</div>`:""}
       ${data.dccpSchedule.length && !data.dccpSchedule.some(r=>r.trips&&r.trips.length) ? `<div class="msg err" style="margin-bottom:10px;">Jadwal ini masih format lama (hanya jam ritase pertama). Upload ulang file DCCP agar semua jam ritase terbaca.</div>`:""}
       ${data.dccpSchedule.length?tbl(data.dccpSchedule,true):`<div class="emptystate">Belum ada jadwal diunggah.</div>`}
     </div>`;
