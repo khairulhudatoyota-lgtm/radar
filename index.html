@@ -3363,11 +3363,11 @@ const TLS_TUJ=[["NVDCKRW","NVDC KARAWANG"],["NVDCCIB","NVDC CIBITUNG"],["PSUPTBN
 function tlsCfg(){
   const c=DB.get().tlsCfg||{};
   const t=TLS_TIPE.find(x=>x[0]===c.tipe)||TLS_TIPE[0], j=TLS_TUJ.find(x=>x[0]===c.tujuan)||TLS_TUJ[0];
-  return {tipe:t[0], tipeNama:t[1], tujuan:j[0], tujuanNama:j[1], dry:!!c.dry, valUrl:(c.valUrl||"")};
+  return {tipe:t[0], tipeNama:t[1], tujuan:j[0], tujuanNama:j[1], dry:!!c.dry, valUrl:(c.valUrl||""), ilsUrl:(c.ilsUrl||"")};
 }
 function saveTlsCfg(){
-  const t=document.getElementById("tlsTipe").value, j=document.getElementById("tlsTuj").value, dry=!!document.getElementById("tlsDry").checked, vu=(document.getElementById("tlsValUrl").value||"").trim();
-  DB.set(d=>{ d.tlsCfg={tipe:t, tujuan:j, dry:dry, valUrl:vu, by:(currentUser&&currentUser.name)||"", ts:Date.now()}; });
+  const t=document.getElementById("tlsTipe").value, j=document.getElementById("tlsTuj").value, dry=!!document.getElementById("tlsDry").checked, vu=(document.getElementById("tlsValUrl").value||"").trim(), iu=(document.getElementById("tlsIlsUrl").value||"").trim();
+  DB.set(d=>{ d.tlsCfg={tipe:t, tujuan:j, dry:dry, valUrl:vu, ilsUrl:iu, by:(currentUser&&currentUser.name)||"", ts:Date.now()}; });
   render(); alert("Pengaturan TLS tersimpan.");
 }
 function renderAdminTls(){
@@ -3377,6 +3377,7 @@ function renderAdminTls(){
     <div class="field"><label>Tipe Pengiriman (ILS reguler)</label><select id="tlsTipe">${TLS_TIPE.map(x=>`<option value="${x[0]}" ${x[0]===c.tipe?"selected":""}>${x[0]} - ${x[1]}</option>`).join("")}</select></div>
     <div class="field"><label>Lokasi Tujuan (ILS reguler)</label><select id="tlsTuj">${TLS_TUJ.map(x=>`<option value="${x[0]}" ${x[0]===c.tujuan?"selected":""}>${x[0]} - ${x[1]}</option>`).join("")}</select></div>
     <div class="field"><label>Alamat halaman SJKB Validasi di TLS (https://…)</label><input id="tlsValUrl" type="url" placeholder="https://tls.toyota.astra.co.id/…" value="${(c.valUrl||"").replace(/"/g,"&quot;")}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Dipakai tombol <b>Validasi</b> milik Koordinator. Kosong = aplikasi membuka beranda TLS, lalu pilih menu sendiri.</div></div>
+    <div class="field"><label>Alamat halaman Pembuatan ILS / SJKB di TLS (https://…)</label><input id="tlsIlsUrl" type="url" placeholder="https://tls.toyota.astra.co.id/PembuatanSJKB" value="${(c.ilsUrl||"").replace(/"/g,"&quot;")}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Dipakai tombol <b>Buka TLS</b> di PC. Kosong = https://tls.toyota.astra.co.id/PembuatanSJKB.</div></div>
     <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:4px 0 12px;"><input type="checkbox" id="tlsDry" ${c.dry?"checked":""} style="margin-top:3px;"><span><b>Mode tes</b>: script mengisi form tapi <b>tidak menekan Simpan</b>. Matikan kalau sudah yakin.</span></label>
     <button class="btn btn-primary" onclick="saveTlsCfg()">💾 Simpan</button>
     <p style="font-size:11px;color:var(--text-dim);margin:10px 0 0;">Saat ini: <b>${c.tipe}</b> · <b>${c.tujuan}</b>${c.dry?" · <b style=\"color:#b45309;\">MODE TES (tanpa Simpan)</b>":""}. ILS Batam selalu manual di TLS.</p></div>
@@ -3391,6 +3392,9 @@ function renderAdminTls(){
       <a class="btn btn-primary" style="width:auto;padding:10px 16px;text-decoration:none;display:inline-block;" href="${TLS_BM}" draggable="true" onclick="event.preventDefault();alert('Jangan diklik di sini. Seret tombol ini ke Bookmarks bar, lalu klik dari sana saat halaman TLS terbuka.');">⚡ RADAR→TLS</a>
       <button type="button" class="btn btn-outline" style="width:auto;padding:10px 16px;" onclick="tlsCopyBm(this)">Salin kode bookmark</button>
     </div>
+    <h3 style="margin:18px 0 6px;font-size:15px;">🧩 Alternatif tanpa bookmark: Tampermonkey</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;">Pasang ekstensi <b>Tampermonkey</b> di Chrome/Edge, buat script baru, tempel kode di bawah, simpan. Sesudah itu tombol <b>⚡ RADAR→TLS</b> muncul sendiri di halaman Pembuatan ILS / SJKB, tanpa bookmark.</p>
+    <button type="button" class="btn btn-outline" style="width:auto;padding:10px 16px;" onclick="tlsCopyUs(this)">Salin script Tampermonkey</button>
     <h3 style="margin:18px 0 6px;font-size:15px;">📱 Chrome di HP (tanpa bookmark)</h3>
     <ol style="font-size:12px;margin:0 0 10px 18px;padding:0;line-height:1.6;">
       <li>Di tab <b>Delivery</b>, ketuk <b>Salin untuk TLS</b> pada ILS, lalu <b>⚡ Salin kode isi TLS</b>. Data ILS sudah ada di dalam kode itu.</li>
@@ -3416,6 +3420,16 @@ function tlsCopyPackage(btn){
   tlsCopy(tlsPayload(b), btn);
 }
 function tlsCopyUs(btn){ tlsCopy(TLS_US, btn); }
+function tlsPcGo(){
+  const b=window._tlsB; if(!b) return;
+  if(b.batam){ alert("ILS Batam diinput manual di TLS."); return; }
+  if(b.units.length>6){ alert("Maksimal 6 unit per ILS."); return; }
+  if((b.moda||"CC")==="SC" && b.units.length!==1){ alert("Moda SC hanya untuk 1 unit."); return; }
+  tlsCopy(tlsPayload(b));
+  let u=tlsCfg().ilsUrl||"https://tls.toyota.astra.co.id/PembuatanSJKB"; if(!/^https:\/\//i.test(u)) u="https://tls.toyota.astra.co.id/PembuatanSJKB";
+  try{ window.open(u,"_blank"); }catch(e){}
+  alert("Data ILS #"+b.id+" sudah disalin.\n\nDi tab TLS (halaman Pembuatan ILS / SJKB): klik ⚡ RADAR→TLS (bookmark atau tombol Tampermonkey). Kalau browser minta izin clipboard, pilih Allow.");
+}
 function tlsCopyBm(btn){ tlsCopy(decodeURIComponent(TLS_BM), btn); }
 function tlsSendApp(){ const b=window._tlsB; if(!b||!window.AndroidTLS){ alert("Fitur ini hanya di aplikasi RADAR EKY (APK)."); return; } try{ window.AndroidTLS.send(tlsPayload(b)); }catch(e){ alert("Gagal kirim ke aplikasi: "+e.message); } }
 function tlsCopyCode(btn){ const b=window._tlsB; if(!b) return; tlsCopy(encodeURIComponent("window.__RADAR_PKG="+JSON.stringify(tlsPayload(b))+";")+TLS_BM.slice("javascript:".length), btn); }
@@ -3428,7 +3442,7 @@ function openTLS(id){
   const head=(k,label,v,key)=>`<div class="tlsrow"><div class="k">${label}</div><div class="v">${v||"-"}</div>${key?`<button type="button" class="tlscp" onclick="tlsCopy(tlsHeadVal('${key}'),this)">Salin</button>`:""}</div>`;
   const rows=b.units.map((u,i)=>`<tr><td>${i+1}</td><td><b>${u.frame}</b></td><td><button type="button" class="tlscp" onclick="tlsCopy(tlsVal(${i},'frame'),this)">Salin</button></td></tr>`).join("");
   showModal(`<h3 style="margin:0 0 4px;">📋 Siap input ke TLS</h3>
-    ${window.AndroidTLS?`<button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 8px;" onclick="tlsSendApp()">📲 Kirim ke TLS (otomatis)</button>`:""}
+    ${window.AndroidTLS?`<button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 8px;" onclick="tlsSendApp()">📲 Kirim ke TLS (otomatis)</button>`:`<button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 4px;" onclick="tlsPcGo()">🖥 Buka TLS &amp; salin data (PC)</button><p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;">Data ILS tersalin dan TLS terbuka di tab baru. Di tab TLS klik <b>⚡ RADAR→TLS</b> (bookmark / tombol Tampermonkey). Pasang sekali di Admin → TLS.</p>`}
     <button type="button" class="btn btn-primary btn-sm" style="width:100%;margin:2px 0 6px;" onclick="tlsCopyCode(this)">⚡ Salin kode isi TLS</button>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Di TLS (halaman Pembuatan ILS / SJKB): ketuk <b>kotak alamat</b>, ketik <b>javascript:</b> lalu <b>tempel</b>, tekan <b>Enter / Go</b>.</p>
     <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 10px;" onclick="tlsCopyPackage(this)">Salin paket (cara bookmark)</button>
