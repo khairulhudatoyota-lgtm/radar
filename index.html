@@ -1769,8 +1769,8 @@ function renderInner(){
   vp.className = "view v-"+activeTab;
   if(activeTab==="dispatcher"){ setVP(vp, renderDispatcher()); if(_vpChanged && vinDraft) setTimeout(()=>{ if(document.getElementById("vinInput")) onVinInput(); },0); }
   else if(activeTab==="orderstall") setVP(vp, renderOrderStall());
-  else if(activeTab==="delivery") setVP(vp, renderDelivery());
-  else if(activeTab==="koordinator") setVP(vp, renderKoordinator());
+  else if(activeTab==="delivery") setVP(vp, schedReqHtml()+renderDelivery());
+  else if(activeTab==="koordinator") setVP(vp, schedReqHtml()+renderKoordinator());
   else if(activeTab==="defect"){ setVP(vp, renderDefectReport()); if(_vpChanged) setTimeout(init3DCarDiagram, 0); }
   else if(activeTab==="confirmdefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccplan") setVP(vp, renderCCPlan());
@@ -1778,7 +1778,7 @@ function renderInner(){
   else if(activeTab==="prio") setVP(vp, renderPrioPage());
   else if(activeTab==="dashboard") setVP(vp, renderLeaderDashboard());
   else if(activeTab==="speedlog") setVP(vp, renderSpeedLog());
-  else if(activeTab==="dccp") setVP(vp, renderDccpUpload());
+  else if(activeTab==="dccp") setVP(vp, schedReqHtml()+renderDccpUpload());
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
   else if(activeTab==="ccreport"){ setVP(vp, renderCcReport()); if(_vpChanged) setTimeout(()=>tripLoad().then(rptUpdate),0); }
@@ -2870,6 +2870,19 @@ function holdResync(d){
 }
 /* Plat yang sudah tidak ada di Jadwal DCCP (mis. diganti CC Pengganti) tidak boleh nyangkut di waiting list / Parkir Luar / daftar izin masuk.
    CC di stall tidak disentuh (urus lewat Keluarkan CC). Absen manual Delivery/Admin tidak disentuh. Tidak jalan kalau jadwal kosong. */
+/* Ganti plat / driver CC terjadwal: semua yang sudah tercatat atas plat lama ikut berganti otomatis (stall, waiting list, Parkir Luar, izin masuk, ILS draft yang belum Delout),
+   dengan urutan/jam absen yang sama. Dipakai Edit CC Terjadwal dan CC Pengganti satu baris penuh. */
+function ccRenameEverywhere(d, oldPlat, nu){
+  const ko=normPlat(oldPlat), kn=normPlat(nu.plat); if(!ko||!kn) return 0; let n=0;
+  const apply=o=>{ o.plat=platFmt(nu.plat); if(nu.lp) o.lp=nu.lp; o.drvCode=nu.drvCode||""; n++; };
+  Object.keys(d.cc||{}).forEach(k=>{ const c=d.cc[k]; if(c && normPlat(c.plat)===ko) apply(c); });
+  (d.queue||[]).forEach(q=>{ if(q && normPlat(q.plat)===ko) apply(q); });
+  (d.hold||[]).forEach(q=>{ if(q && normPlat(q.plat)===ko) apply(q); });
+  if(ko!==kn && d.earlyOk && d.earlyOk[ko]){ d.earlyOk[kn]=d.earlyOk[ko]; delete d.earlyOk[ko]; n++; }
+  (d.ils||[]).forEach(b=>{ if(b && !b.outTs && b.status==="open" && normPlat(b.ccPlat)===ko){ b.ccPlat=platFmt(nu.plat); if(nu.lp) b.lp=nu.lp; if(nu.drvCode) b.drvCode=nu.drvCode; b.drvName=nu.driver||""; n++; } });
+  try{ ccDedupe(d); }catch(e){}
+  return n;
+}
 function ccRegIn(d, plat){ const k=normPlat(plat); return !!k && ((d.dccpSchedule||[]).some(r=>normPlat(r.police)===k) || !!csActive(d,plat)); }
 function ccStaleFind(d){
   if(!(d.dccpSchedule||[]).length) return false;
@@ -5906,7 +5919,7 @@ function handleDccpFile(evt){
       const grid = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
       const rows = parseDccpGrid(grid);
       if(!rows.length){ msg.innerHTML = `<div class="msg err">Bagian "EAST KARAWANG PLANT OPERATION" tidak ditemukan / tidak ada truk.</div>`; return; }
-      dccpParsedPreview = {fileName:f.name, rows, shift:dccpDetectShift(grid, f.name), shiftFile:dccpDetectShift([], f.name)};
+      dccpParsedPreview = {fileName:f.name, rows, shift:dccpDetectShift(grid, f.name), shiftFile:dccpDetectShift([], f.name), gapMin:dccpGapFrom(rows)};
       render();
     }catch(err){ msg.innerHTML = `<div class="msg err">Gagal membaca file: ${err.message}</div>`; }
   };
@@ -5930,6 +5943,19 @@ function dccpDetectShift(grid, fileName){
   if(/night|malam/i.test(f)) return "night";
   if(/day|siang|pagi/i.test(f)) return "day";
   return "";
+}
+/* Jarak antar ritase (menit) di DCCP. CC dengan >= 3 ritase punya pola jarak sendiri yang berulang (mis. 130, 156, 117, lalu 130 lagi); ritase tambahan mengikuti pola itu.
+   CC dengan 1-2 ritase belum punya pola: dipakai jarak umum DCCP (median jarak CC berritase 3-5, dibaca saat upload; cadangan 130 menit). */
+function dccpMinsOf(r){ return dccpTripList(r).map(x=>{ const [h,m]=x.split(":").map(Number); return h*60+m; }); }
+function dccpGapsOf(r){ const t=dccpMinsOf(r), g=[]; for(let i=1;i<t.length;i++) g.push(((t[i]-t[i-1])%1440+1440)%1440); return g; }
+function dccpGapFrom(rows){
+  const all=[]; (rows||[]).forEach(r=>{ const n=dccpTripList(r).length; if(n>=3&&n<=5) dccpGapsOf(r).forEach(g=>{ if(g>=20&&g<=300) all.push(g); }); });
+  if(!all.length) return 130; all.sort((a,b)=>a-b); return all[Math.floor(all.length/2)];
+}
+function dccpGapMin(r){   // {gap, own}
+  const g=dccpGapsOf(r).filter(x=>x>=20&&x<=400);
+  if(dccpTripList(r).length>=3 && g.length>=2) return {gap:g[(dccpTripList(r).length-1)%g.length], own:true};
+  const m=(DB.get().dccpMeta||{}).gapMin; return {gap:(m>=20&&m<=300?m:130), own:false};
 }
 function dccpShiftLabel(sh){ return sh==="night"?"NIGHT SHIFT (20:00–07:00)":sh==="day"?"DAY SHIFT (07:00–20:00)":"shift tidak terbaca"; }
 function parseDccpGrid(grid){
@@ -5979,7 +6005,7 @@ function saveDccpSchedule(){
   const p = dccpParsedPreview;
   DB.set(d=>{
     d.dccpSchedule = p.rows;
-    d.dccpMeta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||"", shift:p.shift||""};
+    d.dccpMeta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||"", shift:p.shift||"", gapMin:p.gapMin||52};
     d.swapLog = [];   // jadwal DCCP baru menimpa yang lama: log tukar CC ikut bersih
   });
   dccpParsedPreview = null;
@@ -6010,6 +6036,20 @@ function dccpDelayBadge(sched, arr){
 let dccpEditIdx = null;   // index jadwal yang sedang diedit; -1 = form tambah spot order
 function dccpOpenEdit(i){ dccpEditIdx=i; render(); }
 function dccpCancelEdit(){ dccpEditIdx=null; render(); }
+/* Tambah satu ritase untuk CC yang sudah terjadwal (mis. saat ramai). Jam ritase tambahan mengikuti skema DCCP: jam ritase terakhir CC itu + jarak antar batch (dibaca dari DCCP, umumnya 52 menit). Jumlah Trip +1, unit +6. */
+function dccpAddRit(ri){
+  const r=(DB.get().dccpSchedule||[])[ri]; if(!r) return;
+  const trips=dccpTripList(r), G=dccpGapMin(r), gap=G.gap;
+  let base; if(trips.length){ base=trips[trips.length-1]; } else { const n=new Date(); base=String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"); }
+  const [bh,bm]=base.split(":").map(Number); let tot=(bh*60+bm+(trips.length?gap:0))%1440;
+  const nt=String(Math.floor(tot/60)).padStart(2,"0")+":"+String(tot%60).padStart(2,"0");
+  const n=(r.planTrip||(trips.length||1));
+  if(!confirm("Tambah 1 ritase untuk "+platFmt(r.police)+"?\n\nRitase "+n+" → "+(n+1)+" (unit +6)\nJam ritase tambahan: "+nt+(trips.length?" ("+base+" + "+gap+" menit, "+(G.own?"pola jarak CC ini di DCCP":"jarak umum DCCP")+")":" (sekarang, CC ini belum punya jam ritase)"))) return;
+  DB.set(d=>{ const x=(d.dccpSchedule||[])[ri]; if(!x||normPlat(x.police)!==normPlat(r.police)) return;
+    const t=(x.planTrip||((x.trips&&x.trips.length)||1)); x.planTrip=t+1; x.planUnit=(x.planUnit||t*6)+6; x.addRit=(x.addRit||0)+1;
+    const cur=((x.trips&&x.trips.length)?x.trips:(x.schedTime?[x.schedTime]:[])).slice(); if(!cur.includes(nt)) cur.push(nt); x.trips=cur; if(!x.schedTime) x.schedTime=nt; });
+  render();
+}
 function dccpSaveEdit(){
   const g = id=>document.getElementById(id).value.trim();
   const police = platFmt(g("dfPolice")), lp=g("dfLP");
@@ -6025,6 +6065,7 @@ function dccpSaveEdit(){
       const old = d.dccpSchedule[idx]; if(!old) return;
       const orig = old.origPolice || (normPlat(old.police)!==normPlat(rec.police) ? old.police : "");
       d.dccpSchedule[idx] = {...old, ...rec, origPolice: orig};
+      { const nr=d.dccpSchedule[idx]; if(normPlat(old.police)!==normPlat(nr.police) || (old.driver||"")!==(nr.driver||"") || (old.drvCode||"")!==(nr.drvCode||"")){ ccRenameEverywhere(d, old.police, {plat:nr.police, lp:nr.lp, drvCode:nr.drvCode, driver:nr.driver}); ccPurgeStale(d); holdResync(d); } }
     }
   });
   dccpEditIdx=null; render();
@@ -6091,9 +6132,9 @@ function dccpGantiDo(ri){
     if(!tgt && !rest.length && dccpDoneCount(Object.assign({},old,{police:old.police}),d)===0){
       // seluruh ritase diganti & belum ada yang loading: plat baru menempati baris & jam yang sama persis
       old.trips=trips.slice(); old.schedTime=trips[0]||old.schedTime||""; old.planTrip=pt; old.planUnit=pu;
-      old.origPolice=old.origPolice||old.police; old.police=plat; if(lp) old.lp=lp; { const od=old.driver||""; if(code) old.drvCode=code; else if(drv!==od) delete old.drvCode; old.driver=drv; }
+      const prevP=old.police; old.origPolice=old.origPolice||old.police; old.police=plat; if(lp) old.lp=lp; { const od=old.driver||""; if(code) old.drvCode=code; else if(drv!==od) delete old.drvCode; old.driver=drv; }
       old.pengganti=true; old.note=((old.note?old.note+"; ":"")+`pengganti ${old.origPolice}`+(why?" - "+why:""));
-      ccPurgeStale(d); holdResync(d); return;
+      ccRenameEverywhere(d, prevP, {plat:plat, lp:old.lp, drvCode:old.drvCode, driver:old.driver}); ccPurgeStale(d); holdResync(d); return;
     }
     const note=`pengganti ${old.police} (rit ${chosen.join(", ")})`+(why?" - "+why:"");
     if(tgt){
@@ -6241,7 +6282,7 @@ function renderDccpUpload(){
       ${rows.map((r,ri)=>{
         const a = withActual ? findActualArrival(r.police,data) : null;
         if(withActual && !lpMine(r.lp)) return "";
-        return `<tr><td>${r.lp}</td><td><b>${platFmt(r.police)}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
+        return `<tr><td>${r.lp}</td><td><b>${platFmt(r.police)}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${(withActual&&currentUser&&["koordinator","delivery","admin"].includes(currentUser.role))?`<div><button class="btn btn-sm" style="margin-top:4px;background:#fff4d6;color:#8a5a00;border:1px solid #e7c76a;" onclick="dccpAddRit(${ri})">➕ +1 Rit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
         ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${ccLbl(a.stall)})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> ${canTukarJam()?`<button class="btn btn-sm" onclick="tukarOpen(${ri})">🔄 Tukar Jam</button>`:""} ${canKeluarkanCC()?`<button class="btn btn-sm" onclick="earlyOne('${xlEsc(r.police)}',true)">🔓 Izin masuk awal</button>`:""} <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
       }).join("")}
     </table></div>`;
@@ -7993,7 +8034,7 @@ function ccShiftWatch(){
 function ccPlatRelock(){ try{ if(shareTrk.on) stopShare(true); }catch(e){} ccPlatOk=false; try{ render(); }catch(e){} setTimeout(ccPlatGateCheck,60); }
 setInterval(ccShiftWatch, 30000);
 /* Plat tadi ditolak (belum di DCCP): begitu Koordinator/Delivery menambahkan, lanjut sendiri supaya absen otomatis langsung jalan */
-setInterval(()=>{ try{ const pl=window._cgPend; if(!pl||!currentUser||currentUser.role!=="cc") return; const i=document.getElementById("cgPlat"); if(!i){ window._cgPend=null; return; } if(ccPlatRegistered(pl)){ i.value=pl; ccPlatGateSave(); } }catch(e){} }, 2000);
+setInterval(()=>{ try{ const pl=window._cgPend; if(!pl||!currentUser||currentUser.role!=="cc") return; const i=document.getElementById("cgPlat"); if(!i){ window._cgPend=null; return; } if(ccPlatRegistered(pl)){ try{ ringBg("Plat sudah terdaftar", pl+" sudah ada di jadwal. Buka RADAR untuk masuk."); }catch(e){} try{ RSnd.login(); }catch(e){} i.value=pl; ccPlatGateSave(); } }catch(e){} }, 2000);
 /* ===== ABSEN BERBASIS PETA =====
    SUMBER ABSEN UTAMA: peta. CC yang posisinya terlihat di peta (HP/APK-nya membagikan lokasi) dan sudah di dalam radius yard tapi BELUM tercatat, dicatat otomatis oleh perangkat Delivery/Admin yang sedang terbuka.
    Jadi CC yang dekat tetap terrecord walau absen otomatis di HP-nya belum jalan. Satu CC tetap satu catatan (cek dobel di registerCC).
@@ -8112,11 +8153,72 @@ function takeCardHtml(data){
       <div style="display:flex;gap:8px;margin-top:6px;"><button class="btn btn-primary btn-sm" onclick="takeDecide('${xlEsc(x.k)}',true)">✔ Setujui</button><button class="btn btn-outline btn-sm" onclick="takeDecide('${xlEsc(x.k)}',false)">✕ Tolak</button></div></div>`).join("")}
   </div>`;
 }
+
+/* ===== PERMINTAAN JADWAL dari driver yang platnya belum terjadwal =====
+   Driver tetap login, tetapi tidak tampil di peta dan tidak bisa absen sampai platnya ada di Jadwal DCCP / Spot Order / CC Pengganti.
+   Dari layar isi plat ia bisa: (1) minta dijadwalkan -> berbunyi di Koordinator LP-nya, (2) ingatkan update DCCP -> berbunyi di Delivery.
+   Permintaan hilang sendiri begitu plat terdaftar, atau sesudah 3 jam. */
+const SREQ_COOL=3*60000, SREQ_TTL=3*3600000;
+const _sreqSeen=new Set();
+function schedReqSend(kind){
+  const plat=window._cgPend||ccPlatNorm((document.getElementById("cgPlat")||{}).value), lp=((document.getElementById("cgLp")||{}).value||"").trim(), out=document.getElementById("cgReqMsg");
+  if(!plat||!currentUser) return;
+  const k=normPlat(plat), cur=((DB.get().schedReq||{})[k]||{}), last=((cur.kinds||{})[kind])||0;
+  if(Date.now()-last<SREQ_COOL){ if(out) out.innerHTML=`<div class="msg info">Sudah dikirim ${Math.max(1,Math.round((Date.now()-last)/60000))} menit lalu. Bisa diingatkan lagi ${Math.ceil((SREQ_COOL-(Date.now()-last))/60000)} menit lagi.</div>`; return; }
+  DB.set(d=>{ d.schedReq=d.schedReq||{}; const r=d.schedReq[k]||{plat:platFmt(plat), kinds:{}}; r.plat=platFmt(plat); r.lp=lp||r.lp||""; r.user=currentUser.username; r.name=currentUser.name||currentUser.username; r.kinds=r.kinds||{}; r.kinds[kind]=Date.now(); r.ts=Date.now(); d.schedReq[k]=r; });
+  if(out) out.innerHTML=`<div class="msg ok">✔ ${kind==="edit"?"Permintaan jadwal terkirim ke Koordinator"+(lp?" LP "+xlEsc(lp):""):"Pengingat update DCCP terkirim ke Delivery"}. Layar ini otomatis lanjut begitu plat terdaftar.</div>`;
+}
+function schedReqList(d){
+  const now=Date.now(); return Object.keys(d.schedReq||{}).map(k=>Object.assign({k},d.schedReq[k])).filter(r=>r && r.plat && now-(r.ts||0)<SREQ_TTL && !ccPlatRegistered(r.plat));
+}
+function schedReqGo(k){
+  const r=(DB.get().schedReq||{})[k]; if(!r) return;
+  activeTab="dccp"; dccpEditIdx=-1; render();
+  setTimeout(()=>{ try{ const set=(id,v)=>{ const e=document.getElementById(id); if(e && v && !e.value) e.value=v; }; set("dfPolice",r.plat); set("dfLP",r.lp); set("dfDriver",r.name); const f=document.getElementById("dfPolice"); if(f) f.scrollIntoView({block:"center"}); }catch(e){} },150);
+}
+function schedReqDone(k){ DB.set(d=>{ if(d.schedReq) delete d.schedReq[k]; }); render(); }
+function schedReqHtml(){
+  try{
+    if(!currentUser || !["koordinator","delivery","admin"].includes(currentUser.role)) return "";
+    const L=schedReqList(DB.get()).filter(r=>currentUser.role!=="koordinator" || lpMine(r.lp)); if(!L.length) return "";
+    const hm=t=>t?new Date(t).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"}):"";
+    return `<div class="card" style="border-left:5px solid #c8102e;"><h3 style="margin:0 0 6px;">🔔 Driver menunggu jadwal (${L.length})</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Plat ini belum ada di Jadwal DCCP / Spot Order. Driver sudah login tapi belum bisa absen.</div>
+      ${L.map(r=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--border);padding:8px 0;">
+        <div style="flex:1;min-width:180px;font-size:13px;"><b>${xlEsc(r.plat)}</b>${r.lp?" · LP "+xlEsc(r.lp):""} · ${xlEsc(r.name||r.user||"")}<br><span style="font-size:11px;color:var(--text-dim);">${(r.kinds||{}).edit?"minta dijadwalkan "+hm(r.kinds.edit):""}${((r.kinds||{}).edit&&(r.kinds||{}).dccp)?" · ":""}${(r.kinds||{}).dccp?"minta update DCCP "+hm(r.kinds.dccp):""}</span></div>
+        ${true?`<button class="btn btn-primary btn-sm" style="width:auto;" onclick="schedReqGo('${r.k}')">➕ Jadwalkan (Spot / Edit)</button>`:""}
+        ${(currentUser.role!=="koordinator")?`<button class="btn btn-outline btn-sm" style="width:auto;" onclick="activeTab='dccp';render();">⬆ Upload DCCP</button>`:""}
+        <button class="btn btn-outline btn-sm" style="width:auto;" onclick="schedReqDone('${r.k}')">Tutup</button></div>`).join("")}</div>`;
+  }catch(e){ return ""; }
+}
+function schedReqCheck(){
+  try{
+    if(!currentUser) return;
+    const d=DB.get(), role=currentUser.role;
+    // bersihkan yang sudah terdaftar / kedaluwarsa (oleh perangkat Delivery/Koordinator/Admin)
+    if(["koordinator","delivery","admin"].includes(role)){
+      const now=Date.now(), stale=Object.keys(d.schedReq||{}).filter(k=>{ const r=d.schedReq[k]; return !r || now-(r.ts||0)>=SREQ_TTL || ccPlatRegistered(r.plat); });
+      if(stale.length) DB.set(x=>{ stale.forEach(k=>{ if(x.schedReq) delete x.schedReq[k]; }); });
+    }
+    if(role!=="koordinator" && role!=="delivery") return;
+    const kind=role==="koordinator"?"edit":"dccp";
+    schedReqList(d).forEach(r=>{
+      const t=(r.kinds||{})[kind]; if(!t || Date.now()-t>15*60000) return;
+      if(role==="koordinator" && !lpMine(r.lp)) return;
+      const key=kind+"|"+r.k+"|"+t; if(_sreqSeen.has(key)) return; _sreqSeen.add(key);
+      const title=kind==="edit"?"📅 Driver minta dijadwalkan":"⬆ Diingatkan update DCCP";
+      const txt=kind==="edit"?`${r.plat}${r.lp?" (LP "+r.lp+")":""} · ${r.name||""}: plat belum ada di jadwal. Tambahkan lewat Spot Order atau Edit CC.`:`${r.plat}${r.lp?" (LP "+r.lp+")":""} · ${r.name||""}: plat belum ada di jadwal. Mohon upload DCCP terbaru.`;
+      playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg(title, txt); }catch(e){}
+      if('Notification' in window && Notification.permission==='granted'){ try{ new Notification(title,{body:txt}); }catch(e){} }
+      try{ render(); }catch(e){}
+    });
+  }catch(e){}
+}
 function ccPlatGateSave(){
   const plat=ccPlatNorm((document.getElementById("cgPlat")||{}).value), lp=((document.getElementById("cgLp")||{}).value||"").trim(), msg=document.getElementById("cgMsg");
   if(!plat){ msg.innerHTML=`<div class="msg err">Format plat tidak dikenali. Contoh: B 9660 TEJ</div>`; return; }
   if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
-  if(!ccPlatRegistered(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="msg err"><b>${xlEsc(plat)}</b> belum terdaftar di Jadwal DCCP, Spot Order, atau CC Pengganti. Minta Koordinator atau Delivery menambahkannya. Layar ini menunggu dan otomatis lanjut begitu plat terdaftar, tidak perlu menekan apa pun.</div>`; return; }
+  if(!ccPlatRegistered(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="msg err"><b>Maaf, plat ${xlEsc(plat)} belum ada jadwal.</b><br>Kamu tetap login, tapi belum tampil di peta dan belum bisa absen sampai plat ini dijadwalkan.</div><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;"><button type="button" class="btn btn-primary" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal (bunyi di Koordinator)</button><button type="button" class="btn btn-outline" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update? Ingatkan Delivery</button></div><div id="cgReqMsg" style="margin-top:8px;"></div><div style="font-size:12px;color:var(--text-dim);margin-top:6px;">Layar ini menunggu dan otomatis lanjut begitu plat terdaftar.</div>`; return; }
   { const oth=ccTakeOther(plat), k=normPlat(plat), me=currentUser.username, q=(DB.get().takeReq||{})[k], fresh=q&&q.to===me&&Date.now()-q.ts<30*60000;
     if(oth){
       const on=(()=>{ const u=(DB.get().users||[]).find(y=>y.username===oth.u); return (u&&u.name)||oth.u; })();
@@ -9431,7 +9533,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); ccQueueFarPurge(); tlsLogoutWatch(); wkTick(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); wkTick(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
