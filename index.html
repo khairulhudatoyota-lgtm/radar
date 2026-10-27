@@ -3019,7 +3019,7 @@ function renderDelivery(){
   const batchHtml = loadingBatches.map(b=>`
     <div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};">
       <h3>🚚 ILS #${b.id} — CC <span style="background:${ccColor(b.ccPlat)};color:#fff;border-radius:6px;padding:1px 8px;">${escH(b.ccPlat)}</span> (Stall ${ccLbl(b.ccNum)}) ${b.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 8px;font-size:12px;">BATAM</span>`:""}</h3>
-      ${(()=>{ const dn=ccDriverAny(b.ccPlat); return dn?`<div style="font-size:15px;font-weight:800;margin:-2px 0 6px;">👤 ${escH(dn)}</div>`:""; })()}
+      ${(()=>{ const dn=b.drvName||ccDriverAny(b.ccPlat,b.ts); return dn?`<div style="font-size:15px;font-weight:800;margin:-2px 0 6px;">👤 ${escH(dn)}</div>`:""; })()}
       <div style="margin:0 0 8px;"><span style="font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;background:${ilsStage(b).bg};color:${ilsStage(b).c};">${ilsStage(b).t}</span></div>
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">${b.units.length} unit · dibuat ${new Date(b.ts).toLocaleString('id-ID')}</p>
       <table><thead><tr><th>QR</th><th>No. Rangka</th><th>Model</th><th>Stall</th></tr></thead><tbody>
@@ -3111,7 +3111,7 @@ function createILS(ccNum, slots){
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
   DB.set(d=>{
     const id = Date.now();
-    d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
+    d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), drvName: ccDriverAny(ccInfo.plat)||"", mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
     units.forEach(u=>{ d.units[u.slot].ilsId = id; });
   });
   notifyILSCreated(ccInfo.plat, units.length);
@@ -3265,24 +3265,35 @@ function tlsCopy(txt,btn){
 function tlsVal(i,k){ const b=window._tlsB; if(!b) return ""; if(k==="all-frame") return b.units.map(u=>u.frame).join("\n"); if(k==="all-stall") return b.units.map(u=>u.loc?u.loc:groupOf(u.slot)).join("\n"); const u=b.units[i]; return k==="frame"?u.frame:(u.loc?u.loc:groupOf(u.slot)); }
 function canSetDrvCode(){ return !!(currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); }
 /* Kode driver (untuk TLS) hanya diketahui/diisi Delivery. Prioritas: isian Delivery per plat > data CC > kolom DCCP */
-function resolveDrvCode(data, plat, own){
+/* Kode driver SELALU harus milik driver yang sedang bertugas: kode yang pernah disimpan per plat hanya dipakai kalau namanya masih sama
+   (plat yang sama bisa dibawa driver lain di shift lain → kode lama = driver lama = SJKB salah orang). */
+function drvNameKey(n){ return String(n||"").toUpperCase().replace(/\s+/g," ").trim(); }
+function resolveDrvCode(data, plat, own, ts, nameHint){
   try{
-    const k=normPlat(plat); const m=((data.drvByPlat||{})[k])||"";
-    if(m) return String(m).toUpperCase();
+    const k=normPlat(plat), nm=drvNameKey(nameHint||ccDriverAny(plat, ts));
+    const m=((data.drvByPlat||{})[k])||"", mn=((data.drvByPlatName||{})[k])||"";
+    if(m && (!nm || mn===nm)) return String(m).toUpperCase();
+    const rows=(data.dccpSchedule||[]).filter(x=>normPlat(x.police)===k);
+    if(nm){
+      const u=(data.users||[]).find(x=>x.role==="cc" && x.drvCode && drvNameKey(x.name)===nm);
+      if(u) return String(u.drvCode).toUpperCase();
+      const r=rows.find(x=>x.drvCode && drvNameKey(x.driver)===nm);
+      return r?String(r.drvCode).toUpperCase():"";
+    }
     if(own) return String(own).toUpperCase();
-    const r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k);
+    const r=rows.find(x=>x.drvCode)||rows[0];
     return String((r&&r.drvCode)||"").toUpperCase();
   }catch(e){ return ""; }
 }
 function setDrvCode(plat, code, ccNum){
   code=String(code||"").trim().toUpperCase(); const k=normPlat(plat); if(!k) return;
   DB.set(d=>{
-    d.drvByPlat=d.drvByPlat||{};
-    if(code) d.drvByPlat[k]=code; else delete d.drvByPlat[k];
+    d.drvByPlat=d.drvByPlat||{}; d.drvByPlatName=d.drvByPlatName||{};
+    if(code){ d.drvByPlat[k]=code; d.drvByPlatName[k]=drvNameKey(ccDriverAny(plat)); } else { delete d.drvByPlat[k]; delete d.drvByPlatName[k]; }
     if(ccNum && d.cc[ccNum] && normPlat(d.cc[ccNum].plat)===k) d.cc[ccNum].drvCode=code;
   });
 }
-function tlsDriver(b){ try{ const c=resolveDrvCode(DB.get(), b.ccPlat, b.drvCode); if(c) return c; const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(b.ccPlat)); return String((r&&r.driver)||"").toUpperCase(); }catch(e){ return ""; } }
+function tlsDriver(b){ try{ const c=resolveDrvCode(DB.get(), b.ccPlat, b.drvCode, b.ts, b.drvName); if(c) return c; const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(b.ccPlat)); return String((r&&r.driver)||"").toUpperCase(); }catch(e){ return ""; } }
 const TLS_VENDOR_MAP={KMDI:"KMD", KPL:"KPC", KPLM:"KPC"};  /* nama LP di RADAR -> kode vendor di TLS */
 function tlsVendor(lp){ const k=String(lp||"").trim().toUpperCase(); return TLS_VENDOR_MAP[k]||String(lp||"").trim(); }
 function tlsSaveDrv(id,btn){
@@ -8083,13 +8094,19 @@ function chatTagHtml(){
     return `<span class="tagChip" onclick="chatTagToggle('${escH(x)}')" style="border-color:${c};${on?`background:${c};color:#fff;`:`color:${c};`}">${on?"✔ ":""}${escH(x)}</span>`; }).join("");
 }
 function chatTagUpdate(){ const el=document.getElementById("chatTagRow"); if(el) el.innerHTML=chatTagHtml(); }
-function ccDriverName(plat){ const k=normPlat(plat); const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===k && x.driver); return r?r.driver:""; }
+/* Plat yang sama bisa punya beberapa baris jadwal (shift Day / Night, pengganti) dengan driver berbeda → ambil baris yang shift-nya sama dengan waktu ts (default: sekarang) */
+function ccDriverName(plat, ts){
+  const k=normPlat(plat), L=(DB.get().dccpSchedule||[]).filter(x=>normPlat(x.police)===k && x.driver); if(!L.length) return "";
+  const h=new Date(ts||Date.now()).getHours(), sh=(h>=SHIFT_START_H&&h<SHIFT2_START_H)?"1":"2";
+  const rowSh=r=>{ const t=dccpTripList(r); if(!t.length) return ""; const hh=+String(t[0]).split(":")[0]; return (hh>=SHIFT_START_H&&hh<SHIFT2_START_H)?"1":"2"; };
+  const m=L.filter(r=>rowSh(r)===sh); return (m[m.length-1]||L[0]).driver;
+}
 /* Nama driver: dari Jadwal DCCP, kalau kosong dari akun yang login dengan plat itu, lalu dari chat terakhir */
-function ccDriverAny(plat){
+function ccDriverAny(plat, ts){
   const k=normPlat(plat); let n="";
   /* Nama driver: Jadwal DCCP / Pengganti (resmi, per shift) didahulukan. Kalau jadwal tidak punya nama, baru akun CC yang login dengan plat ini di shift SEKARANG.
      Akun non-CC (Dispatcher, Delivery, dll.) tidak pernah dipakai sebagai nama driver. */
-  n=ccDriverName(plat)||"";
+  n=ccDriverName(plat,ts)||"";
   if(!n){ try{ const us=DB.get().users||[];
     const e=(DB.get().ccShiftPlat||[]).filter(x=>normPlat(x.plat)===k && !x.lo && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift() && (us.find(y=>y.username===x.u)||{}).role==="cc").sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
     if(e){ const u=us.find(y=>y.username===e.u); n=(u&&u.name)||""; } }catch(x){} }
@@ -8759,7 +8776,7 @@ async function clearTestData(){
   render();
 }
 /* ===== MULAI TRIAL: hapus data operasional, akun & pengaturan tetap aman ===== */
-const TRIAL_KEYS_OBJ=["units","cc","drvByPlat"], TRIAL_KEYS_ARR=["queue","hold","ils","manifest","ccCalls","ccOutLog","swapLog","defects","speedAlerts"];
+const TRIAL_KEYS_OBJ=["units","cc","drvByPlat","drvByPlatName"], TRIAL_KEYS_ARR=["queue","hold","ils","manifest","ccCalls","ccOutLog","swapLog","defects","speedAlerts"];
 async function resetTrial(){
   if(!(currentUser && currentUser.role==="admin")){ alert("Hanya Admin."); return; }
   if(FBS.enabled && !(FBS.authed && FBS.conn && FBS.ready)){ alert("Perangkat belum Online (tanda hijau di pojok atas). Tunggu hijau, lalu ulangi, supaya semua HP ikut bersih."); return; }
