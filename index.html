@@ -2951,6 +2951,9 @@ function registerCC(plat, lp, dist, auto, manual){
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
     if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:(currentUser&&currentUser.username)||"", name:(currentUser&&currentUser.name)||"", role:(currentUser&&currentUser.role)||"", auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
+    { const lf=((d.ccLeft||{})[k])||0; const _own=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));   // Delivery/Admin boleh mengabsenkan manual kapan saja
+      if(lf && (Date.now()<=lf || (!_own && Date.now()-lf < 20*60000))){   // absen dibuat SEBELUM CC keluar (dikirim ulang sinkronisasi / perangkat lain), atau < 20 menit sesudah keluar dari HP driver: satu CC satu catatan
+        res={dup:true, stale:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:(currentUser&&currentUser.username)||"", name:(currentUser&&currentUser.name)||"", role:(currentUser&&currentUser.role)||"", auto:!!auto, manual:!!manual, dup:true, stale:true}]).slice(-120); return; } }
     { const y=d.yardLocation||{}; if(dist!=null && y.radiusKm!=null && dist > (+y.radiusKm)+0.3){ res={far:true, dist, radius:+y.radiusKm}; return; } }   // di luar radius: ditolak, apa pun jalurnya (otomatis / manual)
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
     const _sr=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k); if(_sr && _sr.lp) lp=_sr.lp;   // LP resmi dari jadwal DCCP (sama seperti absen admin)
@@ -3681,7 +3684,7 @@ function delout(id){
     if(currentUser && currentUser.role==="delivery" && !x.esjPic) x.esjPic=currentUser.username;
     const c=d.cc[x.ccNum];
     if(c && normPlat(c.plat)===normPlat(x.ccPlat)){
-      snap.cc=c; d.cc[x.ccNum]=null;
+      snap.cc=c; ccMarkLeft(d,c); d.cc[x.ccNum]=null;
       if(d.queue.length){ const nx=ccQueueTake(d); if(nx){ snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now(), absenTs:nx.ts||Date.now()}; pushCcCall(d, nx, x.ccNum); } }
     }
     d.manifest=d.manifest||[];
@@ -5196,7 +5199,7 @@ function absenLogCardHtml(data){
   const L=(data.absenLog||[]).slice().reverse().slice(0,40);
   return `<details class="card" style="margin-top:10px;"><summary style="cursor:pointer;font-weight:800;">🕵 Log Absen (siapa yang absen) <span class="badge">${L.length}</span></summary>
     <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">40 absen terakhir. Kalau satu plat absen berulang dari akun yang tidak seharusnya (mis. akun lain yang masih login dengan plat itu), akunnya kelihatan di sini. Akun bisa dikeluarkan dari Admin → User.</div>
-    ${L.length?L.map(x=>`<div style="border-top:1px solid var(--border);padding:6px 0;font-size:13px;"><b>${escH(x.plat)}</b> · ${escH(x.lp||"-")} <span style="color:var(--text-dim);">${hh(x.ts)}</span><br><span style="font-size:12px;">Akun: <b>${escH(x.name||x.u||"-")}</b> (${escH(x.u||"-")}, ${escH(x.role||"-")}) · ${x.auto?"🤖 otomatis":(x.manual?"✍ manual":"✍")}${x.dist!=null?" · "+x.dist+" km dari yard":""}${x.dup?` · <span style="color:#C77700;">ditolak (sudah terdaftar)</span>`:""}</span></div>`).join(""):`<div class="emptystate">Belum ada log absen.</div>`}
+    ${L.length?L.map(x=>`<div style="border-top:1px solid var(--border);padding:6px 0;font-size:13px;"><b>${escH(x.plat)}</b> · ${escH(x.lp||"-")} <span style="color:var(--text-dim);">${hh(x.ts)}</span><br><span style="font-size:12px;">Akun: <b>${escH(x.name||x.u||"-")}</b> (${escH(x.u||"-")}, ${escH(x.role||"-")}) · ${x.auto?"🤖 otomatis":(x.manual?"✍ manual":"✍")}${x.dist!=null?" · "+x.dist+" km dari yard":""}${x.stale?` · <span style="color:#C77700;">ditolak (absen lama, CC sudah keluar)</span>`:(x.dup?` · <span style="color:#C77700;">ditolak (sudah terdaftar)</span>`:"")}</span></div>`).join(""):`<div class="emptystate">Belum ada log absen.</div>`}
   </details>`;
 }
 function ilsFixCardHtml(data){
@@ -5305,7 +5308,7 @@ function keluarkanCC(n){
     if(oi>=0){ const x=d.ils[oi]; ilsId=x.id; (x.units||[]).forEach(u=>{ const un=d.units[u.slot]; if(un && un.ilsId===x.id) delete un.ilsId; }); (x.loadSnap||[]).forEach(e=>{ if(e.v && !d.units[e.slot]){ const v=Object.assign({},e.v); delete v.ilsId; d.units[e.slot]=v; } }); d.ils.splice(oi,1); }
     d.ccOutLog=d.ccOutLog||[]; d.ccOutLog.push({ts:Date.now(), plat:cur.plat, lp:cur.lp||"", ccNum:n, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", ilsId});
     if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
-    d.cc[n]=null;
+    ccMarkLeft(d,cur); d.cc[n]=null;
     if(d.queue.length>0){ const next=ccQueueTake(d); if(next){ d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d, next, n); } }
   });
   if(ils){ try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+ils.id).remove(); }catch(e){} }
