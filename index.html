@@ -4411,6 +4411,117 @@ setTimeout(()=>{ try{ xlTick(); }catch(e){} }, 15000);
 window.addEventListener("online",()=>setTimeout(()=>{ try{ xlTick(); }catch(e){} },5000));
 
 /* ======================================================================
+   GOOGLE SHEETS (Apps Script Web App) — alternatif Excel Online, tanpa Client ID / IT
+   Data sama dengan Download Manifest. Satu perangkat "penulis" mengirim tiap ILS setelah masa batal Delout.
+====================================================================== */
+const GS_WR="radar_gs_writer", GS_LOG="radar_gs_log";
+const GS={busy:false, state:"", msg:""};
+function gsCfg(){ const c=DB.get().gsCfg||{}; return {url:c.url||"", sheet:c.sheet||"Manifest", token:c.token||"", on:c.on!==false && !!c.url, since:+c.since||0, lastOk:+c.lastOk||0, lastBy:c.lastBy||"", err:c.err||""}; }
+function gsLog(txt,ok){ const L=xlLS(GS_LOG)||[]; L.unshift({t:Date.now(),txt,ok:!!ok}); xlLS(GS_LOG,L.slice(0,30)); }
+function gsIsWriter(){ return !!xlLS(GS_WR); }
+function gsScript(c){
+  return "/* RADAR EKY → Google Sheets. Tempel di Extensions → Apps Script, lalu Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone). */\n"+
+"const TOKEN="+JSON.stringify(c.token)+";\nconst SHEET="+JSON.stringify(c.sheet)+";\nconst HEAD="+JSON.stringify(MF_HEAD)+";\n"+
+"function sh_(){\n  const ss=SpreadsheetApp.getActiveSpreadsheet();\n  let s=ss.getSheetByName(SHEET); if(!s) s=ss.insertSheet(SHEET);\n  if(s.getLastRow()===0){ s.appendRow(HEAD); s.setFrozenRows(1); s.getRange(1,1,1,HEAD.length).setFontWeight('bold'); }\n  return s;\n}\n"+
+"function out_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }\n"+
+"function doGet(e){\n  try{\n    if((e.parameter.t||'')!==TOKEN) return out_({ok:false,err:'Kode rahasia tidak cocok'});\n    const s=sh_();\n    return out_({ok:true,file:SpreadsheetApp.getActiveSpreadsheet().getName(),sheet:s.getName(),rows:Math.max(0,s.getLastRow()-1),cols:s.getLastColumn()});\n  }catch(x){ return out_({ok:false,err:String(x)}); }\n}\n"+
+"function doPost(e){\n  const lock=LockService.getScriptLock();\n  try{\n    lock.waitLock(20000);\n    const b=JSON.parse(e.postData.contents);\n    if(b.t!==TOKEN) return out_({ok:false,err:'Kode rahasia tidak cocok'});\n    const P=PropertiesService.getScriptProperties();\n    const done=JSON.parse(P.getProperty('done')||'[]');\n    if(b.id && done.indexOf(String(b.id))>=0) return out_({ok:true,dup:true});\n    const s=sh_(), rows=b.rows||[];\n    if(rows.length){\n      const n=s.getLastRow();\n      rows.forEach(function(r,i){ r[0]=n+i; });\n      s.getRange(n+1,1,rows.length,rows[0].length).setValues(rows);\n      s.getRange(n+1,11,rows.length,1).setNumberFormat('dd-mmm-yyyy');\n    }\n    if(b.id){ done.push(String(b.id)); P.setProperty('done',JSON.stringify(done.slice(-400))); }\n    return out_({ok:true,added:rows.length});\n  }catch(x){ return out_({ok:false,err:String(x)}); }\n  finally{ try{ lock.releaseLock(); }catch(_){} }\n}\n";
+}
+function gsRowsFor(data, m){
+  return mfRecRows(data, m, mfTujuanNama(), 0).map(r=>r.map(v=>{ if(v && typeof v==="object"){ return v.d!=null ? v.d : ""; } return v==null?"":v; }));
+}
+function gsPending(data){ const c=gsCfg(); return xlArr(data.manifest).filter(m=>m && !m.gs && (+m.out||0)>=c.since).sort((a,b)=>(a.out||0)-(b.out||0)); }
+function gsSetErr(msg){ const c=gsCfg(); msg=msg||""; if(c.err===msg) return; DB.set(d=>{ d.gsCfg=Object.assign({}, d.gsCfg||{}, {err:msg, errTs:Date.now()}); }); }
+async function gsCall(c, body){
+  let r;
+  try{ r = body ? await fetch(c.url,{method:"POST", body:JSON.stringify(Object.assign({t:c.token},body))}) : await fetch(c.url+(c.url.indexOf("?")<0?"?":"&")+"t="+encodeURIComponent(c.token)); }
+  catch(e){ throw {code:"net", msg:"Tidak bisa menghubungi Google (internet / alamat Web App salah)."}; }
+  let j; try{ j=await r.json(); }catch(e){ throw {code:"cfg", msg:"Balasan bukan dari script. Pastikan Deploy sebagai Web app dengan akses 'Anyone' dan alamatnya berakhiran /exec."}; }
+  if(!j || !j.ok) throw {code:"cfg", msg:(j&&j.err)||"Ditolak oleh script."};
+  return j;
+}
+async function gsTick(force){
+  if(GS.busy) return; if(!gsIsWriter()) return;
+  const c=gsCfg(); if(!c.on||!c.url||!c.token) return;
+  if(!sjCanStore()){ GS.state="offline"; GS.msg="RADAR offline (Firebase)."; return; }
+  GS.busy=true;
+  try{
+    let data=DB.get();
+    for(const m of gsPending(data)){ if(xlWhy(data,m)==="sjkb") await xlTryParse(data,m); }
+    data=DB.get();
+    const ready=gsPending(data).filter(m=>!xlWhy(data,m)).slice(0, force?40:12);
+    for(const m of ready){
+      const rows=gsRowsFor(DB.get(), m);
+      if(rows.length) await gsCall(c,{id:m.id, rows});
+      const ts=Date.now(), who=(currentUser&&currentUser.name)||"PC penulis";
+      DB.set(d=>{ const x=xlArr(d.manifest).find(y=>y.id===m.id); if(x) x.gs=ts; d.gsCfg=Object.assign({}, d.gsCfg||{}, {lastOk:ts, lastBy:who, err:"", errTs:0}); });
+      gsLog("Terkirim "+m.plat+" · "+rows.length+" unit"+(sjInfo(DB.get(),m).sk?"":" (No. SJKB kosong)"), true);
+    }
+    GS.state="ok"; GS.msg="";
+  }catch(e){
+    const code=(e&&e.code)||"cfg", msg=(e&&e.msg)||String(e&&e.message||e);
+    GS.state=code; GS.msg=msg; gsLog(msg,false); if(code!=="net") gsSetErr(msg);
+  }finally{ GS.busy=false; }
+}
+function gsSendNow(btn){ if(btn) btn.disabled=true; gsTick(true).then(()=>{ render(); }); }
+async function gsTest(btn){
+  const out=document.getElementById("gsTestOut"); if(btn) btn.disabled=true;
+  const say=(h,ok)=>{ if(out) out.innerHTML='<div style="margin-top:10px;padding:10px;border-radius:8px;font-size:12px;background:'+(ok?"rgba(31,157,85,.12)":"rgba(185,28,28,.12)")+';">'+h+'</div>'; };
+  say("Menguji sambungan…",true);
+  try{
+    const c=gsCfg(); if(!c.url) throw {msg:"Isi alamat Web App dulu lalu Simpan."};
+    const j=await gsCall(c,null);
+    let h="✅ File <b>"+xlEsc(j.file)+"</b>, sheet <b>"+xlEsc(j.sheet)+"</b> terbaca ("+j.rows+" baris data).";
+    if(j.cols && j.cols!==MF_HEAD.length) h+="<br>⚠ Sheet punya "+j.cols+" kolom, seharusnya "+MF_HEAD.length+" (No … No. SJKB).";
+    say(h,true); gsSetErr("");
+  }catch(e){ say("❌ "+xlEsc((e&&e.msg)||String(e&&e.message||e)),false); }
+  finally{ if(btn) btn.disabled=false; }
+}
+function gsSaveCfg(){
+  const g=id=>((document.getElementById(id)||{}).value||"").trim();
+  const url=g("gsUrl"), sheet=g("gsSheet")||"Manifest", on=!!(document.getElementById("gsOn")||{}).checked, old=!!(document.getElementById("gsOld")||{}).checked;
+  if(url && !/^https:\/\/script\.google(usercontent)?\.com\/.+/i.test(url)){ alert("Alamat harus Web app URL dari Apps Script (diawali https://script.google.com/macros/s/… dan berakhiran /exec)."); return; }
+  if(sheet.length>60 || /[\[\]\*\?:\/\\]/.test(sheet)){ alert("Nama sheet tidak valid (tanpa karakter  [ ] * ? : / \\)."); return; }
+  const prev=DB.get().gsCfg||{}, tok=prev.token||xlRand(12), first=!prev.url;
+  DB.set(d=>{ d.gsCfg=Object.assign({}, d.gsCfg||{}, {url, sheet, token:tok, on:(url?on:false), since: first?(old?0:Date.now()):(+prev.since||0), by:(currentUser&&currentUser.name)||"", ts:Date.now()}); });
+  render(); alert("Pengaturan Google Sheets tersimpan.");
+}
+function gsNewToken(){ if(!confirm("Buat kode rahasia baru?\n\nScript di Google harus diganti dengan yang baru (Salin script → tempel ulang → Deploy → New version). Sebelum itu pengiriman gagal.")) return; DB.set(d=>{ d.gsCfg=Object.assign({}, d.gsCfg||{}, {token:xlRand(12)}); }); render(); }
+function gsCopyScript(btn){ const t=gsScript(gsCfg()); const ok=()=>{ if(btn){ const o=btn.textContent; btn.textContent="✔ Tersalin"; setTimeout(()=>btn.textContent=o,1500); } }; try{ navigator.clipboard.writeText(t).then(ok).catch(()=>prompt("Salin script ini:",t)); }catch(e){ prompt("Salin script ini:",t); } }
+function gsBecomeWriter(){ xlLS(GS_WR,1); render(); setTimeout(()=>gsTick(true),500); }
+function gsStopWriter(){ if(!confirm("Berhenti jadikan perangkat ini penulis Google Sheets?\n\nManifest tetap antre sampai ada perangkat penulis lagi.")) return; xlLS(GS_WR,null); render(); }
+function gsSkipBacklog(){ const n=gsPending(DB.get()).length; if(!confirm("Lewati "+n+" manifest yang belum terkirim?\n\nYang sudah ada sekarang TIDAK akan dikirim ke Google Sheets.")) return; DB.set(d=>{ d.gsCfg=Object.assign({}, d.gsCfg||{}, {since:Date.now()}); }); render(); }
+function renderAdminGs(){
+  const data=DB.get(), c=gsCfg(), raw=data.gsCfg||{}, first=!c.url, L=xlLS(GS_LOG)||[], wr=gsIsWriter();
+  const q=(()=>{ const p=gsPending(data); let undo=0,sj=0,ready=0; p.forEach(m=>{ const w=xlWhy(data,m); if(w==="undo") undo++; else if(w==="sjkb") sj++; else ready++; }); return {total:p.length,undo,sj,ready}; })();
+  return `<div class="card"><h3>📊 Manifest otomatis ke Google Sheets</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Setiap Delout, unitnya ditambahkan sebagai baris baru ke Google Sheet. Kolom sama dengan Download Manifest. Tidak perlu Client ID / izin IT: cukup akun Google biasa dan script kecil di Sheet.</p>
+    <ol style="font-size:12px;margin:0 0 12px 18px;padding:0;line-height:1.6;">
+      <li>Buat Google Sheet baru (sheets.google.com). Buka <b>Extensions → Apps Script</b>.</li>
+      <li>Isi Nama sheet di bawah, tekan <b>Simpan</b> sekali supaya kode rahasia dibuat, lalu <b>Salin script</b>. Hapus isi editor Apps Script, tempel, lalu <b>Save</b>.</li>
+      <li><b>Deploy → New deployment → Web app</b>. Execute as: <b>Me</b>. Who has access: <b>Anyone</b>. Deploy, izinkan akses (Advanced → Go to … jika muncul peringatan), lalu salin <b>Web app URL</b> (berakhiran /exec).</li>
+      <li>Tempel URL itu di bawah, Simpan, lalu di perangkat penulis tekan <b>Jadikan perangkat ini penulis</b> dan <b>Tes sambungan</b>.</li>
+    </ol>
+    <div class="field"><label>Web app URL (…/exec)</label><input id="gsUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" value="${xlEsc(c.url)}"></div>
+    <div class="field"><label>Nama sheet (tab) tujuan</label><input id="gsSheet" type="text" value="${xlEsc(c.sheet)}"></div>
+    ${raw.token?`<div class="field"><label>Kode rahasia (sudah ada di dalam script)</label><div style="display:flex;gap:8px;"><input type="text" readonly value="${xlEsc(raw.token)}" style="flex:1;" onclick="this.select()"><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="gsCopyScript(this)">Salin script</button></div><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Nama sheet atau kode berubah → salin script lagi, tempel, Deploy → Manage deployments → Edit → New version.</div></div>`:`<div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Tekan Simpan dulu, lalu tombol Salin script muncul.</div>`}
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0 8px;"><input type="checkbox" id="gsOn" ${raw.on===false?"":"checked"}> Aktifkan pengiriman otomatis</label>
+    ${first?`<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 12px;"><input type="checkbox" id="gsOld" style="margin-top:3px;"><span>Kirim juga manifest yang sudah ada (sampai 14 hari ke belakang). Kalau tidak dicentang, mulai dari Delout berikutnya.</span></label>`:""}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" style="width:auto;" onclick="gsSaveCfg()">💾 Simpan</button>${raw.token?`<button type="button" class="btn btn-outline" style="width:auto;" onclick="gsNewToken()">Buat ulang kode</button>`:""}</div></div>
+    <div class="card"><h3>💻 Perangkat ini</h3>${!c.url?`<div style="font-size:12px;color:var(--text-dim);">Isi dan simpan Web app URL dulu.</div>`:(wr?`<div style="font-size:12px;line-height:1.6;margin-bottom:8px;"><div>Status: <b style="color:#1f9d55;">● Penulis aktif</b></div>${GS.msg?`<div style="color:#b45309;">${xlEsc(GS.msg)}</div>`:""}<div style="color:var(--text-dim);">Biarkan tab RADAR terbuka di perangkat ini (PC Delivery) supaya data terkirim.</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="gsTest(this)">🧪 Tes sambungan</button><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="gsSendNow(this)">📤 Kirim sekarang</button><button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="gsStopWriter()">Berhenti jadi penulis</button></div>`
+      :`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Perangkat ini <b>bukan</b> penulis. Jadikan penulis hanya di <b>satu</b> perangkat yang standby (PC Delivery).</div><div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="btn btn-primary" style="width:auto;" onclick="gsBecomeWriter()">✅ Jadikan perangkat ini penulis</button><button type="button" class="btn btn-outline" style="width:auto;" onclick="gsTest(this)">🧪 Tes sambungan</button></div>`)}<div id="gsTestOut"></div></div>
+    <div class="card"><h3>📊 Status pengiriman</h3>${c.url?`<div style="font-size:12px;margin:0 0 8px;padding:8px 10px;border-radius:8px;background:rgba(31,157,85,.08);line-height:1.5;">📊 <b>Google Sheets</b> ${c.on?"":"(nonaktif) "}· terakhir terkirim: <b>${xlTime(c.lastOk)}</b>${c.lastBy?" ("+xlEsc(c.lastBy)+")":""}<br>Antrian: <b>${q.total}</b> ILS${q.total?` (${q.ready} siap kirim, ${q.undo} masa batal Delout, ${q.sj} menunggu No. SJKB)`:""}${c.err?`<div style="color:#b91c1c;">⚠ ${xlEsc(c.err)}</div>`:""}</div>`:'<div style="font-size:12px;color:var(--text-dim);">Belum diatur.</div>'}
+      ${q.total?`<button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="gsSkipBacklog()">Lewati antrian lama</button>`:""}
+      ${L.length?`<div style="font-size:11px;margin-top:10px;line-height:1.6;"><b>Log perangkat ini</b>${L.slice(0,12).map(x=>`<div style="color:${x.ok?"inherit":"#b91c1c"};">${xlTime(x.t)} · ${xlEsc(x.txt)}</div>`).join("")}</div>`:""}
+    </div>`;
+}
+setInterval(()=>{ try{ gsTick(); }catch(e){} }, XL_EVERY_MS);
+setTimeout(()=>{ try{ gsTick(); }catch(e){} }, 17000);
+window.addEventListener("online",()=>setTimeout(()=>{ try{ gsTick(); }catch(e){} },6000));
+
+
+/* ======================================================================
    PENDAFTARAN AKUN MANDIRI — user daftar sendiri (password buatan sendiri, tersimpan hash),
    Admin menyetujui / menolak. Driver CC: Admin wajib isi Kode Driver saat menyetujui.
 ====================================================================== */
@@ -7115,6 +7226,7 @@ function renderAdmin(){
       <button class="tabbtn ${adminTab==='sig'?'active':''}" onclick="adminTab='sig';render()">✍ TTD</button>
       <button class="tabbtn ${adminTab==='tls'?'active':''}" onclick="adminTab='tls';render()">🔗 TLS</button>
       <button class="tabbtn ${adminTab==='xl'?'active':''}" onclick="adminTab='xl';render()">📗 Excel</button>
+      <button class="tabbtn ${adminTab==='gs'?'active':''}" onclick="adminTab='gs';render()">📊 Google Sheets</button>
       <button class="tabbtn ${adminTab==='dccp'?'active':''}" onclick="adminTab='dccp';render()">📋 DCCP</button>
       <button class="tabbtn ${adminTab==='data'?'active':''}" onclick="adminTab='data';render()">🗄 Data</button>
     </div>`;
@@ -7122,6 +7234,7 @@ function renderAdmin(){
   if(adminTab==="sig") return tabsHtml + renderAdminSig();
   if(adminTab==="tls") return tabsHtml + renderAdminTls();
   if(adminTab==="xl") return tabsHtml + renderAdminXl();
+  if(adminTab==="gs") return tabsHtml + renderAdminGs();
   if(adminTab==="users"){
     return `${tabsHtml}
       ${renderRegCard()}
