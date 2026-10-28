@@ -2894,7 +2894,8 @@ function ccQueueSort(d){
      kalau dua CC tiba berdekatan (< 5 menit), yang rit-nya lebih sedikit didahulukan. */
   const rit=q=>ccRitDone(d,q.plat);
   (d.queue||[]).forEach(q=>{ const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; } q.due = rit(q)>=1 ? (q.ts||0) : ccEffTs(d,q.plat,q.ts); });
-  d.queue.sort((a,b)=>{ const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12 && Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; } return da-db; });
+  /* BATCH: CC dengan jam jadwal yang sama = satu batch. Batch lebih awal masuk dulu, lalu batch berikutnya. Dalam satu batch: rit lebih sedikit dulu, lalu yang lebih dulu tiba. */
+  d.queue.sort((a,b)=>{ const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
 }
 /* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
 function ccQueueAdvance(){
@@ -2944,7 +2945,7 @@ function holdRelease(force){   // dipanggil berkala; force = daftar plat yang di
     all.forEach(x=>{ if(!f.includes(normPlat(x.plat)) && (ccHoldDue(d,x.plat) || ccFarNow(d,x.plat))) keep.push(x); else rel.push(x); });
     if(!rel.length) return;
     d.hold=keep;
-    rel.sort((a,b)=>ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts));
+    rel.sort((a,b)=>(ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts)) || ((a.ts||0)-(b.ts||0)));
     d.holdRel=(Array.isArray(d.holdRel)?d.holdRel:[]).slice(-19);
     rel.forEach(x=>{ const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall); d.holdRel.push({id:String(Date.now())+"-"+normPlat(x.plat), plat:x.plat, lp:x.lp||"", ts:Date.now(), stall:r.stall||0, queue:r.queue||0}); });
   });
@@ -6071,6 +6072,7 @@ function saveDccpSchedule(){
     d.dccpSchedule = p.rows;
     d.dccpMeta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||"", shift:p.shift||"", dateTs:dccpFileDate(p.fileName)||null, gapMin:p.gapMin||52};
     d.swapLog = [];   // jadwal DCCP baru menimpa yang lama: log tukar CC ikut bersih
+    try{ ccQueueSort(d); }catch(e){}   // urutan waiting list disusun ulang menurut jam jadwal (batch) yang baru
   });
   dccpParsedPreview = null;
   render();
@@ -6737,7 +6739,8 @@ function ccplanCompute(data){
   const T = {planTrip:0, planUnit:0, act:0, actUnit:0, due:0};
   rows.forEach(x=>{ if(x.isSpot) return; T.planTrip+=x.planTrip; T.planUnit+=x.planUnit; T.due+=x.dueNow; });
   T.spotAct = spotIls.length; T.spotUnit = spotIls.reduce((a,b)=>a+(b.units||[]).length,0);
-  T.act = ils.length; T.actUnit = ils.reduce((a,b)=>a+(b.units||[]).length,0);
+  const ilsPlan = ils.filter(b=>keys.has(normPlat(b.ccPlat)));   // CC di luar jadwal ditampilkan terpisah, tidak ikut TOTAL (supaya TOTAL = jumlah per LP)
+  T.act = ilsPlan.length; T.actUnit = ilsPlan.reduce((a,b)=>a+(b.units||[]).length,0);
   T.minus = T.planTrip - T.act; T.dueMinus = Math.max(0, T.due - T.act);
   // per LP
   const lp = {};
@@ -6749,10 +6752,24 @@ function ccplanCompute(data){
     const lo = Math.floor(Math.min(...allTimes)/LDR_SLOT_MS)*LDR_SLOT_MS;
     const hi = Math.ceil(Math.max(...allTimes, ldrPeriod==="yesterday"?0:Math.min(now,Math.max(...allTimes)+2*3600000))/LDR_SLOT_MS)*LDR_SLOT_MS;
     for(let a=lo;a<=hi;a+=LDR_SLOT_MS){
-      slots.push({a, label:ldrHM(a), plan: allTimes.filter(t=>t<=a).length, act: a<=now ? ils.filter(b=>b.ts<=a).length : null});
+      slots.push({a, label:ldrHM(a), plan: allTimes.filter(t=>t<=a).length, act: a<=now ? ilsPlan.filter(b=>b.ts<=a).length : null});
     }
   }
   return {rows, unplanned, T, lp, slots};
+}
+function ccplanCopy(btn){
+  try{
+    const R=ccplanCompute(DB.get()), T=R.T, m=v=>v>0?String(v):(v<0?"lebih "+(-v):"0");
+    const now=new Date(), pad=n=>String(n).padStart(2,"0");
+    let t="*PLANNING CAR CARRIER*\n"+pad(now.getDate())+"/"+pad(now.getMonth()+1)+"/"+now.getFullYear()+" "+pad(now.getHours())+":"+pad(now.getMinutes())+"\n\n";
+    t+="Plan: "+T.planTrip+" rit ("+T.planUnit+" unit)\nAktual: "+T.act+" rit ("+T.actUnit+" unit)\nMinus: "+m(T.minus)+" rit\nMinus vs jadwal saat ini: "+T.dueMinus+"\n\n*Per LP*\n";
+    Object.entries(R.lp).forEach(([k,o])=>{ t+=k+": "+o.act+"/"+o.plan+" rit (minus "+m(o.plan-o.act)+") · "+o.actUnit+"/"+o.unit+" unit\n"; });
+    t+="TOTAL: "+T.act+"/"+T.planTrip+" rit (minus "+m(T.minus)+") · "+T.actUnit+"/"+T.planUnit+" unit\n";
+    const lt=R.rows.filter(x=>!x.isSpot && x.minus>0).sort((a,b)=>b.dueMinus-a.dueMinus||b.minus-a.minus);
+    if(lt.length){ t+="\n*CC yang masih minus*\n"; lt.forEach(x=>{ t+=platFmt(x.r.police)+" · "+(x.r.lp||"-")+" · "+x.act+"/"+x.planTrip+" rit"+(x.dueMinus>0?" (terlambat)":"")+"\n"; }); }
+    if(T.spotAct) t+="\nSpot Order: "+T.spotAct+" rit ("+T.spotUnit+" unit)\n";
+    tlsCopy(t.trim(), btn);
+  }catch(e){ alert("Gagal menyalin: "+e.message); }
 }
 function ccplanChartSVG(slots){
   const n=slots.length; if(n<2) return `<div class="emptystate">Belum ada data jam jadwal. Upload ulang file DCCP agar jam tiap ritase terbaca.</div>`;
@@ -6787,7 +6804,7 @@ function renderCCPlan(){
       <option value="yesterday" ${ldrPeriod==='yesterday'?'selected':''}>Hari produksi kemarin</option>
       <option value="24h" ${ldrPeriod==='24h'?'selected':''}>24 jam terakhir</option>
     </select>
-    ${ldrShiftSelect()}</div>
+    ${ldrShiftSelect()}<button class="btn btn-outline btn-sm" onclick="ccplanCopy(this)">📋 Salin Laporan</button></div>
   </div>
   ${R.rows.length===0?`<div class="card"><div class="emptystate">Belum ada jadwal DCCP. Upload dulu di menu DCCP (Admin/Delivery).</div></div>`:`
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
@@ -8481,9 +8498,11 @@ function trkDirOf(r, t, total){
 }
 function trkRit(plat, dir){
   try{ const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return null;
+    { const mt=data.dccpMeta||{}, dd=mt.dateTs||dccpFileDate(mt.fileName);   // jadwal DCCP sudah lewat (>1 jam setelah shift berakhir): jangan tampilkan nomor ritase dari jadwal basi
+      if(dd && mt.shift){ const st=dd+(mt.shift==="night"?SHIFT2_START_H:SHIFT_START_H)*3600000, en=st+(mt.shift==="night"?11:13)*3600000; if(Date.now()>en+3600000 || Date.now()<st-3*3600000) return null; } }   // lewat, atau shift-nya baru mulai besok (CC istirahat hari ini): tidak ada label ritase
     const spot=!!r.extra, tot=Math.max(dccpTripList(r).length,spot?1:0), done=dccpDoneCount(r,data); if(!tot) return null;
     const cap=v=>spot?v:Math.min(v,tot);
-    const back=(dir==="back"&&done>0); let n=back?cap(done):(done>0&&dir==="out"?cap(done):cap(done+1));
+    const back=(dir==="back"&&done>0); let n=back?cap(done):(done>0&&dir==="out"?cap(done):cap(done+1)); if(!spot && done===0) n=0;   // belum ambil unit (belum ada ILS shift ini): Rit 0 = sedang menuju Rit 1
     const adj=(data.ritAdj||{})[k]; if(adj && adj.ts>=dccpShiftFrom(r) && adj.n>=1){ n=cap(adj.n+Math.max(0,done-(adj.base||0))); }   // setelah dikoreksi, ILS/delout berikutnya tetap menambah nomor ritase   // koreksi manual Delivery berlaku sampai shift ini habis
     return {n:n,tot:tot,spot:spot,max:spot?Math.max(tot,n+2,3):tot,back:back,all:!spot&&done>=tot,txt:(spot?"SPOT Rit "+n:"Rit "+n+"/"+tot+(back&&!(adj&&adj.ts>=dccpShiftFrom(r))?" ✓":""))}; }catch(e){ return null; }
 }
@@ -8515,13 +8534,22 @@ function trkCompute(r, mp){
   return o;
 }
 function trkTxt(o){ return o.dir==="back" ? `${o.dB.toFixed(1)} km dari NVDC · ${o.dA.toFixed(1)} km lagi ke ADM KAP <span style="font-weight:700;color:#C77700;">↩ kembali</span>` : `${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km lagi ke NVDC`; }
+/* CC hanya tampil di peta saat sedang bekerja: mulai 1 jam sebelum jam ritase pertamanya sampai 1 jam setelah shift DCCP berakhir. Plat yang bukan dari jadwal (Spot / Pengganti) atau DCCP tanpa tanggal/shift: selalu tampil. */
+function trkWorking(plat){
+  try{ const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r || r.extra) return true;
+    const mt=data.dccpMeta||{}, dd=mt.dateTs||dccpFileDate(mt.fileName); if(!dd||!mt.shift) return true;
+    const t=dccpTripList(r), now=Date.now(), st=dd+(mt.shift==="night"?SHIFT2_START_H:SHIFT_START_H)*3600000, en=st+(mt.shift==="night"?11:13)*3600000;
+    const first=t.length?ccTimeToTs(t[0],dd):st;
+    return now>=first-3600000 && now<=en+3600000;
+  }catch(e){ return true; }
+}
 function updateTrackUI(){
   const list = document.getElementById("trkList"), mp = DB.get().mapPoints || {};
   const allLive = Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0) < TRK_SHOW_MS);
   const _tk=DB.get().trkKill||{}, ghosts = allLive.filter(r=>!trkHasAccount(r) && !((_tk[trkKey(r.plat)]||0) && Date.now()-_tk[trkKey(r.plat)]<24*3600000));   // yang sudah dihapus Admin disembunyikan 24 jam walau HP lama masih mengirim
   const unsched = allLive.filter(r=>trkHasAccount(r) && !ccPlatRegistered(r.plat));   // peta hanya menampilkan CC yang ada di Jadwal DCCP / Spot Order / CC Pengganti
   window._trkUnsched = unsched;
-  const rows = allLive.filter(r=>trkHasAccount(r) && ccPlatRegistered(r.plat)).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
+  const rows = allLive.filter(r=>trkHasAccount(r) && ccPlatRegistered(r.plat) && trkWorking(r.plat)).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
   window._trkGhosts = ghosts;
   window._trkRows=rows; try{ chatTagUpdate(); ccProfRefresh(); }catch(e){}
   if(list){
