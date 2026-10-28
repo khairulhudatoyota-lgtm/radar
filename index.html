@@ -3211,7 +3211,7 @@ function renderDelivery(){
   const batchHtml = loadingBatches.map(b=>`
     <div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};">
       <h3>🚚 ILS #${b.id} — CC <span style="background:${ccColor(b.ccPlat)};color:#fff;border-radius:6px;padding:1px 8px;">${escH(b.ccPlat)}</span> (Stall ${ccLbl(b.ccNum)}) ${b.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 8px;font-size:12px;">BATAM</span>`:""}</h3>
-      ${(()=>{ const dn=b.drvName||ccDriverAny(b.ccPlat,b.ts); return dn?`<div style="font-size:15px;font-weight:800;margin:-2px 0 6px;">👤 ${escH(dn)}</div>`:""; })()}
+      ${(()=>{ const dn=b.drvName||ccDriverAny(b.ccPlat,b.ts); let lpn=b.lp||""; if(!lpn){ try{ lpn=(Object.values(DB.get().cc||{}).filter(Boolean).find(c=>normPlat(c.plat)===normPlat(b.ccPlat))||{}).lp||(ccPlatRow(b.ccPlat)||{}).lp||""; }catch(e){} } const lb=lpn?`<span style="background:var(--gold);color:#fff;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:900;margin-left:6px;vertical-align:2px;">LP ${escH(lpn)}</span>`:""; return (dn||lb)?`<div style="font-size:15px;font-weight:800;margin:-2px 0 6px;">${dn?"👤 "+escH(dn):""}${lb}</div>`:""; })()}
       <div style="margin:0 0 8px;"><span style="font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;background:${ilsStage(b).bg};color:${ilsStage(b).c};">${ilsStage(b).t}</span></div>
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">${b.units.length} unit · dibuat ${new Date(b.ts).toLocaleString('id-ID')}</p>
       <table><thead><tr><th>QR</th><th>No. Rangka</th><th>Model</th><th>Stall</th></tr></thead><tbody>
