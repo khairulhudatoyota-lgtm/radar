@@ -1477,6 +1477,7 @@ public class MainActivity extends Activity {
                     .putString("trkKey", key == null ? "" : key)
                     .putString("trkPlat", plat == null ? "" : plat)
                     .putString("trkLp", lp == null ? "" : lp)
+                    .putLong("trkStartTs", System.currentTimeMillis())
                     .putString("trkLast", "").apply();
             } catch (Exception e) { }
         }
