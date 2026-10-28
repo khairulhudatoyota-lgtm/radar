@@ -6356,6 +6356,9 @@ function ccTripChipsHtml(r, data){
   }).join("");
   return `<div style="min-width:150px;white-space:normal;">${chips}</div>`;
 }
+/* Urutan tampilan jadwal: menurut jam ritase pertama (batch jam yang sama berkelompok), bukan per LP. Jam sama: urutan file asli. */
+function dccpFirstTs(r){ const t=dccpTripList(r); return t.length?ccTimeToTs(t[0],0):9e15; }
+function dccpSortedIdx(rows){ return rows.map((r,i)=>[r,i]).sort((a,b)=>(dccpFirstTs(a[0])-dccpFirstTs(b[0])) || (a[1]-b[1])); }
 function renderDccpUpload(){
   const data = DB.get();
   const pv = dccpParsedPreview;
@@ -6363,7 +6366,7 @@ function renderDccpUpload(){
   const tbl = (rows, withActual)=>`
     <div style="overflow-x:auto;"><table>
       <tr><th>LP</th><th>Plat</th><th>Model</th><th>Driver</th><th>Jam Ritase</th><th>Tujuan</th>${withActual?"<th>Aktual</th><th></th>":""}</tr>
-      ${rows.map((r,ri)=>{
+      ${dccpSortedIdx(rows).map(([r,ri])=>{
         const a = withActual ? findActualArrival(r.police,data) : null;
         if(withActual && !lpMine(r.lp)) return "";
         return `<tr><td>${r.lp}</td><td><b>${platFmt(r.police)}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${(withActual&&currentUser&&["koordinator","delivery","admin"].includes(currentUser.role))?`<div><button class="btn btn-sm" style="margin-top:4px;background:#fff4d6;color:#8a5a00;border:1px solid #e7c76a;" onclick="dccpAddRit(${ri})">➕ +1 Rit</button></div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
@@ -9605,7 +9608,7 @@ function renderDisplay(){
         <div class="stalltitle"><h3>📋 Jadwal CC Hari Ini (East Karawang)</h3><span class="cnt">${sched.length} truk</span></div>
         <div style="overflow-x:auto;"><table>
           <tr><th>Plat</th><th>LP / Driver</th><th>Jam Ritase</th><th>Aktual Datang</th><th>Status</th></tr>
-          ${sched.map(r=>{ const a=findActualArrival(r.police,data);
+          ${dccpSortedIdx(sched).map(([r])=>{ const a=findActualArrival(r.police,data);
             return `<tr><td><b>${platFmt(r.police)}</b>${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${r.origPolice}</div>`:""}</td><td>${r.lp}<div style="font-size:11px;color:var(--text-dim);">${r.driver||""}</div></td><td>${ccTripChipsHtml(r,data)}</td>
             <td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):"-"}</td>
             <td>${a?(a.stall?`Stall ${ccLbl(a.stall)} `:"Antri ")+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum datang</span>"}</td></tr>`;}).join("")}
