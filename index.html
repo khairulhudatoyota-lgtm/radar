@@ -8340,7 +8340,7 @@ function trkRit(plat, dir){
     const spot=!!r.extra, tot=Math.max(dccpTripList(r).length,spot?1:0), done=dccpDoneCount(r,data); if(!tot) return null;
     const cap=v=>spot?v:Math.min(v,tot);
     const back=(dir==="back"&&done>0); let n=back?cap(done):(done>0&&dir==="out"?cap(done):cap(done+1));
-    const adj=(data.ritAdj||{})[k]; if(adj && adj.ts>=dccpShiftFrom(r) && adj.n>=1){ n=cap(adj.n); }   // koreksi manual Delivery berlaku sampai shift ini habis
+    const adj=(data.ritAdj||{})[k]; if(adj && adj.ts>=dccpShiftFrom(r) && adj.n>=1){ n=cap(adj.n+Math.max(0,done-(adj.base||0))); }   // setelah dikoreksi, ILS/delout berikutnya tetap menambah nomor ritase   // koreksi manual Delivery berlaku sampai shift ini habis
     return {n:n,tot:tot,spot:spot,max:spot?Math.max(tot,n+2,3):tot,back:back,all:!spot&&done>=tot,txt:(spot?"SPOT Rit "+n:"Rit "+n+"/"+tot+(back&&!(adj&&adj.ts>=dccpShiftFrom(r))?" ✓":""))}; }catch(e){ return null; }
 }
 function ritEditOpen(plat){
@@ -8352,7 +8352,7 @@ function ritEditOpen(plat){
 }
 function ritEditSave(plat,n){
   const k=normPlat(plat);
-  DB.set(d=>{ d.ritAdj=d.ritAdj||{}; if(!n) delete d.ritAdj[k]; else d.ritAdj[k]={n:n,ts:Date.now(),by:(currentUser&&currentUser.name)||""}; });
+  DB.set(d=>{ d.ritAdj=d.ritAdj||{}; if(!n) delete d.ritAdj[k]; else{ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===k); d.ritAdj[k]={n:n,base:r?dccpDoneCount(r,d):0,ts:Date.now(),by:(currentUser&&currentUser.name)||""}; } });
   try{ closeModal(); }catch(e){} try{ updateTrackUI(); }catch(e){}
 }
 function trkCompute(r, mp){
