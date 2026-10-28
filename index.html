@@ -1434,26 +1434,29 @@ function spdRows(){
   if(spdF.shift!=="all") list = list.filter(a=>a.shift===spdF.shift);
   return list;
 }
+let spdAll=false;
+function spdShowMore(){ spdAll=!spdAll; render(); }
+function spdMoreBtn(total, shown){ return total>5?`<div style="text-align:center;margin-top:10px;"><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="spdShowMore()">${spdAll?"▲ Tampilkan yang terbaru saja":"▼ Tampilkan semua ("+total+")"}</button></div>`:""; }
 function renderSpeedLog(){
   const list = spdRows(), cnt = {};
   list.forEach(a=>{ const k=a.name||"-"; (cnt[k]=cnt[k]||{n:0,mx:0}); cnt[k].n++; cnt[k].mx=Math.max(cnt[k].mx,a.spd); });
   const top = Object.entries(cnt).sort((a,b)=>b[1].n-a[1].n).slice(0,5);
   const chip = (k,v,l)=>`<button type="button" class="linechip ${spdF[k]===v?'on':''}" onclick="spdSetF('${k}','${v}')">${l}</button>`;
-  const rows = list.length ? list.slice(0,200).map(a=>`<tr><td>${new Date(a.ts).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td><td>${rsShift(a.shift)}</td><td><b>${escH(a.name)}</b>${(a.plat||a.unit)?`<br><small>${a.plat?escH(a.plat)+(a.lp?" · "+escH(a.lp):""):""}${a.unit?"Unit setelahnya: "+escH(a.unit):""}</small>`:""}</td><td><b style="color:#D64545;">${a.spd}</b> / ${a.limit}</td><td>${a.ack?`<span style="color:#2E7D32;font-weight:800;">✔ ${new Date(a.ack).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</span>`:`<span style="color:#D64545;font-weight:800;">✖</span>`}</td></tr>`).join("")
+  const rows = list.length ? list.slice(0,spdAll?200:5).map(a=>`<tr><td>${new Date(a.ts).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td><td>${rsShift(a.shift)}</td><td><b>${escH(a.name)}</b>${(a.plat||a.unit)?`<br><small>${a.plat?escH(a.plat)+(a.lp?" · "+escH(a.lp):""):""}${a.unit?"Unit setelahnya: "+escH(a.unit):""}</small>`:""}</td><td><b style="color:#D64545;">${a.spd}</b> / ${a.limit}</td><td>${a.ack?`<span style="color:#2E7D32;font-weight:800;">✔ ${new Date(a.ack).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</span>`:`<span style="color:#D64545;font-weight:800;">✖</span>`}</td></tr>`).join("")
     : `<tr><td colspan="5" class="emptystate">Tidak ada pelanggaran pada filter ini.</td></tr>`;
   return `<div class="card"><h3>🏎 Riwayat Kecepatan</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">${chip("period","1","Hari ini")}${chip("period","7","7 hari")}${chip("period","30","30 hari")}${chip("period","all","Semua")}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${chip("shift","all","Semua shift")}${chip("shift","red","🔴 Red")}${chip("shift","white","⚪ White")}</div>
     <div style="font-size:13px;margin-bottom:10px;"><b>${list.length}</b> pelanggaran${top.length?` · terbanyak: ${top.map(([n,v])=>`<b>${escH(n)}</b> (${v.n}×, maks ${v.mx})`).join(", ")}`:""}</div>
-    <div style="overflow-x:auto;"><table><thead><tr><th>Waktu</th><th>Shift</th><th>Pengemudi</th><th>km/j</th><th>OK</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    <div style="overflow-x:auto;"><table><thead><tr><th>Waktu</th><th>Shift</th><th>Pengemudi</th><th>km/j</th><th>OK</th></tr></thead><tbody>${rows}</tbody></table></div>${spdMoreBtn(list.length)}</div>`;
 }
 function spdLogHtml(n, onlyMyShift){
   let list = (DB.get().speedAlerts||[]).slice().reverse();
   if(onlyMyShift && currentUser && currentUser.shift && currentUser.role!=="admin") list = list.filter(a=>a.shift===currentUser.shift);
-  list = list.slice(0, n||30);
+  const _tot=list.length; list = list.slice(0, spdAll?(n||30):5);
   const rows = list.length ? list.map(a=>`<tr><td>${new Date(a.ts).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td><td>${rsShift(a.shift)}</td><td>${escH(a.name)}${(a.plat||a.unit)?`<br><small>${a.plat?escH(a.plat):""}${a.unit?"Unit setelahnya: "+escH(a.unit):""}</small>`:""}</td><td><b style="color:#D64545;">${a.spd}</b> / ${a.limit}</td><td>${a.ack?`<span style="color:#2E7D32;font-weight:800;">✔ ${new Date(a.ack).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</span>`:`<span style="color:#D64545;font-weight:800;">✖ belum</span>`}</td></tr>`).join("")
     : `<tr><td colspan="5" class="emptystate">Belum ada pelanggaran kecepatan.</td></tr>`;
-  return `<div class="card"><h3>🏎 Pelanggaran Kecepatan</h3><div style="overflow-x:auto;"><table><thead><tr><th>Waktu</th><th>Shift</th><th>Pengemudi</th><th>km/j</th><th>OK</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  return `<div class="card"><h3>🏎 Pelanggaran Kecepatan</h3><div style="overflow-x:auto;"><table><thead><tr><th>Waktu</th><th>Shift</th><th>Pengemudi</th><th>km/j</th><th>OK</th></tr></thead><tbody>${rows}</tbody></table></div>${spdMoreBtn(Math.min(_tot,n||30))}</div>`;
 }
 function renderAdminSpeed(){
   const c = speedCfg(), ck = (b)=>b?"checked":"";
