@@ -4658,7 +4658,7 @@ window.addEventListener("online",()=>setTimeout(()=>{ try{ gsTick(); }catch(e){}
    PENDAFTARAN AKUN MANDIRI — user daftar sendiri (password buatan sendiri, tersimpan hash),
    Admin menyetujui / menolak. Driver CC: Admin wajib isi Kode Driver saat menyetujui.
 ====================================================================== */
-const REG_ROLES=["dispatcher","cc","delivery","koordinator","leader"];
+const REG_ROLES=["dispatcher","cc","delivery","koordinator","leader","viewer"];
 const REG_KEEP_MS=7*24*3600*1000;
 function regList(d){ return xlArr((d||DB.get()).regs); }
 function regPending(d){ return regList(d).filter(r=>r.status==="pending").sort((a,b)=>a.ts-b.ts); }
