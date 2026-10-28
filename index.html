@@ -8337,16 +8337,17 @@ function trkDirOf(r, t, total){
 }
 function trkRit(plat, dir){
   try{ const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return null;
-    const tot=dccpTripList(r).length, done=dccpDoneCount(r,data); if(!tot) return null;
-    const back=(dir==="back"&&done>0); let n=back?Math.min(done,tot):(done>0&&dir==="out"?Math.min(done,tot):Math.min(done+1,tot)), man=false;
-    const adj=(data.ritAdj||{})[k]; if(adj && adj.ts>=dccpShiftFrom(r) && adj.n>=1){ n=Math.min(adj.n,tot); man=true; }   // koreksi manual Delivery berlaku sampai shift ini habis
-    return {n:n,tot:tot,back:back,man:man,all:done>=tot,txt:"Rit "+n+"/"+tot+(back&&!man?" ✓":"")}; }catch(e){ return null; }
+    const spot=!!r.extra, tot=Math.max(dccpTripList(r).length,spot?1:0), done=dccpDoneCount(r,data); if(!tot) return null;
+    const cap=v=>spot?v:Math.min(v,tot);
+    const back=(dir==="back"&&done>0); let n=back?cap(done):(done>0&&dir==="out"?cap(done):cap(done+1));
+    const adj=(data.ritAdj||{})[k]; if(adj && adj.ts>=dccpShiftFrom(r) && adj.n>=1){ n=cap(adj.n); }   // koreksi manual Delivery berlaku sampai shift ini habis
+    return {n:n,tot:tot,spot:spot,max:spot?Math.max(tot,n+2,3):tot,back:back,all:!spot&&done>=tot,txt:(spot?"SPOT Rit "+n:"Rit "+n+"/"+tot+(back&&!(adj&&adj.ts>=dccpShiftFrom(r))?" ✓":""))}; }catch(e){ return null; }
 }
 function ritEditOpen(plat){
   if(!(currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))) return;
   const rt=trkRit(plat,""); if(!rt){ alert("CC ini tidak ada di jadwal DCCP."); return; }
   showModal(`<h3 style="margin:0 0 6px;">✏️ Edit ritase ${escH(plat)}</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Untuk membetulkan tampilan di peta &amp; daftar. Tidak mengubah ILS atau jadwal. Berlaku sampai shift ini selesai.</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${Array.from({length:rt.tot},(_,i)=>`<button type="button" class="btn ${rt.n===i+1?"btn-primary":"btn-outline"}" style="width:auto;min-width:64px;" onclick="ritEditSave('${escH(plat)}',${i+1})">Rit ${i+1}/${rt.tot}</button>`).join("")}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${Array.from({length:rt.max},(_,i)=>`<button type="button" class="btn ${rt.n===i+1?"btn-primary":"btn-outline"}" style="width:auto;min-width:64px;" onclick="ritEditSave('${escH(plat)}',${i+1})">${rt.spot?"Spot Rit "+(i+1):"Rit "+(i+1)+"/"+rt.tot}</button>`).join("")}</div>
     <button type="button" class="btn btn-outline" onclick="ritEditSave('${escH(plat)}',0)">↺ Kembali otomatis</button>`);
 }
 function ritEditSave(plat,n){
