@@ -1989,11 +1989,12 @@ function renderDispatcher(){
     <div id="geoBanner">${geoBannerHtml()}</div>
     <div class="card d-scan">
       <h3>📷 Scan / Input No. Rangka</h3>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+      ${(()=>{ const ar=myDispArea(); if(ar){ dispLine=ar; const v=(myDispAccount()||{}).vendor; return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:700;">Area kerja:</span><span class="badge gold" style="font-size:13px;">${ar}</span>${v?`<span class="badge">${escH(v)}</span>`:""}</div>`; }
+        return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         <span style="font-size:12px;font-weight:700;color:var(--text);">Line produksi (wajib):</span>
         ${PROD_LINES.map(l=>`<button type="button" class="linechip ${dispLine===l?'on':''}" data-line="${l}" onclick="setDispLine('${l}')">${l}</button>`).join("")}
-        <span style="font-size:11px;color:var(--text-dim);">(tersimpan di perangkat ini)</span>
-      </div>
+        <span style="font-size:11px;color:var(--text-dim);">(belum diikat ke akun — minta Admin mengisi Area kerja)</span>
+      </div>`; })()}
       <div id="lineWarn" class="msg err" style="display:none;margin-bottom:10px;">Pilih KP1 atau KP2 dulu.</div>
       <div id="scanArea"></div>
       <button class="btn btn-outline" onclick="toggleScanner()" id="scanToggleBtn">📷 Buka Kamera Scan QR</button>
@@ -4757,9 +4758,11 @@ function regOpen(){
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">Isi data di bawah. Akun bisa dipakai setelah <b>disetujui Admin</b>.</div>
     <div class="field"><label>Nama lengkap</label><input id="rgName" type="text" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="contoh: Budi Santoso"></div>
     <div class="field"><label>Username (untuk login)</label><input id="rgUser" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="huruf kecil/angka, tanpa spasi"></div>
-    <div class="field"><label>Daftar sebagai</label><select id="rgRole" onchange="document.getElementById('rgLpBox').style.display=(this.value==='cc'||this.value==='koordinator')?'':'none'">
+    <div class="field"><label>Daftar sebagai</label><select id="rgRole" onchange="document.getElementById('rgLpBox').style.display=(this.value==='cc'||this.value==='koordinator')?'':'none';document.getElementById('rgDispBox').style.display=(this.value==='dispatcher')?'':'none'">
       <option value="">-- pilih --</option>${ROLES.filter(r=>REG_ROLES.includes(r.key)).map(r=>`<option value="${r.key}">${r.icon} ${r.label}</option>`).join("")}</select></div>
     <div class="field" id="rgLpBox" style="display:none;"><label>LP (wajib untuk Driver CC &amp; Koordinator)</label><select id="rgLp"><option value="">-- pilih LP --</option>${lps.map(l=>`<option value="${xlEsc(l)}">${xlEsc(l)}</option>`).join("")}</select></div>
+    <div id="rgDispBox" style="display:none;"><div class="field"><label>Area kerja (wajib untuk Dispatcher)</label><select id="rgArea">${areaOptions("")}</select></div>
+      <div class="field"><label>Nama vendor</label><input id="rgVendor" type="text" autocomplete="off" placeholder="contoh: nama perusahaan vendor"></div></div>
     <div class="field"><label>Password</label><div style="position:relative;"><input id="rgP1" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" style="padding-right:44px;"><button type="button" onclick="pwEye('rgP1',this)" style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button></div></div>
     <div class="field"><label>Ulangi password</label><div style="position:relative;"><input id="rgP2" type="password" autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" style="padding-right:44px;"><button type="button" onclick="pwEye('rgP2',this)" style="position:absolute; right:4px; top:4px; bottom:4px; width:38px; background:transparent; color:var(--text-dim); font-size:17px;">👁</button></div></div>
     <div style="font-size:11px;color:var(--text-dim);margin:-4px 0 10px;">${pwRule()} Ingat baik-baik password ini.</div>
@@ -4770,6 +4773,7 @@ function regOpen(){
 async function regSubmit(){
   const g=id=>(document.getElementById(id)||{}).value||"";
   const name=g("rgName").trim().replace(/\s+/g," "), user=g("rgUser").trim().toLowerCase(), role=g("rgRole"), lp=regNeedLp(role)?g("rgLp"):"";
+  const area=role==="dispatcher"?g("rgArea"):"", vendor=role==="dispatcher"?g("rgVendor").trim().slice(0,60):"";
   const p1=g("rgP1"), p2=g("rgP2"), msg=document.getElementById("rgMsg"), btn=document.getElementById("rgBtn");
   const err=t=>{ msg.innerHTML=`<div class="msg err">${t}</div>`; };
   msg.innerHTML="";
@@ -4777,6 +4781,7 @@ async function regSubmit(){
   if(!/^[a-z0-9._-]{3,30}$/.test(user)) return err("Username 3–30 karakter: huruf kecil, angka, titik, strip, atau garis bawah. Tanpa spasi.");
   if(!REG_ROLES.includes(role)) return err("Pilih daftar sebagai apa.");
   if(regNeedLp(role) && !lp) return err("Pilih LP.");
+  if(role==="dispatcher" && !area) return err("Pilih Area kerja (KP1 atau KP2).");
   if(pwWeak(p1,user)) return err(pwRule());
   if(p1!==p2) return err("Ulangan password tidak sama.");
   if(!(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed)) return err("RADAR sedang offline. Pastikan internet (data seluler) aktif, tunggu status Online, lalu coba lagi.");
@@ -4791,7 +4796,7 @@ async function regSubmit(){
       const L=xlArr(d.regs).filter(r=>r.status==="pending" || Date.now()-(r.doneTs||r.ts)<REG_KEEP_MS);
       if((d.users||[]).some(x=>String(x.username).toLowerCase()===user) || L.some(r=>r.status==="pending"&&r.username===user)){ dup=true; d.regs=L; return; }
       L.filter(r=>r.username===user).forEach(r=>{ r.status="old"; });
-      L.push({id, username:user, name, role, lp, password:h, ts:Date.now(), status:"pending", dev:(navigator.userAgent||"").slice(0,80)});
+      L.push({id, username:user, name, role, lp, area, vendor, password:h, ts:Date.now(), status:"pending", dev:(navigator.userAgent||"").slice(0,80)});
       d.regs=L.filter(r=>r.status!=="old");
     });
     if(dup){ btn.disabled=false; btn.textContent="📨 Kirim pendaftaran"; return err("Username baru saja dipakai orang lain. Pilih username lain."); }
@@ -4819,8 +4824,9 @@ function renderRegCard(){
     ${P.map(r=>{ const rl=ROLES.find(x=>x.key===r.role)||{label:r.role,icon:"•"};
       return `<div style="border:1px solid var(--line,rgba(0,0,0,.12));border-radius:10px;padding:10px 12px;margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div><b>${xlEsc(r.name)}</b> <span class="mono" style="font-size:12px;">@${xlEsc(r.username)}</span></div><div style="font-size:11px;color:var(--text-dim);">${xlTime(r.ts)}</div></div>
-        <div style="font-size:12px;margin:4px 0 8px;"><span class="badge gold">${rl.icon} ${xlEsc(rl.label)}</span>${r.lp?` <span class="badge">LP ${xlEsc(r.lp)}</span>`:""}</div>
+        <div style="font-size:12px;margin:4px 0 8px;"><span class="badge gold">${rl.icon} ${xlEsc(rl.label)}</span>${r.lp?` <span class="badge">LP ${xlEsc(r.lp)}</span>`:""}${r.area?` <span class="badge">${xlEsc(r.area)}</span>`:""}${r.vendor?` <span class="badge">${xlEsc(r.vendor)}</span>`:""}</div>
         ${regNeedLp(r.role)?`<div class="field" style="margin-bottom:8px;"><label>LP</label><select id="rgaLp_${r.id}">${lps.map(l=>`<option value="${xlEsc(l)}" ${lpKey(l)===lpKey(r.lp)?"selected":""}>${xlEsc(l)}</option>`).join("")}</select></div>`:""}
+        ${r.role==="dispatcher"?`<div class="field" style="margin-bottom:8px;"><label>Area kerja</label><select id="rgaArea_${r.id}">${areaOptions(String(r.area||""))}</select></div><div class="field" style="margin-bottom:8px;"><label>Nama vendor</label><input id="rgaVen_${r.id}" type="text" value="${xlEsc(r.vendor||"")}"></div>`:""}
         ${r.role==="cc"?`<div class="field" style="margin-bottom:8px;"><label>Kode Driver (wajib)</label><input id="rgaDrv_${r.id}" type="text" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></div>`:""}
         <div style="display:flex;gap:8px;"><button type="button" class="btn btn-primary btn-sm" style="flex:2;" onclick="regApprove('${r.id}')">✔ Setuju</button>
         <button type="button" class="btn btn-danger btn-sm" style="flex:1;" onclick="regReject('${r.id}')">✖ Tolak</button></div></div>`; }).join("")}
@@ -4831,6 +4837,9 @@ function regApprove(id){
   const lpEl=document.getElementById("rgaLp_"+id), drvEl=document.getElementById("rgaDrv_"+id);
   const lp=regNeedLp(r.role)?((lpEl&&lpEl.value)||r.lp||""):"";
   const drv=r.role==="cc"?((drvEl&&drvEl.value)||"").trim().toUpperCase():"";
+  const arEl=document.getElementById("rgaArea_"+id), veEl=document.getElementById("rgaVen_"+id);
+  const area=r.role==="dispatcher"?((arEl&&arEl.value)||r.area||""):"", vendor=r.role==="dispatcher"?(((veEl&&veEl.value)||r.vendor||"").trim().slice(0,60)):"";
+  if(r.role==="dispatcher" && !area){ alert("Pilih Area kerja (KP1 / KP2) untuk "+r.name+"."); return; }
   if(regNeedLp(r.role) && !lp){ alert("Pilih LP."); return; }
   if(r.role==="cc" && !/^[A-Z0-9._-]{3,30}$/.test(drv)){ alert("Isi Kode Driver untuk "+r.name+" (contoh KMDCCDRV302)."); if(drvEl) drvEl.focus(); return; }
   const data=DB.get();
@@ -4841,7 +4850,7 @@ function regApprove(id){
     const x=xlArr(d.regs).find(y=>y.id===id && y.status==="pending"); if(!x) return;
     if((d.users||[]).some(u=>String(u.username).toLowerCase()===x.username)) return;
     if(drv && (d.users||[]).some(u=>u.drvCode===drv)) return;
-    d.users.push({username:x.username, name:x.name, password:x.password, role:x.role, lp, drvCode:drv, regTs:x.ts, approvedBy:(currentUser&&currentUser.name)||"", approvedTs:Date.now()});
+    d.users.push({username:x.username, name:x.name, password:x.password, role:x.role, lp, area, vendor, drvCode:drv, regTs:x.ts, approvedBy:(currentUser&&currentUser.name)||"", approvedTs:Date.now()});
     d.regs=xlArr(d.regs).filter(y=>y.id!==id);
     ok=true;
   });
@@ -6434,6 +6443,10 @@ function ldrAge(ts){
    Shift Day: 07:00–20:00, Shift Night: 20:00–07:00 hari berikutnya. */
 const SHIFT_START_H = 7, SHIFT2_START_H = 20;
 const PROD_LINES = ["KP1","KP2"];
+/* Area kerja (KP1/KP2) dan nama vendor terikat ke akun Dispatcher (diatur saat daftar / oleh Admin) */
+function myDispAccount(){ try{ const un=String((currentUser&&currentUser.username)||"").toLowerCase(); return (DB.get().users||[]).find(u=>String(u.username).toLowerCase()===un && u.role==="dispatcher")||null; }catch(e){ return null; } }
+function myDispArea(){ const u=myDispAccount(); const a=u&&String(u.area||"").toUpperCase().replace(/\s+/g,""); return PROD_LINES.includes(a)?a:""; }
+function areaOptions(sel){ return `<option value="">-- pilih area --</option>`+PROD_LINES.map(l=>`<option value="${l}" ${l===sel?"selected":""}>${l}</option>`).join(""); }
 const PARK_ORDER = ["14A","15A","16A","17A","14B","15B","16B","17B"];   // prioritas parkir: terkecil → terbesar, A dulu baru B
 let vinDraft = "";
 let dispLine = ""; try{ dispLine = localStorage.getItem("apcc_line")||""; }catch(e){}
@@ -7140,7 +7153,7 @@ function makeUnitRecord(vin, model, d){
     const old = d.unitCat[normVin(vin)] || {};
     d.unitCat[normVin(vin)] = {...old, batam: batam, prio: prio, src: old.src||"manual", by:(currentUser&&currentUser.name)||"", ts:Date.now()};
   }
-  return { frame:vin, model, driver: currentUser.name, line: dispLine||"", batam, prio, ts: Date.now(), geo: geoNeeded()?(geoIsIn()?"in":"out"):"" };
+  return { frame:vin, model, driver: currentUser.name, line: myDispArea()||dispLine||"", vendor: ((myDispAccount()||{}).vendor||""), batam, prio, ts: Date.now(), geo: geoNeeded()?(geoIsIn()?"in":"out"):"" };
 }
 function batamIssues(data){
   const groups = {}, misplaced = [];
@@ -7484,7 +7497,7 @@ function usrRender(){
   const hit=[];
   users.forEach((u,i)=>{
     if(usrRole && u.role!==usrRole) return;
-    if(q){ const hay=[u.username,u.name,u.role,u.lp,u.drvCode].join(" ").toLowerCase(); if(hay.indexOf(q)<0) return; }
+    if(q){ const hay=[u.username,u.name,u.role,u.lp,u.drvCode,u.area,u.vendor].join(" ").toLowerCase(); if(hay.indexOf(q)<0) return; }
     hit.push([u,i]);
   });
   const c=document.getElementById("usrCnt"); if(c) c.textContent="("+hit.length+" dari "+users.length+")";
@@ -7493,7 +7506,7 @@ function usrRender(){
   el.innerHTML=(show.map(([u,i])=>`<div style="border-top:1px solid var(--line,#e5e7eb);padding:10px 0;">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
       <div style="min-width:0;"><b>${esc(u.name)}</b><div style="font-size:12px;color:var(--text-dim);word-break:break-all;">${esc(u.username)}</div></div>
-      <div style="text-align:right;"><span class="badge gold">${esc(u.role)}</span>${u.lp?` <span class="badge">LP ${esc(u.lp)}</span>`:''}${u.drvCode?` <span class="badge">${esc(u.drvCode)}</span>`:''}${String(u.username).toLowerCase()==="user"?` <span class="badge" style="background:#1a7f3c;color:#fff;">BEBAS PLAT</span>`:''}</div>
+      <div style="text-align:right;"><span class="badge gold">${esc(u.role)}</span>${u.lp?` <span class="badge">LP ${esc(u.lp)}</span>`:''}${u.area?` <span class="badge">${esc(u.area)}</span>`:''}${u.vendor?` <span class="badge">${esc(u.vendor)}</span>`:''}${u.drvCode?` <span class="badge">${esc(u.drvCode)}</span>`:''}${String(u.username).toLowerCase()==="user"?` <span class="badge" style="background:#1a7f3c;color:#fff;">BEBAS PLAT</span>`:''}</div>
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;">
       <button class="btn-outline btn btn-sm" onclick="pwResetOpen(${i})">🔑 Reset</button>
@@ -7549,6 +7562,8 @@ function renderAdmin(){
           <select id="newRole">${ROLES.map(r=>`<option value="${r.key}">${r.label}</option>`).join("")}</select>
         </div>
         <div class="field"><label>LP (wajib untuk Koordinator &amp; Driver CC)</label><select id="newLP"><option value="">-- pilih LP --</option>${(data.lpList||[]).map(l=>`<option value="${l}">${l}</option>`).join("")}</select></div>
+        <div class="field"><label>Area kerja (untuk Dispatcher)</label><select id="newArea">${areaOptions("")}</select></div>
+        <div class="field"><label>Nama vendor (untuk Dispatcher)</label><input id="newVendor" type="text" placeholder="contoh: nama perusahaan vendor"></div>
         <div class="field"><label>Kode Driver (opsional, biasanya diisi Delivery)</label><input id="newDrv" type="text" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></div>
         <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
         </div>
@@ -9295,7 +9310,8 @@ function addUser(){
   if((r==="koordinator"||r==="cc") && !lp){ alert("LP wajib dipilih untuk role Koordinator dan Driver CC."); return; }
   if(DB.get().users.some(x=>x.username===u)){ alert("Username sudah dipakai. Pilih username lain."); return; }
   if(drvCode && DB.get().users.some(x=>x.drvCode===drvCode)){ alert("Kode driver "+drvCode+" sudah dipakai akun lain."); return; }
-  pwHash(p).then(h=>{ DB.set(d=>{ d.users.push({username:u, name:n, password:h, mustChange:true, role:r, lp, drvCode}); }); })
+  const area=r==="dispatcher"?((document.getElementById("newArea")||{}).value||""):"", vendor=r==="dispatcher"?((document.getElementById("newVendor")||{}).value||"").trim().slice(0,60):"";
+  pwHash(p).then(h=>{ DB.set(d=>{ d.users.push({username:u, name:n, password:h, mustChange:true, role:r, lp, area, vendor, drvCode}); }); })
     .catch(e=>alert(e.message||e));
 }
 function deleteUser(i){
@@ -9321,6 +9337,8 @@ function editUser(i){
     <div class="field"><label>LP (wajib untuk Koordinator &amp; Driver CC)</label>
       <select id="editLP"><option value="">-- pilih LP --</option>${(data.lpList||[]).map(l=>`<option value="${l}" ${lpKey(l)===lpKey(u.lp)?'selected':''}>${l}</option>`).join("")}</select>
     </div>
+    <div class="field"><label>Area kerja Dispatcher (KP1 / KP2)</label><select id="editArea">${areaOptions(String(u.area||"").toUpperCase())}</select></div>
+    <div class="field"><label>Nama vendor (Dispatcher)</label><input id="editVendor" type="text" value="${xlEsc(u.vendor||"")}" placeholder="contoh: nama perusahaan vendor"></div>
     <div class="field"><label>Kode Driver (opsional, biasanya diisi Delivery)</label><input id="editDrv" type="text" value="${u.drvCode||""}" style="text-transform:uppercase;"></div>
     <div style="font-size:11px;color:var(--text-dim);margin:-4px 0 10px;">Password tersimpan terenkripsi, jadi Admin tidak bisa melihatnya. Kalau user lupa, isi password baru di atas; user wajib menggantinya saat login berikutnya.</div>
     <button class="btn btn-primary" onclick="saveUserEdit(${i})">💾 Simpan Perubahan</button>
@@ -9338,7 +9356,7 @@ function saveUserEdit(i){
   if(drvCode && DB.get().users.some((x,k)=>k!==i && x.drvCode===drvCode)){ alert("Kode driver "+drvCode+" sudah dipakai akun lain."); return; }
   const prev = DB.get().users[i]||{}, prevName = prev.username, prevRole = prev.role;
   const apply = h=>{ DB.set(d=>{ let k=i; if(!d.users[k] || d.users[k].username!==prevName || d.users[k].role!==prevRole) k=d.users.findIndex(x=>x.username===prevName && x.role===prevRole); if(k<0) return;
-      const o=d.users[k]; d.users[k]=Object.assign({}, o, {username:u, name:n, role:r, lp, drvCode}, h?{password:h, mustChange:true}:{}); }); closeModal(); };
+      const o=d.users[k]; d.users[k]=Object.assign({}, o, {username:u, name:n, role:r, lp, drvCode, area:(r==="dispatcher"?((document.getElementById("editArea")||{}).value||""):""), vendor:(r==="dispatcher"?((document.getElementById("editVendor")||{}).value||"").trim().slice(0,60):"")}, h?{password:h, mustChange:true}:{}); }); closeModal(); };
   if(p) pwHash(p).then(apply).catch(e=>alert(e.message||e)); else apply(null);
 }
 function addModel(){
