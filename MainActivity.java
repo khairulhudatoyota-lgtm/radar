@@ -944,31 +944,65 @@ public class MainActivity extends Activity {
     }
 
     // ---------- Sesi TLS dibatasi 12 jam: akun TLS terbatas jumlah login-nya, jadi sesi otomatis dikeluarkan ----------
-    private static final long TLS_SESSION_MS = 1L * 3600L * 1000L;
+    private static final long TLS_SESSION_MS = 6L * 3600L * 1000L;   // sama dengan TLS di Chrome/Edge: tidak dipakai 6 jam = logout total
     private final android.os.Handler tlsH = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable tlsTick = new Runnable() { @Override public void run() {
         try { if (tls != null && tls.getVisibility() != View.VISIBLE) tlsSessionCheck(false); } catch (Exception e) { }
         tlsH.postDelayed(this, 5 * 60 * 1000L);
     } };
 
-    /** open=true: TLS akan dibuka (mulai hitung 12 jam bila belum). open=false: hanya keluarkan sesi bila sudah lewat 12 jam. */
+    private static final int[] TLS_SLOT_HOURS = {0, 6, 12, 18, 20};
+    private long tlsLastSlot(long now) {
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        c.setTimeInMillis(now);
+        long best = 0;
+        for (int dayBack = 0; dayBack <= 1; dayBack++) {
+            for (int h : TLS_SLOT_HOURS) {
+                java.util.Calendar x = (java.util.Calendar) c.clone();
+                x.add(java.util.Calendar.DAY_OF_YEAR, -dayBack);
+                x.set(java.util.Calendar.HOUR_OF_DAY, h); x.set(java.util.Calendar.MINUTE, 0); x.set(java.util.Calendar.SECOND, 0); x.set(java.util.Calendar.MILLISECOND, 0);
+                long t = x.getTimeInMillis();
+                if (t <= now && t > best) best = t;
+            }
+        }
+        return best;
+    }
+
+    /** Sama seperti TLS di Chrome/Edge: sesi dianggap habis bila TLS tidak dipakai 6 jam. "tlsSince" = waktu terakhir TLS dipakai.
+     *  open=true: TLS akan dibuka (cek dulu, lalu catat waktu pakai). open=false: hanya keluarkan sesi bila sudah 6 jam tidak dipakai. */
     private void tlsSessionCheck(boolean open) {
         try {
             SharedPreferences sp = getSharedPreferences("radar", MODE_PRIVATE);
-            long now = System.currentTimeMillis(), since = sp.getLong("tlsSince", 0);
-            if (since > 0 && now - since > TLS_SESSION_MS) {
-                tlsLogout(false);
-                since = 0;
-                sp.edit().putLong("tlsSince", 0).apply();
-                if (open) Toast.makeText(this, "Sesi TLS 1 jam habis. Silakan login TLS lagi.", Toast.LENGTH_LONG).show();
+            long now = System.currentTimeMillis(), last = sp.getLong("tlsSince", 0);
+            // Jadwal logout paksa TLS: 00.00, 06.00, 12.00, 18.00, 20.00 (waktu HP). Saat TLS sedang dibuka, ditunda sampai ditutup.
+            long slot = tlsLastSlot(now), done = sp.getLong("tlsSlotDone", 0);
+            if (done == 0) { sp.edit().putLong("tlsSlotDone", slot).apply(); }
+            else if (done < slot && (open || tls == null || tls.getVisibility() != View.VISIBLE)) {
+                sp.edit().putLong("tlsSlotDone", slot).apply();
+                if (last > 0) {
+                    tlsLogout(false);
+                    last = 0;
+                    sp.edit().putLong("tlsSince", 0).apply();
+                    if (open) Toast.makeText(this, "Waktunya logout TLS terjadwal. Silakan login TLS lagi.", Toast.LENGTH_LONG).show();
+                }
             }
-            if (open && since == 0) sp.edit().putLong("tlsSince", now).apply();
+            if (last > 0 && now - last > TLS_SESSION_MS) {
+                tlsLogout(false);
+                last = 0;
+                sp.edit().putLong("tlsSince", 0).apply();
+                if (open) Toast.makeText(this, "TLS tidak dipakai 6 jam. Silakan login TLS lagi.", Toast.LENGTH_LONG).show();
+            }
+            if (open) sp.edit().putLong("tlsSince", now).apply();
         } catch (Exception e) { }
+    }
+
+    private void tlsTouch() {
+        try { getSharedPreferences("radar", MODE_PRIVATE).edit().putLong("tlsSince", System.currentTimeMillis()).apply(); } catch (Exception e) { }
     }
 
     // Keluar dari TLS: coba logout di sisi server dulu (agar slot login akun TLS dibebaskan), baru hapus cookie/data lokal
     private final Runnable tlsIdleLogout = new Runnable() { @Override public void run() {
-        try { if (tls != null && tls.getVisibility() != View.VISIBLE) tlsLogout(true); } catch (Exception e) { }
+        try { if (tls != null && (!fg || tls.getVisibility() != View.VISIBLE)) tls.loadUrl("about:blank"); } catch (Exception e) { }   // seperti menutup tab: halaman berhenti, login tetap
     } };
 
     private void tlsLogout() { tlsLogout(true); }
@@ -1066,7 +1100,7 @@ public class MainActivity extends Activity {
     }
 
     private void showRadar() {
-        try { if (tls.getVisibility() == View.VISIBLE) { tlsH.removeCallbacks(tlsIdleLogout); tlsH.postDelayed(tlsIdleLogout, 3 * 60 * 1000L); } } catch (Exception e) { }
+        try { if (tls.getVisibility() == View.VISIBLE) { tlsTouch(); tlsH.removeCallbacks(tlsIdleLogout); tlsH.postDelayed(tlsIdleLogout, 3 * 60 * 1000L); } } catch (Exception e) { }
         tls.setVisibility(View.GONE);
         xl.setVisibility(View.GONE);
         xlCopyBtn.setVisibility(View.GONE);
@@ -1257,7 +1291,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (inst == this) inst = null;
-        try { tlsLogout(false); } catch (Exception e) { }
         super.onDestroy();
     }
 
@@ -1288,12 +1321,18 @@ public class MainActivity extends Activity {
         super.onPause();
         fg = false;
         try { radar.resumeTimers(); } catch (Exception e) { }   // JS RADAR tetap berjalan saat layar mati / aplikasi lain dibuka
+        try { tlsTouch(); tlsH.removeCallbacks(tlsIdleLogout); tlsH.postDelayed(tlsIdleLogout, 3 * 60 * 1000L); } catch (Exception e) { }   // layar mati / app ke latar: 3 menit lagi halaman TLS dihentikan (seperti tab ditutup), tanpa perlu dibuka
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         fg = true;
+        try {
+            tlsH.removeCallbacks(tlsIdleLogout);
+            if (tls != null && tls.getVisibility() == View.VISIBLE) { String cu = tls.getUrl(); if (cu == null || cu.startsWith("about:")) tls.loadUrl(TLS_URL); }
+            else tlsSessionCheck(false);
+        } catch (Exception e) { }
         alarmStopNative();   // dering mati begitu aplikasi dibuka
         checkGps();
         if (!updRunning && inst == this) checkApkUpdate();
@@ -1528,7 +1567,6 @@ public class MainActivity extends Activity {
         public void exitApp() {
             runOnUiThread(new Runnable() { @Override public void run() {
                 try { stopService(new Intent(MainActivity.this, LocationService.class)); } catch (Exception e) { }
-                try { tlsLogout(false); } catch (Exception e) { }
                 finishAffinity();
             } });
         }

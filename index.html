@@ -91,9 +91,34 @@ html,body{max-width:100%; overflow-x:hidden;}
 .leaflet-container{z-index:0;}
 .mapLbl{position:absolute;left:0;top:0;background:#fff;color:#111827;border:2px solid #0F2A4A;border-radius:8px;padding:2px 7px;font:800 12px/1.3 "Inter",Arial,Helvetica,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35);pointer-events:none;}
 .truckMk{width:38px;height:38px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-size:19px;cursor:pointer;position:relative;}
+.truckRit{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);background:#0F2A4A;color:#fff;font:800 11px/1.2 "Inter",Arial,sans-serif;padding:2px 7px;border-radius:6px;border:2px solid #fff;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.4);}.truckRit:empty{display:none}
 .truckLb{position:absolute;left:50%;top:42px;transform:translateX(-50%);color:#fff;font:900 13px/1.2 "Inter",Arial,Helvetica,sans-serif;letter-spacing:.3px;padding:3px 8px;border-radius:7px;border:2px solid #fff;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.5);text-shadow:0 1px 1px rgba(0,0,0,.35);}
 .tagChip{display:inline-block;border:2px solid;border-radius:999px;padding:3px 10px;font-weight:800;font-size:12px;margin:0 6px 6px 0;cursor:pointer;background:#fff;}
 #chatRing{position:fixed;left:10px;right:10px;top:10px;z-index:99999;background:#E60012;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 8px 28px rgba(0,0,0,.5);animation:ringPulse .8s infinite alternate;}
+.nsPop{background:var(--card,#fff);border:1px solid var(--border);border-radius:16px;padding:14px;text-align:center;animation:nsIn .5s cubic-bezier(.2,1.4,.4,1) both;box-shadow:0 6px 24px rgba(0,0,0,.12);overflow:hidden}
+.nsRoad{position:relative;height:42px;border-bottom:3px dashed var(--border);margin:0 -14px 6px;overflow:hidden}
+.nsTruck{position:absolute;bottom:-2px;left:-15%;font-size:30px;animation:nsDrive 4.2s linear infinite}
+.nsTruck:after{content:"💨";position:absolute;left:-22px;top:4px;font-size:16px;animation:nsPuff .5s ease-out infinite}
+.nsBell{font-size:34px;display:inline-block;transform-origin:50% 10%;animation:nsRing 1.6s ease-in-out infinite}
+.nsTit{font-weight:800;font-size:16px;margin:4px 0;animation:nsUp .5s .15s both}
+.nsSub{font-size:13px;color:var(--text-dim);margin-bottom:12px;animation:nsUp .5s .3s both}
+.nsDots b{animation:nsDot 1.2s infinite;display:inline-block}.nsDots b:nth-child(2){animation-delay:.2s}.nsDots b:nth-child(3){animation-delay:.4s}
+.nsBtn{display:block;width:100%;margin-top:8px;position:relative;overflow:hidden;animation:nsUp .5s .45s both}
+.nsBtn small{display:block;font-weight:500;font-size:11px;opacity:.8}
+.nsBtn.btn-primary:after{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:nsShine 2.4s infinite}
+.nsBtn:active{transform:scale(.97)}
+.nsOk{animation:nsPopIn .45s cubic-bezier(.2,1.6,.4,1) both}
+.nsFoot{font-size:12px;color:var(--text-dim);margin-top:10px;animation:nsBlink 2s ease-in-out infinite}
+@keyframes nsIn{from{opacity:0;transform:translateY(24px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes nsUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes nsDrive{from{left:-15%}to{left:105%}}
+@keyframes nsPuff{from{opacity:.9;transform:translateX(0)}to{opacity:0;transform:translateX(-14px)}}
+@keyframes nsRing{0%,55%,100%{transform:rotate(0)}10%{transform:rotate(18deg)}20%{transform:rotate(-16deg)}30%{transform:rotate(12deg)}40%{transform:rotate(-8deg)}}
+@keyframes nsDot{0%,60%,100%{opacity:.2;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+@keyframes nsShine{from{left:-60%}to{left:130%}}
+@keyframes nsPopIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+@keyframes nsBlink{0%,100%{opacity:.6}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.nsPop *,.nsPop{animation:none!important}}
 @keyframes ringPulse{from{transform:scale(1)}to{transform:scale(1.025)}}
 #ccProf{position:fixed;left:0;right:0;bottom:0;z-index:9998;background:var(--panel,#fff);color:var(--text);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.4);padding:0 0 14px;max-height:75vh;overflow:auto;}
 .mapDot{position:absolute;left:-6px;top:-6px;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);}
@@ -1023,6 +1048,22 @@ function fbRender(){
   if(typing || (typeof scanStream!=="undefined" && scanStream) || activeTab==="defect" || (typeof dccpEditIdx!=="undefined" && dccpEditIdx!==null)) return;
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
+/* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
+function isViewer(){ return !!(currentUser && currentUser.role==="viewer"); }
+let _uiAt=0; ["click","keydown","touchend"].forEach(ev=>{ try{ window.addEventListener(ev,()=>{ _uiAt=Date.now(); },true); }catch(e){} });
+let _vbT=0;
+function viewerBlockedToast(){
+  if(Date.now()-_uiAt>1500 || Date.now()-_vbT<2500) return; _vbT=Date.now();
+  try{ const t=document.createElement("div"); t.textContent="👁 Akun Pengamat: hanya bisa melihat, data tidak diubah."; t.style.cssText="position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0F2A4A;color:#fff;padding:10px 16px;border-radius:12px;font:700 13px Inter,Arial,sans-serif;z-index:100001;box-shadow:0 4px 16px rgba(0,0,0,.4);max-width:88vw;text-align:center;"; document.body.appendChild(t); setTimeout(()=>{ try{ t.remove(); }catch(e){} },2600); }catch(e){}
+}
+function viewerBadge(){ try{ let b=document.getElementById("viewerBadge"); if(isViewer()){ if(!b){ b=document.createElement("div"); b.id="viewerBadge"; b.textContent="👁 PENGAMAT · hanya lihat"; b.style.cssText="position:fixed;top:6px;right:6px;background:#0F2A4A;color:#fff;font:800 11px Inter,Arial,sans-serif;padding:4px 9px;border-radius:8px;z-index:9000;opacity:.9;pointer-events:none;"; document.body.appendChild(b); } } else if(b) b.remove(); }catch(e){} }
+function viewerGuardInstall(){
+  try{
+    if(window._vgDone || !window.firebase || !firebase.database || !firebase.database.Reference) return;
+    const P=firebase.database.Reference.prototype; window._vgDone=true;
+    ["set","update","remove","transaction"].forEach(m=>{ const o=P[m]; if(!o) return; P[m]=function(){ if(isViewer()){ viewerBlockedToast(); return Promise.resolve(); } return o.apply(this,arguments); }; });
+  }catch(e){}
+}
 const DB = {
   load(){
     if(_mem) return _mem;
@@ -1035,6 +1076,7 @@ const DB = {
   save(data){ _mem = data; try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); }catch(e){} },
   get(){ return this.load(); },
   set(mutatorFn){
+    if(isViewer()){ viewerBlockedToast(); return; }
     const data = this.load();
     const pre = cloneJ(data);
     const T = Date.now(), seed = (T ^ 0x9e3779b9) >>> 0;
@@ -1118,6 +1160,7 @@ const ROLES = [
   {key:"koordinator", label:"Koordinator", icon:"🧭", desc:"Kosongkan stall CC"},
   {key:"leader",      label:"Leader", icon:"👔", desc:"Lihat & konfirmasi data defect"},
   {key:"admin",       label:"Admin", icon:"🔐", desc:"Sistem & konfigurasi data"},
+  {key:"viewer",      label:"Pengamat", icon:"👁", desc:"Lihat semua menu, tidak bisa mengubah data"},
 ];
 const TABS_BY_ROLE = {
   dispatcher:  [{key:"dispatcher", label:"Scan Unit"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
@@ -1125,6 +1168,7 @@ const TABS_BY_ROLE = {
   delivery:    [{key:"delivery", label:"Delivery"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   leader:      [{key:"dashboard", label:"Dashboard"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
+  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
@@ -1704,7 +1748,7 @@ function cleanPlatForUser(){
   }catch(e){}
 }
 function enterApp(forceTab){
-  cleanPlatForUser();
+  viewerGuardInstall(); viewerBadge(); cleanPlatForUser();
   syncCcProfileFromAccount();
   try{ if(window.AndroidTLS && AndroidTLS.keepAlive && currentUser && currentUser.role!=="display") AndroidTLS.keepAlive(); }catch(e){}
   requestNotifPermission();
@@ -3443,97 +3487,6 @@ function tlsLogoutWatch(){
   }catch(e){}
 }
 
-/* ===== MODE WORKER: HP hanya memasukkan pekerjaan ke antrean; PC pekerja (bridge) yang mengisi TLS dan menempel manifest ===== */
-const WK_BRIDGE="http://127.0.0.1:8787";
-let WK={alive:false, chk:0, busy:false};
-function wkOn(){ try{ return DB.get().wkMode==="worker"; }catch(e){ return false; } }
-function wkIsPc(){ try{ return localStorage.getItem("radar_wkpc")==="1"; }catch(e){ return false; } }
-function wkMyId(){ try{ let i=localStorage.getItem("radar_wkid"); if(!i){ i="PC"+Math.random().toString(36).slice(2,8); localStorage.setItem("radar_wkid",i); } return i; }catch(e){ return "PC?"; } }
-function wkSetMode(on){
-  if(!confirm(on?"NYALAKAN Mode Worker?\n\nILS (kirim ke TLS) dan manifest dari semua HP masuk antrean dan dikerjakan PC pekerja. Pastikan PC pekerja sudah menyala dengan bridge berjalan.":"Kembali ke Mode Normal?\n\nHP bekerja sendiri seperti biasa. Pekerjaan yang masih antre tidak dibuang, bisa dikerjakan manual.")) return;
-  DB.set(d=>{ d.wkMode=on?"worker":"normal"; d.wkModeBy=(currentUser&&currentUser.name)||""; d.wkModeTs=Date.now(); });
-  render();
-}
-function wkSetPc(on){ try{ localStorage.setItem("radar_wkpc", on?"1":"0"); }catch(e){} render(); }
-function wkEnqueue(kind, ilsId, plat, payload){
-  const key=kind+":"+ilsId;
-  let added=false;
-  DB.set(d=>{
-    d.wq=d.wq||[];
-    if(d.wq.some(j=>j.key===key && (j.status==="pending"||j.status==="run"||j.status==="done"))) return;
-    if(kind==="tls"){ const il=(d.ils||[]).find(x=>x.id===ilsId); if(il && il.tlsOk) return; }   // ILS di TLS hanya sekali: yang sudah sukses tidak dikirim lagi
-    d.wq.push({id:"W"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), key:key, kind:kind, ilsId:ilsId, plat:plat||"", payload:payload, status:"pending", ts:Date.now(), by:(currentUser&&currentUser.name)||"", tries:0});
-    d.wq=d.wq.slice(-60);
-    added=true;
-  });
-  return true;
-}
-function wkJob(id){ return ((DB.get().wq)||[]).find(j=>j.id===id); }
-function wkUpd(id, fn){ DB.set(d=>{ const j=(d.wq||[]).find(x=>x.id===id); if(j) fn(j); }); }
-function wkRetry(id){
-  const j=wkJob(id); if(!j) return;
-  if(j.kind==="tls" && (j.risk || j.status==="run")){
-    if(!confirm("ILS di TLS hanya bisa dibuat SATU KALI.\n\nPekerjaan ini terhenti di tengah jalan, jadi ILS-nya mungkin SUDAH terbuat di TLS.\n\nCek dulu di TLS apakah ILS untuk "+(j.plat||"unit ini")+" sudah ada.\n\nTekan OK HANYA kalau di TLS belum ada, lalu pekerjaan diulang.")) return;
-  }
-  wkUpd(id, x=>{ x.status="pending"; x.msg=""; x.pc=""; x.risk=false; }); render();
-}
-function wkMarkDone(id){
-  if(!confirm("Tandai selesai tanpa mengulang?\n\nPakai ini kalau kamu sudah memastikan ILS-nya sudah ada di TLS.")) return;
-  wkUpd(id, x=>{ x.status="done"; x.msg="Ditandai selesai manual"; x.risk=false; x.doneTs=Date.now(); });
-  DB.set(d=>{ const jj=(d.wq||[]).find(x=>x.id===id); if(jj&&jj.kind==="tls"){ const il=(d.ils||[]).find(x=>x.id===jj.ilsId); if(il) il.tlsOk=Date.now(); } }); render();
-}
-function wkCancel(id){ wkUpd(id, j=>{ j.status="cancel"; j.msg="Dibatalkan"; }); render(); }
-function wkClearDone(){ DB.set(d=>{ d.wq=(d.wq||[]).filter(j=>j.status==="pending"||j.status==="run"||j.status==="fail"); }); render(); }
-async function wkPing(){
-  if(Date.now()-WK.chk<5000) return WK.alive;
-  WK.chk=Date.now();
-  try{ const c=new AbortController(); const t=setTimeout(()=>c.abort(),1500); const r=await fetch(WK_BRIDGE+"/ping",{signal:c.signal}); clearTimeout(t); const j=await r.json(); WK.alive=!!(j&&j.ok); }catch(e){ WK.alive=false; }
-  return WK.alive;
-}
-async function wkTick(){
-  try{
-    if(WK.busy || !wkOn() || !wkIsPc() || !currentUser) return;
-    if(!(await wkPing())) return;
-    const q=(DB.get().wq)||[], me=wkMyId(), now=Date.now();
-    // pekerjaan "run" milik PC ini yang menggantung > 3 menit -> gagal
-    q.filter(j=>j.status==="run" && j.pc===me && now-(j.at||0)>180000).forEach(j=>wkUpd(j.id, x=>{ x.status="fail"; x.risk=(x.kind==="tls"); x.msg="Waktu habis. CEK TLS dulu sebelum ulangi"; }));
-    const j=q.filter(x=>x.status==="pending").sort((a,b)=>a.ts-b.ts)[0]; if(!j) return;
-    WK.busy=true;
-    DB.set(d=>{ const x=(d.wq||[]).find(y=>y.id===j.id); if(x && x.status==="pending"){ x.status="run"; x.pc=me; x.at=Date.now(); x.tries=(x.tries||0)+1; } });
-    const mine=wkJob(j.id);
-    if(!mine || mine.status!=="run" || mine.pc!==me){ WK.busy=false; return; }   // PC lain yang menang
-    let res={ok:false,msg:"Bridge tidak menjawab"};
-    try{
-      const c=new AbortController(); const t=setTimeout(()=>c.abort(),170000);
-      const r=await fetch(WK_BRIDGE+"/job",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:j.id,kind:j.kind,plat:j.plat,payload:j.payload}),signal:c.signal});
-      clearTimeout(t); res=await r.json();
-    }catch(e){ res={ok:false,msg:"Bridge: "+((e&&e.message)||"gagal")}; }
-    if(res.ok && j.kind==="tls") DB.set(d=>{ const il=(d.ils||[]).find(x=>x.id===j.ilsId); if(il) il.tlsOk=Date.now(); });
-    wkUpd(j.id, x=>{ x.status=res.ok?"done":"fail"; x.msg=String(res.msg||"").slice(0,200); x.doneTs=Date.now(); x.risk=!res.ok && x.kind==="tls" && (res.stage==="simpan"||res.stage==="konfirmasi"||res.stage==="unknown"||!res.stage&&res.msg&&/^Bridge:/.test(res.msg)); });
-    WK.busy=false;
-    if(typeof render==="function" && adminTab==="tls") try{ render(); }catch(e){}
-  }catch(e){ WK.busy=false; }
-}
-function wkStatusLabel(s){ return {pending:"Menunggu PC",run:"Diproses PC",done:"Selesai",fail:"Gagal",cancel:"Dibatalkan"}[s]||s; }
-function wkCardHtml(data){
-  const on=data.wkMode==="worker", pc=wkIsPc(), q=(data.wq||[]).slice().reverse().slice(0,15);
-  const col={pending:"#8a5a00",run:"#1d4ed8",done:"#12633a",fail:"#b91c1c",cancel:"#5b6675"};
-  const rows=q.map(j=>`<div style="display:flex;gap:8px;align-items:center;font-size:12px;border-bottom:1px solid var(--border,#e5e7eb);padding:6px 0;">
-    <div style="flex:1;min-width:0;"><b>${j.kind==="tls"?"TLS":"Manifest"}</b> · ${(j.plat||j.ilsId||"").toString().replace(/</g,"&lt;")}<div style="color:var(--text-dim);">${j.by?j.by.replace(/</g,"&lt;")+" · ":""}${new Date(j.ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}${j.msg?" · "+j.msg.replace(/</g,"&lt;"):""}${j.risk?` · <b style="color:#b91c1c;">⚠ cek TLS dulu</b>`:""}</div></div>
-    <div style="font-weight:700;color:${col[j.status]||"#333"};">${wkStatusLabel(j.status)}</div>
-    ${(j.status==="fail"||j.status==="run")?`<button class="btn btn-outline btn-sm" style="width:auto;" onclick="wkRetry('${j.id}')">Ulangi</button>`:""}
-    ${(j.risk&&j.status==="fail")?`<button class="btn btn-outline btn-sm" style="width:auto;" onclick="wkMarkDone('${j.id}')">Sudah ada di TLS</button>`:""}
-    ${(j.status==="pending"||j.status==="fail")?`<button class="btn btn-outline btn-sm" style="width:auto;" onclick="wkCancel('${j.id}')">Batal</button>`:""}</div>`).join("");
-  return `<div class="card"><h3>🖥 Mode Worker (PC mengerjakan TLS &amp; manifest)</h3>
-    <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Mode <b>Normal</b>: HP bekerja sendiri. Mode <b>Worker</b>: ILS dan manifest dari HP masuk antrean, PC pekerja yang mengisi TLS dan menempel manifest (HP tidak membuka TLS).</p>
-    <div class="msg ${on?"info":""}" style="margin-bottom:10px;"><b>${on?"🟢 MODE WORKER aktif":"⚪ MODE NORMAL"}</b>${data.wkModeBy?`<br><span style="font-size:11px;">diubah oleh ${String(data.wkModeBy).replace(/</g,"&lt;")}</span>`:""}</div>
-    <button class="btn ${on?"btn-outline":"btn-primary"}" onclick="wkSetMode(${on?"false":"true"})">${on?"Kembali ke Mode Normal":"Nyalakan Mode Worker"}</button>
-    <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:12px 0 4px;"><input type="checkbox" ${pc?"checked":""} onchange="wkSetPc(this.checked)" style="margin-top:3px;"><span><b>Perangkat ini adalah PC pekerja</b> (centang hanya di PC yang menjalankan bridge). Bridge: <b>${WK.alive?"terhubung":"tidak terdeteksi"}</b>.</span></label>
-    <div style="margin-top:12px;font-weight:700;font-size:13px;">Antrean (${(data.wq||[]).length})</div>
-    ${rows||`<div style="font-size:12px;color:var(--text-dim);padding:6px 0;">Antrean kosong.</div>`}
-    ${(data.wq||[]).some(j=>j.status==="done"||j.status==="cancel")?`<button class="btn btn-outline btn-sm" style="width:auto;margin-top:8px;" onclick="wkClearDone()">Bersihkan yang selesai</button>`:""}
-  </div>`;
-}
 function tlsInAppOk(){ try{ return !!DB.get().tlsInAppOn; }catch(e){ return false; } }
 function tlsInAppMsg(){ alert("Buka TLS lewat aplikasi (APK) dimatikan sementara oleh admin.\n\nAkun TLS terbatas jumlah loginnya. Kirim ILS lewat PC (Salin untuk TLS / Buka TLS di PC)."); }
 function tlsInAppToggle(){
@@ -3549,7 +3502,7 @@ function saveTlsCfg(){
 }
 function renderAdminTls(){
   const c=tlsCfg();
-  return wkCardHtml(DB.get())+`<div class="card"><h3>🔗 Pengaturan Input ILS ke TLS</h3>
+  return `<div class="card"><h3>🔗 Pengaturan Input ILS ke TLS</h3>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Nilai default untuk ILS reguler. Dipakai di layar "Salin untuk TLS" dan nanti oleh script pengisi TLS. Ubah di sini kalau aturan di TLS berubah.</p>
     <div class="field"><label>Tipe Pengiriman (ILS reguler)</label><select id="tlsTipe">${TLS_TIPE.map(x=>`<option value="${x[0]}" ${x[0]===c.tipe?"selected":""}>${x[0]} - ${x[1]}</option>`).join("")}</select></div>
     <div class="field"><label>Lokasi Tujuan (ILS reguler)</label><select id="tlsTuj">${TLS_TUJ.map(x=>`<option value="${x[0]}" ${x[0]===c.tujuan?"selected":""}>${x[0]} - ${x[1]}</option>`).join("")}</select></div>
@@ -3610,7 +3563,7 @@ function tlsPcGo(){
   alert("Data ILS #"+b.id+" sudah disalin.\n\nDi tab TLS (halaman Pembuatan ILS / SJKB): klik ⚡ RADAR→TLS (bookmark atau tombol Tampermonkey). Kalau browser minta izin clipboard, pilih Allow.");
 }
 function tlsCopyBm(btn){ tlsCopy(decodeURIComponent(TLS_BM), btn); }
-function tlsSendApp(){ if(wkOn() && window._tlsB){ const b0=window._tlsB; wkEnqueue("tls", b0.id, b0.ccPlat, tlsPayload(b0)); alert("Mode Worker aktif: ILS dikirim ke antrean PC pekerja. Pantau statusnya di Admin → TLS."); return; } if(!tlsInAppOk()){ tlsInAppMsg(); return; } const b=window._tlsB; if(!b||!window.AndroidTLS){ alert("Fitur ini hanya di aplikasi RADAR EKY (APK)."); return; } try{ window.AndroidTLS.send(tlsPayload(b)); }catch(e){ alert("Gagal kirim ke aplikasi: "+e.message); } }
+function tlsSendApp(){ if(!tlsInAppOk()){ tlsInAppMsg(); return; } const b=window._tlsB; if(!b||!window.AndroidTLS){ alert("Fitur ini hanya di aplikasi RADAR EKY (APK)."); return; } try{ window.AndroidTLS.send(tlsPayload(b)); }catch(e){ alert("Gagal kirim ke aplikasi: "+e.message); } }
 function tlsCopyCode(btn){ const b=window._tlsB; if(!b) return; tlsCopy(encodeURIComponent("window.__RADAR_PKG="+JSON.stringify(tlsPayload(b))+";")+TLS_BM.slice("javascript:".length), btn); }
 function setTlsModa(id,m){
   const bb=(DB.get().ils||[]).find(x=>x.id===id);
@@ -3860,13 +3813,6 @@ function delout(id){
 function mfAutoXlOn(){ try{ return localStorage.getItem("radar_mfautoxl")!=="0"; }catch(e){ return true; } }
 function mfAutoXlSet(on){ try{ localStorage.setItem("radar_mfautoxl", on?"1":"0"); }catch(e){} }
 function mfAfterDelout(id){
-  if(wkOn() && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")){
-    try{
-      const data=DB.get(), m=mfRecords(data).find(x=>x.id===id), rows=m?mfRecRows(data, m, mfTujuanNama(), 0):[];
-      if(rows.length){ const tsv=rows.map(r=>r.map(mfCell).join("\t")).join("\n"); wkEnqueue("manifest", id, m.plat||"", tsv); }
-    }catch(e){}
-    return;
-  }
   if(!(window.AndroidTLS && AndroidTLS.openExcel) || !currentUser || (currentUser.role!=="delivery" && currentUser.role!=="admin") || !mfAutoXlOn()) return;
   const link=(xlCfg().link||"").trim(); if(!link) return;
   const data=DB.get(), m=mfRecords(data).find(x=>x.id===id); if(!m) return;
@@ -6005,7 +5951,7 @@ function saveDccpSchedule(){
   const p = dccpParsedPreview;
   DB.set(d=>{
     d.dccpSchedule = p.rows;
-    d.dccpMeta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||"", shift:p.shift||"", gapMin:p.gapMin||52};
+    d.dccpMeta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||"", shift:p.shift||"", dateTs:dccpFileDate(p.fileName)||null, gapMin:p.gapMin||52};
     d.swapLog = [];   // jadwal DCCP baru menimpa yang lama: log tukar CC ikut bersih
   });
   dccpParsedPreview = null;
@@ -6074,7 +6020,25 @@ function dccpSaveEdit(){
 /* ===== CC PENGGANTI (per ritase atau sampai ritase terakhir) ===== */
 function dccpTripList(r){ return ((r.trips&&r.trips.length)?r.trips:(r.schedTime?[r.schedTime]:[])).slice().sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0)); }
 /* Ritase yang sudah jalan dihitung sejak awal SHIFT milik baris jadwal itu (dari jam ritase pertamanya), bukan sejak 07.00: plat 24 jam yang sudah jalan di shift pagi tidak mengurangi jadwal shift malam */
-function dccpShiftFrom(r){ const t=dccpTripList(r), pd=prodDayStart(Date.now()); { const sh=((DB.get().dccpMeta)||{}).shift; if(sh==="day") return pd; if(sh==="night") return pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; } if(!t.length) return pd; const h=+String(t[0]).split(":")[0]; return (h>=SHIFT_START_H&&h<SHIFT2_START_H)?pd:pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; }
+function dccpFileDate(fn){
+  const M={januari:0,january:0,jan:0,februari:1,february:1,feb:1,maret:2,march:2,mar:2,april:3,apr:3,mei:4,may:4,juni:5,june:5,jun:5,juli:6,july:6,jul:6,agustus:7,august:7,agu:7,aug:7,september:8,sept:8,sep:8,oktober:9,october:9,okt:9,oct:9,november:10,nov:10,desember:11,december:11,des:11,dec:11};
+  const m=String(fn||"").toLowerCase().match(/(\d{1,2})[\s._-]*([a-z]{3,9})[\s._-]*(\d{4})/);
+  if(!m||!(m[2] in M)) return null;
+  const d=new Date(+m[3],M[m[2]],+m[1],0,0,0,0); return isNaN(d)?null:d.getTime();
+}
+function dccpDateBadge(meta){
+  const dd=meta&&(meta.dateTs||dccpFileDate(meta.fileName)); if(!dd||!meta.shift) return "";
+  const st=dd+(meta.shift==="night"?SHIFT2_START_H:SHIFT_START_H)*3600000, en=st+(meta.shift==="night"?11:13)*3600000, now=Date.now();
+  const tgl=new Date(dd).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  let c="#1E9E5A",bg="#E7F7EE",t="Sedang berjalan";
+  if(now<st){ c="#B7791F"; bg="#FFF6E0"; t="Belum mulai · mulai "+new Date(st).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }
+  else if(now>en+3600000){ c="#C0392B"; bg="#FDECEA"; t="Sudah lewat — upload DCCP terbaru"; }
+  return `<div style="display:inline-block;padding:6px 10px;border-radius:10px;background:${bg};color:${c};font-weight:700;font-size:13px;margin-bottom:8px;">📅 ${tgl} · ${dccpShiftLabel(meta.shift)} · ${t}</div>`;
+}
+function dccpShiftFrom(r){ const t=dccpTripList(r), pd=prodDayStart(Date.now()); const meta=(DB.get().dccpMeta)||{}; const dd=meta.dateTs||dccpFileDate(meta.fileName);
+  /* tanggal di nama file = tanggal shift: ILS hari/shift sebelumnya tidak boleh dihitung sebagai ritase jadwal ini */
+  if(dd){ const sh=meta.shift; if(sh==="day") return dd+SHIFT_START_H*3600000; if(sh==="night") return dd+SHIFT2_START_H*3600000; if(t.length){ const h=+String(t[0]).split(":")[0]; return dd+((h>=SHIFT_START_H&&h<SHIFT2_START_H)?SHIFT_START_H:SHIFT2_START_H)*3600000; } }
+  { const sh=meta.shift; if(sh==="day") return pd; if(sh==="night") return pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; } if(!t.length) return pd; const h=+String(t[0]).split(":")[0]; return (h>=SHIFT_START_H&&h<SHIFT2_START_H)?pd:pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; }
 /* ILS plat ini sejak awal shift baris jadwal. ILS pertama sesudah status Change Shift adalah ritase SISA shift sebelumnya, jadi tidak mengurangi jadwal shift ini. */
 function dccpDoneList(r,data){ const from=dccpShiftFrom(r), k=normPlat(r.police);
   const L=(data.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=from).sort((a,b)=>a.ts-b.ts);
@@ -6300,7 +6264,7 @@ function renderDccpUpload(){
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">Jadwal Aktif (${data.dccpSchedule.length} truk)</h3><span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(-1)">➕ Tambah CC / Spot Order</button>${(data.dccpSchedule.length&&currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))?`<button class="btn-danger btn btn-sm" onclick="dccpClearAll()">🗑 Hapus Semua</button>`:""}</span></div>
-      ${meta.fileName?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${meta.shift?`<b>${dccpShiftLabel(meta.shift)}</b> · `:""}${meta.fileName} · diunggah ${new Date(meta.uploadedAt).toLocaleString('id-ID')} oleh ${meta.uploadedBy}</div>`:""}
+      ${dccpDateBadge(meta)}${meta.fileName?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${meta.shift?`<b>${dccpShiftLabel(meta.shift)}</b> · `:""}${meta.fileName} · diunggah ${new Date(meta.uploadedAt).toLocaleString('id-ID')} oleh ${meta.uploadedBy}</div>`:""}
       ${data.dccpSchedule.length && !data.dccpSchedule.some(r=>r.trips&&r.trips.length) ? `<div class="msg err" style="margin-bottom:10px;">Jadwal ini masih format lama (hanya jam ritase pertama). Upload ulang file DCCP agar semua jam ritase terbaca.</div>`:""}
       ${data.dccpSchedule.length?tbl(data.dccpSchedule,true):`<div class="emptystate">Belum ada jadwal diunggah.</div>`}
     </div>`;
@@ -8166,7 +8130,7 @@ function schedReqSend(kind){
   const k=normPlat(plat), cur=((DB.get().schedReq||{})[k]||{}), last=((cur.kinds||{})[kind])||0;
   if(Date.now()-last<SREQ_COOL){ if(out) out.innerHTML=`<div class="msg info">Sudah dikirim ${Math.max(1,Math.round((Date.now()-last)/60000))} menit lalu. Bisa diingatkan lagi ${Math.ceil((SREQ_COOL-(Date.now()-last))/60000)} menit lagi.</div>`; return; }
   DB.set(d=>{ d.schedReq=d.schedReq||{}; const r=d.schedReq[k]||{plat:platFmt(plat), kinds:{}}; r.plat=platFmt(plat); r.lp=lp||r.lp||""; r.user=currentUser.username; r.name=currentUser.name||currentUser.username; r.kinds=r.kinds||{}; r.kinds[kind]=Date.now(); r.ts=Date.now(); d.schedReq[k]=r; });
-  if(out) out.innerHTML=`<div class="msg ok">✔ ${kind==="edit"?"Permintaan jadwal terkirim ke Koordinator"+(lp?" LP "+xlEsc(lp):""):"Pengingat update DCCP terkirim ke Delivery"}. Layar ini otomatis lanjut begitu plat terdaftar.</div>`;
+  if(out) out.innerHTML=`<div class="msg ok nsOk">✔ ${kind==="edit"?"Permintaan jadwal terkirim ke Koordinator"+(lp?" LP "+xlEsc(lp):""):"Pengingat update DCCP terkirim ke Delivery"}. Layar ini otomatis lanjut begitu plat terdaftar.</div>`;
 }
 function schedReqList(d){
   const now=Date.now(); return Object.keys(d.schedReq||{}).map(k=>Object.assign({k},d.schedReq[k])).filter(r=>r && r.plat && now-(r.ts||0)<SREQ_TTL && !ccPlatRegistered(r.plat));
@@ -8218,7 +8182,7 @@ function ccPlatGateSave(){
   const plat=ccPlatNorm((document.getElementById("cgPlat")||{}).value), lp=((document.getElementById("cgLp")||{}).value||"").trim(), msg=document.getElementById("cgMsg");
   if(!plat){ msg.innerHTML=`<div class="msg err">Format plat tidak dikenali. Contoh: B 9660 TEJ</div>`; return; }
   if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
-  if(!ccPlatRegistered(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="msg err"><b>Maaf, plat ${xlEsc(plat)} belum ada jadwal.</b><br>Kamu tetap login, tapi belum tampil di peta dan belum bisa absen sampai plat ini dijadwalkan.</div><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;"><button type="button" class="btn btn-primary" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal (bunyi di Koordinator)</button><button type="button" class="btn btn-outline" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update? Ingatkan Delivery</button></div><div id="cgReqMsg" style="margin-top:8px;"></div><div style="font-size:12px;color:var(--text-dim);margin-top:6px;">Layar ini menunggu dan otomatis lanjut begitu plat terdaftar.</div>`; return; }
+  if(!ccPlatRegistered(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="nsPop"><div class="nsRoad"><span class="nsTruck">🚛</span><i></i></div><div class="nsBell">🔔</div><div class="nsTit">Maaf, plat ${xlEsc(plat)} belum ada jadwal</div><div class="nsSub">Kamu tetap login, tapi belum tampil di peta dan belum bisa absen<span class="nsDots"><b>.</b><b>.</b><b>.</b></span></div><button type="button" class="btn btn-primary nsBtn" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal<small>bunyi di Koordinator</small></button><button type="button" class="btn btn-outline nsBtn" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update?<small>ingatkan Delivery</small></button><div id="cgReqMsg"></div><div class="nsFoot">⏳ Layar ini menunggu dan otomatis lanjut begitu plat terdaftar.</div></div>`; return; }
   { const oth=ccTakeOther(plat), k=normPlat(plat), me=currentUser.username, q=(DB.get().takeReq||{})[k], fresh=q&&q.to===me&&Date.now()-q.ts<30*60000;
     if(oth){
       const on=(()=>{ const u=(DB.get().users||[]).find(y=>y.username===oth.u); return (u&&u.name)||oth.u; })();
@@ -8371,6 +8335,25 @@ function trkDirOf(r, t, total){
   if(m.dir) return m.dir;
   return trkDirGuess(r, t*(total>0?total:20));
 }
+function trkRit(plat, dir){
+  try{ const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return null;
+    const tot=dccpTripList(r).length, done=dccpDoneCount(r,data); if(!tot) return null;
+    const back=(dir==="back"&&done>0); let n=back?Math.min(done,tot):(done>0&&dir==="out"?Math.min(done,tot):Math.min(done+1,tot)), man=false;
+    const adj=(data.ritAdj||{})[k]; if(adj && adj.ts>=dccpShiftFrom(r) && adj.n>=1){ n=Math.min(adj.n,tot); man=true; }   // koreksi manual Delivery berlaku sampai shift ini habis
+    return {n:n,tot:tot,back:back,man:man,all:done>=tot,txt:"Rit "+n+"/"+tot+(back&&!man?" ✓":"")}; }catch(e){ return null; }
+}
+function ritEditOpen(plat){
+  if(!(currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))) return;
+  const rt=trkRit(plat,""); if(!rt){ alert("CC ini tidak ada di jadwal DCCP."); return; }
+  showModal(`<h3 style="margin:0 0 6px;">✏️ Edit ritase ${escH(plat)}</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Untuk membetulkan tampilan di peta &amp; daftar. Tidak mengubah ILS atau jadwal. Berlaku sampai shift ini selesai.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${Array.from({length:rt.tot},(_,i)=>`<button type="button" class="btn ${rt.n===i+1?"btn-primary":"btn-outline"}" style="width:auto;min-width:64px;" onclick="ritEditSave('${escH(plat)}',${i+1})">Rit ${i+1}/${rt.tot}</button>`).join("")}</div>
+    <button type="button" class="btn btn-outline" onclick="ritEditSave('${escH(plat)}',0)">↺ Kembali otomatis</button>`);
+}
+function ritEditSave(plat,n){
+  const k=normPlat(plat);
+  DB.set(d=>{ d.ritAdj=d.ritAdj||{}; if(!n) delete d.ritAdj[k]; else d.ritAdj[k]={n:n,ts:Date.now(),by:(currentUser&&currentUser.name)||""}; });
+  try{ closeModal(); }catch(e){} try{ updateTrackUI(); }catch(e){}
+}
 function trkCompute(r, mp){
   const o = {plat:r.plat, lp:r.lp, lat:r.lat, lng:r.lng, spd:r.spd||0, age:Math.max(0,Date.now()-(r.ts||0))};
   const R = routeGet();
@@ -8409,7 +8392,7 @@ function updateTrackUI(){
       const prog = o.t!=null ? `<div style="position:relative;height:10px;background:var(--border);border-radius:6px;margin:8px 0 2px;"><div style="position:absolute;left:0;top:0;bottom:0;width:${pp}%;background:${o.dir==="back"?"#C77700":"var(--gold)"};border-radius:6px;"></div><div style="position:absolute;top:-4px;left:calc(${pp}% - 9px);font-size:16px;transform:scaleX(-1);">🚚</div></div>
         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);">${o.dir==="back"?"<span>📦 NVDC</span><span>ADM KAP 🏭</span>":"<span>🏭 ADM KAP</span><span>NVDC 📦</span>"}</div>` : "";
       return `<div onclick="ccProfOpen('${escH(o.plat)}')" style="cursor:pointer;border:1px solid var(--border);border-left:7px solid ${ccColor(o.plat)};border-radius:12px;padding:10px 12px;margin-bottom:8px;${stale?'opacity:.6;':''}">
-        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b style="background:${ccColor(o.plat)};color:#fff;border-radius:7px;padding:2px 9px;font-weight:900;">${escH(o.plat)}</b><span style="font-size:11px;color:var(--text-dim);">${escH(o.lp||"")} · ${stale?'⚠ ':''}${mins<1?'baru saja':mins+' mnt lalu'}${o.spd?` · ${o.spd} km/j`:''}</span></div>
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><b style="background:${ccColor(o.plat)};color:#fff;border-radius:7px;padding:2px 9px;font-weight:900;">${escH(o.plat)}</b>${(()=>{ const rt=trkRit(o.plat,o.dir); return rt?`<span style="margin-left:6px;background:#0F2A4A;color:#fff;border-radius:7px;padding:2px 8px;font-weight:800;font-size:12px;">${rt.txt}</span>${(currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))?`<button type="button" onclick="event.stopPropagation();ritEditOpen('${escH(o.plat)}')" style="margin-left:4px;border:1px solid var(--border);background:#fff;border-radius:7px;padding:1px 7px;font-size:12px;cursor:pointer;">✏️ Edit</button>`:""}`:""; })()}<span style="font-size:11px;color:var(--text-dim);">${escH(o.lp||"")} · ${stale?'⚠ ':''}${mins<1?'baru saja':mins+' mnt lalu'}${o.spd?` · ${o.spd} km/j`:''}</span></div>
         ${o.dA!=null ? `<div style="font-size:13px;margin-top:4px;">${trkTxt(o)}${o.off!=null && o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>` : ""}
         ${prog}</div>`;
     }).join("");
@@ -8421,7 +8404,7 @@ function updateTrackUI(){
     try{ trailDraw(); }catch(e){}
     rows.forEach(o=>{
       const cl=ccColor(o.plat), pl=o.plat;
-      L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div class="truckMk" style="background:${cl};${o.age>3*60000?'opacity:.6;':''}"><span style="display:inline-block;${(()=>{ const tg=(o.dir==="back"?mp.adm:mp.nvdc); return (tg&&tg.lng>o.lng)?'transform:scaleX(-1);':''; })()}">🚚</span><div class="truckLb" style="background:${cl};">${escH(o.plat)}</div></div>`, iconSize:[38,38], iconAnchor:[19,19]}), zIndexOffset:500}).on("click",()=>ccProfOpen(pl)).addTo(ccMapLayer);
+      L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div class="truckMk" style="background:${cl};${o.age>3*60000?'opacity:.6;':''}"><span style="display:inline-block;${(()=>{ const tg=(o.dir==="back"?mp.adm:mp.nvdc); return (tg&&tg.lng>o.lng)?'transform:scaleX(-1);':''; })()}">🚚</span><div class="truckRit">${(()=>{ const rt=trkRit(o.plat,o.dir); return rt?rt.txt:""; })()}</div><div class="truckLb" style="background:${cl};">${escH(o.plat)}</div></div>`, iconSize:[38,38], iconAnchor:[19,19]}), zIndexOffset:500}).on("click",()=>ccProfOpen(pl)).addTo(ccMapLayer);
     });
   }
 }
@@ -9533,7 +9516,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); wkTick(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
