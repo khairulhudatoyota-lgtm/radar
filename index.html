@@ -1061,7 +1061,7 @@ function viewerGuardInstall(){
   try{
     if(window._vgDone || !window.firebase || !firebase.database || !firebase.database.Reference) return;
     const P=firebase.database.Reference.prototype; window._vgDone=true;
-    ["set","update","remove","transaction"].forEach(m=>{ const o=P[m]; if(!o) return; P[m]=function(){ if(isViewer()){ viewerBlockedToast(); return Promise.resolve(); } return o.apply(this,arguments); }; });
+    ["set","update","remove","transaction"].forEach(m=>{ const o=P[m]; if(!o) return; P[m]=function(){ if(isViewer() && !/\/(radar_chat|radar_foto)(\/|$)/.test(String(this))){ viewerBlockedToast(); return Promise.resolve(); } return o.apply(this,arguments); }; });
   }catch(e){}
 }
 
@@ -1071,7 +1071,8 @@ function viewerClean(root){
   if(!isViewer()) return;
   try{
     (root||document).querySelectorAll('button,input,select,textarea,a[onclick],label[for],[onclick]').forEach(el=>{
-      if(el.closest("#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv")) return;
+      if(el.closest("#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv,#chatCard")) return;
+      if(/chatSend|thrDraft|thrTxt|chatDraft|chatTag|chatTo\b|lapPick\(.(chat|thr)/.test((el.getAttribute("onclick")||"")+(el.getAttribute("oninput")||"")+(el.id||""))) return;   // Pengamat boleh chat/bertanya langsung
       const h=(el.getAttribute("onclick")||"")+" "+(el.getAttribute("onchange")||"")+" "+(el.getAttribute("oninput")||"");
       const tag=el.tagName, ty=(el.type||"").toLowerCase();
       let bad=VW_BAD.test(h) || ty==="file" || tag==="TEXTAREA" || el.getAttribute("type")==="submit" || (tag==="INPUT" && ["text","number","time","password","tel"].includes(ty) && !/ldrOnSearch|search|cari/i.test(h+(el.id||"")+(el.placeholder||"")));
@@ -3058,6 +3059,8 @@ function registerCC(plat, lp, dist, auto, manual, src){
     { const lf=((d.ccLeft||{})[k])||0; const _own=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));   // Delivery/Admin boleh mengabsenkan manual kapan saja
       if(lf && (Date.now()<=lf || (!_own && Date.now()-lf < ccReabsenMin(d)*60000))){   // absen dibuat SEBELUM CC keluar (dikirim ulang sinkronisasi / perangkat lain), atau < 20 menit sesudah keluar dari HP driver: satu CC satu catatan
         res={dup:true, stale:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true}]).slice(-120); return; } }
+    { const _o4=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));
+      if(!_o4 && ccOutbound(d, plat)){ res={dup:true, stale:true, outbound:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true, outbound:true}]).slice(-120); return; } }
     { const y=d.yardLocation||{}; if(dist!=null && y.radiusKm!=null && dist > (+y.radiusKm)+0.3){ res={far:true, dist, radius:+y.radiusKm}; return; } }
     { const _own2=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); const _dn=ccDistNow(d, plat); const _y=d.yardLocation||{}; if(!_own2 && _dn!=null && _y.radiusKm!=null && _dn > (+_y.radiusKm)+0.3){ res={far:true, dist:_dn, radius:+_y.radiusKm, map:true}; return; } }   // peta (segar < 5 menit) menunjukkan CC masih jauh: absen apa pun dari HP/otomatis ditolak   // di luar radius: ditolak, apa pun jalurnya (otomatis / manual)
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
@@ -8029,6 +8032,18 @@ setInterval(()=>{ try{ const pl=window._cgPend; if(!pl||!currentUser||currentUse
    SUMBER ABSEN UTAMA: peta. CC yang posisinya terlihat di peta (HP/APK-nya membagikan lokasi) dan sudah di dalam radius yard tapi BELUM tercatat, dicatat otomatis oleh perangkat Delivery/Admin yang sedang terbuka.
    Jadi CC yang dekat tetap terrecord walau absen otomatis di HP-nya belum jalan. Satu CC tetap satu catatan (cek dobel di registerCC).
    CC yang baru keluar (Delout / dikeluarkan) tidak dicatat lagi sebelum terlihat keluar area (radius + 1 km), maks. 90 menit. */
+/* Arah CC dari data peta (segar < 5 menit): "out" = menuju NVDC, "back" = kembali ke ADM. null = tidak diketahui.
+   Dipakai agar CC yang baru Delout dan sedang berjalan ke arah NVDC TIDAK absen lagi saat masih di sekitar ADM. */
+function ccDirNow(d, plat){
+  try{ const k=normPlat(plat), r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
+    if(!r || typeof r.lat!=="number" || Date.now()-(r.ts||0)>5*60000) return null;
+    const o=trkCompute(r, d.mapPoints||DB.get().mapPoints||{}); return (o&&o.dir)||null; }catch(e){ return null; }
+}
+function ccOutbound(d, plat){   // true = baru keluar (≤4 jam) dan masih berjalan ke arah NVDC / baru <45 menit keluar
+  const lo=ccLastLeft(d, plat); if(!lo) return false; const age=Date.now()-lo; if(age>4*3600000) return false;
+  if(age<45*60000) return true;
+  return ccDirNow(d, plat)==="out";
+}
 const MAPABS={hits:{}, out:{}};
 function ccLastLeft(d, plat){
   const k=normPlat(plat); let lo=((d.ccLeft||{})[k])||0;
@@ -8040,6 +8055,7 @@ function mapAbsenWhy(d, r, km){   // alasan CC di dalam radius belum tercatat (u
   const y=d.yardLocation||{}; if(y.lat==null||y.radiusKm==null) return "titik yard / radius belum diatur";
   if(!ccPlatRegistered(r.plat)) return "plat tidak ada di Jadwal DCCP";
   const lo=ccLastLeft(d,r.plat), k=normPlat(r.plat);
+  if(lo && ccOutbound(d,r.plat)) return "baru Delout / menuju NVDC, bukan absen";
   if(lo && Date.now()-lo<ccReabsenMin(d)*60000) return "baru keluar (jeda "+ccReabsenMin(d)+" menit sebelum boleh absen lagi)";
   if(lo && Date.now()-lo<90*60000 && !((MAPABS.out[k]||0)>lo)) return "baru keluar, menunggu terlihat keluar area dulu";
   return "dibaca peta, dicatat dalam ±10 detik";
@@ -8058,6 +8074,7 @@ function mapAbsenTick(){
       if(km>rad+1) MAPABS.out[k]=now;
       if(have.has(k) || !ccPlatRegistered(r.plat)){ delete MAPABS.hits[k]; return; }
       const lo=ccLastLeft(d,r.plat);
+      if(lo && ccOutbound(d,r.plat)){ delete MAPABS.hits[k]; return; }   // baru Delout & menuju NVDC: bukan absen
       if(lo && (now-lo<ccReabsenMin(d)*60000 || (now-lo<90*60000 && !((MAPABS.out[k]||0)>lo)))){ delete MAPABS.hits[k]; return; }
       if(km<=rad){
         MAPABS.hits[k]=(MAPABS.hits[k]||0)+1;
@@ -8713,7 +8730,7 @@ function lapChatCardsHtml(){
   return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">⚠ Laporan di jalan</h3><button class="btn btn-primary btn-sm" onclick="lapFormOpen()">＋ Lapor macet / kecelakaan</button></div>
       <div style="font-size:11px;color:var(--text-dim);margin:6px 0 8px;">Titik laporan muncul di peta (ikon warna). Ketuk titik atau tombol Buka untuk balas dan melihat foto. Tersimpan 12 jam.</div>
       <div id="lapList">${lapListHtml()}</div></div>
-    <div class="card"><h3>💬 Chat CC</h3>
+    <div class="card" id="chatCard"><h3>💬 Chat CC</h3>
       <div id="chatBox" style="max-height:300px;overflow-y:auto;padding:2px 2px 6px;">${chatBoxHtml()}</div>
       <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Tandai CC yang diajak bicara (HP-nya akan berdering):</div>
       <div id="chatTagRow" style="margin-top:4px;">${chatTagHtml()}</div>
