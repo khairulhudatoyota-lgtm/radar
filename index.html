@@ -1064,6 +1064,24 @@ function viewerGuardInstall(){
     ["set","update","remove","transaction"].forEach(m=>{ const o=P[m]; if(!o) return; P[m]=function(){ if(isViewer()){ viewerBlockedToast(); return Promise.resolve(); } return o.apply(this,arguments); }; });
   }catch(e){}
 }
+
+/* Akun Pengamat hanya melihat: semua tombol/isian yang mengubah data disembunyikan (penyimpanan juga diblokir di DB.set & Firebase) */
+const VW_BAD=/edit|save|simpan|hapus|delete|delout|tambah|\badd|spot|upload|kirim|send|submit|manual|absen|keluar|tukar|ganti|undo|konfirm|confirm|\back|generate|\bils|ILS|remove|clear|reset|mail|ringBg|ccCall|panggil|lapForm|lapPick|chat|defectForm|saveDefect|handle|toggle|\bhold|release|orderStall|pindah|\bmove|swap|accept|approve|reject|tolak|setuju|kosongkan|finish|selesai|revisi|ubah|change|rename|tls|excel|share|logout|masuk|ritEdit|sched|schedReq|plat|batal|bulk|import|restore|backup|admin|usr|reg[A-Z]|keluarkan|gantiPlat|pengganti|addRit|rit[A-Z]|drv|code|notes?\b|\.note|\.vin|\.text|\.type/i;
+function viewerClean(root){
+  if(!isViewer()) return;
+  try{
+    (root||document).querySelectorAll('button,input,select,textarea,a[onclick],label[for],[onclick]').forEach(el=>{
+      if(el.closest("#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv")) return;
+      const h=(el.getAttribute("onclick")||"")+" "+(el.getAttribute("onchange")||"")+" "+(el.getAttribute("oninput")||"");
+      const tag=el.tagName, ty=(el.type||"").toLowerCase();
+      let bad=VW_BAD.test(h) || ty==="file" || tag==="TEXTAREA" || el.getAttribute("type")==="submit" || (tag==="INPUT" && ["text","number","time","password","tel"].includes(ty) && !/ldrOnSearch|search|cari/i.test(h+(el.id||"")+(el.placeholder||"")));
+      if(bad){ el.style.setProperty("display","none","important"); el.setAttribute("data-vh","1"); }
+    });
+  }catch(e){}
+}
+let _vcQ=0;
+function viewerCleanSoon(){ if(!isViewer()||_vcQ) return; _vcQ=1; requestAnimationFrame(()=>{ _vcQ=0; viewerClean(document.body); }); }
+try{ new MutationObserver(()=>viewerCleanSoon()).observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
 const DB = {
   load(){
     if(_mem) return _mem;
@@ -1390,12 +1408,12 @@ function spdOk(id){
 }
 /* Leader / Admin / Delivery: popup alarm saat ada pelanggaran dari shift-nya */
 function spdCheckIncoming(){
-  if(!currentUser || !["leader","admin","delivery"].includes(currentUser.role)) return;
+  if(!currentUser || !["leader","admin","delivery","viewer"].includes(currentUser.role)) return;
   const list = DB.get().speedAlerts || []; let seen = 0;
   try{ seen = +localStorage.getItem("radar_spd_seen")||0; }catch(e){}
   if(!seen){ try{ localStorage.setItem("radar_spd_seen", String(Date.now())); }catch(e){} return; }
   const me = spdDev();
-  const fresh = list.filter(a=>a && a.ts>seen && Date.now()-a.ts<10*60000 && a.dev!==me && (currentUser.role==="admin" || !currentUser.shift || a.shift===currentUser.shift));
+  const fresh = list.filter(a=>a && a.ts>seen && Date.now()-a.ts<10*60000 && a.dev!==me && (currentUser.role==="admin" || currentUser.role==="viewer" || !currentUser.shift || a.shift===currentUser.shift));
   const mx = list.reduce((m,a)=>Math.max(m,a&&a.ts||0), seen);
   if(mx>seen){ try{ localStorage.setItem("radar_spd_seen", String(mx)); }catch(e){} }
   fresh.forEach(a=>spdShowOverlay(a, false));
@@ -3361,7 +3379,7 @@ function draftCardsHtml(data){
 /* Alarm + notifikasi ke MP Delivery saat ada CC siap loading dengan stall penuh (aplikasi harus terbuka) */
 let _draftSeen = new Set(); try{ _draftSeen = new Set(JSON.parse(localStorage.getItem("apcc_draftseen")||"[]")); }catch(e){}
 function checkDraftAlerts(){
-  if(!currentUser || currentUser.role!=="delivery") return;
+  if(!currentUser || (currentUser.role!=="delivery" && currentUser.role!=="viewer")) return;
   const P = ccProposals(DB.get()).filter(p=>!p.dismissed); let fired = false;
   for(const p of P){
     let key, txt;
@@ -3658,8 +3676,8 @@ function koordStatusHtml(data){
 }
 let _koordSeen=new Set(); try{ _koordSeen=new Set(JSON.parse(localStorage.getItem("apcc_koordseen")||"[]")); }catch(e){}
 function checkKoordAlerts(){
-  if(!currentUser || (currentUser.role!=="koordinator" && currentUser.role!=="delivery")) return;
-  const isDel=currentUser.role==="delivery";   // Delivery: bunyi saat CC absen (hanya yang baru, ≤10 menit); validasi ILS tetap untuk Koordinator
+  if(!currentUser || (currentUser.role!=="koordinator" && currentUser.role!=="delivery" && currentUser.role!=="viewer")) return;
+  const isKo=(currentUser.role==="koordinator"||currentUser.role==="viewer"), isDel=(currentUser.role==="delivery"||currentUser.role==="viewer");   // Pengamat merasakan bunyi Delivery + Koordinator   // Delivery: bunyi saat CC absen (hanya yang baru, ≤10 menit); validasi ILS tetap untuk Koordinator
   const L=koordStatusList(DB.get()); let fired=false;
   if(isDel){ ilsPendingList(DB.get()).forEach(b=>{
     if(Date.now()-(b.ts||0)<6*60000) return;
@@ -3682,9 +3700,10 @@ function checkKoordAlerts(){
   }); }
   for(const x of L){
     const who=`LP ${x.lp||"-"} ${x.plat}${x.driver?` · Driver ${x.driver}`:""}`;
-    if(isDel && Date.now()-(x.absenTs||0)>10*60000) continue;
-    const evs=[[`abs|${normPlat(x.plat)}|${x.absenTs}`, `CC sudah absen: ${who} (Stall CC ${ccLbl(x.n)}).`]];
-    if(!isDel && x.ils && x.ils.tlsTs) evs.push([`tls|${x.ils.id}`, `ILS sudah di TLS: ${who} · ${x.ils.units.length} unit di Stall CC ${ccLbl(x.n)}. Silakan validasi unit.`]);
+    const fresh10=Date.now()-(x.absenTs||0)<=10*60000;
+    if(isDel && !isKo && !fresh10) continue;
+    const evs=[]; if(!isDel || fresh10) evs.push([`abs|${normPlat(x.plat)}|${x.absenTs}`, `CC sudah absen: ${who} (Stall CC ${ccLbl(x.n)}).`]);
+    if(isKo && x.ils && x.ils.tlsTs) evs.push([`tls|${x.ils.id}`, `ILS sudah di TLS: ${who} · ${x.ils.units.length} unit di Stall CC ${ccLbl(x.n)}. Silakan validasi unit.`]);
     for(const [key,txt] of evs){
       if(_koordSeen.has(key)) continue;
       _koordSeen.add(key); fired=true;
@@ -5390,10 +5409,17 @@ function ccCallShow(c){
   }catch(e){}
 }
 function ccCallOk(id){
-  ccCallClose();
+  ccCallClose(); if(isViewer()){ _vwCallSeen.add(id); return; }
   try{ DB.set(d=>{ const a=ccCallsList(d).slice(); const x=a.find(y=>y&&y.id===id); if(x) x.ack=Date.now(); d.ccCalls=a; }); }catch(e){}
 }
+const _vwCallSeen=new Set();
 function ccCallCheck(){
+  if(isViewer()){   // Pengamat ikut merasakan panggilan giliran parkir ke driver mana pun
+    const dv=DB.get(), cv=ccCallsList(dv).filter(x=>x && !x.ack && !_vwCallSeen.has(x.id) && Date.now()-x.ts<10*60000).sort((a,b)=>b.ts-a.ts).find(x=>{ const cur=dv.cc[x.stall]; return cur && normPlat(cur.plat)===normPlat(x.plat); });
+    if(!cv){ if(_ccCallId!==null) ccCallClose(); return; }
+    if(_ccCallId!==cv.id || !document.getElementById("ccCallOv")) ccCallShow(cv);
+    return;
+  }
   if(!currentUser || currentUser.role!=="cc"){ if(_ccCallId!==null) ccCallClose(); return; }
   const d=DB.get(), pl=normPlat(getCcProfile().plat||""); if(!pl) return;
   const c=ccCallsList(d).filter(x=>x && !x.ack && normPlat(x.plat)===pl && Date.now()-x.ts<3*3600000).sort((a,b)=>b.ts-a.ts)
@@ -8164,8 +8190,8 @@ function schedReqCheck(){
       const now=Date.now(), stale=Object.keys(d.schedReq||{}).filter(k=>{ const r=d.schedReq[k]; return !r || now-(r.ts||0)>=SREQ_TTL || ccPlatRegistered(r.plat); });
       if(stale.length) DB.set(x=>{ stale.forEach(k=>{ if(x.schedReq) delete x.schedReq[k]; }); });
     }
-    if(role!=="koordinator" && role!=="delivery") return;
-    const kind=role==="koordinator"?"edit":"dccp";
+    if(role!=="koordinator" && role!=="delivery" && role!=="viewer") return;
+    (role==="viewer"?["edit","dccp"]:[role==="koordinator"?"edit":"dccp"]).forEach(kind=>
     schedReqList(d).forEach(r=>{
       const t=(r.kinds||{})[kind]; if(!t || Date.now()-t>15*60000) return;
       if(role==="koordinator" && !lpMine(r.lp)) return;
@@ -8175,7 +8201,7 @@ function schedReqCheck(){
       playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg(title, txt); }catch(e){}
       if('Notification' in window && Notification.permission==='granted'){ try{ new Notification(title,{body:txt}); }catch(e){} }
       try{ render(); }catch(e){}
-    });
+    }));
   }catch(e){}
 }
 function ccPlatGateSave(){
