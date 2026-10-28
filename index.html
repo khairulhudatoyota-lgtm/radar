@@ -1285,7 +1285,7 @@ function spdSync(){
 }
 function spdStart(){
   if(SPD.id!=null || !navigator.geolocation) return;
-  SPD.last = null; SPD.hits = 0;
+  SPD.last = null; SPD.hits = 0; SPD.n = 0;
   SPD.id = navigator.geolocation.watchPosition(onSpdPos, ()=>{}, {enableHighAccuracy:true, maximumAge:1000, timeout:30000});
   spdChipUpdate();
 }
@@ -1305,19 +1305,24 @@ function spdChipUpdate(){
 }
 function onSpdPos(pos){
   const c = pos.coords, cfg = speedCfg(); if(!cfg.on) return;
-  const now = pos.timestamp || Date.now();
+  const now = pos.timestamp || Date.now(), acc = c.accuracy||99;
+  /* Anti salah baca (jalan kaki terbaca 12 km/j): abaikan 2 bacaan pertama (GPS baru "bangun"), sinyal kurang akurat (>25 m),
+     hitung dari perpindahan hanya kalau jauh melebihi kesalahan GPS, dan butuh 3 bacaan berturut-turut di atas batas. */
+  SPD.n = (SPD.n||0)+1;
+  if(acc>25){ SPD.last = null; SPD.hits = 0; return; }
   let v = (typeof c.speed==="number" && !isNaN(c.speed)) ? c.speed*3.6 : null;
-  if(v==null && SPD.last && (c.accuracy||99)<=25){
+  if(v==null && SPD.last){
     const dt = (now-SPD.last.t)/1000;
-    if(dt>=2 && dt<=30){
+    if(dt>=4 && dt<=30){
       const m = haversineKm(SPD.last.lat, SPD.last.lng, c.latitude, c.longitude)*1000;
-      v = m < (c.accuracy||0) ? 0 : m/dt*3.6;
+      v = m < Math.max(acc,8)*2 ? 0 : m/dt*3.6;
     }
   }
   SPD.last = {lat:c.latitude, lng:c.longitude, t:now};
-  if(v==null || v>200 || (c.accuracy||0)>40){ return; }
+  if(SPD.n<=2) return;
+  if(v==null || v>200){ return; }
   SPD.cur = v; spdChipUpdate();
-  if(v > cfg.limit){ SPD.hits++; if(SPD.hits>=2) spdTrigger(v, c.latitude, c.longitude); } else { SPD.hits = 0;  }
+  if(v > cfg.limit){ SPD.hits++; if(SPD.hits>=3) spdTrigger(v, c.latitude, c.longitude); } else { SPD.hits = 0;  }
 }
 function spdTrigger(v, lat, lng, force){
   const cfg = speedCfg();
