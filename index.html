@@ -2897,17 +2897,20 @@ function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut ja
   return {queue:pos+1};
 }
 /* CC yang posisinya (data peta, segar < 5 menit) masih jauh dari yard tidak dilepas dari Parkir Luar ke stall, walau jadwalnya sudah dekat. Delivery/Admin tetap bisa melepas paksa. */
-function ccDistNow(d, plat){   // jarak (km) CC ke yard dari posisi peta yang segar (< 5 menit); null = tidak diketahui
+/* Posisi terakhir CC dari peta. Kalau HP berhenti mengirim posisi (sinyal hilang / di NVDC) tapi posisi terakhirnya JAUH dan belum cukup waktu untuk kembali (±40 km/j), CC tetap dianggap jauh. */
+function ccLastPos(d, plat){
   try{ const y=d.yardLocation||{}; if(y.lat==null) return null; const k=normPlat(plat), r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
-    if(!r || typeof r.lat!=="number" || Date.now()-(r.ts||0)>5*60000) return null; return haversineKm(r.lat,r.lng,y.lat,y.lng); }catch(e){ return null; }
+    if(!r || typeof r.lat!=="number") return null; return {km:haversineKm(r.lat,r.lng,y.lat,y.lng), age:Date.now()-(r.ts||0)}; }catch(e){ return null; }
+}
+function ccDistNow(d, plat){   // jarak (km) CC ke yard; null = tidak diketahui
+  const p=ccLastPos(d,plat); if(!p) return null;
+  if(p.age<=5*60000) return p.km;
+  const y=d.yardLocation||{}; if(p.km>(+y.radiusKm||5)+0.5 && p.age<=90*60000 && p.age<(p.km/40*60+5)*60000) return p.km;   // posisi basi tapi masih masuk akal belum sampai
+  return null;
 }
 function ccFarNow(d, plat){
-  try{
-    const y=d.yardLocation||{}; if(y.lat==null) return false;
-    const k=normPlat(plat), r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
-    if(!r || typeof r.lat!=="number" || Date.now()-(r.ts||0)>5*60000) return false;   // posisi tidak diketahui: tidak ditahan
-    return haversineKm(r.lat,r.lng,y.lat,y.lng) > (+y.radiusKm||5)+0.5;
-  }catch(e){ return false; }
+  try{ const y=d.yardLocation||{}; if(y.lat==null) return false; const km=ccDistNow(d,plat); if(km==null) return false;   // posisi tidak diketahui: tidak ditahan
+    return km > (+y.radiusKm||5)+0.5; }catch(e){ return false; }
 }
 function holdRelease(force){   // dipanggil berkala; force = daftar plat yang dilepas paksa (Delivery/Admin)
   const d0=DB.get(), h0=d0.hold||[]; if(!h0.length) return;
@@ -2965,7 +2968,10 @@ function ccQueueFarPurge(){
   try{
     if(!currentUser) return;
     const d=DB.get(), y=d.yardLocation||{}; if(y.lat==null||y.radiusKm==null) return;
-    const now=Date.now(), rad=+y.radiusKm, ks=[...(d.queue||[]), ...(d.hold||[])].map(q=>normPlat(q.plat)); if(!ks.length) return;
+    const now=Date.now(), rad=+y.radiusKm;
+    /* CC di STALL yang ternyata sudah jauh dari yard (mis. absen nyangkut) dan belum punya ILS terbuka: bukan sedang loading, keluarkan dari stall */
+    const stallKs=Object.keys(d.cc||{}).filter(n=>{ const c=d.cc[n]; return c && !(d.ils||[]).some(b=>b && b.status==="open" && !b.outTs && b.ccNum==n); }).map(n=>normPlat(d.cc[n].plat));
+    const ks=[...(d.queue||[]), ...(d.hold||[])].map(q=>normPlat(q.plat)).concat(stallKs); if(!ks.length) return;
     const gone=[];
     ks.forEach(k=>{
       const r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
@@ -2977,6 +2983,13 @@ function ccQueueFarPurge(){
     if(!gone.length) return;
     DB.set(d2=>{
       gone.forEach(([k,km])=>{
+        const sn=Object.keys(d2.cc||{}).find(n=>d2.cc[n] && normPlat(d2.cc[n].plat)===k);
+        if(sn!==undefined && !(d2.ils||[]).some(b=>b && b.status==="open" && !b.outTs && b.ccNum==sn)){
+          const cur=d2.cc[sn]; ccMarkLeft(d2,cur); d2.cc[sn]=null;
+          if((d2.queue||[]).length>0){ const next=ccQueueTake(d2); if(next){ d2.cc[sn]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d2, next, sn); } }
+          d2.absenLog=(d2.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(cur.plat), lp:cur.lp||"", u:"peta", name:"Peta: CC sudah jauh ("+km.toFixed(1)+" km), keluar dari stall", role:"peta", auto:true, manual:false, dist:Math.round(km*10)/10, rejected:true}]).slice(-120);
+          return;
+        }
         const q=(d2.queue||[]).find(x=>normPlat(x.plat)===k), h=(d2.hold||[]).find(x=>normPlat(x.plat)===k), it=q||h; if(!it) return;
         d2.queue=(d2.queue||[]).filter(x=>normPlat(x.plat)!==k); d2.hold=(d2.hold||[]).filter(x=>normPlat(x.plat)!==k);
         ccMarkLeft(d2,{plat:it.plat});
@@ -5336,7 +5349,7 @@ function absenLogCardHtml(data){
   const L=(data.absenLog||[]).slice().reverse().slice(0,40);
   return `<details class="card" style="margin-top:10px;"><summary style="cursor:pointer;font-weight:800;">🕵 Log Absen (siapa yang absen) <span class="badge">${L.length}</span></summary>
     <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">40 absen terakhir. Kalau satu plat absen berulang dari akun yang tidak seharusnya (mis. akun lain yang masih login dengan plat itu), akunnya kelihatan di sini. Akun bisa dikeluarkan dari Admin → User.</div>
-    ${L.length?L.map(x=>`<div style="border-top:1px solid var(--border);padding:6px 0;font-size:13px;"><b>${escH(x.plat)}</b> · ${escH(x.lp||"-")} <span style="color:var(--text-dim);">${hh(x.ts)}</span><br><span style="font-size:12px;">Akun: <b>${escH(x.name||x.u||"-")}</b> (${escH(x.u||"-")}, ${escH(x.role||"-")}) · ${x.auto?"🤖 otomatis":(x.manual?"✍ manual":"✍")}${x.dist!=null?" · "+x.dist+" km dari yard":""}${x.stale?` · <span style="color:#C77700;">ditolak (absen lama, CC sudah keluar)</span>`:(x.dup?` · <span style="color:#C77700;">ditolak (sudah terdaftar)</span>`:"")}</span></div>`).join(""):`<div class="emptystate">Belum ada log absen.</div>`}
+    ${L.length?L.map(x=>`<div style="border-top:1px solid var(--border);padding:6px 0;font-size:13px;"><b>${escH(x.plat)}</b> · ${escH(x.lp||"-")}${(()=>{ const r=(data.dccpSchedule||[]).find(z=>normPlat(z.police)===normPlat(x.plat)); return r&&r.driver?` · <b>${escH(r.driver)}</b>`:""; })()} <span style="color:var(--text-dim);">${hh(x.ts)}</span><br><span style="font-size:12px;">Akun: <b>${escH(x.name||x.u||"-")}</b> (${escH(x.u||"-")}, ${escH(x.role||"-")}) · ${x.auto?"🤖 otomatis":(x.manual?"✍ manual":"✍")}${x.dist!=null?" · "+x.dist+" km dari yard":""}${x.stale?` · <span style="color:#C77700;">ditolak (absen lama, CC sudah keluar)</span>`:(x.dup?` · <span style="color:#C77700;">ditolak (sudah terdaftar)</span>`:"")}</span></div>`).join(""):`<div class="emptystate">Belum ada log absen.</div>`}
   </details>`;
 }
 function ilsFixCardHtml(data){
