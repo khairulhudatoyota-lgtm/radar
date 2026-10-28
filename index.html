@@ -124,6 +124,11 @@ html,body{max-width:100%; overflow-x:hidden;}
 .mapDot{position:absolute;left:-6px;top:-6px;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);}
 .tabbar{display:flex; overflow-x:auto; gap:6px; padding:8px 10px; background:var(--panel); border-bottom:1px solid var(--border); scrollbar-width:none;}
 .tabbar::-webkit-scrollbar{display:none;}
+.tabbtn[data-badge]{position:relative;}
+.tabbtn[data-badge]::after{content:attr(data-badge);position:absolute;top:1px;right:1px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#E60012;color:#fff;font:800 11px/18px Inter,Arial,sans-serif;text-align:center;box-shadow:0 0 0 1.5px #fff;animation:sjPulse 1.4s ease-in-out infinite;}
+.sjUnreadBadge{display:inline-block;background:#E8590C;color:#fff;border-radius:10px;padding:2px 9px;font-size:11px;font-weight:800;vertical-align:middle;animation:sjPulse 1.4s ease-in-out infinite;}
+.sjNewTag{display:inline-block;background:#E8590C;color:#fff;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:800;margin-right:6px;}
+@keyframes sjPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
 .tabbtn{flex:none; padding:9px 14px; border-radius:9px; background:var(--panel2); color:var(--text-dim); font-size:13px; font-weight:600; white-space:nowrap; border:1px solid transparent;}
 .tabbtn.active{background:var(--gold); color:#fff; border-color:var(--gold);}
 
@@ -1816,6 +1821,7 @@ function render(){
     saved.forEach(([i,l,t])=>{ const el = all[i]; if(el){ el.scrollLeft = l; el.scrollTop = t; } });
   }
   if(window.scrollY!==winY || window.scrollX!==winX) window.scrollTo(winX, winY);
+  try{ sjBadgeUpdate(); }catch(e){}
 }
 let _lastVPHtml = "", _lastVPTab = "", _autoRender = false, _vpChanged = true;
 function setVP(vp, html){
@@ -4052,6 +4058,7 @@ async function sjFetch(id){
 }
 function sjBlob(v){ const bin=atob(v.b64), arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); return new Blob([arr],{type:v.mime||"application/pdf"}); }
 async function sjView(id){
+  sjMarkRead(id);
   try{
     const v=await sjFetch(id);
     if(window.AndroidTLS && window.AndroidTLS.openPdf){ window.AndroidTLS.openPdf(v.name||"surat-jalan.pdf", v.b64); return; }
@@ -4059,12 +4066,51 @@ async function sjView(id){
   }catch(e){ alert("Gagal membuka surat jalan: "+(e&&e.message||e)); }
 }
 async function sjDownload(id){
+  sjMarkRead(id);
   try{
     const v=await sjFetch(id), a=document.createElement("a");
     a.href=URL.createObjectURL(sjBlob(v)); a.download=v.name||"surat-jalan.pdf"; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),500);
   }catch(e){ alert("Gagal mengunduh surat jalan: "+(e&&e.message||e)); }
 }
 function sjFmt(t){ return new Date(t).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
+/* ===== SURAT JALAN BARU: notifikasi + penanda "belum dibuka" untuk Driver CC & Koordinator ===== */
+function sjForMe(){ return !!currentUser && (currentUser.role==="cc" || currentUser.role==="koordinator"); }
+function sjReadKey(){ return "radar_sjread_"+((currentUser&&currentUser.username)||""); }
+function sjReadMap(){ try{ return JSON.parse(localStorage.getItem(sjReadKey())||"{}")||{}; }catch(e){ return {}; } }
+function sjMarkRead(id){
+  try{ if(!sjForMe()) return; const m=sjReadMap(); m[String(id)]=Date.now(); const now=Date.now(); Object.keys(m).forEach(k=>{ if(now-m[k]>10*86400000) delete m[k]; }); localStorage.setItem(sjReadKey(),JSON.stringify(m)); }catch(e){}
+  try{ sjBadgeUpdate(); }catch(e){}
+}
+function sjReady(b){ return !!(b && b.outTs && (b.sj||b.sjkb) && !b.batam) || !!(b && b.outTs && b.batam && b.sj); }   // sudah Delout dan surat jalan bisa dibuka
+function sjMineRows(){ if(!sjForMe()) return []; const sc=currentUser.role==="cc"?"cc":"koor"; return sjRows(DB.get(), sjScopePass(sc)).filter(sjReady); }
+function sjUnread(b){ if(!sjForMe() || !sjReady(b)) return false; const m=sjReadMap(); const ts=Math.max((b.sj&&b.sj.ts)||0,b.outTs||0); return !(m[String(b.id)] && m[String(b.id)]>=ts); }
+function sjUnreadCount(){ return sjMineRows().filter(sjUnread).length; }
+function sjBadgeUpdate(){
+  try{
+    const n=sjForMe()?sjUnreadCount():0, tab=currentUser&&currentUser.role==="cc"?"orderstall":(currentUser&&currentUser.role==="koordinator"?"koordinator":"");
+    document.querySelectorAll(".tabbtn").forEach(b=>{ if(tab && b.dataset.tab===tab && n>0) b.setAttribute("data-badge",String(n)); else b.removeAttribute("data-badge"); });
+    try{ if(navigator.setAppBadge){ if(n>0) navigator.setAppBadge(n); else navigator.clearAppBadge(); } }catch(e){}
+  }catch(e){}
+}
+let _sjNotifSeen=null;
+function sjNotifyCheck(){
+  try{
+    if(!sjForMe()){ _sjNotifSeen=null; return; }
+    const key="radar_sjnotif_"+currentUser.username; const rows=sjMineRows();
+    if(_sjNotifSeen===null){ try{ _sjNotifSeen=new Set(JSON.parse(localStorage.getItem(key)||"null")||rows.map(b=>b.id+"|"+((b.sj&&b.sj.ts)||0))); }catch(e){ _sjNotifSeen=new Set(rows.map(b=>b.id+"|"+((b.sj&&b.sj.ts)||0))); } try{ localStorage.setItem(key,JSON.stringify([..._sjNotifSeen])); }catch(e){} sjBadgeUpdate(); return; }   // pertama kali di perangkat ini: yang sudah ada tidak dibunyikan
+    let fired=false;
+    rows.forEach(b=>{ const k=b.id+"|"+((b.sj&&b.sj.ts)||0); if(_sjNotifSeen.has(k)) return; _sjNotifSeen.add(k);
+      if(Date.now()-(b.outTs||0)>6*3600000) return; fired=true;
+      const txt=(currentUser.role==="cc"?"Surat jalan kamu sudah bisa dibuka":b.ccPlat+" · LP "+(b.lp||"-")+": surat jalan sudah bisa dibuka")+" (Delout "+sjFmt(b.outTs)+").";
+      try{ playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); }catch(e){}
+      try{ ringBg("📄 Surat Jalan Baru "+b.ccPlat, txt); }catch(e){}
+      try{ if('Notification' in window && Notification.permission==='granted') new Notification("📄 Surat Jalan Baru "+b.ccPlat,{body:txt}); }catch(e){}
+    });
+    if(fired){ try{ localStorage.setItem(key,JSON.stringify([..._sjNotifSeen].slice(-300))); }catch(e){} try{ render(); }catch(e){} }
+    sjBadgeUpdate();
+  }catch(e){}
+}
+setInterval(sjNotifyCheck, 3000);
 function sjRows(data, pass){
   const now=Date.now();
   return (data.ils||[]).filter(b=>b.outTs && ((now-b.outTs<SJ_KEEP_MS && !b.batam) || (b.sj && now-b.outTs<SJ_KEEP_MS) || (b.undo && now-b.outTs<DELOUT_UNDO_MS)) && pass(b)).sort((a,b)=>b.outTs-a.outTs);
@@ -4072,7 +4118,8 @@ function sjRows(data, pass){
 function sjRowHtml(b, now){
   const sjCanUp=!!currentUser && currentUser.role!=="cc" && currentUser.role!=="display";   // CC tidak mengunggah; Delivery/Koordinator/Leader/Admin boleh
   const exp=sjFmt(b.outTs+SJ_KEEP_MS), sh=String(b.shift||"").toUpperCase();
-  return `<div class="kitem" style="margin-top:8px;border-left:6px solid ${ccColor(b.ccPlat)};"><b>📄 ${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")}${sh?` · <span class="badge">${sh}</span>`:""}
+  const _un=sjUnread(b);
+  return `<div class="kitem ${_un?"sjNew":""}" style="margin-top:8px;border-left:6px solid ${_un?"#E8590C":ccColor(b.ccPlat)};${_un?"background:#FFF3E6;":""}">${_un?`<span class="sjNewTag">🆕 BARU · belum dibuka</span>`:""}<b>📄 ${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")}${sh?` · <span class="badge">${sh}</span>`:""}
       <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${b.units.length} unit · Delout ${sjFmt(b.outTs)}${b.sj?` · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>${sjCanUp?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="sjUploadPick(${b.id})">⬆ Unggah PDF validasi</button>`:""}`}${(sjCanUp && (b.sj||b.sjkb) && !b.batam)?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjUploadPick(${b.id})">⬆ Ganti PDF</button>`:""}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
 }
@@ -4085,7 +4132,7 @@ function sjScopePass(scope){
 function sjBoxHtml(scope, title, hint){
   const data=DB.get(), now=Date.now(), L=sjRows(data, sjScopePass(scope)), n=L.length;
   const last=L[0];
-  return `<div class="card" id="dlSecSj"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">📄 ${title} <span class="badge gold">${n}</span></h3><button class="btn btn-primary btn-sm" style="width:auto;" onclick="sjOvOpen('${scope}')">${scope==="cc"?"Lihat semua":"🔎 Buka"}</button></div>${(scope==="del" && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"))?`<button class="btn btn-green btn-sm" style="width:100%;margin-top:8px;" onclick="sjIlsUpload()">⬆ Upload PDF ILS (dibaca & dicocokkan otomatis)</button>`:""}
+  return `<div class="card" id="dlSecSj"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">📄 ${title} <span class="badge gold">${n}</span>${(()=>{ const u=L.filter(sjUnread).length; return u?` <span class="sjUnreadBadge">${u} belum dibuka</span>`:""; })()}</h3><button class="btn btn-primary btn-sm" style="width:auto;" onclick="sjOvOpen('${scope}')">${scope==="cc"?"Lihat semua":"🔎 Buka"}</button></div>${(scope==="del" && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"))?`<button class="btn btn-green btn-sm" style="width:100%;margin-top:8px;" onclick="sjIlsUpload()">⬆ Upload PDF ILS (dibaca & dicocokkan otomatis)</button>`:""}
     <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">${hint}</div>
     ${n? (scope==="cc"? sjRowHtml(last,now) : `<div style="font-size:12px;margin-top:6px;">Terbaru: <b>${escH(last.ccPlat)}</b> · ${sjFmt(last.outTs)}${last.sjkb?" · "+escH(last.sjkb):""}</div>`) : `<div class="emptystate" style="margin-top:6px;">Belum ada surat jalan.</div>`}</div>`;
 }
@@ -5097,6 +5144,7 @@ function esjFileName(D){ return "E-SJKB "+(D.sjkb||("ILS-"+D.id)).replace(/\//g,
 /* ---------- layar e-SJKB ---------- */
 let _esj=null;
 async function esjOpen(id, picUser){
+  sjMarkRead(id);
   const b=sjILS(id); if(!b) return;
   if(b.batam){ alert("ILS Batam: surat jalan Batam berbeda dan tetap dibuat manual."); return; }
   showModal('<h3 style="margin:0 0 6px;">🧾 e-SJKB</h3><div class="msg">Menyiapkan e-SJKB…</div>');
@@ -5121,7 +5169,7 @@ async function esjOpen(id, picUser){
       <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Data dibaca dari PDF surat jalan TLS dan dilengkapi data RADAR. e-SJKB ini juga tampil di kotak Surat Jalan milik CC, Koordinator, dan Delivery.</div>`);
   }catch(e){ showModal(`<h3>🧾 e-SJKB</h3><div class="msg err">Gagal membuat e-SJKB: ${xlEsc(e&&e.message||e)}</div><button class="btn btn-primary" style="margin-top:10px;" onclick="closeModal()">Tutup</button>`); }
 }
-async function esjDownload(id){
+async function esjDownload(id){ sjMarkRead(id);
   const b=sjILS(id); if(!b) return;
   try{
     const D=await esjCollect(id, b.esjPic||undefined);
