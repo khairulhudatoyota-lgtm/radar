@@ -1994,15 +1994,12 @@ function renderDispatcher(){
     <div id="geoBanner">${geoBannerHtml()}</div>
     <div class="card d-scan">
       <h3>📷 Scan / Input No. Rangka</h3>
-      ${(()=>{ const ar=myDispArea(); if(ar){ dispLine=ar; const v=(myDispAccount()||{}).vendor; return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:700;">Area kerja:</span><span class="badge gold" style="font-size:13px;">${ar}</span>${v?`<span class="badge">${escH(v)}</span>`:""}</div>`; }
-        return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-        <span style="font-size:12px;font-weight:700;color:var(--text);">Line produksi (wajib):</span>
-        ${PROD_LINES.map(l=>`<button type="button" class="linechip ${dispLine===l?'on':''}" data-line="${l}" onclick="setDispLine('${l}')">${l}</button>`).join("")}
-        <span style="font-size:11px;color:var(--text-dim);">(belum diikat ke akun — minta Admin mengisi Area kerja)</span>
-      </div>`; })()}
-      <div id="lineWarn" class="msg err" style="display:none;margin-bottom:10px;">Pilih KP1 atau KP2 dulu.</div>
+      ${(()=>{ const ar=myDispArea(), eff=ar||dispLine, v=(myDispAccount()||{}).vendor; if(ar) dispLine=ar;
+        if(eff) return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:700;">Area kerja:</span><span class="badge gold" style="font-size:14px;padding:4px 12px;">${eff}</span>${v?`<span class="badge">${escH(v)}</span>`:""}</div>`;
+        return `<div class="msg err" style="margin-bottom:10px;">Area kerja (KP1 / KP2) akun ini belum diatur. Hubungi Admin untuk mengisinya, baru bisa input unit.</div>`; })()}
+      <div id="lineWarn" class="msg err" style="display:none;margin-bottom:10px;">Area kerja akun ini belum diatur. Hubungi Admin.</div>
       <div id="scanArea"></div>
-      <button class="btn btn-outline" onclick="toggleScanner()" id="scanToggleBtn">📷 Buka Kamera Scan QR</button>
+      <button class="btn btn-outline" onclick="scanTarget='disp';toggleScanner()" id="scanToggleBtn">📷 Buka Kamera Scan QR</button>
       <details style="margin-top:10px;" ${(batamManual||prioManual)?"open":""}>
         <summary style="cursor:pointer;font-size:12px;color:var(--text-dim);">Tandai manual (hanya jika unit tidak ada di daftar)</summary>
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
@@ -2279,7 +2276,18 @@ function vinFromScan(t){
   return m ? m[1] : null;   // hanya No. Rangka 17 karakter yang diterima
 }
 function scanStatus(msg){ const e=document.getElementById("scanStat"); if(e) e.textContent=msg; }
+let scanTarget = "disp";
 function onScanned(txt){
+  if(scanTarget==="defect"){
+    const dv = vinFromScan(txt);
+    if(!dv){ scanStatus("Kode terbaca tapi bukan No. Rangka 17 karakter. Arahkan ke QR No. Rangka."); return; }
+    defectFormState.vin = dv;
+    try{ navigator.vibrate && navigator.vibrate(120); }catch(e){}
+    stopScanner();
+    const di = document.getElementById("defectVin"); if(di) di.value = dv;
+    const bt = document.getElementById("scanToggleBtn"); if(bt) bt.textContent = "📷 Scan Ulang No. Rangka";
+    return;
+  }
   const v = vinFromScan(txt) || String(txt||"").trim().toUpperCase();
   const inp = document.getElementById("vinInput");
   if(inp) inp.value = v;
@@ -2418,7 +2426,7 @@ function stopScanner(){
   if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream=null; }
   scanTorch = false;
   const btn = document.getElementById("scanToggleBtn");
-  if(btn) btn.textContent = "📷 Buka Kamera Scan QR";
+  if(btn) btn.textContent = scanTarget==="defect" ? (defectFormState.vin?"📷 Scan Ulang No. Rangka":"📷 Scan No. Rangka") : "📷 Buka Kamera Scan QR";
   const area = document.getElementById("scanArea");
   if(area) area.innerHTML = "";
 }
@@ -2914,7 +2922,7 @@ function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut ja
 /* CC yang posisinya (data peta, segar < 5 menit) masih jauh dari yard tidak dilepas dari Parkir Luar ke stall, walau jadwalnya sudah dekat. Delivery/Admin tetap bisa melepas paksa. */
 /* Posisi terakhir CC dari peta. Kalau HP berhenti mengirim posisi (sinyal hilang / di NVDC) tapi posisi terakhirnya JAUH dan belum cukup waktu untuk kembali (±40 km/j), CC tetap dianggap jauh. */
 function ccLastPos(d, plat){
-  try{ const y=d.yardLocation||{}; if(y.lat==null) return null; const k=normPlat(plat), r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
+  try{ const y=d.yardLocation||{}; if(y.lat==null) return null; const k=normPlat(plat), r=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
     if(!r || typeof r.lat!=="number") return null; return {km:haversineKm(r.lat,r.lng,y.lat,y.lng), age:Date.now()-(r.ts||0)}; }catch(e){ return null; }
 }
 function ccDistNow(d, plat){   // jarak (km) CC ke yard; null = tidak diketahui
@@ -6456,7 +6464,7 @@ const PARK_ORDER = ["14A","15A","16A","17A","14B","15B","16B","17B"];   // prior
 let vinDraft = "";
 let dispLine = ""; try{ dispLine = localStorage.getItem("apcc_line")||""; }catch(e){}
 function setDispLine(l){ dispLine = l; try{ localStorage.setItem("apcc_line", dispLine); }catch(e){} document.querySelectorAll(".linechip").forEach(b=>b.classList.toggle("on", b.dataset.line===dispLine)); const w=document.getElementById("lineWarn"); if(w) w.style.display="none"; }
-function requireLine(){ if(dispLine) return true; const w=document.getElementById("lineWarn"); if(w){ w.style.display="block"; w.scrollIntoView({block:"center",behavior:"smooth"}); } alert("Pilih line produksi dulu (KP1 atau KP2) sebelum input unit."); return false; }
+function requireLine(){ if(dispLine) return true; const w=document.getElementById("lineWarn"); if(w){ w.style.display="block"; w.scrollIntoView({block:"center",behavior:"smooth"}); } alert("Area kerja (KP1 / KP2) akun ini belum diatur. Hubungi Admin untuk mengisinya."); return false; }
 let ldrShift = "all";
 function prodDayStart(ts){
   const d = new Date(ts==null?Date.now():ts);
@@ -7377,7 +7385,11 @@ function renderDefectReport(){
   return `
     <div class="card">
       <h3>🔧 Lapor Unit Defect / NG</h3>
-      <div class="field"><label>No. Rangka</label><input id="defectVin" type="text" placeholder="Ketik / scan No. Rangka..." value="${defectFormState.vin}" oninput="defectFormState.vin=this.value"></div>
+      <div class="field"><label>No. Rangka (scan QR)</label>
+        <input id="defectVin" type="text" readonly placeholder="Belum di-scan" value="${defectFormState.vin}" style="font-weight:800;letter-spacing:1px;">
+        <div id="scanArea" style="margin-top:8px;"></div>
+        <button type="button" class="btn btn-outline" style="margin-top:8px;" onclick="scanTarget='defect';toggleScanner()" id="scanToggleBtn">${defectFormState.vin?"📷 Scan Ulang No. Rangka":"📷 Scan No. Rangka"}</button>
+      </div>
       <div class="field"><label>Jenis Defect</label>
         <select id="defectType" onchange="defectFormState.type=this.value">
           <option value="">-- pilih jenis defect --</option>
@@ -8122,7 +8134,7 @@ setInterval(()=>{ try{ const pl=window._cgPend; if(!pl||!currentUser||currentUse
 /* Arah CC dari data peta (segar < 5 menit): "out" = menuju NVDC, "back" = kembali ke ADM. null = tidak diketahui.
    Dipakai agar CC yang baru Delout dan sedang berjalan ke arah NVDC TIDAK absen lagi saat masih di sekitar ADM. */
 function ccDirNow(d, plat){
-  try{ const k=normPlat(plat), r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
+  try{ const k=normPlat(plat), r=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
     if(!r || typeof r.lat!=="number" || Date.now()-(r.ts||0)>5*60000) return null;
     const o=trkCompute(r, d.mapPoints||DB.get().mapPoints||{}); return (o&&o.dir)||null; }catch(e){ return null; }
 }
@@ -8153,7 +8165,8 @@ function mapAbsenTick(){
     const d=DB.get(), y=d.yardLocation||{}; if(y.lat==null || y.radiusKm==null || !(d.dccpSchedule||[]).length) return;
     const now=Date.now(), rad=+y.radiusKm;
     const have=new Set([...Object.values(d.cc||{}).filter(Boolean).map(c=>normPlat(c.plat)), ...(d.queue||[]).map(q=>normPlat(q.plat)), ...(d.hold||[]).map(q=>normPlat(q.plat))]);
-    Object.values(TRACK||{}).forEach(r=>{
+    const newest={}; Object.values(TRACK||{}).forEach(t=>{ if(!t||typeof t.lat!=="number"||!t.plat) return; const kk=normPlat(t.plat); if(kk && (!newest[kk] || (t.ts||0)>(newest[kk].ts||0))) newest[kk]=t; });   // satu plat bisa punya >1 titik (akun/HP lain): hanya yang TERBARU dipakai
+    Object.values(newest).forEach(r=>{
       if(!r || typeof r.lat!=="number" || !r.plat) return; const k=normPlat(r.plat); if(!k) return;
       if(now-(r.ts||0)>90000){ delete MAPABS.hits[k]; return; }
       if(typeof trkHasAccount==="function" && !trkHasAccount(r)) return;
