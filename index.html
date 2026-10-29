@@ -6855,6 +6855,10 @@ function ritAdjSave(k, sys, clear){
     if(n===0) delete m[key]; else m[key]={n, by:who, ts:Date.now(), note};
     Object.keys(m).forEach(q=>{ if(q.split("|")[0]<cut) delete m[q]; });
     d.ritAdj=m;
+    /* sinkron ke jadwal DCCP (chip jam ritase): jumlah rit selesai shift berjalan ikut dikoreksi */
+    try{ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===k), rg=ldrRange();
+      if(r && !r.extra){ const f0=dccpShiftFrom(r); if(f0>=rg[0] && f0<rg[1]){ d.dccpFix=(d.dccpFix&&typeof d.dccpFix==="object")?d.dccpFix:{}; delete d.dccpFix[k];
+        if(n!==0){ const base=dccpDoneCount(r,d); d.dccpFix[k]={n:Math.max(0,base+n),base:base,ts:Date.now(),by:who}; } } } }catch(e){}
   });
   closeModal();
 }
