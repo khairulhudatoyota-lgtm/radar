@@ -2885,11 +2885,17 @@ function ccQueueTake(d){
   /* CC yang posisinya masih jauh dari yard tidak dipanggil. Kalau semua yang menunggu masih jauh, stall dibiarkan kosong (null). */
   const q=d.queue||[]; if(!q.length) return null;
   const cap=ccLpCap(d), near=q.filter(x=>!ccFarNow(d,x.plat)); if(!near.length) return null;
-  const pick=near.find(x=>csActive(d,x.plat) || ccLpCount(d,x.lp)<cap) || near[0];
+  /* Prioritas jarak: CC urutan terdepan yang perkiraan tiba (jarak / ±30 km/j) masih lebih dari batas menit tidak ditunggu; yang sudah dekat dipanggil lebih dulu supaya stall tidak kosong. Posisi tidak diketahui = dianggap sudah dekat. */
+  const etaOf=x=>{ const km=ccDistNow(d,x.plat); return km==null?0:km/CC_ETA_KMH*60; }, lim=ccEtaSkipMin(d);
+  const okLp=x=>csActive(d,x.plat) || ccLpCount(d,x.lp)<cap;
+  const ready=near.filter(x=>etaOf(x)<=lim);
+  const pick=(ready.find(okLp) || ready[0]) || near.find(okLp) || near[0];
   q.splice(q.indexOf(pick),1); return pick;
 }
 function ccRitDone(d, plat){ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); return r ? dccpDoneCount(r,d) : 0; }
 function ccActiveStalls(d){ return CONFIG.CC_ACTIVE_DEFAULT.length + CONFIG.CC_EMERGENCY.filter(n=>d.ccOpen&&d.ccOpen[n]).length; }
+const CC_ETA_KMH=30;   // kecepatan rata-rata CC menuju yard untuk perkiraan tiba
+function ccEtaSkipMin(d){ const v=Number((d||DB.get()).etaSkipMin); return isFinite(v)&&v>=0 ? v : 5; }   // CC yang perkiraan tibanya lebih dari ini tidak ditunggu kalau ada yang sudah dekat
 function ccLoadMin(d){ const v=Number((d||DB.get()).loadMin); return isFinite(v)&&v>=5 ? v : 15; }   // rata-rata waktu loading per CC
 function ccQueueSort(d){
   /* Rit pertama: jam efektif (jadwal DCCP, toleransi telat). Rit ke-2 dst: jam jadwal hanya perkiraan, jadi berdasarkan KEDATANGAN;
@@ -4250,9 +4256,22 @@ function mfRecord(d,x){ return {id:x.id, out:x.outTs||Date.now(), t:x.tlsTs||x.t
 function mfTitle(m){ m=String(m||""); return m.charAt(0).toUpperCase()+m.slice(1).toLowerCase(); }
 function mfPad(n){ return String(n).padStart(2,"0"); }
 function mfDateStr(t){ const d=new Date(t); return d.getFullYear()+"-"+mfPad(d.getMonth()+1)+"-"+mfPad(d.getDate()); }
+/* Nama LP seragam: KMD = KMDI, KPL = KPLM, TOP = TOPI. Dipakai nama resmi di daftar LP; kalau tidak ada, yang paling sering muncul. */
+function mfLpLabel(data, raw){
+  const c=lpCanon(raw); if(!c) return raw||"";
+  const off=(data.lpList||[]).find(l=>lpCanon(l)===c); if(off) return off;
+  const cnt={}; (data.ils||[]).forEach(b=>{ if(b && b.lp && lpCanon(b.lp)===c) cnt[b.lp]=(cnt[b.lp]||0)+1; });
+  const top=Object.keys(cnt).sort((x,y)=>cnt[y]-cnt[x])[0]; return top||raw;
+}
 function mfRecords(data){
-  const L=(data.manifest||[]).slice(), have=new Set(L.map(m=>m.id));
-  (data.ils||[]).filter(b=>b.status==="done" && !have.has(b.id)).forEach(b=>{ L.push({id:b.id, out:b.doneTs||b.ts, t:b.tlsTs||b.ts, lp:b.lp||"", plat:b.ccPlat||"", drv:mfDriver(data,b.ccPlat), bt:!!b.batam, sk:b.sjkb||"", cb:b.sjCab||{}, u:(b.units||[]).map(u=>[u.frame,u.model||""])}); });
+  const ils=Array.isArray(data.ils)?data.ils:[], byId={}; ils.forEach(b=>{ if(b) byId[b.id]=b; });
+  const L=[], have=new Set();
+  /* manifest yatim (ILS sudah dibatalkan/dihapus) atau ILS yang belum Delout tidak ikut; waktu, No. SJKB, cabang selalu mengikuti ILS terkini */
+  (data.manifest||[]).forEach(m=>{ if(!m) return; const b=byId[m.id];
+    if(ils.length){ if(!b || b.status!=="done") return; }
+    have.add(m.id); L.push(b?Object.assign({},m,{t:b.tlsTs||b.ts||m.t, out:b.outTs||b.doneTs||m.out, lp:b.lp||m.lp, plat:b.ccPlat||m.plat, bt:!!b.batam, u:(b.units||[]).map(u=>[u.frame,u.model||""])}):m); });
+  ils.filter(b=>b && b.status==="done" && !have.has(b.id)).forEach(b=>{ L.push({id:b.id, out:b.doneTs||b.ts, t:b.tlsTs||b.ts, lp:b.lp||"", plat:b.ccPlat||"", drv:mfDriver(data,b.ccPlat), bt:!!b.batam, sk:b.sjkb||"", cb:b.sjCab||{}, u:(b.units||[]).map(u=>[u.frame,u.model||""])}); });
+  L.forEach(m=>{ m.lp=mfLpLabel(data,m.lp); });
   return L;
 }
 const MF_DAY_FROM=7*60, MF_DAY_TO=20*60;   // Day 07:00–20:00, Night 20:01–06:59
@@ -4272,7 +4291,9 @@ function mfRows(data, dateStr, lp, shift){
     if(shift==="Day") return d===dateStr && mn>=MF_DAY_FROM && mn<=MF_DAY_TO;
     if(shift==="Night") return (d===dateStr && mn>MF_DAY_TO) || (d===nextDs && mn<MF_DAY_FROM);
     return d===dateStr; };
-  const L=mfRecords(data).filter(m=>inShift(m) && (!lp || lpCanon(m.lp)===lpCanon(lp))).sort((a,b)=>a.t-b.t);
+  let L=mfRecords(data).filter(m=>inShift(m) && (!lp || lpCanon(m.lp)===lpCanon(lp))).sort((a,b)=>a.t-b.t);
+  /* nomor rangka yang sama hanya satu baris (ILS dobel): ambil yang paling akhir */
+  { const seen=new Set(); L=L.slice().sort((a,b)=>(b.out||0)-(a.out||0)).map(m=>{ const U=(Array.isArray(m.u)?m.u:(m.u?Object.values(m.u):[])).filter(u=>{ const f=String(u[0]||"").toUpperCase(); if(!f) return true; if(seen.has(f)) return false; seen.add(f); return true; }); return U.length?Object.assign({},m,{u:U}):null; }).filter(Boolean).sort((a,b)=>a.t-b.t); }
   const rows=[];
   L.forEach(m=>{ mfRecRows(data, m, tujuan, rows.length).forEach(r=>rows.push(r)); });
   return rows;
@@ -4334,6 +4355,25 @@ async function downloadManifest(){
   else add("LP "+lpSel, all);
   const out=mfXlsx(sheets,[5,20,10,12,22,7,7,28,16,6,12,7,10,30]);
   mfSave("Manifest-"+(lpSel?lpSel+"-":"ALL-")+ds+(shf?"-"+shf:"")+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",out);
+  try{ const miss=mfMissing(data, ds, lpSel, shf, all); if(miss.length) alert("Perhatian: "+miss.length+" ILS yang Delout pada tanggal ini TIDAK masuk file:\n\n"+miss.slice(0,8).join("\n")+(miss.length>8?"\n… dan "+(miss.length-8)+" lainnya":"")); }catch(e){}
+}
+/* Pemeriksa: ILS yang Delout di tanggal/shift ini tetapi tidak jadi baris manifest, beserta alasannya */
+function mfMissing(data, ds, lpSel, shf, rows){
+  const inRows=new Set(rows.map(r=>String(r[1]).toUpperCase())), nextDs=mfDateStr(new Date(ds+"T12:00:00").getTime()+86400000), hm=t=>{ const d=new Date(t); return mfPad(d.getHours())+":"+mfPad(d.getMinutes()); };
+  const inD=t=>{ const d=new Date(t), mn=d.getHours()*60+d.getMinutes(), k=mfDateStr(t);
+    if(shf==="Day") return k===ds && mn>=MF_DAY_FROM && mn<=MF_DAY_TO;
+    if(shf==="Night") return (k===ds && mn>MF_DAY_TO) || (k===nextDs && mn<MF_DAY_FROM);
+    return k===ds; };
+  const out=[];
+  (data.ils||[]).filter(b=>b && b.outTs && inD(b.outTs) && (!lpSel || lpCanon(b.lp)===lpCanon(lpSel))).forEach(b=>{
+    const fr=(b.units||[]).map(u=>String(u.frame||"").toUpperCase()).filter(Boolean); if(!fr.length || fr.every(f=>inRows.has(f))) return;
+    const t=b.tlsTs||b.ts; let why;
+    if(b.status!=="done") why="status ILS bukan selesai";
+    else if(!inD(t)) why="jam ILS/TLS "+mfDateStr(t)+" "+hm(t)+" jatuh di tanggal/shift lain (manifest memakai jam TLS, bukan jam Delout)";
+    else why="nomor rangka sama dengan ILS lain (dobel), yang dipakai hanya satu";
+    out.push(b.ccPlat+" · Delout "+hm(b.outTs)+" · "+why);
+  });
+  return out;
 }
 /* ======================================================================
    EXCEL ONLINE — manifest Delout dikirim otomatis ke tabel Excel (OneDrive/SharePoint kantor)
@@ -5423,7 +5463,7 @@ function openExcelManifest(){
 }
 function manifestCardHtml(data){
   const today=mfDateStr(Date.now());
-  const lps=[...new Set([...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean))];
+  const lps=(()=>{ const seen=new Set(), o=[]; [...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean).forEach(l=>{ const c=lpCanon(l); if(seen.has(c)) return; seen.add(c); o.push(mfLpLabel(data,l)); }); return o; })();
   const nToday=mfRows(data,today,"").length;
   return `<div class="card"><h3>📊 Download Manifest (Excel)</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 14 hari. Hari ini: <b>${nToday} unit</b>. Nama Cabang dan No. SJKB diisi dari PDF surat jalan; sel kuning berarti PDF-nya belum ada.</div>
