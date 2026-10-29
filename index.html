@@ -6750,7 +6750,10 @@ function ccplanCompute(data){
   const [rs,re] = ldrRange(); const now = Date.now();
   const dayStart = prodMidnight() - (ldrPeriod==='yesterday'?86400000:0);
   const inShift = t=>{ if(ldrShift==='all'||ldrPeriod==='24h') return true; const h=+t.split(':')[0]; const s1 = h>=SHIFT_START_H && h<SHIFT2_START_H; return ldrShift==='1'?s1:!s1; };
-  const ilsAll = (data.ils||[]).filter(b=>b.ts>=rs && b.ts<re);
+  const _all = (data.ils||[]), _dupOld = new Set();   // ILS lama yang dobel (unit sama dengan ILS yang lebih baru) tidak dihitung sebagai ritase
+  _all.forEach(b=>{ if(!b||b.outTs||b.status!=="open") return; const fr=new Set((b.units||[]).map(u=>String(u.frame||"").toUpperCase())); if(_all.some(o=>o&&o.id>b.id&&(o.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())))) _dupOld.add(b.id); });
+  const ilsAll = _all.filter(b=>b.ts>=rs && b.ts<re && !_dupOld.has(b.id));
+  const useAdj = ritAdjOk(), adjDk = prodDateKey(rs), adjMap = data.ritAdj||{};
   /* Spot Order = CC tambahan di luar DCCP: tidak masuk plan, tidak menutup minus plan DCCP */
   const planKeys = new Set(), spotKeys = new Set();
   (data.dccpSchedule||[]).forEach(r=>{ const k=normPlat(r.police); if(!r.extra) planKeys.add(k); });
@@ -6772,12 +6775,13 @@ function ccplanCompute(data){
     if(filtered){ const per = planTrip? planUnit/planTrip : 6; planTrip = times.length; planUnit = Math.round(times.length*per); }
     const dueNow = ldrPeriod==="yesterday" ? planTrip : (times.length ? times.filter(t=>ccTimeToTs(t,dayStart)<=now).length : planTrip);
     const nextT = times.find(t=>ccTimeToTs(t,dayStart)>now) || "";
-    const a = act[k]||0, au = actU[k]||0;
+    const a0 = act[k]||0, au = actU[k]||0;
+    const adj = useAdj ? (Number((adjMap[adjDk+"|"+k]||{}).n)||0) : 0, a = Math.max(0, a0+adj);
     const inYard = findActualArrival(r.police,data);
     let status = "ontrack";
     if(a>=planTrip) status="done"; else if(a<dueNow) status="late";
     if(isSpot) status="spot";
-    return {isSpot, r, planTrip, planUnit, dueNow, nextT, act:a, actUnit:au, minus:planTrip-a, dueMinus:Math.max(0,dueNow-a), inYard, status, times};
+    return {isSpot, r, planTrip, planUnit, dueNow, nextT, act:a, sysAct:a0, adj:(a-a0), actUnit:au, minus:planTrip-a, dueMinus:Math.max(0,dueNow-a), inYard, status, times};
   });
   for(let i=rows.length-1;i>=0;i--){ if(ldrShift!=='all' && ldrPeriod!=='24h' && rows[i].planTrip===0 && rows[i].act===0) rows.splice(i,1); }
   const unplanned = Object.keys(act).filter(k=>!keys.has(k)).map(k=>({plat:k, act:act[k], actUnit:actU[k]}));
@@ -6785,7 +6789,7 @@ function ccplanCompute(data){
   rows.forEach(x=>{ if(x.isSpot) return; T.planTrip+=x.planTrip; T.planUnit+=x.planUnit; T.due+=x.dueNow; });
   T.spotAct = spotIls.length; T.spotUnit = spotIls.reduce((a,b)=>a+(b.units||[]).length,0);
   const ilsPlan = ils.filter(b=>keys.has(normPlat(b.ccPlat)));   // CC di luar jadwal ditampilkan terpisah, tidak ikut TOTAL (supaya TOTAL = jumlah per LP)
-  T.act = ilsPlan.length; T.actUnit = ilsPlan.reduce((a,b)=>a+(b.units||[]).length,0);
+  T.act = ilsPlan.length + rows.filter(x=>!x.isSpot).reduce((q,x)=>q+(x.act-x.sysAct),0); T.actUnit = ilsPlan.reduce((a,b)=>a+(b.units||[]).length,0);
   T.minus = T.planTrip - T.act; T.dueMinus = Math.max(0, T.due - T.act);
   // per LP
   const lp = {};
@@ -6801,6 +6805,35 @@ function ccplanCompute(data){
     }
   }
   return {rows, unplanned, T, lp, slots};
+}
+
+/* ===== Koreksi ritase manual (Planning CC): Delivery / Admin. Hanya mengubah angka Aktual di Planning, bukan ILS ===== */
+function ritAdjOk(){ return ldrShift==="all" && ldrPeriod!=="24h"; }
+function ritAdjOpen(k){
+  if(!canKeluarkanCC()) return;
+  const x=ccplanCompute(DB.get()).rows.find(r=>normPlat(r.r.police)===k); if(!x) return;
+  showModal(`<h3 style="margin:0 0 6px;">✎ Koreksi ritase ${escH(platFmt(x.r.police))}</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;line-height:1.6;">Aktual di sistem: <b>${x.sysAct}</b> rit${x.adj?` · koreksi saat ini <b>${x.adj>0?"+":""}${x.adj}</b>`:""}. Ketik jumlah ritase yang <b>benar</b> untuk hari produksi ini (semua shift). Hanya angka di Planning CC yang berubah; ILS dan surat jalan tidak ikut berubah.</div>
+    <div class="field"><label>Ritase yang benar</label><input id="raVal" type="number" min="0" max="20" value="${x.act}"></div>
+    <div class="field"><label>Catatan (opsional)</label><input id="raNote" type="text" maxlength="80" placeholder="mis. ILS dobel"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="closeModal()">Batal</button>
+    ${x.adj?`<button type="button" class="btn btn-outline" style="flex:1;" onclick="ritAdjSave('${k}',${x.sysAct},true)">Hapus koreksi</button>`:""}
+    <button type="button" class="btn btn-primary" style="flex:2;" onclick="ritAdjSave('${k}',${x.sysAct},false)">💾 Simpan</button></div>`);
+}
+function ritAdjSave(k, sys, clear){
+  if(!canKeluarkanCC()) return;
+  const v=clear?sys:parseInt((document.getElementById("raVal")||{}).value);
+  if(isNaN(v)||v<0||v>20){ alert("Isi angka 0 sampai 20."); return; }
+  const note=clear?"":String((document.getElementById("raNote")||{}).value||"").trim().slice(0,80);
+  const dk=prodDateKey(ldrRange()[0]), key=dk+"|"+k, who=(currentUser&&currentUser.name)||"";
+  const cut=prodDateKey(Date.now()-14*86400000);
+  DB.set(d=>{
+    const m=(d.ritAdj&&typeof d.ritAdj==="object")?d.ritAdj:{}; const n=v-sys;
+    if(n===0) delete m[key]; else m[key]={n, by:who, ts:Date.now(), note};
+    Object.keys(m).forEach(q=>{ if(q.split("|")[0]<cut) delete m[q]; });
+    d.ritAdj=m;
+  });
+  closeModal();
 }
 function ccplanCopy(btn){
   try{
@@ -6871,7 +6904,7 @@ function renderCCPlan(){
 
   <div class="card"><h3>Per Car Carrier</h3><div style="overflow-x:auto;"><table style="font-size:13px;">
     <tr><th style="${th}">Plat</th><th style="${th}">LP</th><th style="${th}">Driver</th><th style="${th}">Plan</th><th style="${th}">Aktual</th><th style="${th}">Minus</th><th style="${th}">Harusnya s.d. kini</th><th style="${th}">Jam ritase hari ini</th><th style="${th}">Status</th></tr>
-    ${rows.map(x=>{ const c=stChip[x.status]; return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${platFmt(x.r.police)}</b>${x.r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${x.r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${x.r.origPolice}</div>`:""}</td><td style="${td}">${x.r.lp}</td><td style="${td}">${x.r.driver||"-"}</td><td style="${td}">${x.planTrip}</td><td style="${td}"><b>${x.act}</b></td><td style="${td};font-weight:800;color:${x.minus>0?"#D64545":"#1E9E5A"};">${x.minus>0?"−"+x.minus:(x.minus<0?"+"+(-x.minus):"0")}</td><td style="${td}">${x.dueNow}${x.dueMinus>0?` <span style="color:#D64545;font-weight:700;">(−${x.dueMinus})</span>`:""}</td><td style="${td}">${ccTripChipsHtml(x.r,data)}${x.inYard?`<div style="font-size:11px;color:var(--text-dim);">${x.inYard.stall?"di Stall "+x.inYard.stall:"antri"}</div>`:""}</td><td style="${td}"><span style="color:${c[1]};font-weight:700;">${c[0]}</span></td></tr>`; }).join("")}
+    ${rows.map(x=>{ const c=stChip[x.status]; return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${platFmt(x.r.police)}</b>${x.r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${x.r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${x.r.origPolice}</div>`:""}</td><td style="${td}">${x.r.lp}</td><td style="${td}">${x.r.driver||"-"}</td><td style="${td}">${x.planTrip}</td><td style="${td}"><b>${x.act}</b>${x.adj?` <span title="Koreksi manual" style="font-size:10px;color:#b45309;font-weight:700;">(${x.adj>0?"+":""}${x.adj})</span>`:""}${(canKeluarkanCC()&&ritAdjOk())?` <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:1px 6px;font-size:11px;" onclick="ritAdjOpen('${normPlat(x.r.police)}')">✎</button>`:""}</td><td style="${td};font-weight:800;color:${x.minus>0?"#D64545":"#1E9E5A"};">${x.minus>0?"−"+x.minus:(x.minus<0?"+"+(-x.minus):"0")}</td><td style="${td}">${x.dueNow}${x.dueMinus>0?` <span style="color:#D64545;font-weight:700;">(−${x.dueMinus})</span>`:""}</td><td style="${td}">${ccTripChipsHtml(x.r,data)}${x.inYard?`<div style="font-size:11px;color:var(--text-dim);">${x.inYard.stall?"di Stall "+x.inYard.stall:"antri"}</div>`:""}</td><td style="${td}"><span style="color:${c[1]};font-weight:700;">${c[0]}</span></td></tr>`; }).join("")}
   </table></div></div>
   ${R.unplanned.length?`<div class="card"><h3>CC di Luar Jadwal</h3><table style="font-size:13px;"><tr><th style="${th}">Plat</th><th style="${th}">Ritase</th><th style="${th}">Unit</th></tr>${R.unplanned.map(u=>`<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${u.plat}</b></td><td style="${td}">${u.act}</td><td style="${td}">${u.actUnit}</td></tr>`).join("")}</table><div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Sudah dihitung di total aktual. Tambahkan lewat menu DCCP › Spot Order bila ingin masuk plan.</div></div>`:""}
   `}
