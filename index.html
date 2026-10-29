@@ -3301,6 +3301,8 @@ function notifyILSCreated(ccPlat, count){
   }
 }
 function createILS(ccNum, slots){
+  /* sinyal putus / belum Online: perubahan antre di HP lalu terkirim ulang saat tersambung (bisa jadi ILS dobel) → tahan dulu */
+  if(FBS.enabled && fbCurrentState()!=="online"){ alert("Sinyal belum Online (status: "+fbCurrentState()+"). ILS tidak dibuat supaya tidak dobel. Tunggu sampai pojok atas tertulis ● Online, lalu coba lagi."); return false; }
   const data = DB.get();
   const ccInfo = data.cc[ccNum];
   if(!ccInfo){ alert("Stall CC tidak valid."); return false; }
