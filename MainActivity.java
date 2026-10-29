@@ -264,6 +264,9 @@ public class MainActivity extends Activity {
 
         setupWebView(radar);
         setupWebView(tls);
+        // Login TAM Passport: matikan isi-otomatis & simpan form (isian lama / captcha basi ikut terkirim => "Invalid username or password")
+        try { tls.getSettings().setSaveFormData(false); } catch (Exception e) { }
+        try { if (Build.VERSION.SDK_INT >= 26) tls.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS); } catch (Exception e) { }
         setupWebView(xl);
         cm.setAcceptThirdPartyCookies(xl, true);
         xl.getSettings().setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");   // tampilan desktop: Excel Online tidak memaksa buka aplikasi Excel
@@ -1654,6 +1657,24 @@ public class MainActivity extends Activity {
                     if (xl.getUrl() == null || !url.equals(xlLastUrl)) { xlLastUrl = url; xl.loadUrl(url); }
                 } catch (Exception e) { }
             } });
+        }
+
+        // Buka TLS di Chrome (login TAM Passport lewat browser). Hanya https ke host TLS.
+        @JavascriptInterface
+        public boolean openExternal(final String url) {
+            try {
+                Uri u = Uri.parse(url == null ? "" : url);
+                if (!"https".equals(u.getScheme()) || u.getHost() == null || !u.getHost().endsWith("toyota.astra.co.id")) return false;
+                final Uri uu = u;
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        Intent it = new Intent(Intent.ACTION_VIEW, uu);
+                        try { it.setPackage("com.android.chrome"); startActivity(it); }
+                        catch (Exception e1) { try { startActivity(new Intent(Intent.ACTION_VIEW, uu)); } catch (Exception e2) { } }
+                    }
+                });
+                return true;
+            } catch (Exception e) { return false; }
         }
 
         @JavascriptInterface

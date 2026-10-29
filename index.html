@@ -2770,7 +2770,9 @@ function ccNextDue(d, plat){   // ts jam ritase berikutnya milik plat ini; null 
   const k=normPlat(plat), r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return null;
   const times=dccpTripList(r); if(!times.length) return null;
   const done=dccpDoneCount(r,d); if(done>=times.length) return null;
-  return ccTimeToTs(times[done], prodMidnight());
+  /* tanggal dasar = tanggal di nama file DCCP (bukan hari produksi): sebelum 07.00 hari produksi masih kemarin, sehingga jam 07.31 hari ini terhitung sudah lewat dan CC langsung masuk stall */
+  const mt=d.dccpMeta||{}, dd=mt.dateTs||dccpFileDate(mt.fileName);
+  return ccTimeToTs(times[done], dd||prodMidnight());
 }
 /* Izin masuk SEBELUM jadwal DCCP (hanya Delivery & Admin yang boleh memberi). Berlaku sampai ganti hari produksi (07:00).
    d.earlyAll = {ts,by}  -> semua CC boleh masuk tanpa menunggu jadwal (mis. shift malam sepi / jalan lancar)
@@ -2924,7 +2926,9 @@ function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut ja
 /* Posisi terakhir CC dari peta. Kalau HP berhenti mengirim posisi (sinyal hilang / di NVDC) tapi posisi terakhirnya JAUH dan belum cukup waktu untuk kembali (±40 km/j), CC tetap dianggap jauh. */
 function ccLastPos(d, plat){
   try{ const y=d.yardLocation||{}; if(y.lat==null) return null; const k=normPlat(plat), r=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
-    if(!r || typeof r.lat!=="number") return null; return {km:haversineKm(r.lat,r.lng,y.lat,y.lng), age:Date.now()-(r.ts||0)}; }catch(e){ return null; }
+    if(!r || typeof r.lat!=="number") return null; const age=Date.now()-(r.ts||0); let km=haversineKm(r.lat,r.lng,y.lat,y.lng);
+    Object.values(TRACK||{}).forEach(t=>{ if(t && typeof t.lat==="number" && normPlat(t.plat)===k && Date.now()-(t.ts||0)<=5*60000){ const kk=haversineKm(t.lat,t.lng,y.lat,y.lng); if(kk<km) km=kk; } });   // ada titik segar lain yang dekat: tidak dianggap jauh
+    return {km:km, age:age}; }catch(e){ return null; }
 }
 function ccDistNow(d, plat){   // jarak (km) CC ke yard; null = tidak diketahui
   const p=ccLastPos(d,plat); if(!p) return null;
@@ -2998,9 +3002,10 @@ function ccQueueFarPurge(){
     const ks=[...(d.queue||[]), ...(d.hold||[])].map(q=>normPlat(q.plat)).concat(stallKs); if(!ks.length) return;
     const gone=[];
     ks.forEach(k=>{
-      const r=Object.values(TRACK||{}).find(t=>t && normPlat(t.plat)===k);
-      if(!r || typeof r.lat!=="number" || now-(r.ts||0)>120000){ delete QFAR[k]; return; }
-      const km=haversineKm(r.lat,r.lng,y.lat,y.lng);
+      /* satu plat bisa punya >1 titik (HP/akun lain): dianggap jauh hanya kalau SEMUA titik segarnya jauh; ada satu saja di yard = masih di yard */
+      const fr=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k && now-(t.ts||0)<=120000);
+      if(!fr.length){ delete QFAR[k]; return; }
+      const km=Math.min(...fr.map(t=>haversineKm(t.lat,t.lng,y.lat,y.lng)));
       if(km>rad+1){ if(!QFAR[k]) QFAR[k]=now; if(now-QFAR[k]>=QFAR_MIN*60000) gone.push([k,km]); } else delete QFAR[k];
     });
     Object.keys(QFAR).forEach(k=>{ if(!ks.includes(k)) delete QFAR[k]; });
@@ -3612,6 +3617,19 @@ function tlsCopyPackage(btn){
   if(!tlsDriver(b) && !confirm("Kode driver belum ada (profil CC / jadwal DCCP). Script akan memakai driver yang terisi otomatis di TLS (kalau ada). Lanjut salin?")) return;
   tlsCopy(tlsPayload(b), btn);
 }
+/* Jalur Chrome: salin kode isi-TLS + buka TLS di Chrome (login Passport lewat browser). Satu ketukan. */
+function tlsChromeGo(){
+  const b=window._tlsB; if(!b) return;
+  if(b.batam){ alert("ILS Batam diinput manual di TLS."); return; }
+  if(b.units.length>6){ alert("Maksimal 6 unit per ILS."); return; }
+  if((b.moda||"CC")==="SC" && b.units.length!==1){ alert("Moda SC hanya untuk 1 unit."); return; }
+  if(!tlsDriver(b) && !confirm("Kode driver belum ada (profil CC / jadwal DCCP). Script akan memakai driver yang terisi otomatis di TLS (kalau ada). Lanjut?")) return;
+  tlsCopy(encodeURIComponent("window.__RADAR_PKG="+JSON.stringify(tlsPayload(b))+";")+TLS_BM.slice("javascript:".length));
+  let u=tlsCfg().ilsUrl||"https://tls.toyota.astra.co.id/PembuatanSJKB"; if(!/^https:\/\//i.test(u)) u="https://tls.toyota.astra.co.id/PembuatanSJKB";
+  let ok=false; try{ if(window.AndroidTLS && window.AndroidTLS.openExternal) ok=!!window.AndroidTLS.openExternal(u); }catch(e){}
+  if(!ok){ try{ window.open(u,"_blank"); }catch(e){} }
+  alert("Kode ILS #"+b.id+" sudah disalin dan TLS dibuka di Chrome.\n\n1) Login TLS di Chrome (kalau diminta).\n2) Buka halaman Pembuatan ILS / SJKB.\n3) Ketuk kotak alamat, ketik  javascript:  lalu TEMPEL, tekan Go/Enter.\n\nKotak biru RADAR→TLS akan mengisi sendiri. Simpan tetap kamu tekan di TLS.");
+}
 function tlsCopyUs(btn){ tlsCopy(TLS_US, btn); }
 function tlsPcGo(){
   const b=window._tlsB; if(!b) return;
@@ -3635,7 +3653,8 @@ function openTLS(id){
   const head=(k,label,v,key)=>`<div class="tlsrow"><div class="k">${label}</div><div class="v">${v||"-"}</div>${key?`<button type="button" class="tlscp" onclick="tlsCopy(tlsHeadVal('${key}'),this)">Salin</button>`:""}</div>`;
   const rows=b.units.map((u,i)=>`<tr><td>${i+1}</td><td><b>${u.frame}</b></td><td><button type="button" class="tlscp" onclick="tlsCopy(tlsVal(${i},'frame'),this)">Salin</button></td></tr>`).join("");
   showModal(`<h3 style="margin:0 0 4px;">📋 Siap input ke TLS</h3>
-    ${window.AndroidTLS?`<button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 8px;" onclick="tlsSendApp()">📲 Kirim ke TLS (otomatis)</button>`:`<button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 4px;" onclick="tlsPcGo()">🖥 Buka TLS &amp; salin data (PC)</button><p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;">Data ILS tersalin dan TLS terbuka di tab baru. Di tab TLS klik <b>⚡ RADAR→TLS</b> (bookmark / tombol Tampermonkey). Pasang sekali di Admin → TLS.</p>`}
+    <button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 8px;" onclick="tlsChromeGo()">🌐 Buka TLS di Chrome &amp; salin kode</button>
+    ${window.AndroidTLS?`<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 8px;" onclick="tlsSendApp()">📲 Kirim ke TLS di aplikasi (otomatis)</button>`:`<button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 4px;" onclick="tlsPcGo()">🖥 Buka TLS &amp; salin data (PC)</button><p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;">Data ILS tersalin dan TLS terbuka di tab baru. Di tab TLS klik <b>⚡ RADAR→TLS</b> (bookmark / tombol Tampermonkey). Pasang sekali di Admin → TLS.</p>`}
     <button type="button" class="btn btn-primary btn-sm" style="width:100%;margin:2px 0 6px;" onclick="tlsCopyCode(this)">⚡ Salin kode isi TLS</button>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Di TLS (halaman Pembuatan ILS / SJKB): ketuk <b>kotak alamat</b>, ketik <b>javascript:</b> lalu <b>tempel</b>, tekan <b>Enter / Go</b>.</p>
     <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 10px;" onclick="tlsCopyPackage(this)">Salin paket (cara bookmark)</button>
