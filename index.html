@@ -6789,7 +6789,9 @@ function ccplanCompute(data){
   const inShift = t=>{ if(ldrShift==='all'||ldrPeriod==='24h') return true; const h=+t.split(':')[0]; const s1 = h>=SHIFT_START_H && h<SHIFT2_START_H; return ldrShift==='1'?s1:!s1; };
   const _all = (data.ils||[]), _dupOld = new Set();   // ILS lama yang dobel (unit sama dengan ILS yang lebih baru) tidak dihitung sebagai ritase
   _all.forEach(b=>{ if(!b||b.outTs||b.status!=="open") return; const fr=new Set((b.units||[]).map(u=>String(u.frame||"").toUpperCase())); if(_all.some(o=>o&&o.id>b.id&&(o.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())))) _dupOld.add(b.id); });
-  const ilsAll = _all.filter(b=>b.ts>=rs && b.ts<re && !_dupOld.has(b.id));
+  /* ILS dihitung sejak awal shift jadwal DCCP yang sedang dimuat: CC yang jalan 24 jam (beda driver tiap shift) tidak membawa ritase shift sebelumnya */
+  const _from={}; if(ldrPeriod!=='yesterday') (data.dccpSchedule||[]).forEach(r=>{ if(!r.extra){ try{ _from[normPlat(r.police)]=dccpShiftFrom(r); }catch(e){} } });
+  const ilsAll = _all.filter(b=>b.ts>=rs && b.ts<re && !_dupOld.has(b.id) && !(_from[normPlat(b.ccPlat)]>b.ts));
   const useAdj = ritAdjOk(), adjDk = prodDateKey(rs), adjMap = data.ritAdj||{};
   /* Spot Order = CC tambahan di luar DCCP: tidak masuk plan, tidak menutup minus plan DCCP */
   const planKeys = new Set(), spotKeys = new Set();
