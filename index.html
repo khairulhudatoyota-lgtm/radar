@@ -6203,9 +6203,31 @@ function dccpShiftFrom(r){ const t=dccpTripList(r), pd=prodDayStart(Date.now());
   { const sh=meta.shift; if(sh==="day") return pd; if(sh==="night") return pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; } if(!t.length) return pd; const h=+String(t[0]).split(":")[0]; return (h>=SHIFT_START_H&&h<SHIFT2_START_H)?pd:pd+(SHIFT2_START_H-SHIFT_START_H)*3600000; }
 /* ILS plat ini sejak awal shift baris jadwal. ILS pertama sesudah status Change Shift adalah ritase SISA shift sebelumnya, jadi tidak mengurangi jadwal shift ini. */
 function dccpDoneList(r,data){ const from=dccpShiftFrom(r), k=normPlat(r.police);
-  const L=(data.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=from).sort((a,b)=>a.ts-b.ts);
+  const _all=(data.ils||[]);
+  const L=_all.filter(b=>normPlat(b.ccPlat)===k && b.ts>=from).sort((a,b)=>a.ts-b.ts);
+  /* ILS dobel (nomor rangka sama, belum keluar, ada yang lebih baru) tidak dihitung */
+  for(let i=L.length-1;i>=0;i--){ const b=L[i]; if(!b||b.outTs||b.status!=="open") continue; const fr=new Set((b.units||[]).map(u=>String(u.frame||"").toUpperCase()).filter(Boolean)); if(!fr.size) continue;
+    if(_all.some(o=>o&&o.id>b.id&&(o.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())))) L.splice(i,1); }
   try{ csArr(data).filter(x=>x && normPlat(x.plat)===k).forEach(x=>{ for(let c=0;c<(x.n||1);c++){ const i=L.findIndex(b=>b.ts>=x.ts); if(i>=0) L.splice(i,1); } }); }catch(e){}
+  /* koreksi manual Delivery: jumlah ritase selesai shift ini; ILS baru sesudahnya tetap menambah */
+  try{ const f=(data.dccpFix||{})[k]; if(f && f.ts>=from){ const t=Math.max(0,f.n+Math.max(0,L.length-(f.base||0))); if(t<L.length) L.length=t; else while(L.length<t) L.push({ts:f.ts,fix:1,units:[]}); } }catch(e){}
   return L; }
+function dccpFixOpen(plat){
+  if(!canKeluarkanCC()) return;
+  const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return;
+  const tot=dccpTripList(r).length, cur=dccpDoneCount(r,data), f=(data.dccpFix||{})[k];
+  showModal(`<h3 style="margin:0 0 6px;">✎ Koreksi ritase selesai</h3><div style="font-size:13px;margin-bottom:4px;"><b>${escH(platFmt(r.police))}</b> · ${escH(r.driver||"")}</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Sekarang tertulis <b>${cur}</b> dari ${tot} rit selesai. Pilih jumlah rit yang sebenarnya sudah selesai. Tidak menghapus ILS; berlaku sampai shift ini habis, ILS baru sesudahnya tetap menambah.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${Array.from({length:tot+1},(_,i)=>`<button type="button" class="btn ${cur===i?"btn-primary":"btn-outline"}" style="width:auto;min-width:56px;" onclick="dccpFixSave('${escH(plat)}',${i})">${i}</button>`).join("")}</div>
+    ${f?`<button type="button" class="btn btn-outline" onclick="dccpFixSave('${escH(plat)}',-1)">↺ Kembali otomatis</button>`:""}`);
+}
+function dccpFixSave(plat,n){
+  if(!canKeluarkanCC()) return; const k=normPlat(plat);
+  DB.set(d=>{ d.dccpFix=(d.dccpFix&&typeof d.dccpFix==="object")?d.dccpFix:{}; if(n<0){ delete d.dccpFix[k]; return; }
+    delete d.dccpFix[k]; const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===k); const base=r?dccpDoneCount(r,d):0;
+    d.dccpFix[k]={n:n,base:base,ts:Date.now(),by:(currentUser&&currentUser.name)||""}; });
+  try{ closeModal(); }catch(e){} try{ renderDccpUpload(); }catch(e){} try{ updateTrackUI(); }catch(e){}
+}
 function dccpDoneCount(r,data){ return dccpDoneList(r,data).length; }
 function dccpGantiOpen(ri){
   const data=DB.get(), r=data.dccpSchedule[ri]; if(!r) return;
@@ -6396,7 +6418,8 @@ function ccTripChipsHtml(r, data){
     else if(due<=now){ bg="#FDECEC"; fg="#D64545"; sub="belum"; }
     return `<span style="display:inline-block;text-align:center;background:${bg};color:${fg};border-radius:8px;padding:3px 7px;margin:2px 3px 2px 0;font-weight:700;font-size:12px;line-height:1.2;">${t}${sub?`<br><span style="font-size:10px;font-weight:600;">${sub}</span>`:""}</span>`;
   }).join("");
-  return `<div style="min-width:150px;white-space:normal;">${chips}</div>`;
+  const fx=(canKeluarkanCC()&&!r.extra)?`<button type="button" onclick="dccpFixOpen('${escH(r.police)}')" style="border:1px solid var(--border);background:#fff;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;color:var(--text-dim);margin:2px 0;">✎ Koreksi${(data.dccpFix||{})[k]?" ●":""}</button>`:"";
+  return `<div style="min-width:150px;white-space:normal;">${chips}${fx?"<br>"+fx:""}</div>`;
 }
 /* Urutan tampilan jadwal: menurut jam ritase pertama (batch jam yang sama berkelompok), bukan per LP. Jam sama: urutan file asli. */
 function dccpFirstTs(r){ const t=dccpTripList(r); return t.length?ccTimeToTs(t[0],0):9e15; }
