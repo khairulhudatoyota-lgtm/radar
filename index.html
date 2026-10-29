@@ -3219,6 +3219,7 @@ function renderDelivery(){
       <h3>🚚 ILS #${b.id} — CC <span style="background:${ccColor(b.ccPlat)};color:#fff;border-radius:6px;padding:1px 8px;">${escH(b.ccPlat)}</span> (Stall ${ccLbl(b.ccNum)}) ${b.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 8px;font-size:12px;">BATAM</span>`:""}</h3>
       ${(()=>{ const dn=b.drvName||ccDriverAny(b.ccPlat,b.ts); let lpn=b.lp||""; if(!lpn){ try{ lpn=(Object.values(DB.get().cc||{}).filter(Boolean).find(c=>normPlat(c.plat)===normPlat(b.ccPlat))||{}).lp||(ccPlatRow(b.ccPlat)||{}).lp||""; }catch(e){} } const lb=lpn?`<span style="background:var(--gold);color:#fff;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:900;margin-left:6px;vertical-align:2px;">LP ${escH(lpn)}</span>`:""; return (dn||lb)?`<div style="font-size:15px;font-weight:800;margin:-2px 0 6px;">${dn?"👤 "+escH(dn):""}${lb}</div>`:""; })()}
       <div style="margin:0 0 8px;"><span style="font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;background:${ilsStage(b).bg};color:${ilsStage(b).c};">${ilsStage(b).t}</span></div>
+      ${(()=>{ const fr=new Set((b.units||[]).map(u=>String(u.frame||"").toUpperCase())); const o=(data.ils||[]).find(x=>x && x.id!==b.id && !x.outTs && x.status==="open" && (x.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase()))); if(!o) return ""; const lama=b.id<o.id; return `<div style="background:#fdeaea;border:1px solid #e0a0a0;border-radius:8px;padding:8px 10px;margin:0 0 8px;font-size:12px;color:#991b1b;"><b>⚠ DOBEL</b>: ada ILS #${o.id} dengan unit yang sama. ${lama?"ILS ini <b>yang lebih lama</b>, biasanya yang dibatalkan. Cek dulu ILS mana yang dipakai di TLS.":"ILS ini yang lebih baru."}</div>`; })()}
       <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">${b.units.length} unit · dibuat ${new Date(b.ts).toLocaleString('id-ID')}</p>
       <table><thead><tr><th>QR</th><th>No. Rangka</th><th>Model</th><th>Stall</th></tr></thead><tbody>
         ${b.units.map(u=>`<tr><td style="width:84px;">${qrCellHtml(u.frame)}</td><td><b>${u.frame}</b>${unitTagsHtml(u,true)}</td><td>${u.model}</td><td>${u.loc?"Luar stall: "+u.loc:u.slot}</td></tr>`).join("")}
@@ -3308,6 +3309,8 @@ function createILS(ccNum, slots){
   const _dupI=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum!=ccNum && normPlat(b.ccPlat)===normPlat(ccInfo.plat));
   if(_dupI){ alert("Plat "+ccInfo.plat+" sudah punya ILS #"+_dupI.id+" yang masih aktif di Stall "+ccLbl(_dupI.ccNum)+". Selesaikan atau batalkan ILS itu dulu supaya tidak dobel."); return false; }
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
+  { const fr=new Set(units.map(u=>String(u.frame||"").toUpperCase())); const dupF=(data.ils||[]).find(b=>b && !b.outTs && b.status==="open" && (b.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())));
+    if(dupF){ alert("Unit ini sudah ada di ILS #"+dupF.id+" (CC "+dupF.ccPlat+") yang masih aktif. Batalkan ILS itu dulu bila memang mau dibuat ulang, supaya tidak dobel."); return false; } }
   DB.set(d=>{
     const id = Date.now();
     d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), drvName: ccDriverAny(ccInfo.plat)||"", mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
@@ -5496,15 +5499,26 @@ function ilsFixExec(id, back){
   alert("ILS #"+id+" dihapus."+(back?" "+nb+" unit dikembalikan ke stall.":""));
   render();
 }
+/* Baris manifest yatim (ILS-nya sudah dibatalkan/dihapus tapi manifest tertinggal) dibersihkan otomatis oleh Delivery/Admin. Hanya jalan kalau daftar ILS sudah termuat. */
+function mfPurgeOrphans(){
+  try{
+    if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer()) return;
+    const d0=DB.get(); if(!Array.isArray(d0.ils) || !d0.ils.length || !Array.isArray(d0.manifest) || !d0.manifest.length) return;
+    const have=new Set(d0.ils.map(b=>b&&b.id)); if(!d0.manifest.some(m=>m && !have.has(m.id))) return;
+    DB.set(d=>{ if(!Array.isArray(d.ils) || !d.ils.length) return; const h=new Set(d.ils.map(b=>b&&b.id)); d.manifest=(d.manifest||[]).filter(m=>m && h.has(m.id)); });
+  }catch(e){}
+}
+setInterval(mfPurgeOrphans, 60000);
 function cancelILS(id){
   const b=(DB.get().ils||[]).find(x=>x.id===id); if(!b) return;
-  if(b.outTs || b.status==="done"){ alert("ILS ini sudah Delout, tidak bisa dibatalkan di sini. Gunakan Batalkan Delout (5 menit) bila perlu."); return; }
+  if(b.outTs || b.status==="done"){ if(canKeluarkanCC()){ ilsFixDo(id); return; } alert("ILS ini sudah Delout. Pembatalan hanya bisa oleh Delivery / Admin."); return; }   // sudah Delout: lewat koreksi (hapus ILS + surat jalan + manifest + ritase)
   const msg=`Batalkan ILS #${id} (CC ${b.ccPlat})?\n\n• ${b.units.length} unit kembali ke stall seperti sebelum ILS dibuat\n• ILS beserta daftar QR / No. Rangka dihapus`+(b.tlsTs?"\n• ILS ini sudah ditandai masuk TLS: pastikan ILS di TLS juga dibatalkan":"")+(b.valStartTs?"\n• Proses validasi sudah dimulai dan ikut dihapus":"");
   if(!confirm(msg)) return;
   DB.set(d=>{ const i=(d.ils||[]).findIndex(x=>x.id===id); if(i<0) return; const x=d.ils[i];
     (x.units||[]).forEach(u=>{ const cur=d.units[u.slot]; if(cur && cur.ilsId===id) delete cur.ilsId; });
     (x.loadSnap||[]).forEach(e=>{ if(e.v && !d.units[e.slot]){ const v=Object.assign({},e.v); delete v.ilsId; d.units[e.slot]=v; } });   // loading sudah ditandai selesai: kembalikan unit ke slot
-    d.ils.splice(i,1); });
+    d.ils.splice(i,1);
+    d.manifest=(d.manifest||[]).filter(m=>m.id!==id); });   // data manifest ILS yang dibatalkan ikut dihapus (No. SJKB biasanya ganti)
   try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+id).remove(); }catch(e){}
   render();
 }
