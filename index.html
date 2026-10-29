@@ -3171,7 +3171,9 @@ function ilsStage(b){
   return {t:b.batam?"🟠 ILS Batam dibuat":"🟠 ILS dibuat — belum di-input ke TLS", c:"#b45309", bg:"#ffedd5"};
 }
 let dlMoreOpen=false;
-function dlJump(id){ const e=document.getElementById(id); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); }
+let _earlyOpen=null;   // pilihan buka/tutup "Izin masuk sebelum jadwal" oleh pengguna (supaya tidak menutup sendiri saat layar refresh otomatis)
+function dlJump(id){ const e=document.getElementById(id); if(!e) return; let off=0; try{ document.querySelectorAll(".tabs,.tabbar,header,.sticky").forEach(h=>{ const cs=getComputedStyle(h); if(cs.position==="sticky"||cs.position==="fixed"){ const r=h.getBoundingClientRect(); if(r.top<=1 && r.height<200) off=Math.max(off,r.bottom); } }); }catch(_){}
+  const y=e.getBoundingClientRect().top+window.pageYOffset-off-8; window.scrollTo({top:Math.max(0,y),behavior:"smooth"}); }
 function renderDelivery(){
   const data = DB.get();
   const filledSlots = Object.entries(data.units).filter(([id,v])=>v && !v.ilsId);
@@ -3245,7 +3247,7 @@ function renderDelivery(){
       <button class="linechip" style="padding:7px 14px;" onclick="dlJump('dlSecAktif')">🚚 ILS Aktif <span class="badge gold">${loadingBatches.length}</span></button>
       <button class="linechip" style="padding:7px 14px;" onclick="dlJump('dlSecSj')">📄 Surat Jalan</button></div>`;
   const _hn=(data.hold||[]).length, _ea=!!(data.earlyAll&&data.earlyAll.ts>=prodDayStart(Date.now()));
-  const earlyBox=`<details class="card" style="margin:0 0 10px;" ${_hn&&!_ea?"open":""}><summary style="cursor:pointer;font-weight:800;">🔓 Izin masuk sebelum jadwal${_ea?` <span class="badge" style="background:#1E9E5A;color:#fff;">SEMUA DIIZINKAN</span>`:""}${_hn?` <span class="badge gold">Parkir Luar ${_hn}</span>`:""}</summary><div style="margin-top:8px;">${earlyCardHtml(data)}${holdCardHtml(data,false)}</div></details>`;
+  const earlyBox=`<details class="card" style="margin:0 0 10px;" ${(_earlyOpen!==null?_earlyOpen:(_hn&&!_ea))?"open":""} ontoggle="if(event.isTrusted)_earlyOpen=this.open"><summary style="cursor:pointer;font-weight:800;">🔓 Izin masuk sebelum jadwal${_ea?` <span class="badge" style="background:#1E9E5A;color:#fff;">SEMUA DIIZINKAN</span>`:""}${_hn?` <span class="badge gold">Parkir Luar ${_hn}</span>`:""}</summary><div style="margin-top:8px;">${earlyCardHtml(data)}${holdCardHtml(data,false)}</div></details>`;
   return `
     ${jump}
     ${takeCardHtml(data)}
