@@ -8566,9 +8566,23 @@ function shareCardHtml(){
   </div>`;
 }
 /* --- viewer: peta --- */
+/* Filter shift di Peta CC: Semua / Day (07:00–20:00) / Night. CC dihitung ikut shift kalau punya jam ritase di shift itu (CC yang jalan 24 jam muncul di keduanya); CC tanpa jam ritase (spot order) selalu tampil. */
+let ccMapShift="all"; try{ const v=localStorage.getItem("radar_ccmapshift"); if(v==="day"||v==="night") ccMapShift=v; }catch(e){}
+function ccMapShiftOk(plat){
+  if(ccMapShift==="all") return true;
+  const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); if(!r) return true;
+  const T=dccpTripList(r); if(!T.length) return true;
+  return T.some(t=>{ const h=+String(t).split(":")[0]; const day=(h>=SHIFT_START_H && h<SHIFT2_START_H); return ccMapShift==="day"?day:!day; });
+}
+function ccMapShiftSet(v){ ccMapShift=v; try{ localStorage.setItem("radar_ccmapshift",v); }catch(e){} const el=document.getElementById("ccmapShiftBar"); if(el) el.innerHTML=ccMapShiftBar(); try{ updateTrackUI(); }catch(e){} }
+function ccMapShiftBar(){
+  const o=[["all","Semua"],["day","☀ Day 07–20"],["night","🌙 Night 20–07"]];
+  return o.map(([k,l])=>`<button type="button" onclick="ccMapShiftSet('${k}')" style="border:1.5px solid ${ccMapShift===k?"#0F2A4A":"var(--border)"};background:${ccMapShift===k?"#0F2A4A":"#fff"};color:${ccMapShift===k?"#fff":"var(--text)"};border-radius:999px;padding:6px 14px;font-weight:800;font-size:13px;">${l}</button>`).join("");
+}
 function renderCcMap(){
   return `<div class="card">
     <h3>🗺 Peta CC — ADM KAP ⇄ NVDC Karawang</h3>
+    <div id="ccmapShiftBar" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px;">${ccMapShiftBar()}</div>
     <div id="ccmapMsg"></div>
     <div id="ccmap" style="position:relative;z-index:0;isolation:isolate;height:55vh;min-height:320px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#e8eef5;"></div>
     <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Posisi diperbarui saat aplikasi driver terbuka. ${routeGet()?"Garis biru = rute jalan CC; jarak dihitung sepanjang rute.":"Garis putus-putus = garis lurus (Admin belum menyimpan rute jalan)."}</div>
@@ -8710,7 +8724,7 @@ function updateTrackUI(){
   const _tk=DB.get().trkKill||{}, ghosts = allLive.filter(r=>!trkHasAccount(r) && !((_tk[trkKey(r.plat)]||0) && Date.now()-_tk[trkKey(r.plat)]<24*3600000));   // yang sudah dihapus Admin disembunyikan 24 jam walau HP lama masih mengirim
   const unsched = allLive.filter(r=>trkHasAccount(r) && !ccPlatRegistered(r.plat));   // peta hanya menampilkan CC yang ada di Jadwal DCCP / Spot Order / CC Pengganti
   window._trkUnsched = unsched;
-  const rows = allLive.filter(r=>trkHasAccount(r) && ccPlatRegistered(r.plat) && trkWorking(r.plat)).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
+  const rows = allLive.filter(r=>trkHasAccount(r) && ccPlatRegistered(r.plat) && trkWorking(r.plat) && ccMapShiftOk(r.plat)).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
   window._trkGhosts = ghosts;
   window._trkRows=rows; try{ chatTagUpdate(); ccProfRefresh(); }catch(e){}
   if(list){
@@ -8719,7 +8733,7 @@ function updateTrackUI(){
     if(!(mp.adm && mp.nvdc)) h += `<div class="msg info">Admin belum mengatur titik ADM KAP & NVDC (Admin Panel → 🗺 Rute CC).</div>`;
     if(ghosts.length && currentUser && ["admin","delivery"].includes(currentUser.role)) h += `<div class="msg err" style="font-size:12px;">⚠ ${ghosts.length} titik tanpa akun aktif disembunyikan (${ghosts.map(g=>escH(g.plat||"?")).join(", ")}). HP-nya masih mengirim posisi tapi akunnya sudah logout / tidak ada. <button type="button" class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="trkClearGhosts()">🗑 Hapus titik ini</button></div>`;
     if(unsched.length && currentUser && ["admin","delivery","koordinator"].includes(currentUser.role)) h += `<div class="msg info" style="font-size:12px;">ℹ ${unsched.length} CC tidak ditampilkan karena tidak ada di jadwal (${unsched.map(g=>escH(g.plat||"?")).join(", ")}). Tambahkan lewat Jadwal DCCP → Tambah CC / CC Pengganti kalau memang beroperasi.</div>`;
-    if(!rows.length) h += `<div style="font-size:13px;color:var(--text-dim);">Belum ada CC terjadwal yang membagikan posisi.</div>`;
+    if(!rows.length) h += `<div style="font-size:13px;color:var(--text-dim);">${ccMapShift==="all"?"Belum ada CC terjadwal yang membagikan posisi.":"Tidak ada CC shift "+(ccMapShift==="day"?"Day":"Night")+" yang membagikan posisi. Pilih Semua untuk melihat seluruh CC."}</div>`;
     h += rows.map(o=>{
       const mins = Math.round(o.age/60000), stale = o.age > 3*60000;
       const pt = o.t==null ? 0 : (o.dir==="back" ? 1-o.t : o.t), pp = Math.round(pt*100);
