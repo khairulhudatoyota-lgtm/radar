@@ -3228,6 +3228,7 @@ function renderDelivery(){
         ${b.batam?"":`<button class="btn btn-outline btn-sm" style="flex:1;" onclick="openTLS(${b.id})">📋 Salin untuk TLS</button>`}
         <button class="btn btn-green btn-sm" style="flex:1;" onclick="delout(${b.id})">✔ CC Berangkat / Dell Out</button>
       </div>
+      <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px;" onclick="ilsCopyExcel(${b.id},this)">📊 Salin No. Rangka untuk Excel</button>
       <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
         <button class="btn btn-outline btn-sm" style="flex:1;min-width:130px;" onclick="cancelILS(${b.id})">↩ Batal ILS</button>
         ${canKeluarkanCC()?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:130px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${b.ccNum})">🚪 Keluarkan CC</button>`:""}
@@ -3618,6 +3619,12 @@ function tlsCopyPackage(btn){
   tlsCopy(tlsPayload(b), btn);
 }
 /* Jalur Chrome: salin kode isi-TLS + buka TLS di Chrome (login Passport lewat browser). Satu ketukan. */
+/* Salin untuk Excel: No. Rangka saja, satu per baris (tempel ke kolom No. Rangka langsung turun ke bawah) */
+function ilsCopyExcel(id, btn){
+  const b=(DB.get().ils||[]).find(x=>x.id===id); if(!b) return;
+  const txt=b.units.map(u=>String(u.frame||"").trim().toUpperCase()).join("\n");
+  tlsCopy(txt, btn);
+}
 function tlsChromeGo(){
   const b=window._tlsB; if(!b) return;
   if(b.batam){ alert("ILS Batam diinput manual di TLS."); return; }
@@ -5208,7 +5215,8 @@ async function esjOpen(id, picUser){
       <div class="field" style="margin-top:10px;${currentUser&&["delivery","admin"].includes(currentUser.role)?"":"display:none;"}"><label>PIC Delivery</label><select id="esjPic" onchange="esjOpen(${id}, this.value)">${us.map(u=>`<option value="${xlEsc(u.username)}" ${u.username===D.pic.user?"selected":""}>${xlEsc(sigName("mp_"+u.username)||u.name)}${esjPicSig(u).sig?"":" (belum ada TTD)"}</option>`).join("")}</select></div>
       ${!D.sjkb?`<div class="msg err">No. SJKB belum terbaca dari PDF validasi TLS, jadi e-SJKB belum bisa disimpan atau dikirim. Unggah PDF validasinya dulu.</div><button type="button" class="btn btn-outline" style="margin-top:8px;" onclick="closeModal()">Tutup</button>`:`<div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${canShare?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="esjShare()">📤 Kirim (WhatsApp)</button>`:""}
-        ${window.AndroidTLS&&window.AndroidTLS.openPdf?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="esjOpenPdf()">📄 Buka PDF / Bagikan</button>`:""}
+        ${window.AndroidTLS&&window.AndroidTLS.sharePdf?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="esjSharePdfApp()">📤 Kirim (WhatsApp)</button>`:""}
+        ${window.AndroidTLS&&window.AndroidTLS.openPdf?`<button type="button" class="btn btn-outline" style="flex:1;min-width:140px;" onclick="esjOpenPdf()">📄 Buka PDF</button>`:""}
         <button type="button" class="btn btn-outline" style="flex:1;min-width:140px;" onclick="esjSave()">⬇ Simpan PDF</button>
       </div>`}
       <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Data dibaca dari PDF surat jalan TLS dan dilengkapi data RADAR. e-SJKB ini juga tampil di kotak Surat Jalan milik CC, Koordinator, dan Delivery.</div>`);
@@ -5225,6 +5233,7 @@ async function esjDownload(id){ sjMarkRead(id);
 }
 function esjSave(){ if(!_esj) return; mfSave(_esj.name,"application/pdf",_esj.pdf); }
 function esjB64(){ let s=""; const b=_esj.pdf; for(let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192)); return btoa(s); }
+function esjSharePdfApp(){ if(!_esj) return; try{ window.AndroidTLS.sharePdf(_esj.name, esjB64(), "e-SJKB "+(_esj.D.sjkb||"")+" · "+(_esj.D.nopol||"")); }catch(e){ esjSave(); } }
 function esjOpenPdf(){ if(!_esj) return; try{ window.AndroidTLS.openPdf(_esj.name, esjB64()); }catch(e){ esjSave(); } }
 async function esjShare(){
   if(!_esj) return;

@@ -1607,6 +1607,29 @@ public class MainActivity extends Activity {
             }
         }
 
+        // Kirim PDF lewat WhatsApp (ACTION_SEND). WhatsApp tidak muncul di daftar "Buka dengan" karena itu bukan aplikasi pembaca PDF.
+        @JavascriptInterface
+        public void sharePdf(final String name, final String b64, final String text) {
+            try {
+                Uri uri = saveBytes(name, "application/pdf", Base64.decode(b64, Base64.DEFAULT));
+                Intent it = new Intent(Intent.ACTION_SEND);
+                it.setType("application/pdf");
+                it.putExtra(Intent.EXTRA_STREAM, uri);
+                if (text != null && text.length() > 0) it.putExtra(Intent.EXTRA_TEXT, text);
+                it.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                String[] wa = new String[]{"com.whatsapp", "com.whatsapp.w4b"};
+                for (int i = 0; i < wa.length; i++) {
+                    try { Intent w = new Intent(it); w.setPackage(wa[i]); startActivity(w); return; } catch (Exception ignore) { }
+                }
+                Intent ch = Intent.createChooser(it, "Kirim surat jalan");
+                ch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(ch);
+            } catch (final Exception e) {
+                runOnUiThread(new Runnable() { @Override public void run() {
+                    Toast.makeText(MainActivity.this, "Tidak bisa membagikan PDF: " + e.getMessage(), Toast.LENGTH_LONG).show(); } });
+            }
+        }
+
         @JavascriptInterface
         public void alarmStart(final String title, final String body) {
             runOnUiThread(new Runnable() {
