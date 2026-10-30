@@ -6848,16 +6848,23 @@ function ldrCompute(data){
   });
   /* WIP = WIP awal + input − terkirim, dihitung kumulatif sejak awal hari produksi sampai akhir periode (shift Night ikut membawa sisa Day) */
   const _cb = ldrPeriod==="24h" ? rs : (ldrPeriod==="yesterday" ? prodDayStart()-86400000 : prodDayStart());
-  const _cl = {t:(ldrPeriod==="24h"?0:_wip0), L:{}}; PROD_LINES.forEach(l=>{ _cl.L[l]=ldrPeriod==="24h"?0:(((_wipE.wipL||{})[l])||0); });
+  const _cl = {t:0, L:{}, i:0, o:0, r:0}; PROD_LINES.forEach(l=>{ _cl.L[l]=0; });
   log.forEach(e=>{ const ln=PROD_LINES.includes(e.line)?e.line:null;
-    if(e.parkedTs!=null && e.parkedTs>=_cb && e.parkedTs<endLimit){ _cl.t++; if(ln) _cl.L[ln]++; }
-    if(e.sentTs!=null && e.sentTs>=_cb && e.sentTs<endLimit){ _cl.t--; if(ln) _cl.L[ln]--; } });
+    if(e.parkedTs!=null && e.parkedTs>=_cb && e.parkedTs<endLimit){ _cl.t++; _cl.i++; if(ln) _cl.L[ln]++; }
+    if(e.sentTs!=null && e.sentTs>=_cb && e.sentTs<endLimit){ _cl.t--; _cl.o++; if(ln) _cl.L[ln]--; }
+    else if(e.status==="removed" && e.removedTs!=null && e.removedTs>=_cb && e.removedTs<endLimit){ _cl.t--; _cl.r++; if(ln) _cl.L[ln]--; } });
   const _cum = _cl;
+  let _tIn2 = tIn; const _bl2 = Object.assign({}, byLine);
+  if(ldrPeriod!=="24h" && ldrShift!=="2"){
+    const wl = _wipE.wipL||{};
+    PROD_LINES.forEach(l=>{ const d=Math.min(wl[l]||0, _bl2[l]||0); _bl2[l]=(_bl2[l]||0)-d; _tIn2-=d; });
+    const dl=Math.min(wl._||0, _tIn2); _tIn2-=dl;
+  }
   const wipList = log.filter(e=>e.status==="parked"||e.status==="ils").sort((a,b)=>(a.parkedTs||0)-(b.parkedTs||0));
   // buang slot kosong di awal (sebelum aktivitas pertama) agar tabel ringkas
   let first = slots.findIndex(s=>s.inp||s.out);
   if(first<0) first = Math.max(0, nb-4);
-  return {slots: slots.slice(first), tIn, tOut, byModel, byLine, models:[...modelSet], wipList, wip0:_wip0, wipL:_wipE.wipL||{}, wipByLine:(()=>{ const o={}; PROD_LINES.forEach(l=>{ o[l]=_cum.L[l]; }); return o; })(), wipTotal: _cum.t};
+  return {slots: slots.slice(first), tIn:_tIn2, tInRaw:tIn, tOut, byModel, byLine:_bl2, models:[...modelSet], wipList, wip0:_wip0, wipL:_wipE.wipL||{}, wipByLine:(()=>{ const o={}; PROD_LINES.forEach(l=>{ o[l]=_cum.L[l]; }); return o; })(), wipTotal: _cum.t, cum:_cum};
 }
 function ldrChartSVG(slots){
   const n = slots.length;
@@ -6980,7 +6987,7 @@ function renderLeaderDashboard(){
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
     ${tile("Unit Diinput", R.tIn, "#16213E", "periode terpilih")}
     ${tile("Unit Terkirim", R.tOut, "#1E9E5A", "periode terpilih")}
-    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>l+" "+(R.wipByLine[l]||0)).join(" · ")+(R.wip0?" · termasuk "+R.wip0+" WIP awal":"")+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
+    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>l+" "+(R.wipByLine[l]||0)).join(" · ")+" · rumus: "+R.cum.i+" input mentah − "+R.cum.o+" kirim"+(R.cum.r?" − "+R.cum.r+" keluar":"")+" · terdaftar belum kirim: "+R.wipList.length+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
   </div>
 
   ${batamAlertHtml(data)}
@@ -7016,7 +7023,7 @@ function renderLeaderDashboard(){
   </div>
 
   <div class="card"><h3>📦 WIP — Unit Belum Terkirim (${R.wipTotal})</h3>
-    ${R.wip0?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Termasuk ${R.wip0} unit WIP awal (diisi Admin: ${PROD_LINES.map(l=>l+" "+((R.wipL&&R.wipL[l])||0)).join(", ")}; tidak ada di daftar di bawah).</div>`:""}${R.wipList.length===0 ? `<div class="emptystate">${R.wip0?"Tidak ada WIP dari input RADAR.":"Tidak ada WIP."}</div>` : `
+    ${R.wip0?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">WIP awal ${R.wip0} unit (diisi Admin: ${PROD_LINES.map(l=>l+" "+((R.wipL&&R.wipL[l])||0)).join(", ")}) = input pagi yang bukan produksi; dikurangkan dari Input, bukan ditambah ke WIP.</div>`:""}${R.wipList.length===0 ? `<div class="emptystate">${R.wip0?"Tidak ada WIP dari input RADAR.":"Tidak ada WIP."}</div>` : `
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto;"><table style="font-size:13px;">
       <tr><th style="${th}">No. Rangka</th><th style="${th}">Model</th><th style="${th}">Stall</th><th style="${th}">Masuk</th><th style="${th}">Umur</th><th style="${th}">Status</th></tr>
       ${R.wipList.map(e=>{ const h=(Date.now()-(e.parkedTs||Date.now()))/3600000; const col=h>24?"#D64545":h>12?"#E8833A":"inherit";
@@ -7340,7 +7347,8 @@ function rptShiftCompute(data){
       if(inW(e.parkedTs)){ inp++; if(lines[e.line]) lines[e.line].inp++; else noLine++; }
       if(inW(e.sentTs)){ out++; if(lines[e.line]) lines[e.line].out++; }
     });
-    const wipEnd = started ? wip0 + log.filter(e=>e.parkedTs!=null && e.parkedTs>=base && e.parkedTs<end).length - log.filter(e=>e.sentTs!=null && e.sentTs>=base && e.sentTs<end).length : null;
+    if(w==="1"){ PROD_LINES.forEach(l=>{ const d=Math.min(E.wipL[l]||0, lines[l].inp); lines[l].inp-=d; inp-=d; }); const dl=Math.min(E.wipL._||0, Math.max(0,noLine)); noLine-=dl; inp-=dl; }
+    const wipEnd = started ? log.filter(e=>e.parkedTs!=null && e.parkedTs>=base && e.parkedTs<end).length - log.filter(e=>(e.sentTs!=null && e.sentTs>=base && e.sentTs<end) || (e.sentTs==null && e.status==="removed" && e.removedTs!=null && e.removedTs>=base && e.removedTs<end)).length : null;
     return {w, a, b, started, running: started && now<b, plan:P.total, hasPlan:P.has, inp, out, noLine, lines, wipEnd};
   };
   return {base, s1:mk("1"), s2:mk("2")};
