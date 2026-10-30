@@ -2886,7 +2886,7 @@ function ccQueueTake(d){
   const q=d.queue||[]; if(!q.length) return null;
   const cap=ccLpCap(d), near=q.filter(x=>!ccFarNow(d,x.plat)); if(!near.length) return null;
   /* Prioritas jarak: CC urutan terdepan yang perkiraan tiba (jarak / ±30 km/j) masih lebih dari batas menit tidak ditunggu; yang sudah dekat dipanggil lebih dulu supaya stall tidak kosong. Posisi tidak diketahui = dianggap sudah dekat. */
-  const etaOf=x=>{ const km=ccDistNow(d,x.plat); return km==null?0:km/CC_ETA_KMH*60; }, lim=ccEtaSkipMin(d);
+  const etaOf=x=>{ if(ccRitDone(d,x.plat)===0) return 0; const km=ccDistNow(d,x.plat); return km==null?0:km/CC_ETA_KMH*60; }, lim=ccEtaSkipMin(d);   // rit pertama: murni urutan DCCP, tidak dilewati karena jarak
   const okLp=x=>csActive(d,x.plat) || ccLpCount(d,x.lp)<cap;
   const ready=near.filter(x=>etaOf(x)<=lim);
   const pick=(ready.find(okLp) || ready[0]) || near.find(okLp) || near[0];
@@ -2901,9 +2901,11 @@ function ccQueueSort(d){
   /* Rit pertama: jam efektif (jadwal DCCP, toleransi telat). Rit ke-2 dst: jam jadwal hanya perkiraan, jadi berdasarkan KEDATANGAN;
      kalau dua CC tiba berdekatan (< 5 menit), yang rit-nya lebih sedikit didahulukan. */
   const rit=q=>ccRitDone(d,q.plat);
-  (d.queue||[]).forEach(q=>{ const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; } q.due = rit(q)>=1 ? (q.ts||0) : ccEffTs(d,q.plat,q.ts); });
+  /* Rit pertama: urutan Jadwal DCCP (jam jadwal, lalu urutan baris di DCCP), tidak peduli siapa yang lebih dulu tiba. */
+  (d.queue||[]).forEach(q=>{ const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; } if(rit(q)>=1){ q.due=(q.ts||0); return; } const du=ccNextDue(d,q.plat); q.due = du!=null ? du : (q.ts||0); });
+  const dIdx=q=>{ const i=(d.dccpSchedule||[]).findIndex(r=>normPlat(r.police)===normPlat(q.plat)); return i<0?9e6:i; };
   /* BATCH: CC dengan jam jadwal yang sama = satu batch. Batch lebih awal masuk dulu, lalu batch berikutnya. Dalam satu batch: rit lebih sedikit dulu, lalu yang lebih dulu tiba. */
-  d.queue.sort((a,b)=>{ const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
+  d.queue.sort((a,b)=>{ const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(ra===0){ const ia=dIdx(a), ib=dIdx(b); if(ia!==ib) return ia-ib; } if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
 }
 /* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
 function ccQueueAdvance(){
