@@ -2682,6 +2682,7 @@ function renderOrderStall(){
     <div class="card" style="margin-bottom:10px;">
       <div style="display:flex; justify-content:space-between;">
         <div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}${(()=>{const dk=ccDistNow(data,q.plat); return dk!=null?` · 📍 ${dk.toFixed(1)} km dari yard${ccFarNow(data,q.plat)?" (masih jauh, belum dipanggil)":""}`:"";})()}</span></div>
+        ${ccQueueCtl(data,idx,q)}
       </div>
       ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
     </div>
@@ -2734,7 +2735,7 @@ function renderOrderStall(){
 
     <div class="card">
       <h3>⏳ Daftar Antrian (Waiting List)</h3>
-      ${data.queue.length===0 ? `<div class="emptystate">Tidak ada antrian. Semua truk bisa langsung masuk stall.</div>` : queueCards}
+      ${data.queue.length===0 ? `<div class="emptystate">Tidak ada antrian. Semua truk bisa langsung masuk stall.</div>` : ccQueueAutoBar(data)+queueCards}
     </div>
   `;
 }
@@ -2886,7 +2887,7 @@ function ccQueueTake(d){
   const q=d.queue||[]; if(!q.length) return null;
   const cap=ccLpCap(d), near=q.filter(x=>!ccFarNow(d,x.plat)); if(!near.length) return null;
   /* Prioritas jarak: CC urutan terdepan yang perkiraan tiba (jarak / ±30 km/j) masih lebih dari batas menit tidak ditunggu; yang sudah dekat dipanggil lebih dulu supaya stall tidak kosong. Posisi tidak diketahui = dianggap sudah dekat. */
-  const etaOf=x=>{ if(ccRitDone(d,x.plat)===0) return 0; const km=ccDistNow(d,x.plat); return km==null?0:km/CC_ETA_KMH*60; }, lim=ccEtaSkipMin(d);   // rit pertama: murni urutan DCCP, tidak dilewati karena jarak
+  const etaOf=x=>{ if(x.mo!=null || ccRitDone(d,x.plat)===0) return 0; const km=ccDistNow(d,x.plat); return km==null?0:km/CC_ETA_KMH*60; }, lim=ccEtaSkipMin(d);   // rit pertama: murni urutan DCCP, tidak dilewati karena jarak
   const okLp=x=>csActive(d,x.plat) || ccLpCount(d,x.lp)<cap;
   const ready=near.filter(x=>etaOf(x)<=lim);
   const pick=(ready.find(okLp) || ready[0]) || near.find(okLp) || near[0];
@@ -2897,6 +2898,28 @@ function ccActiveStalls(d){ return CONFIG.CC_ACTIVE_DEFAULT.length + CONFIG.CC_E
 const CC_ETA_KMH=30;   // kecepatan rata-rata CC menuju yard untuk perkiraan tiba
 function ccEtaSkipMin(d){ const v=Number((d||DB.get()).etaSkipMin); return isFinite(v)&&v>=0 ? v : 5; }   // CC yang perkiraan tibanya lebih dari ini tidak ditunggu kalau ada yang sudah dekat
 function ccLoadMin(d){ const v=Number((d||DB.get()).loadMin); return isFinite(v)&&v>=5 ? v : 15; }   // rata-rata waktu loading per CC
+/* Ubah urutan waiting list manual (masih masa uji). Urutan yang diubah dikunci (mo) sampai CC-nya keluar dari antrian atau "Urut otomatis" ditekan. */
+function canQueueMove(){ return !!(currentUser && ["delivery","admin","koordinator"].includes(currentUser.role)); }
+function ccQueueMove(plat, dir){
+  if(!canQueueMove()) return; const k=normPlat(plat);
+  DB.set(d=>{ const q=d.queue||[]; const i=q.findIndex(x=>x && normPlat(x.plat)===k), j=i+dir; if(i<0||j<0||j>=q.length) return;
+    const t=q[i]; q[i]=q[j]; q[j]=t; q.forEach((x,n)=>{ x.mo=n+1; }); d.queueMoveLog=(d.queueMoveLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), dir, by:(currentUser&&currentUser.name)||""}]).slice(-60); });
+  try{ render(); }catch(e){}
+}
+function ccQueueAuto(){
+  if(!canQueueMove()) return;
+  DB.set(d=>{ (d.queue||[]).forEach(x=>{ delete x.mo; }); ccQueueSort(d); });
+  try{ render(); }catch(e){}
+}
+function ccQueueCtl(data, idx, q){
+  if(!canQueueMove()) return ""; const n=(data.queue||[]).length, pl=escH(q.plat).replace(/'/g,"");
+  const bt=(dir,l,off)=>`<button type="button" ${off?"disabled":""} onclick="ccQueueMove('${pl}',${dir})" style="border:1px solid var(--border);background:#fff;border-radius:8px;padding:4px 10px;font-weight:900;font-size:14px;${off?"opacity:.35;":""}">${l}</button>`;
+  return `<div style="display:flex;gap:6px;align-items:center;">${q.mo!=null?`<span title="urutan diatur manual" style="font-size:12px;">📌</span>`:""}${bt(-1,"▲",idx===0)}${bt(1,"▼",idx===n-1)}</div>`;
+}
+function ccQueueAutoBar(data){
+  if(!canQueueMove() || !(data.queue||[]).some(x=>x&&x.mo!=null)) return "";
+  return `<div style="margin:0 0 8px;"><button type="button" class="btn btn-outline btn-sm" onclick="ccQueueAuto()">↺ Urut otomatis (hapus urutan manual)</button></div>`;
+}
 function ccQueueSort(d){
   /* Rit pertama: jam efektif (jadwal DCCP, toleransi telat). Rit ke-2 dst: jam jadwal hanya perkiraan, jadi berdasarkan KEDATANGAN;
      kalau dua CC tiba berdekatan (< 5 menit), yang rit-nya lebih sedikit didahulukan. */
@@ -2905,7 +2928,7 @@ function ccQueueSort(d){
   (d.queue||[]).forEach(q=>{ const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; } if(rit(q)>=1){ q.due=(q.ts||0); return; } const du=ccNextDue(d,q.plat); q.due = du!=null ? du : (q.ts||0); });
   const dIdx=q=>{ const i=(d.dccpSchedule||[]).findIndex(r=>normPlat(r.police)===normPlat(q.plat)); return i<0?9e6:i; };
   /* BATCH: CC dengan jam jadwal yang sama = satu batch. Batch lebih awal masuk dulu, lalu batch berikutnya. Dalam satu batch: rit lebih sedikit dulu, lalu yang lebih dulu tiba. */
-  d.queue.sort((a,b)=>{ const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(ra===0){ const ia=dIdx(a), ib=dIdx(b); if(ia!==ib) return ia-ib; } if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
+  d.queue.sort((a,b)=>{ if(a.mo!=null||b.mo!=null){ if(a.mo!=null&&b.mo!=null&&a.mo!==b.mo) return a.mo-b.mo; if(a.mo==null) return 1; if(b.mo==null) return -1; } const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(ra===0){ const ia=dIdx(a), ib=dIdx(b); if(ia!==ib) return ia-ib; } if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
 }
 /* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
 function ccQueueAdvance(){
@@ -3824,7 +3847,7 @@ function renderKoordinator(){
 
   const queueCards = data.queue.map((q,idx)=>`
     <div class="card" style="margin-bottom:10px;">
-      <b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}</span>
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>${ccQueueCtl(data,idx,q)}</div>
       ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
     </div>`).join("");
 
@@ -3843,7 +3866,7 @@ function renderKoordinator(){
       <h3>⏳ Waiting List</h3>
       ${data.queue.length===0? `<div class="emptystate">Tidak ada antrian.</div>` : ''}
     </div>
-    ${queueCards}
+    ${ccQueueAutoBar(data)}${queueCards}
   `;
 }
 /* ======================================================================
