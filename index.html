@@ -6920,14 +6920,14 @@ function ldrCompute(data){
   slots.forEach(s=>{
     s.wip = _wip0 + log.filter(e=>e.parkedTs!=null && e.parkedTs<s.b && !( (e.sentTs&&e.sentTs<s.b) || (e.removedTs&&e.removedTs<s.b) )).length;
   });
-  /* WIP = WIP awal + input − terkirim, dihitung kumulatif sejak awal hari produksi sampai akhir periode (shift Night ikut membawa sisa Day) */
-  const _cb = ldrPeriod==="24h" ? rs : (ldrPeriod==="yesterday" ? prodDayStart()-86400000 : prodDayStart());
-  const _cl = {t:0, L:{}, i:0, o:0, r:0}; PROD_LINES.forEach(l=>{ _cl.L[l]=0; });
-  log.forEach(e=>{ const ln=PROD_LINES.includes(e.line)?e.line:null;
-    if(e.parkedTs!=null && e.parkedTs>=_cb && e.parkedTs<endLimit){ _cl.t++; _cl.i++; if(ln) _cl.L[ln]++; }
-    if(e.sentTs!=null && e.sentTs>=_cb && e.sentTs<endLimit){ _cl.t--; _cl.o++; if(ln) _cl.L[ln]--; }
-    else if(e.status==="removed" && e.removedTs!=null && e.removedTs>=_cb && e.removedTs<endLimit){ _cl.t--; _cl.r++; if(ln) _cl.L[ln]--; } });
-  const _cum = _cl;
+  /* WIP = STOK unit yang ada di stall / luar stall pada akhir periode (sudah parkir, belum terkirim, belum dikeluarkan). Untuk periode berjalan = isi stall saat ini. */
+  const _stk = log.filter(e=>e.parkedTs!=null && e.parkedTs<endLimit && !((e.sentTs&&e.sentTs<endLimit)||(e.removedTs&&e.removedTs<endLimit)));
+  const _cum = {t:_stk.length, L:{}};
+  PROD_LINES.forEach(l=>{ _cum.L[l]=_stk.filter(e=>(e.line||"")===l).length; });
+  if(ldrPeriod!=="yesterday"){   // periode berjalan: WIP = jumlah unit yang ada di stall (termasuk parkir luar stall) SAAT INI, langsung dari data stall
+    const _U = Object.values(data.units||{}).filter(Boolean);
+    _cum.t = _U.length; PROD_LINES.forEach(l=>{ _cum.L[l]=_U.filter(u=>(u.line||"")===l).length; });
+  }
   let _tIn2 = tIn; const _bl2 = Object.assign({}, byLine);
   if(ldrPeriod!=="24h" && ldrShift!=="2"){
     const wl = _wipE.wipL||{};
@@ -7061,7 +7061,7 @@ function renderLeaderDashboard(){
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
     ${tile("Unit Diinput", R.tIn, "#16213E", "periode terpilih")}
     ${tile("Unit Terkirim", R.tOut, "#1E9E5A", "periode terpilih")}
-    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>l+" "+(R.wipByLine[l]||0)).join(" · ")+" · rumus: "+R.cum.i+" input mentah − "+R.cum.o+" kirim"+(R.cum.r?" − "+R.cum.r+" keluar":"")+" · terdaftar belum kirim: "+R.wipList.length+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
+    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>l+" "+(R.wipByLine[l]||0)).join(" · ")+" · stok unit di stall / luar stall"+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
   </div>
 
   ${batamAlertHtml(data)}
@@ -7422,7 +7422,7 @@ function rptShiftCompute(data){
       if(inW(e.sentTs)){ out++; if(lines[e.line]) lines[e.line].out++; }
     });
     if(w==="1"){ PROD_LINES.forEach(l=>{ const d=Math.min(E.wipL[l]||0, lines[l].inp); lines[l].inp-=d; inp-=d; }); const dl=Math.min(E.wipL._||0, Math.max(0,noLine)); noLine-=dl; inp-=dl; }
-    const wipEnd = started ? log.filter(e=>e.parkedTs!=null && e.parkedTs>=base && e.parkedTs<end).length - log.filter(e=>(e.sentTs!=null && e.sentTs>=base && e.sentTs<end) || (e.sentTs==null && e.status==="removed" && e.removedTs!=null && e.removedTs>=base && e.removedTs<end)).length : null;
+    const wipEnd = started ? ((now<b && base===prodDayStart()) ? Object.values(data.units||{}).filter(Boolean).length : log.filter(e=>e.parkedTs!=null && e.parkedTs<end && !((e.sentTs&&e.sentTs<end)||(e.removedTs&&e.removedTs<end))).length) : null;
     return {w, a, b, started, running: started && now<b, plan:P.total, hasPlan:P.has, inp, out, noLine, lines, wipEnd};
   };
   return {base, s1:mk("1"), s2:mk("2")};
