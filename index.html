@@ -874,6 +874,7 @@ window.RSnd=(function(){
       <div id="clockBadge" style="font-size:12px;font-weight:700;color:var(--text);margin-top:6px;font-variant-numeric:tabular-nums;"></div>
       <div class="userchip">
         <div class="who">Login sebagai <b id="curUserName">-</b> · <span id="curUserRole" class="badge gold" onclick="shiftChangeOpen()" style="cursor:pointer;">ROLE</span></div>
+        <button class="menuBtn" id="toneBtn" onclick="sndOpen()" title="Pilih nada suara">🔔 Nada</button>
         <button class="menuBtn" id="menuBtn" onclick="backToRoleMenu()" style="display:none;">☰ Menu</button>
         <button class="menuBtn" id="minBtn" onclick="appMinimize()" style="display:none;color:var(--text);border-color:var(--border);">⬇ Minimize</button>
         <button class="logoutBtn" onclick="doLogout()">Keluar</button>
@@ -1017,7 +1018,7 @@ function fbPush(k, pre, fn, T, seed){
     runMut(nt, fn, T, seed);
     const v = cloneJ(nt[k]);
     return v===undefined ? null : v;
-  }, (err)=>{ if(err) console.warn("sync gagal:", k, err); }, true);
+  }, (err,committed)=>{ if(err) console.warn("sync gagal:", k, err); try{ if(window._fbAck) window._fbAck(k,err,committed); }catch(e){} }, true);
 }
 function fbStart(){
   if(typeof firebase === "undefined" || !/^https?:/.test(location.protocol)){ fbState("off"); return; }
@@ -1405,8 +1406,8 @@ function spdShowOverlay(a, mine){
     <button type="button" class="okbtn" style="background:#16213E;color:#fff;" onclick="spdOk('${a.id}')">✔ OK</button>
   </div>`;
   document.body.appendChild(o);
-  spdSiren(3);
-  _spdSirenTimer = setInterval(()=>{ if(!document.getElementById("spdOv")){ clearInterval(_spdSirenTimer); _spdSirenTimer=null; return; } spdSiren(3); }, 2400);
+  soundEv('kecepatan');
+  _spdSirenTimer = setInterval(()=>{ if(!document.getElementById("spdOv")){ clearInterval(_spdSirenTimer); _spdSirenTimer=null; return; } soundEv('kecepatan'); }, 2400);
   if(!mine){ try{ if('Notification' in window && Notification.permission==='granted') new Notification("🚨 Kecepatan melebihi batas", {body:`${a.name} · ${a.spd} km/j (batas ${a.limit})`}); }catch(e){} }
 }
 /* OK = hentikan alarm. Untuk pengemudi, OK dicatat di riwayat sebagai tanda sudah melihat peringatan. */
@@ -2465,6 +2466,89 @@ let autoWatchId = null;
 /* Saat layar terkunci / aplikasi di latar belakang, bunyi web (AudioContext) dibisukan HP. Di APK, dering dibunyikan oleh aplikasi native (alarm + getar, berhenti saat aplikasi dibuka). */
 function appBg(){ try{ if(window.AndroidTLS && AndroidTLS.isFg) return !AndroidTLS.isFg(); }catch(e){} return false; }
 function ringBg(title, body){ try{ if(appBg() && window.AndroidTLS && AndroidTLS.notify){ AndroidTLS.notify(String(title), String(body||"")); return true; } }catch(e){} return false; }
+
+/* ===== NADA SUARA: tiap jenis kejadian punya nada sendiri yang bisa dipilih (disimpan per HP). Getar tetap ikut. ===== */
+const SND_EV=[
+  {k:"absen",   t:"Absen berhasil",            d:"CC kamu tercatat masuk stall / waiting list / Parkir Luar", roles:["cc"], def:"beep3"},
+  {k:"giliran", t:"Giliran parkir",            d:"Giliran naik ke Stall CC. Berbunyi berulang sampai OK ditekan", roles:["cc"], def:"sirene"},
+  {k:"sj",      t:"Surat jalan siap",          d:"Surat jalan sudah bisa dibuka setelah Delout", roles:["cc","koordinator","delivery"], def:"chime"},
+  {k:"lapor",   t:"Laporan jalan (macet/kecelakaan)", d:"Ada laporan titik di Peta CC dalam radius 25 km darimu", roles:["cc","delivery","koordinator","leader","admin"], def:"klakson"},
+  {k:"chat",    t:"Chat Peta CC",              d:"Ada pesan baru di chat peta", roles:["cc","delivery","koordinator","leader","admin"], def:"bel"},
+  {k:"kecepatan",t:"Peringatan kecepatan",     d:"Kecepatan melewati batas yang ditetapkan Admin", roles:["dispatcher"], def:"sirene"},
+  {k:"draft",   t:"CC absen / draft ILS siap", d:"Ada CC yang absen dan draft ILS siap dibuat", roles:["delivery","admin"], def:"naik"},
+  {k:"jadwal",  t:"CC masuk sesuai jadwal",    d:"CC dari Parkir Luar sudah waktunya masuk stall / waiting list", roles:["delivery","admin"], def:"bel"},
+  {k:"ilstls",  t:"ILS belum ditandai di TLS", d:"ILS sudah lama belum ditandai Sudah di-input ke TLS", roles:["delivery","admin"], def:"cepat"},
+  {k:"ambilalih",t:"Minta ambil alih plat",    d:"Driver lain minta memakai plat yang masih login", roles:["delivery","admin"], def:"turun"},
+  {k:"sreq",    t:"Driver minta dijadwalkan",  d:"Plat belum ada di jadwal DCCP / diingatkan update DCCP", roles:["delivery","koordinator","admin"], def:"radar"},
+  {k:"koord",   t:"Notifikasi Koordinator",    d:"CC masuk stall, ILS sudah di TLS, dan kabar lain untuk LP-mu", roles:["koordinator"], def:"naik"}
+];
+const SND_TONES={
+  beep3:{n:"Beep tiga kali", p:(c,t,o)=>{ for(let i=0;i<3;i++) o("sine",880,880,t+i*.35,.25,.18); }},
+  sirene:{n:"Sirene (keras)", p:(c,t,o)=>{ for(let i=0;i<3;i++){ const s=t+i*.75; o("square",700,1150,s,.35,.28); o("square",1150,700,s+.35,.35,.28); } }},
+  bel:{n:"Bel ding-dong", p:(c,t,o)=>{ o("sine",880,880,t,.45,.25); o("sine",660,660,t+.5,.6,.25); o("sine",880,880,t+1.2,.45,.25); o("sine",660,660,t+1.7,.6,.25); }},
+  naik:{n:"Dering naik", p:(c,t,o)=>{ [523,659,784,1047].forEach((f,i)=>o("triangle",f,f,t+i*.22,.2,.22)); [523,659,784,1047].forEach((f,i)=>o("triangle",f,f,t+1.2+i*.22,.2,.22)); }},
+  turun:{n:"Dering turun", p:(c,t,o)=>{ [1047,784,659,523].forEach((f,i)=>o("triangle",f,f,t+i*.22,.2,.22)); [1047,784,659,523].forEach((f,i)=>o("triangle",f,f,t+1.2+i*.22,.2,.22)); }},
+  klakson:{n:"Klakson", p:(c,t,o)=>{ o("square",420,420,t,.35,.2); o("square",420,420,t+.5,.35,.2); o("square",420,420,t+1.0,.7,.2); }},
+  chime:{n:"Chime lembut", p:(c,t,o)=>{ o("sine",1047,1047,t,.7,.2); o("sine",1319,1319,t+.15,.7,.14); o("sine",1047,1047,t+1.2,.7,.2); o("sine",1319,1319,t+1.35,.7,.14); }},
+  cepat:{n:"Beep cepat", p:(c,t,o)=>{ for(let i=0;i<8;i++) o("square",1000,1000,t+i*.18,.1,.16); }},
+  radar:{n:"Ping radar", p:(c,t,o)=>{ o("sine",1500,700,t,.55,.22); o("sine",1500,700,t+.8,.55,.22); o("sine",1500,700,t+1.6,.55,.22); }},
+  nenaw:{n:"Nee-naw ambulans", p:(c,t,o)=>{ for(let i=0;i<4;i++){ o("square",960,960,t+i*.55,.27,.26); o("square",770,770,t+i*.55+.28,.27,.26); } }},
+  sirenpol:{n:"Sirene polisi (wail)", p:(c,t,o)=>{ o("sawtooth",600,1400,t,.9,.24); o("sawtooth",1400,600,t+.9,.9,.24); }},
+  kebakaran:{n:"Alarm kebakaran", p:(c,t,o)=>{ for(let i=0;i<5;i++) o("sawtooth",500,1500,t+i*.42,.4,.26); }},
+  alarmkeras:{n:"Alarm super keras", p:(c,t,o)=>{ for(let i=0;i<10;i++) o("square",i%2?1500:2000,i%2?1500:2000,t+i*.2,.18,.5); }},
+  sekolah:{n:"Bel sekolah", p:(c,t,o)=>{ for(let i=0;i<22;i++) o("square",1500,1500,t+i*.08,.045,.3); }},
+  telepon:{n:"Telepon jadul", p:(c,t,o)=>{ for(let k=0;k<2;k++){ for(let i=0;i<8;i++) o("sine",i%2?480:440,i%2?480:440,t+k*1.1+i*.05,.05,.3); } }},
+  peluit:{n:"Peluit wasit", p:(c,t,o)=>{ for(let i=0;i<3;i++){ for(let j=0;j<10;j++) o("sine",2600+(j%2)*180,2600+(j%2)*180,t+i*.7+j*.03,.03,.28); } }},
+  gong:{n:"Gong", p:(c,t,o)=>{ o("sine",110,100,t,2,.45); o("sine",220,200,t,1.6,.25); o("sine",330,300,t,1.2,.15); }},
+  marimba:{n:"Marimba", p:(c,t,o)=>{ [523,587,659,784,880,784,659,523].forEach((f,i)=>o("triangle",f,f,t+i*.16,.14,.26)); }},
+  fanfare:{n:"Fanfare terompet", p:(c,t,o)=>{ [392,392,392,523].forEach((f,i)=>o("sawtooth",f,f,t+i*.2,i===3?.9:.16,.2)); [659,784].forEach(f=>o("sawtooth",f,f,t+.8,.9,.12)); }},
+  koin:{n:"Koin game", p:(c,t,o)=>{ o("square",988,988,t,.1,.2); o("square",1319,1319,t+.1,.5,.2); o("square",988,988,t+1.0,.1,.2); o("square",1319,1319,t+1.1,.5,.2); }},
+  level:{n:"Level naik 8-bit", p:(c,t,o)=>{ [262,330,392,523,659,784,1047].forEach((f,i)=>o("square",f,f,t+i*.09,.09,.18)); o("square",1047,1047,t+.7,.5,.18); }},
+  laser:{n:"Laser pew-pew", p:(c,t,o)=>{ for(let i=0;i<5;i++) o("square",1900,200,t+i*.3,.22,.2); }},
+  boing:{n:"Boing pegas", p:(c,t,o)=>{ o("sine",180,900,t,.35,.4); o("sine",900,250,t+.35,.45,.4); o("sine",250,800,t+1,.3,.4); o("sine",800,200,t+1.3,.5,.4); }},
+  burung:{n:"Burung cuit-cuit", p:(c,t,o)=>{ for(let i=0;i<6;i++){ const f=2200+(i%3)*500; o("sine",f,f+900,t+i*.28,.12,.22); o("sine",f+900,f,t+i*.28+.12,.1,.22); } }},
+  kodok:{n:"Kodok ngorek", p:(c,t,o)=>{ for(let i=0;i<5;i++){ o("sawtooth",150,110,t+i*.4,.12,.3); o("sawtooth",170,120,t+i*.4+.14,.12,.3); } }},
+  kayu:{n:"Kentongan kayu", p:(c,t,o)=>{ [0,.3,.6,.9,1.2,1.5].forEach(x=>{ o("sine",420,300,t+x,.12,.4); o("triangle",840,600,t+x,.06,.2); }); }},
+  telolet:{n:"Klakson telolet", p:(c,t,o)=>{ [392,523,659,523,784,659,523,392].forEach((f,i)=>o("sawtooth",f,f,t+i*.14,.12,.24)); [392,523,659,523,784,659,523,392].forEach((f,i)=>o("sawtooth",f,f,t+1.2+i*.14,.12,.24)); }},
+  sedih:{n:"Trombon sedih", p:(c,t,o)=>{ o("sawtooth",311,311,t,.4,.22); o("sawtooth",293,293,t+.45,.4,.22); o("sawtooth",277,277,t+.9,.4,.22); o("sawtooth",277,180,t+1.35,.9,.22); }},
+  whoosh:{n:"Pesawat lewat", p:(c,t,o)=>{ o("sawtooth",150,1300,t,1.0,.2); o("sawtooth",1300,150,t+1,1.0,.2); }},
+  tuktuk:{n:"Drum tuk-tuk", p:(c,t,o)=>{ [0,.25,.5,.75,1,1.25,1.5,1.75].forEach((x,i)=>o("sine",i%2?220:150,i%2?120:50,t+x,.18,.55)); }},
+  dingdong3:{n:"Bel pintu tiga nada", p:(c,t,o)=>{ o("sine",784,784,t,.5,.25); o("sine",659,659,t+.5,.5,.25); o("sine",523,523,t+1,.9,.25); }},
+};
+const SND_GROUPS=[["Standar",["beep3","bel","chime","naik","turun","radar","cepat","dingdong3","marimba"]],["Keras",["sirene","klakson","sirenpol","kebakaran","alarmkeras","sekolah","nenaw","peluit","telepon","gong","fanfare"]],["Lucu & unik",["telolet","koin","level","laser","boing","burung","kodok","kayu","sedih","whoosh","tuktuk"]]];
+/* Volume minimal 50% (tidak boleh hening). 100% = paling keras yang dihasilkan HP. */
+const SND_VOL={"50":{n:"50% (paling pelan)",m:1.2},"75":{n:"75% (bawaan)",m:1.8},"100":{n:"100% (paling keras)",m:2.4}};
+function sndVolKey(){ try{ let v=localStorage.getItem("radar_tonevol"); const old={halus:"50",normal:"50",keras:"75",maks:"100"}; if(old[v]) v=old[v]; return SND_VOL[v]?v:"75"; }catch(e){ return "75"; } }
+function sndVolSet(v){ try{ localStorage.setItem("radar_tonevol",v); }catch(e){} try{ navigator.vibrate&&navigator.vibrate(30); }catch(e){} }
+function sndMap(){ try{ return JSON.parse(localStorage.getItem("radar_tones")||"{}")||{}; }catch(e){ return {}; } }
+function sndTone(ev){ const e=SND_EV.find(x=>x.k===ev), m=sndMap(), t=m[ev]; return (t && SND_TONES[t]) ? t : (e?e.def:"beep3"); }
+function sndPlay(tone){
+  try{
+    const T=SND_TONES[tone]||SND_TONES.beep3; spdUnlock(); const ctx=SPD.ac; if(!ctx) return;
+    const vm=SND_VOL[sndVolKey()].m; const o=(type,f0,f1,t,dur,vol)=>{ vol=Math.min(0.9,vol*vm); const os=ctx.createOscillator(), g=ctx.createGain(); os.type=type; os.frequency.setValueAtTime(f0,t); if(f1!==f0) os.frequency.linearRampToValueAtTime(f1,t+dur);
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.03); g.gain.setValueAtTime(vol,t+Math.max(0.04,dur-0.08)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      os.connect(g); g.connect(ctx.destination); os.start(t); os.stop(t+dur+0.02); };
+    T.p(ctx, ctx.currentTime+0.05, o);
+  }catch(e){}
+}
+function soundEv(ev){ const t=sndTone(ev); sndPlay(t); if(t==="senyap" || ev==="giliran" || ev==="kecepatan"){ try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){} } }
+function sndSet(ev,t){ const m=sndMap(); if(t===(SND_EV.find(x=>x.k===ev)||{}).def) delete m[ev]; else m[ev]=t; try{ localStorage.setItem("radar_tones",JSON.stringify(m)); }catch(e){} sndTest(ev); }
+function sndTest(ev){ const t=sndTone(ev); if(t==="senyap"){ try{ navigator.vibrate && navigator.vibrate([200,100,200]); }catch(e){} return; } sndPlay(t); }
+function sndReset(){ try{ localStorage.removeItem("radar_tones"); }catch(e){} sndOpen(); }
+function sndRow(e){
+  const cur=sndTone(e.k);
+  return `<div style="padding:9px 0;border-top:1px solid var(--border);"><div style="font-weight:800;font-size:13px;">${xlEsc(e.t)}</div><div style="font-size:11px;color:var(--text-dim);margin:1px 0 6px;">${xlEsc(e.d)}</div>
+    <div style="display:flex;gap:8px;"><select onchange="sndSet('${e.k}',this.value)" style="flex:1;min-width:0;">${SND_GROUPS.map(g=>`<optgroup label="${g[0]}">${g[1].map(k=>`<option value="${k}" ${k===cur?"selected":""}>${xlEsc(SND_TONES[k].n)}${k===e.def?" (bawaan)":""}</option>`).join("")}</optgroup>`).join("")}</select>
+    <button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="sndTest('${e.k}')">▶ Coba</button></div></div>`;
+}
+function sndOpen(){
+  const rl=currentUser?currentUser.role:"", mine=SND_EV.filter(e=>e.roles.includes(rl)), other=SND_EV.filter(e=>!e.roles.includes(rl));
+  showModal(`<h3 style="margin:0 0 4px;">🔔 Nada Suara</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Pilih nada untuk tiap kejadian supaya langsung tahu itu bunyi apa, termasuk saat di jalan. Pengaturan ini hanya di HP ini. Saat aplikasi di latar belakang atau layar mati, dering memakai nada sistem aplikasi Android.</div>
+    <div style="display:flex;gap:8px;align-items:center;margin:2px 0 6px;"><b style="font-size:12px;">🔊 Volume</b><select onchange="sndVolSet(this.value)" style="flex:1;">${Object.keys(SND_VOL).map(k=>`<option value="${k}" ${k===sndVolKey()?"selected":""}>${SND_VOL[k].n}</option>`).join("")}</select></div>
+    <div style="max-height:55vh;overflow:auto;">${mine.length?`<div style="font-size:12px;font-weight:800;color:#0F2A4A;margin-top:6px;">Untuk peran kamu</div>${mine.map(sndRow).join("")}`:""}
+    ${other.length?`<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;font-weight:800;">Nada lainnya (${other.length})</summary>${other.map(sndRow).join("")}</details>`:""}</div>
+    <div style="display:flex;gap:8px;margin-top:10px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="sndReset()">↺ Semua bawaan</button><button type="button" class="btn btn-primary" style="flex:1;" onclick="closeModal()">Selesai</button></div>`);
+}
 function playAlarmSound(){
   try{
     const ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -2506,7 +2590,7 @@ function toggleAutoWatch(){
       const dist = haversineKm(pos.coords.latitude, pos.coords.longitude, d.yardLocation.lat, d.yardLocation.lng);
       if(dist <= d.yardLocation.radiusKm){
         absenState = {verified:true, distanceKm:dist};
-        playAlarmSound();
+        soundEv('absen');
         if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
         if('Notification' in window && Notification.permission==='granted'){
           try{ new Notification('📍 Sudah Masuk Radius Yard', {body:`Jarak ${dist.toFixed(1)} km — absen otomatis tercatat.`}); }catch(e){}
@@ -2618,7 +2702,7 @@ function doAutoRegister(dist){
                 : res.hold ? `🕒 Absen tercatat. Jadwal loading ${prof.plat} jam ${holdHm(res.due)} — belum masuk slot / waiting list. Tunggu di luar, otomatis masuk ${ccEarlyMin()} menit sebelum jadwal.`
                 : res.stall ? `✔ Absen otomatis berhasil — ${prof.plat} masuk STALL ${ccLbl(res.stall)}. Silakan masuk area.`
                 : `⏳ Absen otomatis berhasil — semua stall penuh, ${prof.plat} masuk antrian nomor ${res.queue}.`;
-  playAlarmSound();
+  soundEv('absen');
   if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
   if('Notification' in window && Notification.permission==='granted'){
     try{ new Notification('📍 Absen Otomatis Berhasil', {body: autoAbsen.msg}); }catch(e){}
@@ -3496,7 +3580,7 @@ function checkDraftAlerts(){
     else continue;
     if(_draftSeen.has(key)) continue;
     _draftSeen.add(key); fired = true;
-    playAlarmSound(); if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
+    soundEv('draft'); if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
     try{ ringBg('🚚 CC Siap Loading', txt); }catch(e){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification('🚚 CC Siap Loading', {body:txt}); }catch(e){} }
   }
@@ -3810,19 +3894,19 @@ function checkKoordAlerts(){
     if(Date.now()-(b.ts||0)<6*60000) return;
     const key="tlsp|"+b.id; if(_koordSeen.has(key)) return; _koordSeen.add(key); fired=true;
     const txt="ILS "+b.ccPlat+" ("+b.units.length+" unit) belum ditandai 'Sudah di-input ke TLS'. Tandai supaya Koordinator bisa validasi.";
-    playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⚠ ILS belum ditandai Sudah di TLS", txt); }catch(e){}
+    soundEv('ilstls'); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⚠ ILS belum ditandai Sudah di TLS", txt); }catch(e){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("⚠ ILS belum ditandai Sudah di TLS",{body:txt}); }catch(e){} }
   }); }
   if(isDel){ (Array.isArray(DB.get().holdRel)?DB.get().holdRel:[]).forEach(e=>{
     if(!e||Date.now()-e.ts>15*60000) return; const key="rel|"+e.id; if(_koordSeen.has(key)) return; _koordSeen.add(key); fired=true;
     const txt=`CC ${e.plat}${e.lp?" (LP "+e.lp+")":""} sudah waktunya masuk sesuai jadwal: `+(e.stall?`naik ke Stall CC ${ccLbl(e.stall)}.`:`masuk Waiting List${e.queue?" no. "+e.queue:""}.`);
-    playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⏰ CC Masuk Sesuai Jadwal", txt); }catch(x){}
+    soundEv('jadwal'); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⏰ CC Masuk Sesuai Jadwal", txt); }catch(x){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("⏰ CC Masuk Sesuai Jadwal",{body:txt}); }catch(x){} }
   }); }
   if(isDel){ Object.keys(DB.get().takeReq||{}).forEach(k=>{ const q=DB.get().takeReq[k];
     if(!q||q.status!=="wait"||Date.now()-q.ts>30*60000) return; const key="take|"+k+"|"+q.ts; if(_koordSeen.has(key)) return; _koordSeen.add(key); fired=true;
     const txt=`${q.toName} minta memakai plat ${q.plat} yang masih login atas nama ${q.fromName}. Buka RADAR untuk menyetujui atau menolak.`;
-    playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("🔁 Minta Ambil Alih Plat", txt); }catch(x){}
+    soundEv('ambilalih'); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("🔁 Minta Ambil Alih Plat", txt); }catch(x){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("🔁 Minta Ambil Alih Plat",{body:txt}); }catch(x){} }
   }); }
   for(const x of L){
@@ -3834,7 +3918,7 @@ function checkKoordAlerts(){
     for(const [key,txt] of evs){
       if(_koordSeen.has(key)) continue;
       _koordSeen.add(key); fired=true;
-      playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]);
+      soundEv('koord'); if(navigator.vibrate) navigator.vibrate([250,120,250]);
       try{ ringBg(key.startsWith('tls')?'🧾 ILS Siap Validasi':'🚚 CC Absen', txt); }catch(e){}
       if('Notification' in window && Notification.permission==='granted'){ try{ new Notification(key.startsWith('tls')?'🧾 ILS Siap Validasi':'🚚 CC Absen',{body:txt}); }catch(e){} }
     }
@@ -4204,7 +4288,7 @@ function sjNotifyCheck(){
     rows.forEach(b=>{ const k=b.id+"|"+((b.sj&&b.sj.ts)||0); if(_sjNotifSeen.has(k)) return; _sjNotifSeen.add(k);
       if(Date.now()-(b.outTs||0)>6*3600000) return; fired=true;
       const txt=(currentUser.role==="cc"?"Surat jalan kamu sudah bisa dibuka":b.ccPlat+" · LP "+(b.lp||"-")+": surat jalan sudah bisa dibuka")+" (Delout "+sjFmt(b.outTs)+").";
-      try{ playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); }catch(e){}
+      try{ soundEv('sj'); if(navigator.vibrate) navigator.vibrate([250,120,250]); }catch(e){}
       try{ ringBg("📄 Surat Jalan Baru "+b.ccPlat, txt); }catch(e){}
       try{ if('Notification' in window && Notification.permission==='granted') new Notification("📄 Surat Jalan Baru "+b.ccPlat,{body:txt}); }catch(e){}
     });
@@ -4924,6 +5008,7 @@ async function regSubmit(){
   try{
     const h=await pwHash(p1), id=Date.now()+"-"+Math.floor(Math.random()*1e6);
     let dup=false;
+    const ack=new Promise(res=>{ let done=false; const fin=v=>{ if(!done){ done=true; window._fbAck=null; res(v); } }; window._fbAck=(k,err,committed)=>{ if(k==="regs") fin(err?{err}:{ok:!!committed}); }; setTimeout(()=>fin({timeout:true}),15000); });
     DB.set(d=>{
       const L=xlArr(d.regs).filter(r=>r.status==="pending" || Date.now()-(r.doneTs||r.ts)<REG_KEEP_MS);
       if((d.users||[]).some(x=>String(x.username).toLowerCase()===user) || L.some(r=>r.status==="pending"&&r.username===user)){ dup=true; d.regs=L; return; }
@@ -4931,7 +5016,10 @@ async function regSubmit(){
       L.push({id, username:user, name, role, lp, area, vendor, password:h, ts:Date.now(), status:"pending", dev:(navigator.userAgent||"").slice(0,80)});
       d.regs=L.filter(r=>r.status!=="old");
     });
-    if(dup){ btn.disabled=false; btn.textContent="📨 Kirim pendaftaran"; return err("Username baru saja dipakai orang lain. Pilih username lain."); }
+    if(dup){ window._fbAck=null; btn.disabled=false; btn.textContent="📨 Kirim pendaftaran"; return err("Username baru saja dipakai orang lain. Pilih username lain."); }
+    { btn.textContent="Menunggu konfirmasi server…"; const r=await ack;
+      if(r.err){ btn.disabled=false; btn.textContent="📨 Kirim pendaftaran"; return err("Pendaftaran DITOLAK server: "+xlEsc(String(r.err.message||r.err))+". Foto layar ini dan kirim ke Admin."); }
+      if(r.timeout){ btn.disabled=false; btn.textContent="📨 Kirim pendaftaran"; return err("Belum ada konfirmasi dari server (sinyal lemah?). Pendaftaran BELUM tentu masuk ke Admin. Pastikan Online, tunggu sebentar, lalu tekan Kirim lagi (kalau sudah masuk, akan muncul pesan username sudah menunggu persetujuan)."); } }
     try{ if(SAVE_LOGIN) localStorage.setItem("radar_lastuser", user); }catch(e){}
     showModal(`<h3 style="margin:0 0 6px;">✅ Pendaftaran terkirim</h3>
       <div style="font-size:13px;line-height:1.7;">Username: <b style="font-family:monospace;font-size:16px;">${xlEsc(user)}</b><br>Daftar sebagai: <b>${xlEsc((ROLES.find(r=>r.key===role)||{}).label||role)}</b>${lp?` · LP <b>${xlEsc(lp)}</b>`:""}</div>
@@ -5625,8 +5713,8 @@ function ccCallShow(c){
   const o=document.createElement("div"); o.id="ccCallOv";
   o.innerHTML=`<div class="box"><div style="font-size:13px;font-weight:800;color:#1a7f3c;letter-spacing:.08em;">🅿️ GILIRAN KAMU PARKIR</div><div class="big">STALL ${ccLbl(c.stall)}</div><div class="row" style="font-size:17px;margin-top:10px;"><b>${escH(c.plat)}</b></div><div class="row">Segera masuk ke stall ${escH(c.stall)}.<br>Alarm berbunyi sampai OK ditekan.</div><button type="button" class="okbtn" onclick="ccCallOk('${escH(c.id)}')">✔ OK, saya menuju stall</button></div>`;
   document.body.appendChild(o);
-  spdSiren(3);
-  _ccCallTimer=setInterval(()=>{ if(!document.getElementById("ccCallOv")){ clearInterval(_ccCallTimer); _ccCallTimer=null; return; } spdSiren(3); }, 2400);
+  soundEv('giliran');
+  _ccCallTimer=setInterval(()=>{ if(!document.getElementById("ccCallOv")){ clearInterval(_ccCallTimer); _ccCallTimer=null; return; } soundEv('giliran'); }, 2400);
   try{
     if(window.AndroidTLS && AndroidTLS.alarmStart) AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), c.plat+": segera masuk ke stall "+ccLbl(c.stall));
     else if('Notification' in window && Notification.permission==='granted') new Notification("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), {body:c.plat+": segera masuk ke stall "+ccLbl(c.stall)});
@@ -8538,7 +8626,7 @@ function schedReqCheck(){
       const key=kind+"|"+r.k+"|"+t; if(_sreqSeen.has(key)) return; _sreqSeen.add(key);
       const title=kind==="edit"?"📅 Driver minta dijadwalkan":"⬆ Diingatkan update DCCP";
       const txt=kind==="edit"?`${r.plat}${r.lp?" (LP "+r.lp+")":""} · ${r.name||""}: plat belum ada di jadwal. Tambahkan lewat Spot Order atau Edit CC.`:`${r.plat}${r.lp?" (LP "+r.lp+")":""} · ${r.name||""}: plat belum ada di jadwal. Mohon upload DCCP terbaru.`;
-      playAlarmSound(); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg(title, txt); }catch(e){}
+      soundEv('sreq'); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg(title, txt); }catch(e){}
       if('Notification' in window && Notification.permission==='granted'){ try{ new Notification(title,{body:txt}); }catch(e){} }
       try{ render(); }catch(e){}
     }));
@@ -8853,7 +8941,7 @@ function lapAlert(r){
     const T=LAP_TYPES[r.type]||LAP_TYPES.lain;
     const p=window._myPos, d=(p&&Date.now()-p.ts<10*60000)?haversineKm(p.lat,p.lng,r.lat,r.lng):null;
     if(d!=null && d>25) return;   // laporan jauh dari posisi kamu: tidak perlu membunyikan alarm
-    playAlarmSound(); if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
+    soundEv('lapor'); if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
     try{ ringBg(T.ic+" "+T.t+" dilaporkan"+(r.plat?" — "+r.plat:""), (r.text||"Buka Peta CC untuk melihat titiknya.")+(d!=null?" · ±"+d.toFixed(1)+" km dari kamu":"")); }catch(e){}
     if('Notification' in window && Notification.permission==='granted'){
       try{ new Notification(T.ic+" "+T.t+" dilaporkan"+(r.plat?" — "+r.plat:""), {body:(r.text||"Buka Peta CC untuk melihat titiknya.")+(d!=null?" · ±"+d.toFixed(1)+" km dari kamu":"")}); }catch(e){}
@@ -9048,7 +9136,7 @@ function chatRing(m){
     <div style="display:flex;gap:8px;"><button onclick="chatRingOpen()" style="flex:1;background:#fff;color:#E60012;border:0;border-radius:10px;font-weight:900;padding:10px;">💬 Buka chat</button>
     <button onclick="chatRingStop()" style="flex:1;background:rgba(255,255,255,.2);color:#fff;border:2px solid #fff;border-radius:10px;font-weight:800;padding:10px;">OK, diam</button></div>`;
   document.body.appendChild(el);
-  let n=0; const go=()=>{ playAlarmSound(); try{ if(navigator.vibrate) navigator.vibrate([400,150,400,150,400]); }catch(e){} if(++n>=8) { clearInterval(_ringT); _ringT=null; } };
+  let n=0; const go=()=>{ soundEv('chat'); try{ if(navigator.vibrate) navigator.vibrate([400,150,400,150,400]); }catch(e){} if(++n>=8) { clearInterval(_ringT); _ringT=null; } };
   go(); _ringT=setInterval(go,1500);
   try{ ringBg("📣 "+(m.plat||m.by||"CC")+" mengajak bicara", m.text||"Buka RADAR untuk membalas."); }catch(e){}
   try{ if('Notification' in window && Notification.permission==='granted') new Notification("📣 "+(m.plat||m.by||"CC")+" mengajak bicara", {body:(m.text||"Buka RADAR untuk membalas."), requireInteraction:true}); }catch(e){}
