@@ -2735,7 +2735,7 @@ function renderOrderStall(){
 
     <div class="card">
       <h3>⏳ Daftar Antrian (Waiting List)</h3>
-      ${data.queue.length===0 ? `<div class="emptystate">Tidak ada antrian. Semua truk bisa langsung masuk stall.</div>` : ccQueueAutoBar(data)+queueCards}
+      ${data.queue.length===0 ? `<div class="emptystate">Tidak ada antrian. Semua truk bisa langsung masuk stall.</div>` : ccQueueAutoBar(data)+queueCards}${ccHoldRowsHtml(data)}
     </div>
   `;
 }
@@ -3109,6 +3109,15 @@ function holdCardHtml(data, onlyMine){
   </div>`;
 }
 /* Ringkasan SEMUA CC yang sudah absen, apa pun statusnya: di stall / waiting list / Parkir Luar. */
+/* CC yang SUDAH ABSEN tetapi belum waktunya (Parkir Luar): ditampilkan di bawah waiting list lengkap dengan statusnya, supaya jelas siapa yang sudah absen dan siapa yang sudah siap. */
+function ccHoldRowsHtml(data){
+  try{
+    const H=(data.hold||[]).slice().sort((a,b)=>ccEffTs(data,a.plat,a.ts)-ccEffTs(data,b.plat,b.ts)); if(!H.length) return "";
+    const hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}), em=ccEarlyMin(data)*60000;
+    return `<div style="margin-top:10px;padding-top:8px;border-top:2px dashed var(--border);"><div style="font-size:12px;font-weight:800;color:#B4570E;margin-bottom:4px;">🅿️ Sudah absen, di luar waiting list (${H.length})</div>`+
+      H.map(q=>{ const du=ccNextDue(data,q.plat); return `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>${escH(q.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(q.lp||"")}${q.ts?" · absen "+hm(q.ts):""}${q.absenDistKm!=null?" · "+q.absenDistKm.toFixed(1)+" km":""}</span></div><div style="text-align:right;"><span style="background:#E8833A;color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;">Parkir Luar</span>${du!=null?`<div style="font-size:11px;color:var(--text-dim);">jadwal ${holdHm(du)} · masuk antrian ±${holdHm(du-em)}</div>`:""}</div></div>`; }).join("")+`</div>`;
+  }catch(e){ return ""; }
+}
 function ccSemuaAbsenHtml(data){
   try{
     const hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
@@ -3876,7 +3885,7 @@ function renderKoordinator(){
       <h3>⏳ Waiting List</h3>
       ${data.queue.length===0? `<div class="emptystate">Tidak ada antrian.</div>` : ''}
     </div>
-    ${ccQueueAutoBar(data)}${queueCards}
+    ${ccQueueAutoBar(data)}${queueCards}${ccHoldRowsHtml(data)}
   `;
 }
 /* ======================================================================
@@ -9847,13 +9856,14 @@ function renderDisplay(){
       ${ccSemuaAbsenHtml(data)}
       <div class="card y-queue">
         <h3>⏳ Antrian CC Menunggu (${data.queue.length})</h3>
-        ${data.queue.length===0 ? `<div class="emptystate">Tidak ada antrian.</div>` :
-        data.queue.map((q,i)=>`
+        ${data.queue.length===0 ? `<div class="emptystate">${(data.hold||[]).length?"Tidak ada yang menunggu di waiting list.":"Tidak ada antrian."}</div>` :
+        ccQueueAutoBar(data)+data.queue.map((q,i)=>`
           <div style="padding:10px 0; border-bottom:1px solid var(--border);">
-            <b>#${i+1} · ${q.plat}</b> <span style="font-size:11px; color:var(--text-dim);">· ${new Date(q.ts).toLocaleTimeString('id-ID')}</span>
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>#${i+1} · ${q.plat}</b> <span style="font-size:11px; color:var(--text-dim);">· ${new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>${ccQueueCtl(data,i,q)}</div>
             ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
           </div>
         `).join("")}
+        ${ccHoldRowsHtml(data)}
       </div>
       ${ccOnlineBelumAbsenHtml(data)}
       </div>
