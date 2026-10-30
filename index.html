@@ -5782,8 +5782,8 @@ function ccCallShow(c){
   soundEv('giliran');
   _ccCallTimer=setInterval(()=>{ if(!document.getElementById("ccCallOv")){ clearInterval(_ccCallTimer); _ccCallTimer=null; return; } soundEv('giliran'); }, 2400);
   try{
-    if(window.AndroidTLS && AndroidTLS.alarmStart) AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), c.plat+": segera masuk ke stall "+ccLbl(c.stall));
-    else if('Notification' in window && Notification.permission==='granted') new Notification("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), {body:c.plat+": segera masuk ke stall "+ccLbl(c.stall)});
+    if(window.AndroidTLS && AndroidTLS.alarmStart && appBg()) AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), c.plat+": segera masuk ke stall "+ccLbl(c.stall));
+    else if(!window.AndroidTLS && 'Notification' in window && Notification.permission==='granted') new Notification("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), {body:c.plat+": segera masuk ke stall "+ccLbl(c.stall)});
   }catch(e){}
 }
 function ccCallOk(id){
@@ -6830,7 +6830,7 @@ function ldrCompute(data){
   const modelSet = new Set(Object.keys(data.models||{}));
   const idxOf = ts=>{ if(ts==null || ts<rs || ts>=re) return -1; const i=Math.floor((ts-rs)/LDR_SLOT_MS); return i<nb?i:-1; };
   let tIn=0, tOut=0;
-  const byLine = {};
+  const byLine = {}, byLineOut = {};
   const byModel = {};
   const mm = m=>{ modelSet.add(m); return byModel[m] = byModel[m] || {inp:0,out:0,wip:0}; };
   log.forEach(e=>{
@@ -6838,7 +6838,7 @@ function ldrCompute(data){
     const i = idxOf(e.parkedTs);
     if(i>=0){ slots[i].inp++; slots[i].byModel[e.model]=(slots[i].byModel[e.model]||0)+1; tIn++; m.inp++; const ln=e.line||"-"; byLine[ln]=(byLine[ln]||0)+1; }
     const j = idxOf(e.sentTs);
-    if(j>=0){ slots[j].out++; tOut++; m.out++; }
+    if(j>=0){ slots[j].out++; tOut++; m.out++; const lo=e.line||"-"; byLineOut[lo]=(byLineOut[lo]||0)+1; }
     if(e.status==="parked"||e.status==="ils") m.wip++;
   });
   const _wipE = (()=>{ try{ const base = ldrPeriod==="yesterday" ? prodDayStart()-86400000 : prodDayStart(); return normPlanEntry((data.prodPlan||{})[prodDateKey(base+3600000)]); }catch(e){ return {wip0:0,wipL:{}}; } })();
@@ -6846,11 +6846,18 @@ function ldrCompute(data){
   slots.forEach(s=>{
     s.wip = _wip0 + log.filter(e=>e.parkedTs!=null && e.parkedTs<s.b && !( (e.sentTs&&e.sentTs<s.b) || (e.removedTs&&e.removedTs<s.b) )).length;
   });
+  /* WIP = WIP awal + input − terkirim, dihitung kumulatif sejak awal hari produksi sampai akhir periode (shift Night ikut membawa sisa Day) */
+  const _cb = ldrPeriod==="24h" ? rs : (ldrPeriod==="yesterday" ? prodDayStart()-86400000 : prodDayStart());
+  const _cl = {t:(ldrPeriod==="24h"?0:_wip0), L:{}}; PROD_LINES.forEach(l=>{ _cl.L[l]=ldrPeriod==="24h"?0:(((_wipE.wipL||{})[l])||0); });
+  log.forEach(e=>{ const ln=PROD_LINES.includes(e.line)?e.line:null;
+    if(e.parkedTs!=null && e.parkedTs>=_cb && e.parkedTs<endLimit){ _cl.t++; if(ln) _cl.L[ln]++; }
+    if(e.sentTs!=null && e.sentTs>=_cb && e.sentTs<endLimit){ _cl.t--; if(ln) _cl.L[ln]--; } });
+  const _cum = _cl;
   const wipList = log.filter(e=>e.status==="parked"||e.status==="ils").sort((a,b)=>(a.parkedTs||0)-(b.parkedTs||0));
   // buang slot kosong di awal (sebelum aktivitas pertama) agar tabel ringkas
   let first = slots.findIndex(s=>s.inp||s.out);
   if(first<0) first = Math.max(0, nb-4);
-  return {slots: slots.slice(first), tIn, tOut, byModel, byLine, models:[...modelSet], wipList, wip0:_wip0, wipL:_wipE.wipL||{}, wipByLine:(()=>{ const o={}; PROD_LINES.forEach(l=>{ o[l]=((_wipE.wipL||{})[l]||0)+wipList.filter(e=>(e.line||"")===l).length; }); return o; })(), wipTotal: wipList.length+_wip0};
+  return {slots: slots.slice(first), tIn, tOut, byModel, byLine, models:[...modelSet], wipList, wip0:_wip0, wipL:_wipE.wipL||{}, wipByLine:(()=>{ const o={}; PROD_LINES.forEach(l=>{ o[l]=_cum.L[l]; }); return o; })(), wipTotal: _cum.t};
 }
 function ldrChartSVG(slots){
   const n = slots.length;
@@ -6978,6 +6985,7 @@ function renderLeaderDashboard(){
 
   ${batamAlertHtml(data)}
   ${planVsInputHtml(data, R)}
+  ${rptShiftHtml(data)}
 
   <div class="card"><h3>Input vs Kirim per 30 menit</h3>${ldrChartSVG(R.slots)}</div>
 
@@ -7311,6 +7319,91 @@ function renderPlanAdmin(){
   </div>
   ${saved.length?`<div class="card"><h3>Plan Tersimpan</h3>${saved.map(k=>{ const x=normPlanEntry(data.prodPlan[k]); const a=sum(x.s1)||sum(x.m1), b=sum(x.s2)||sum(x.m2);
     return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);cursor:pointer;" onclick="planDateKey='${k}';render()"><b>${k}</b><span>Day ${a} · Night ${b} · <b>${a+b}</b></span></div>`; }).join("")}</div>`:""}`;
+}
+
+/* ======================================================================
+   LAPORAN PRODUKSI PER SHIFT — Plan / Input / Minus / Terkirim / WIP akhir, per line, Day vs Night
+====================================================================== */
+function rptShiftCompute(data){
+  const pd = prodDayStart(), base = ldrPeriod==="yesterday" ? pd-86400000 : pd;
+  const log = data.unitLog||[], now = Date.now();
+  const E = normPlanEntry((data.prodPlan||{})[prodDateKey(base+3600000)]);
+  const wip0 = E.wip0||0;
+  const mk = w=>{
+    const [a,b] = shiftWindow(base, w);
+    const end = Math.min(b, now), started = a <= now;
+    const P = getPlanFor(data, base+3600000, w);
+    const inW = ts=>ts!=null && ts>=a && ts<b;
+    const lines = {}; PROD_LINES.forEach(l=>lines[l]={plan:P.byLine[l]||0, inp:0, out:0});
+    let inp=0, out=0, noLine=0;
+    log.forEach(e=>{
+      if(inW(e.parkedTs)){ inp++; if(lines[e.line]) lines[e.line].inp++; else noLine++; }
+      if(inW(e.sentTs)){ out++; if(lines[e.line]) lines[e.line].out++; }
+    });
+    const wipEnd = started ? wip0 + log.filter(e=>e.parkedTs!=null && e.parkedTs>=base && e.parkedTs<end).length - log.filter(e=>e.sentTs!=null && e.sentTs>=base && e.sentTs<end).length : null;
+    return {w, a, b, started, running: started && now<b, plan:P.total, hasPlan:P.has, inp, out, noLine, lines, wipEnd};
+  };
+  return {base, s1:mk("1"), s2:mk("2")};
+}
+function rptShiftText(data){
+  const R = rptShiftCompute(data);
+  const d = new Date(R.base+3600000);
+  const tgl = d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const blk = (nm, x)=>{
+    if(!x.started) return nm+"\n(belum mulai)";
+    const mi = x.plan-x.inp;
+    let t = nm+(x.running?" (berjalan s/d "+ldrHM(Date.now())+")":"")+"\n";
+    t += "Plan: "+(x.hasPlan?x.plan:"-")+" | Input: "+x.inp+(x.hasPlan?" | "+(mi>0?"Minus "+mi:(mi<0?"Lebih "+(-mi):"Sesuai plan")):"")+" | Terkirim: "+x.out+" | WIP akhir: "+x.wipEnd+"\n";
+    PROD_LINES.forEach(l=>{ const y=x.lines[l]; t += "• "+l+": plan "+y.plan+", input "+y.inp+", kirim "+y.out+"\n"; });
+    if(x.noLine) t += "• Tanpa line: input "+x.noLine+"\n";
+    return t.trim();
+  };
+  const tIn=R.s1.inp+R.s2.inp, tOut=R.s1.out+R.s2.out, tPl=R.s1.plan+R.s2.plan;
+  return "LAPORAN PRODUKSI — RADAR EKY\n"+tgl+"\n\n"+blk("SHIFT DAY (07:00–20:00)",R.s1)+"\n\n"+blk("SHIFT NIGHT (20:00–07:00)",R.s2)+"\n\nTOTAL HARI PRODUKSI: Plan "+tPl+" | Input "+tIn+" | Terkirim "+tOut;
+}
+function rptShiftCopy(){
+  const t = rptShiftText(DB.get());
+  const done = ()=>{ const el=document.getElementById("rptShiftMsg"); if(el){ el.textContent="✔ Laporan tersalin — tinggal tempel di WhatsApp."; } };
+  const fb = ()=>{ const ta=document.createElement("textarea"); ta.value=t; ta.style.cssText="position:fixed;opacity:0"; document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); done(); }catch(e){ prompt("Salin laporan:", t); } ta.remove(); };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fb); else fb();
+}
+function rptShiftCSV(){
+  const R = rptShiftCompute(DB.get());
+  const rows = [["Shift","Line","Plan","Input","Minus","Terkirim","WIP akhir shift"]];
+  [["Day",R.s1],["Night",R.s2]].forEach(([nm,x])=>{
+    if(!x.started) return;
+    PROD_LINES.forEach(l=>{ const y=x.lines[l]; rows.push([nm,l,y.plan,y.inp,y.plan-y.inp,y.out,""]); });
+    rows.push([nm,"TOTAL",x.plan,x.inp,x.plan-x.inp,x.out,x.wipEnd]);
+  });
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv"}));
+  a.download = "laporan-shift-"+prodDateKey(R.base+3600000)+".csv"; a.click();
+}
+function rptShiftHtml(data){
+  if(ldrPeriod==="24h") return "";
+  const R = rptShiftCompute(data);
+  const C = "padding:6px 8px;white-space:nowrap;";
+  const H = t=>`<th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-dim);white-space:nowrap;">${t}</th>`;
+  const mcol = v=>`font-weight:800;color:${v>0?"#D64545":"#1E9E5A"};`;
+  const part = (nm, x)=>{
+    if(!x.started) return `<div style="margin-top:12px;"><b>${nm}</b> <span style="font-size:12px;color:var(--text-dim);">· belum mulai</span></div>`;
+    const mi = x.plan-x.inp;
+    const rows = PROD_LINES.map(l=>{ const y=x.lines[l], m=y.plan-y.inp;
+      return `<tr style="border-top:1px solid var(--border);"><td style="${C}"><b>${l}</b></td><td style="${C}">${y.plan}</td><td style="${C}"><b>${y.inp}</b></td><td style="${C}${mcol(m)}">${y.plan?fmtMinus(m):"-"}</td><td style="${C}">${y.out}</td></tr>`; }).join("");
+    return `<div style="margin-top:14px;">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline;"><b style="font-size:14px;">${nm}</b>
+        <span style="font-size:11px;color:var(--text-dim);">${x.running?"🟢 berjalan":"selesai"} · WIP akhir <b style="color:var(--text);">${x.wipEnd}</b></span></div>
+      <div style="overflow-x:auto;"><table style="font-size:13px;"><tr>${H("Line")}${H("Plan")}${H("Input")}${H("Minus")}${H("Terkirim")}</tr>${rows}
+        <tr style="border-top:2px solid var(--border);"><td style="${C}"><b>Total</b></td><td style="${C}"><b>${x.hasPlan?x.plan:"-"}</b></td><td style="${C}"><b>${x.inp}</b></td><td style="${C}${mcol(mi)}">${x.hasPlan?fmtMinus(mi):"-"}</td><td style="${C}"><b>${x.out}</b></td></tr></table></div>
+      ${x.noLine?`<div style="font-size:11px;color:var(--text-dim);">Tanpa line: ${x.noLine} unit (ikut di total).</div>`:""}</div>`;
+  };
+  const tIn=R.s1.inp+R.s2.inp, tOut=R.s1.out+R.s2.out, tPl=R.s1.plan+R.s2.plan;
+  return `<div class="card"><h3>📋 Laporan Produksi per Shift</h3>
+    <div style="font-size:12px;color:var(--text-dim);">${new Date(R.base+3600000).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · Total hari produksi: plan <b>${tPl||"-"}</b> · input <b>${tIn}</b> · terkirim <b>${tOut}</b></div>
+    ${part("Shift Day · 07:00–20:00", R.s1)}${part("Shift Night · 20:00–07:00", R.s2)}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;"><button class="btn btn-sm" onclick="rptShiftCopy()">📋 Salin untuk WhatsApp</button><button class="btn btn-sm" onclick="rptShiftCSV()">⬇ CSV</button></div>
+    <div id="rptShiftMsg" style="font-size:12px;color:var(--green);margin-top:6px;"></div></div>`;
 }
 function planVsInputHtml(data, R){   // dipakai Dashboard Leader
   if(ldrPeriod==="24h") return "";
