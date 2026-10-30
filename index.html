@@ -3537,19 +3537,36 @@ function createILS(ccNum, slots){
   if(!ccInfo){ alert("Stall CC tidak valid."); return false; }
   const units = slots.filter(slot=>data.units[slot] && !data.units[slot].ilsId).map(slot=>({slot, loc:data.units[slot].loc||"", frame:data.units[slot].frame, model:data.units[slot].model, batam:!!data.units[slot].batam, prio:!!data.units[slot].prio}));
   if(!units.length){ alert("Unit sudah tidak tersedia."); return false; }
-  const _dupI=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum!=ccNum && normPlat(b.ccPlat)===normPlat(ccInfo.plat));
-  if(_dupI){ alert("Plat "+ccInfo.plat+" sudah punya ILS #"+_dupI.id+" yang masih aktif di Stall "+ccLbl(_dupI.ccNum)+". Selesaikan atau batalkan ILS itu dulu supaya tidak dobel."); return false; }
+  const _dupI=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===normPlat(ccInfo.plat));
+  if(_dupI){ alert("Plat "+ccInfo.plat+" sudah punya ILS #"+_dupI.id+" yang masih aktif di Stall "+ccLbl(_dupI.ccNum)+(_dupI.mp?" (dibuat oleh "+_dupI.mp+")":"")+". Satu CC hanya boleh punya satu ILS aktif. Selesaikan atau batalkan ILS itu dulu."); return false; }
+  { const _dupS=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum==ccNum);   // stall CC terkunci: 1 stall = 1 plat = 1 ILS aktif
+    if(_dupS){ alert("Stall "+ccLbl(ccNum)+" sudah terkunci untuk "+_dupS.ccPlat+" (ILS #"+_dupS.id+"). Satu stall CC hanya boleh satu plat / satu ILS aktif sampai CC itu berangkat (Delout)."); return false; } }
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
   { const fr=new Set(units.map(u=>String(u.frame||"").toUpperCase())); const dupF=(data.ils||[]).find(b=>b && !b.outTs && b.status==="open" && (b.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())));
     if(dupF){ alert("Unit ini sudah ada di ILS #"+dupF.id+" (CC "+dupF.ccPlat+") yang masih aktif. Batalkan ILS itu dulu bila memang mau dibuat ulang, supaya tidak dobel."); return false; } }
   DB.set(d=>{
     const id = Date.now();
+    /* dicek ULANG di dalam transaksi (data server terbaru): kalau di saat yang sama orang lain sudah membuat ILS untuk plat ini, ILS ini TIDAK dibuat */
+    if((d.ils||[]).some(b=>b && b.status==="open" && !b.outTs && (normPlat(b.ccPlat)===normPlat(ccInfo.plat) || b.ccNum==ccNum))) return;
     d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), drvName: ccDriverAny(ccInfo.plat)||"", mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
-    units.forEach(u=>{ d.units[u.slot].ilsId = id; });
+    units.forEach(u=>{ if(d.units[u.slot] && !d.units[u.slot].ilsId) d.units[u.slot].ilsId = id; });
   });
   notifyILSCreated(ccInfo.plat, units.length);
   return true;
 }
+/* Jaga-jaga balapan dua perangkat: unit bertanda ILS tapi ILS-nya tidak ada (ILS kedua ditolak server). Setelah >20 detik tetap yatim, tanda ILS dilepas supaya unit bisa dipilih lagi. */
+const _ilsOrph = {};
+function ilsOrphanTick(){
+  try{
+    if(!currentUser || !["delivery","admin"].includes(currentUser.role)) return;
+    if(FBS.enabled && fbCurrentState()!=="online") return;
+    const d = DB.get(), ids = new Set((d.ils||[]).filter(Boolean).map(b=>b.id)), now = Date.now(), bad = [];
+    Object.entries(d.units||{}).forEach(([k,u])=>{ if(u && u.ilsId && !ids.has(u.ilsId)){ const key=k+"|"+u.ilsId; if(!_ilsOrph[key]) _ilsOrph[key]=now; else if(now-_ilsOrph[key]>20000) bad.push([k,u.ilsId]); } });
+    Object.keys(_ilsOrph).forEach(key=>{ const [k,id]=key.split("|"); const u=(d.units||{})[k]; if(!(u && String(u.ilsId)===id && !ids.has(u.ilsId))) delete _ilsOrph[key]; });
+    if(bad.length){ DB.set(x=>{ bad.forEach(([k,id])=>{ const u=x.units[k]; if(u && u.ilsId===id) delete u.ilsId; }); }); bad.forEach(([k,id])=>delete _ilsOrph[k+"|"+id]); }
+  }catch(e){}
+}
+setInterval(ilsOrphanTick, 8000);
 function generateILS(){
   if(createILS(parseInt(deliverySelCC), deliverySelUnits.slice())){
     deliverySelUnits = [];
