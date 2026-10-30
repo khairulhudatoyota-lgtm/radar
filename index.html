@@ -2060,6 +2060,7 @@ function quickParkOK(){
   const slot = pickedSlot || findFirstEmptySlot(data, _isB);
   if(!slot){ alert(_isB && batamStallList(data).length ? "Stall khusus BATAM penuh / tidak ada slot kosong." : (batamStallList(data).length ? "Stall reguler penuh / tidak ada slot kosong." : "Semua stall penuh, tidak ada slot kosong.")); return; }
   if(!slotAllowed(data, slot, _isB)){ alert(`Slot ${slot} untuk unit ${_isB?"reguler":"BATAM"}. Unit ${_isB?"BATAM":"reguler"} tidak boleh dicampur — pilih stall yang sesuai.`); return; }
+  if(!fifoOk(data, slot, _isB, !pickedSlot || pickedAuto)) return;
   DB.set(d=>{
     d.units[slot] = makeUnitRecord(vin, model, d);
     if(offKey) moveOffToSlot(d, offKey, slot);
@@ -2154,7 +2155,30 @@ function refreshSlotSelection(){
     btn.textContent = `✔ Parkirkan Unit di ${pickedSlot||'...'}`;
   }
 }
+/* FIFO per stall: stall yang sudah terisi sebagian (1–5 dari 6) diselesaikan dulu sampai penuh sebelum pindah ke stall lain.
+   Kalau ada beberapa stall setengah terisi, pilih yang unit pertamanya paling lama (lebih dulu mulai). Stall yang unitnya sudah masuk ILS dilewati. */
+function partialStall(data, batam){
+  let best = null;
+  for(const g of PARK_ORDER){
+    if(!slotAllowed(data, g+"1", batam)) continue;
+    let n = 0, minTs = Infinity, ils = false, empty = null;
+    for(let i=1;i<=CONFIG.SLOTS_PER_STALL;i++){
+      const u = data.units[g+i];
+      if(u){ n++; minTs = Math.min(minTs, u.ts||0); if(u.ilsId) ils = true; }
+      else if(!empty) empty = g+i;
+    }
+    if(n>0 && empty && !ils && (!best || minTs<best.ts)) best = {g, n, ts:minTs, slot:empty};
+  }
+  return best;
+}
+function fifoOk(data, slot, batam, auto){
+  if(auto) return true;
+  const P = partialStall(data, batam);
+  if(!P || groupOf(slot)===P.g) return true;
+  return confirm("Stall "+P.g+" baru terisi "+P.n+" dari "+CONFIG.SLOTS_PER_STALL+" unit.\n\nSelesaikan dulu "+P.g+" sampai penuh ("+P.slot+" kosong), baru pindah ke stall "+groupOf(slot)+".\n\nTetap pindah ke "+slot+"?");
+}
 function findFirstEmptySlot(data, batam){
+  { const P = partialStall(data, batam); if(P) return P.slot; }
   for(const g of PARK_ORDER){
     if(!slotAllowed(data, g+"1", batam)) continue;
     for(let i=1;i<=CONFIG.SLOTS_PER_STALL;i++){
@@ -2260,6 +2284,7 @@ function confirmPark(){
   const _cat2 = lookupUnitCat(data, vin), _isB2 = !!(_cat2 && _cat2.batam) || batamManual;
   if(!slotAllowed(data, pickedSlot, _isB2)){ alert(`Slot ${pickedSlot} untuk unit ${_isB2?"reguler":"BATAM"}. Unit ${_isB2?"BATAM":"reguler"} tidak boleh dicampur — pilih stall yang sesuai.`); return; }
   const _ps = pickedSlot;
+  if(!fifoOk(data, _ps, _isB2, pickedAuto)) return;
   DB.set(d=>{
     d.units[_ps] = makeUnitRecord(vin, model, d);
     if(offKey) moveOffToSlot(d, offKey, _ps);
