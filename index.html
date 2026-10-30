@@ -2931,6 +2931,16 @@ function ccQueueSort(d){
   d.queue.sort((a,b)=>{ if(a.mo!=null||b.mo!=null){ if(a.mo!=null&&b.mo!=null&&a.mo!==b.mo) return a.mo-b.mo; if(a.mo==null) return 1; if(b.mo==null) return -1; } const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(ra===0){ const ia=dIdx(a), ib=dIdx(b); if(ia!==ib) return ia-ib; } if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
 }
 /* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
+/* Susun ulang waiting list menurut aturan DCCP kalau urutannya belum sesuai (mis. CC yang absen sebelum aturan berubah). Hanya perangkat Delivery/Admin/Koordinator; tidak menyentuh urutan manual (📌). */
+function ccQueueResort(){
+  try{
+    if(!canQueueMove() || isViewer()) return;
+    const d0=DB.get(); if((d0.queue||[]).length<2) return;
+    const c=JSON.parse(JSON.stringify(d0)); ccQueueSort(c);
+    if(c.queue.map(q=>normPlat(q.plat)).join("|")===d0.queue.map(q=>normPlat(q.plat)).join("|")) return;
+    DB.set(d=>{ ccQueueSort(d); });
+  }catch(e){}
+}
 function ccQueueAdvance(){
   try{
     const d0=DB.get(); if(!(d0.queue||[]).length) return;
@@ -9892,7 +9902,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueResort(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
