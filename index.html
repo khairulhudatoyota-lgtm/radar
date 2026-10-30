@@ -2899,7 +2899,7 @@ const CC_ETA_KMH=30;   // kecepatan rata-rata CC menuju yard untuk perkiraan tib
 function ccEtaSkipMin(d){ const v=Number((d||DB.get()).etaSkipMin); return isFinite(v)&&v>=0 ? v : 5; }   // CC yang perkiraan tibanya lebih dari ini tidak ditunggu kalau ada yang sudah dekat
 function ccLoadMin(d){ const v=Number((d||DB.get()).loadMin); return isFinite(v)&&v>=5 ? v : 15; }   // rata-rata waktu loading per CC
 /* Ubah urutan waiting list manual (masih masa uji). Urutan yang diubah dikunci (mo) sampai CC-nya keluar dari antrian atau "Urut otomatis" ditekan. */
-function canQueueMove(){ return !!(currentUser && ["delivery","admin","koordinator"].includes(currentUser.role)); }
+function canQueueMove(){ return !!(currentUser && ["delivery","admin"].includes(currentUser.role)); }   // ubah urutan antrian: Delivery (dan Admin); Koordinator hanya melihat
 function ccQueueMove(plat, dir){
   if(!canQueueMove()) return; const k=normPlat(plat);
   DB.set(d=>{ const q=d.queue||[]; const i=q.findIndex(x=>x && normPlat(x.plat)===k), j=i+dir; if(i<0||j<0||j>=q.length) return;
@@ -2931,7 +2931,7 @@ function ccQueueSort(d){
   d.queue.sort((a,b)=>{ if(a.mo!=null||b.mo!=null){ if(a.mo!=null&&b.mo!=null&&a.mo!==b.mo) return a.mo-b.mo; if(a.mo==null) return 1; if(b.mo==null) return -1; } const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(ra===0){ const ia=dIdx(a), ib=dIdx(b); if(ia!==ib) return ia-ib; } if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
 }
 /* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
-/* Susun ulang waiting list menurut aturan DCCP kalau urutannya belum sesuai (mis. CC yang absen sebelum aturan berubah). Hanya perangkat Delivery/Admin/Koordinator; tidak menyentuh urutan manual (📌). */
+/* Susun ulang waiting list menurut aturan DCCP kalau urutannya belum sesuai (mis. CC yang absen sebelum aturan berubah). Hanya perangkat Delivery/Admin; tidak menyentuh urutan manual (📌). */
 function ccQueueResort(){
   try{
     if(!canQueueMove() || isViewer()) return;
