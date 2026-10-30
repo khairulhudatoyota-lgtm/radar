@@ -1267,7 +1267,7 @@ function spdNeeded(){ const c = speedCfg(); return !!(currentUser && c.on && c.r
 function spdUnlock(){
   try{ const C = window.AudioContext||window.webkitAudioContext; if(!C) return; if(!SPD.ac) SPD.ac = new C(); if(SPD.ac.state==="suspended") SPD.ac.resume(); }catch(e){}
 }
-document.addEventListener("pointerdown", spdUnlock);
+["pointerdown","touchstart","touchend","click","keydown"].forEach(ev=>{ try{ document.addEventListener(ev, spdUnlock, {passive:true, capture:true}); }catch(e){} });
 function spdSiren(times){
   try{
     spdUnlock(); const ctx = SPD.ac; if(!ctx) return;
@@ -2480,6 +2480,8 @@ const SND_EV=[
   {k:"ilstls",  t:"ILS belum ditandai di TLS", d:"ILS sudah lama belum ditandai Sudah di-input ke TLS", roles:["delivery","admin"], def:"cepat"},
   {k:"ambilalih",t:"Minta ambil alih plat",    d:"Driver lain minta memakai plat yang masih login", roles:["delivery","admin"], def:"turun"},
   {k:"sreq",    t:"Driver minta dijadwalkan",  d:"Plat belum ada di jadwal DCCP / diingatkan update DCCP", roles:["delivery","koordinator","admin"], def:"radar"},
+  {k:"tanya",   t:"Delivery tanya alasan (KR)", d:"Delivery/Admin/Leader bertanya kenapa CC LP-mu belum jalan; isi alasannya", roles:["koordinator"], def:"nenaw"},
+  {k:"jawab",   t:"Alasan dari Koordinator",   d:"Koordinator sudah mengisi alasan atas pertanyaanmu", roles:["delivery","admin","leader"], def:"chime"},
   {k:"koord",   t:"Notifikasi Koordinator",    d:"CC masuk stall, ILS sudah di TLS, dan kabar lain untuk LP-mu", roles:["koordinator"], def:"naik"}
 ];
 const SND_TONES={
@@ -2522,14 +2524,22 @@ function sndVolKey(){ try{ let v=localStorage.getItem("radar_tonevol"); const ol
 function sndVolSet(v){ try{ localStorage.setItem("radar_tonevol",v); }catch(e){} try{ navigator.vibrate&&navigator.vibrate(30); }catch(e){} }
 function sndMap(){ try{ return JSON.parse(localStorage.getItem("radar_tones")||"{}")||{}; }catch(e){ return {}; } }
 function sndTone(ev){ const e=SND_EV.find(x=>x.k===ev), m=sndMap(), t=m[ev]; return (t && SND_TONES[t]) ? t : (e?e.def:"beep3"); }
-function sndPlay(tone){
+function sndToast(msg){ try{ let t=document.getElementById("sndToast"); if(!t){ t=document.createElement("div"); t.id="sndToast"; t.style.cssText="position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#B91C1C;color:#fff;padding:10px 16px;border-radius:12px;font:700 13px Inter,Arial,sans-serif;z-index:100002;max-width:88vw;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.3);"; document.body.appendChild(t); } t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.display="none"; },5000); }catch(e){} }
+function sndPlay(tone, quiet){
   try{
-    const T=SND_TONES[tone]||SND_TONES.beep3; spdUnlock(); const ctx=SPD.ac; if(!ctx) return;
-    const vm=SND_VOL[sndVolKey()].m; const o=(type,f0,f1,t,dur,vol)=>{ vol=Math.min(0.9,vol*vm); const os=ctx.createOscillator(), g=ctx.createGain(); os.type=type; os.frequency.setValueAtTime(f0,t); if(f1!==f0) os.frequency.linearRampToValueAtTime(f1,t+dur);
-      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.03); g.gain.setValueAtTime(vol,t+Math.max(0.04,dur-0.08)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-      os.connect(g); g.connect(ctx.destination); os.start(t); os.stop(t+dur+0.02); };
-    T.p(ctx, ctx.currentTime+0.05, o);
-  }catch(e){}
+    const T=SND_TONES[tone]||SND_TONES.beep3; spdUnlock();
+    if(!SPD.ac){ if(!quiet) sndToast("Pemutar suara tidak tersedia di perangkat ini."); return; }
+    const ctx=SPD.ac;
+    const go=()=>{
+      const vm=SND_VOL[sndVolKey()].m; const o=(type,f0,f1,t,dur,vol)=>{ vol=Math.min(0.9,vol*vm); const os=ctx.createOscillator(), g=ctx.createGain(); os.type=type; os.frequency.setValueAtTime(f0,t); if(f1!==f0) os.frequency.linearRampToValueAtTime(f1,t+dur);
+        g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.02); g.gain.setValueAtTime(vol,t+Math.max(0.03,dur-0.06)); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+        os.connect(g); g.connect(ctx.destination); os.start(t); os.stop(t+dur+0.02); };
+      T.p(ctx, ctx.currentTime+0.05, o);
+    };
+    if(ctx.state==="running") go();
+    else { let r; try{ r=ctx.resume(); }catch(e){} if(r && r.then) r.then(go,()=>{}); else go(); }
+    if(!quiet) setTimeout(()=>{ try{ if(ctx.state!=="running") sndToast("Suara diblokir HP. Tekan ▶ Coba sekali lagi dan naikkan volume MEDIA HP (bukan volume dering)."); }catch(e){} }, 700);
+  }catch(e){ if(!quiet) sndToast("Suara gagal diputar: "+(e&&e.message||e)); }
 }
 function soundEv(ev){ const t=sndTone(ev); sndPlay(t); if(t==="senyap" || ev==="giliran" || ev==="kecepatan"){ try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){} } }
 function sndSet(ev,t){ const m=sndMap(); if(t===(SND_EV.find(x=>x.k===ev)||{}).def) delete m[ev]; else m[ev]=t; try{ localStorage.setItem("radar_tones",JSON.stringify(m)); }catch(e){} sndTest(ev); }
@@ -2543,7 +2553,7 @@ function sndRow(e){
 }
 function sndOpen(){
   const rl=currentUser?currentUser.role:"", mine=SND_EV.filter(e=>e.roles.includes(rl)), other=SND_EV.filter(e=>!e.roles.includes(rl));
-  showModal(`<h3 style="margin:0 0 4px;">🔔 Nada Suara</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Pilih nada untuk tiap kejadian supaya langsung tahu itu bunyi apa, termasuk saat di jalan. Pengaturan ini hanya di HP ini. Saat aplikasi di latar belakang atau layar mati, dering memakai nada sistem aplikasi Android.</div>
+  showModal(`<h3 style="margin:0 0 4px;">🔔 Nada Suara</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Pilih nada untuk tiap kejadian supaya langsung tahu itu bunyi apa, termasuk saat di jalan. Pengaturan ini hanya di HP ini. Saat aplikasi di latar belakang atau layar mati, dering memakai nada sistem aplikasi Android. <b>Tidak terdengar?</b> Naikkan volume <b>media</b> HP (bukan volume dering) lalu tekan ▶ Coba lagi.</div>
     <div style="display:flex;gap:8px;align-items:center;margin:2px 0 6px;"><b style="font-size:12px;">🔊 Volume</b><select onchange="sndVolSet(this.value)" style="flex:1;">${Object.keys(SND_VOL).map(k=>`<option value="${k}" ${k===sndVolKey()?"selected":""}>${SND_VOL[k].n}</option>`).join("")}</select></div>
     <div style="max-height:55vh;overflow:auto;">${mine.length?`<div style="font-size:12px;font-weight:800;color:#0F2A4A;margin-top:6px;">Untuk peran kamu</div>${mine.map(sndRow).join("")}`:""}
     ${other.length?`<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;font-weight:800;">Nada lainnya (${other.length})</summary>${other.map(sndRow).join("")}</details>`:""}</div>
@@ -3194,6 +3204,62 @@ function holdCardHtml(data, onlyMine){
 }
 /* Ringkasan SEMUA CC yang sudah absen, apa pun statusnya: di stall / waiting list / Parkir Luar. */
 /* CC yang SUDAH ABSEN tetapi belum waktunya (Parkir Luar): ditampilkan di bawah waiting list lengkap dengan statusnya, supaya jelas siapa yang sudah absen dan siapa yang sudah siap. */
+
+/* ===== TANYA KENAPA KE KOORDINATOR ===== */
+function whyAskRoleOk(){ return !!(currentUser && ["delivery","admin","leader"].includes(currentUser.role) && !isViewer()); }
+function whyAnsRoleOk(){ return !!(currentUser && ["koordinator","delivery","admin"].includes(currentUser.role) && !isViewer()); }
+function whyMap(d){ const m=(d||DB.get()).whyReq; return (m&&typeof m==="object")?m:{}; }
+function whyList(d){ const m=whyMap(d); return Object.keys(m).map(k=>Object.assign({k},m[k])).filter(x=>x&&x.plat); }
+const WHY_REASONS=["Hujan","Problem produksi (unit belum siap)","Problem CC (rusak / ban / mesin)","Driver istirahat / sholat","Menunggu stall / antri di yard","Antri / macet di NVDC","Menunggu surat jalan / TLS","Lainnya (tulis di bawah)"];
+function whyHm(t){ const x=new Date(t); return String(x.getHours()).padStart(2,"0")+":"+String(x.getMinutes()).padStart(2,"0"); }
+function whyAsk(plat){
+  if(!whyAskRoleOk()) return; const k=normPlat(plat), d0=DB.get(), r=(d0.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return;
+  const ex=whyMap(d0)[k]; if(ex && ex.status==="ask" && Date.now()-ex.ts<10*60000){ alert("Sudah ditanyakan ke Koordinator jam "+whyHm(ex.ts)+". Tunggu jawabannya (bisa tanya lagi setelah 10 menit)."); return; }
+  const done=dccpDoneCount(r,d0), tot=dccpTripList(r).length;
+  if(!confirm("Tanya Koordinator LP "+(r.lp||"-")+" kenapa "+platFmt(r.police)+" belum jalan sesuai jadwal ("+done+"/"+tot+" rit)?\n\nHP Koordinator akan berbunyi dan diminta mengisi alasan.")) return;
+  const me={by:(currentUser&&currentUser.name)||"", byUser:(currentUser&&currentUser.username)||""};
+  DB.set(d=>{ d.whyReq=(d.whyReq&&typeof d.whyReq==="object")?d.whyReq:{}; const cut=Date.now()-24*3600000; Object.keys(d.whyReq).forEach(q=>{ if(!d.whyReq[q]||(d.whyReq[q].ts||0)<cut) delete d.whyReq[q]; });
+    d.whyReq[k]={plat:platFmt(r.police), lp:r.lp||"", driver:r.driver||"", rit:done, tot, by:me.by, byUser:me.byUser, ts:Date.now(), status:"ask", reason:""}; });
+  render();
+}
+function whyAnswerSave(k){
+  if(!whyAnsRoleOk()) return; const sel=(document.getElementById("whySel_"+k)||{}).value||"", tx=String((document.getElementById("whyTx_"+k)||{}).value||"").trim().slice(0,160);
+  const reason=(sel&&!/^Lainnya/.test(sel)?sel:"")+(sel&&!/^Lainnya/.test(sel)&&tx?" — ":"")+tx;
+  if(reason.trim().length<3){ alert("Pilih alasan atau tulis alasannya."); return; }
+  const who=(currentUser&&currentUser.name)||"";
+  DB.set(d=>{ const x=(d.whyReq||{})[k]; if(!x) return; x.status="done"; x.reason=reason.trim(); x.ansBy=who; x.ansTs=Date.now(); });
+  render();
+}
+function whyKoordCardHtml(data){
+  try{
+    if(!currentUser || !whyAnsRoleOk()) return ""; const my=currentUser.role==="koordinator"?myKoordLP():"";
+    const L=whyList(data).filter(x=>x.status==="ask" && Date.now()-x.ts<6*3600000 && (!my || lpCanon(my)===lpCanon(x.lp))).sort((a,b)=>a.ts-b.ts); if(!L.length) return "";
+    return `<div class="card" style="border:2px solid #E60012;"><h3>❓ Delivery menanyakan alasan (${L.length})</h3>
+      ${L.map(x=>`<div style="border-top:1px solid var(--border);padding:10px 0;"><div style="font-weight:800;">${escH(x.plat)} <span style="font-size:12px;color:var(--text-dim);">LP ${escH(x.lp||"-")}${x.driver?" · 👤 "+escH(x.driver):""}</span></div>
+        <div style="font-size:12px;color:var(--text-dim);margin:2px 0 6px;">${escH(x.by||"Delivery")} bertanya jam ${whyHm(x.ts)} · baru ${x.rit}/${x.tot} rit. Kenapa belum jalan?</div>
+        <select id="whySel_${x.k}" style="width:100%;margin-bottom:6px;"><option value="">— pilih alasan —</option>${WHY_REASONS.map(r=>`<option>${escH(r)}</option>`).join("")}</select>
+        <input id="whyTx_${x.k}" type="text" maxlength="160" placeholder="Keterangan tambahan (opsional)" style="width:100%;margin-bottom:6px;">
+        <button type="button" class="btn btn-primary btn-sm" onclick="whyAnswerSave('${x.k}')">📨 Kirim alasan</button></div>`).join("")}</div>`;
+  }catch(e){ return ""; }
+}
+const _whySeen={};
+function whyCheck(){
+  try{
+    if(!currentUser || isViewer()) return; const d=DB.get(), now=Date.now();
+    whyList(d).forEach(x=>{
+      if(x.status==="ask" && now-x.ts<60*60000 && currentUser.role==="koordinator"){
+        const my=myKoordLP(); if(my && lpCanon(my)!==lpCanon(x.lp)) return;
+        const key=x.k+"|"+x.ts, st=_whySeen[key]||{n:0,t:0}; if(st.n>=4 || (st.n>0 && now-st.t<2*60000)) return;
+        _whySeen[key]={n:st.n+1,t:now}; soundEv("tanya"); try{ navigator.vibrate&&navigator.vibrate([300,150,300,150,300]); }catch(e){}
+        try{ ringBg("❓ Delivery tanya alasan", x.plat+" (LP "+(x.lp||"-")+") baru "+x.rit+"/"+x.tot+" rit. Buka RADAR, isi alasannya."); }catch(e){}
+      }
+      if(x.status==="done" && x.byUser && x.byUser===currentUser.username && x.ansTs && now-x.ansTs<30*60000){
+        const key=x.k+"|a|"+x.ansTs; if(_whySeen[key]) return; _whySeen[key]={n:1,t:now};
+        soundEv("jawab"); try{ ringBg("💬 Alasan dari Koordinator", x.plat+": "+x.reason); }catch(e){}
+      }
+    });
+  }catch(e){}
+}
 function qDrv(data,plat){ try{ const v=(typeof ccDriverAny==="function"&&ccDriverAny(plat))||mfDriver(data,plat)||""; return v?` · 👤 ${escH(v)}`:""; }catch(e){ return ""; } }
 function ccHoldRowsHtml(data){
   try{
@@ -3956,7 +4022,7 @@ function renderKoordinator(){
     </div>`).join("");
 
   return `
-    ${koordStatusHtml(data)}
+    ${whyKoordCardHtml(data)}${koordStatusHtml(data)}
     ${sjBoxHtml("koor","Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""), "Muncul setelah Delout. Terhapus otomatis 7 hari. Tekan Buka untuk mencari per tanggal, shift, plat no, atau no surat jalan.")}
     <div class="card">
       <h3>🧭 Kelola Stall Car Carrier</h3>
@@ -9893,7 +9959,14 @@ function renderDisplay(){
   const _sh = currentShift(), _w = shiftWindow(prodDayStart(), _sh);
   const _ilsShift = data.ils.filter(b=>b.ts>=_w[0] && b.ts<_w[1]);
   _ilsShift.forEach(b=>{ const k=platFmt(b.ccPlat); ritaseByPlat[k]=(ritaseByPlat[k]||0)+1; });
-  const totalRitase = _ilsShift.length;
+  /* semua CC terjadwal ikut tampil (0 rit juga), ritase dihitung sama dengan jadwal DCCP (dobel/koreksi ikut) */
+  const _now0=Date.now(), _mt=data.dccpMeta||{}, _dd=_mt.dateTs||dccpFileDate(_mt.fileName)||prodMidnight(), _rows=[], _seenK=new Set();
+  (data.dccpSchedule||[]).forEach(r=>{ if(r.extra) return; const k=normPlat(r.police); if(_seenK.has(k)) return; _seenK.add(k);
+    const T=dccpTripList(r), done=dccpDoneCount(r,data), dueN=T.filter(t=>ccTimeToTs(t,_dd)<=_now0).length;
+    _rows.push({k, plat:platFmt(r.police), lp:r.lp||"", driver:r.driver||"", done, tot:T.length, dueN, late: done<dueN}); });
+  Object.keys(ritaseByPlat).forEach(pl=>{ const k=normPlat(pl); if(_seenK.has(k)) return; _seenK.add(k); _rows.push({k, plat:pl, lp:"", driver:"", done:ritaseByPlat[pl], tot:0, dueN:0, late:false}); });
+  _rows.sort((a,b)=>(b.late-a.late)||(b.done-a.done));
+  const totalRitase = _rows.reduce((q,x)=>q+x.done,0);
   const _inpByModel = {}, _inpByLine = {}; let _inpTot = 0;
   (data.unitLog||[]).forEach(e=>{ if(e.parkedTs!=null && e.parkedTs>=_w[0] && e.parkedTs<_w[1]){ _inpTot++; _inpByModel[e.model]=(_inpByModel[e.model]||0)+1; if(e.line) _inpByLine[e.line]=(_inpByLine[e.line]||0)+1; } });
   const _plan = getPlanFor(data, _w[0]+1000, _sh);
@@ -9930,7 +10003,9 @@ function renderDisplay(){
           <div style="flex:1;min-width:140px;"><div style="font-size:12px;color:var(--text-dim);">TOTAL RITASE CC (shift ini)</div><div style="font-size:30px;font-weight:800;">${totalRitase}</div></div>
         </div>
         ${planDisplayHtml}
-        ${Object.keys(ritaseByPlat).length?`<table style="margin-top:10px;"><tr><th>Plat CC</th><th>Ritase</th></tr>${Object.entries(ritaseByPlat).map(([k,v])=>`<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join("")}</table>`:""}
+        ${_rows.length?`<table style="margin-top:10px;"><tr><th>Plat CC</th><th>Ritase</th><th></th></tr>${_rows.map(x=>{ const w=whyMap(data)[x.k]; const askBtn=(x.late&&whyAskRoleOk()&&!(w&&w.status==="ask"&&Date.now()-w.ts<10*60000))?` <button type="button" onclick="whyAsk('${x.plat}')" style="border:1.5px solid #E60012;background:#fff;color:#E60012;border-radius:8px;padding:3px 8px;font-weight:800;font-size:11px;">❓ Tanya KR</button>`:"";
+          const st=w&&w.status==="ask"&&Date.now()-w.ts<6*3600000?`<div style="font-size:11px;color:#B4570E;">⏳ menunggu jawaban Koordinator (tanya ${whyHm(w.ts)})</div>`:(w&&w.status==="done"&&Date.now()-(w.ansTs||0)<12*3600000?`<div style="font-size:11px;color:#17803d;">💬 ${escH(w.reason)} <span style="color:var(--text-dim);">— ${escH(w.ansBy||"KR")} ${whyHm(w.ansTs)}</span></div>`:"");
+          return `<tr><td>${escH(x.plat)}${x.lp?` <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)}</span>`:""}${x.driver?`<div style="font-size:11px;color:var(--text-dim);">👤 ${escH(x.driver)}</div>`:""}${st}</td><td style="white-space:nowrap;"><b style="${x.late?"color:#D64545;":""}">${x.done}</b>${x.tot?`<span style="font-size:11px;color:var(--text-dim);"> /${x.tot}</span>`:""}${x.late?`<div style="font-size:10px;color:#D64545;">jadwal ${x.dueN}</div>`:""}</td><td>${askBtn}</td></tr>`; }).join("")}</table>`:""}
       </div>
       <div class="card y-cc">
         <div class="stalltitle"><h3>🚚 Stall Car Carrier</h3><span class="cnt" id="dispClock"></span></div>
@@ -10001,7 +10076,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueResort(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueResort(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); whyCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
