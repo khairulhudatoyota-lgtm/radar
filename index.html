@@ -3350,16 +3350,30 @@ function ccOnlineBelumAbsenHtml(data){
   }catch(e){ return ""; }
 }
 /* Daftarkan truk ke stall kosong / antrian / ruang tunggu jadwal. Return {stall:n} | {queue:n} | {hold:true,due:ts} | {dup:true} */
+/* Satu driver tidak bisa membawa dua truk: nama driver sama + LP sama, tapi plat lain sudah di stall / antrian / ruang tunggu / ILS aktif → tolak. */
+function ccDriverBusy(d, plat, lp){
+  try{
+    const nm=s=>String(s||"").toLowerCase().replace(/[^a-z]/g,""); const k=normPlat(plat), me=nm(ccDriverAny(plat)); if(me.length<4) return null;
+    const row=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k), myLp=lpCanon((row&&row.lp)||lp||"");
+    const others=[...Object.values(d.cc||{}).filter(Boolean), ...(d.queue||[]), ...(d.hold||[]), ...(d.ils||[]).filter(x=>x && x.status==="open" && !x.outTs).map(x=>({plat:x.ccPlat}))];
+    for(const o of others){ if(!o || !o.plat || normPlat(o.plat)===k) continue;
+      const r2=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(o.plat));
+      if(nm(ccDriverAny(o.plat))===me && lpCanon((r2&&r2.lp)||o.lp||"")===myLp) return o.plat; }
+  }catch(e){}
+  return null;
+}
 function registerCC(plat, lp, dist, auto, manual, src){
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
-    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k)){ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
+    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k) || (d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k)){   /* satu plat = satu data: sudah di stall / antrian / ILS aktif → semua jalur absen (otomatis, peta, manual KR/Delivery) ditolak */ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
     { const lf=((d.ccLeft||{})[k])||0; const _own=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));   // Delivery/Admin boleh mengabsenkan manual kapan saja
       if(lf && (Date.now()<=lf || (!_own && Date.now()-lf < ccReabsenMin(d)*60000))){   // absen dibuat SEBELUM CC keluar (dikirim ulang sinkronisasi / perangkat lain), atau < 20 menit sesudah keluar dari HP driver: satu CC satu catatan
         res={dup:true, stale:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true}]).slice(-120); return; } }
     { const _o6=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));
       if(!_o6){ const la=(d.absenLog||[]).slice().reverse().find(x=>x && !x.dup && !x.rejected && !x.far && normPlat(x.plat)===k);
         if(la && Date.now()-(la.ts||0)<20*60000 && !(((d.ccLeft||{})[k]||0)>la.ts)){ res={dup:true, recent:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, recent:true}]).slice(-120); return; } } }
+    { const bz=ccDriverBusy(d, plat, lp); if(bz){ res={dup:true, driverBusy:bz}; return; } }   /* driver sama + LP sama sudah membawa truk lain */
+    if(ccNeedNvdc(d, plat)){ res={dup:true, stale:true, outbound:true, nvdc:true}; return; }   /* sudah Delout tapi belum tiba di NVDC = masih perjalanan: SEMUA absen (otomatis, peta, manual KR/Delivery) diabaikan. Rit pertama (belum pernah Delout) tidak kena aturan ini. */
     { const _o4=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));
       if(!_o4 && ccOutbound(d, plat)){ res={dup:true, stale:true, outbound:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true, outbound:true}]).slice(-120); return; } }
     { const y=d.yardLocation||{}; if(dist!=null && y.radiusKm!=null && dist > (+y.radiusKm)+0.3){ res={far:true, dist, radius:+y.radiusKm}; return; } }
@@ -8880,7 +8894,15 @@ function ccDirNow(d, plat){
     if(!r || typeof r.lat!=="number" || Date.now()-(r.ts||0)>5*60000) return null;
     const o=trkCompute(r, d.mapPoints||DB.get().mapPoints||{}); return (o&&o.dir)||null; }catch(e){ return null; }
 }
+/* Sesudah Delout / dikeluarkan, CC TIDAK boleh absen lagi sampai posisinya tercatat di NVDC (d.ccNvdc). Tanpa titik NVDC: aturan jam lama. Kalau GPS CC tidak terbaca di NVDC, Delivery/Admin absen manual. */
+function ccLastDelout(d, plat){ const k=normPlat(plat); let lo=0; (d.ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===k && x.outTs>lo) lo=x.outTs; }); return lo; }   /* tanda keluar dari ADM = Delout (bukan CC yang cuma dikeluarkan dari stall) */
+function ccNeedNvdc(d, plat){
+  const mp=d.mapPoints||{}; if(!(mp.nvdc && typeof mp.nvdc.lat==="number")) return false;
+  const lo=ccLastDelout(d, plat); if(!lo) return false;
+  return !(((d.ccNvdc||{})[normPlat(plat)]||0) > lo);
+}
 function ccOutbound(d, plat){   // true = baru keluar (≤4 jam) dan masih berjalan ke arah NVDC / baru <45 menit keluar
+  if(ccNeedNvdc(d, plat)) return true;
   const lo=ccLastLeft(d, plat); if(!lo) return false; const age=Date.now()-lo; if(age>4*3600000) return false;
   if(age<45*60000) return true;
   return ccDirNow(d, plat)==="out";
@@ -8914,6 +8936,8 @@ function mapAbsenTick(){
       if(typeof trkHasAccount==="function" && !trkHasAccount(r)) return;
       const km=haversineKm(r.lat,r.lng,y.lat,y.lng);
       if(km>rad+1) MAPABS.out[k]=now;
+      try{ const nv=(d.mapPoints||{}).nvdc, lo0=ccLastDelout(d,r.plat);   /* tercatat tiba di NVDC (≤1 km) sesudah Delout → boleh absen lagi */
+        if(nv && lo0 && (r.ts||0)>lo0 && haversineKm(r.lat,r.lng,nv.lat,nv.lng)<=1 && !(((d.ccNvdc||{})[k]||0)>lo0)) DB.set(x=>{ x.ccNvdc=x.ccNvdc||{}; if(!((x.ccNvdc[k]||0)>lo0)) x.ccNvdc[k]=Date.now(); }); }catch(e){}
       if(have.has(k) || !ccPlatRegistered(r.plat)){ delete MAPABS.hits[k]; return; }
       const lo=ccLastLeft(d,r.plat);
       if(lo && ccOutbound(d,r.plat)){ delete MAPABS.hits[k]; return; }   // baru Delout & menuju NVDC: bukan absen
