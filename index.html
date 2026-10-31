@@ -3893,6 +3893,24 @@ function tlsChromeGo(){
   alert("Kode ILS #"+b.id+" sudah disalin dan TLS dibuka di Chrome.\n\n1) Login TLS di Chrome (kalau diminta).\n2) Buka halaman Pembuatan ILS / SJKB.\n3) Ketuk kotak alamat, ketik  javascript:  lalu TEMPEL, tekan Go/Enter.\n\nKotak biru RADAR→TLS akan mengisi sendiri. Simpan tetap kamu tekan di TLS.");
 }
 function tlsCopyUs(btn){ tlsCopy(TLS_US, btn); }
+/* Batal di TLS: dipanggil setelah ILS dibatalkan / dihapus di RADAR. Buka menu Delivery > Batal SJKB di TLS, isi No. SJKB, Enter. Simpan tetap ditekan operator. */
+function tlsCancelAsk(b){
+  try{
+    if(!b) return; let sj=String(b.sjkb||"").trim();
+    if(!(b.tlsTs || sj)) return;   // ILS ini belum pernah masuk TLS
+    if(!confirm("ILS #"+b.id+" ("+b.ccPlat+") sudah masuk TLS.\n\nBatalkan juga di TLS sekarang?\nRADAR membuka menu Delivery > Batal SJKB dan mengisi No. SJKB. Kamu tinggal menekan Simpan di TLS.")) return;
+    if(!sj){ sj=String(prompt("No. SJKB ILS ini belum terbaca dari surat jalan.\nKetik / tempel No. SJKB-nya:","")||"").trim().toUpperCase(); if(!sj) return; }
+    tlsCancelGo(sj, b.id);
+  }catch(e){}
+}
+function tlsCancelGo(sj, id){
+  const pkg="RADAR-TLS:"+JSON.stringify({v:1, mode:"cancel", sjkb:sj, ils:id});
+  try{ if(window.AndroidTLS && window.AndroidTLS.send && tlsInAppOk()){ window.AndroidTLS.send(pkg); return; } }catch(e){}
+  tlsCopy(sj);
+  let u=tlsCfg().ilsUrl||"https://tls.toyota.astra.co.id/PembuatanSJKB"; if(!/^https:\/\//i.test(u)) u="https://tls.toyota.astra.co.id/PembuatanSJKB";
+  try{ if(window.AndroidTLS && window.AndroidTLS.openExternal){ window.AndroidTLS.openExternal(u); } else window.open(u,"_blank"); }catch(e){}
+  alert("No. SJKB "+sj+" sudah disalin.\n\nDi TLS: menu Delivery > Batal SJKB, tempel di No. SJKB, tekan Enter, lalu Simpan.");
+}
 function tlsPcGo(){
   const b=window._tlsB; if(!b) return;
   if(b.batam){ alert("ILS Batam diinput manual di TLS."); return; }
@@ -5788,6 +5806,7 @@ function ilsFixExec(id, back){
   try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+id).remove(); }catch(e){}
   alert("ILS #"+id+" dihapus."+(back?" "+nb+" unit dikembalikan ke stall.":""));
   render();
+  tlsCancelAsk(b);
 }
 /* Baris manifest yatim (ILS-nya sudah dibatalkan/dihapus tapi manifest tertinggal) dibersihkan otomatis oleh Delivery/Admin. Hanya jalan kalau daftar ILS sudah termuat. */
 function mfPurgeOrphans(){
@@ -5811,6 +5830,7 @@ function cancelILS(id){
     d.manifest=(d.manifest||[]).filter(m=>m.id!==id); });   // data manifest ILS yang dibatalkan ikut dihapus (No. SJKB biasanya ganti)
   try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+id).remove(); }catch(e){}
   render();
+  tlsCancelAsk(b);
 }
 /* ===== PANGGILAN GILIRAN PARKIR: driver waiting list yang naik ke stall → HP berbunyi sampai OK ditekan ===== */
 function ccCallsList(d){ const a=d.ccCalls; return Array.isArray(a)?a:(a&&typeof a==="object"?Object.values(a):[]); }
