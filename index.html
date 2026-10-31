@@ -2493,7 +2493,7 @@ let autoWatchId = null;
 
 /* Saat layar terkunci / aplikasi di latar belakang, bunyi web (AudioContext) dibisukan HP. Di APK, dering dibunyikan oleh aplikasi native (alarm + getar, berhenti saat aplikasi dibuka). */
 function appBg(){ try{ if(window.AndroidTLS && AndroidTLS.isFg) return !AndroidTLS.isFg(); }catch(e){} return false; }
-function ringBg(title, body){ try{ if(appBg() && window.AndroidTLS && AndroidTLS.notify){ AndroidTLS.notify(String(title), String(body||"")); return true; } }catch(e){} return false; }
+function ringBg(title, body){ try{ if(appBg() && window.AndroidTLS && AndroidTLS.notify){ if(Date.now()-(_nativeRing._any||0)<3000) return true; /* soundEv barusan sudah bunyi native: jangan dobel */ AndroidTLS.notify(String(title), String(body||"")); return true; } }catch(e){} return false; }
 
 /* ===== NADA SUARA: tiap jenis kejadian punya nada sendiri yang bisa dipilih (disimpan per HP). Getar tetap ikut. ===== */
 const SND_EV=[
@@ -2503,11 +2503,12 @@ const SND_EV=[
   {k:"lapor",   t:"Laporan jalan (macet/kecelakaan)", d:"Ada laporan titik di Peta CC dalam radius 25 km darimu", roles:["cc","delivery","koordinator","leader","admin"], def:"klakson"},
   {k:"chat",    t:"Chat Peta CC",              d:"Ada pesan baru di chat peta", roles:["cc","delivery","koordinator","leader","admin"], def:"bel"},
   {k:"kecepatan",t:"Peringatan kecepatan",     d:"Kecepatan melewati batas yang ditetapkan Admin", roles:["dispatcher"], def:"sirene"},
+  {k:"naikstall",t:"CC naik ke stall (buat ILS)", d:"CC dari waiting list / Parkir Luar dapat giliran masuk Stall CC; siapkan unit dan buat ILS", roles:["delivery","admin"], def:"naik"},
   {k:"draft",   t:"CC absen / draft ILS siap", d:"Ada CC yang absen dan draft ILS siap dibuat", roles:["delivery","admin"], def:"naik"},
-  {k:"jadwal",  t:"CC masuk sesuai jadwal",    d:"CC dari Parkir Luar sudah waktunya masuk stall / waiting list", roles:["delivery","admin"], def:"bel"},
+  {k:"jadwal",  t:"CC masuk sesuai jadwal",    d:"CC dari Parkir Luar sudah waktunya masuk stall / waiting list", roles:["viewer"], def:"bel"},
   {k:"ilstls",  t:"ILS belum ditandai di TLS", d:"ILS sudah lama belum ditandai Sudah di-input ke TLS", roles:["delivery","admin"], def:"cepat"},
   {k:"ambilalih",t:"Minta ambil alih plat",    d:"Driver lain minta memakai plat yang masih login", roles:["delivery","admin"], def:"turun"},
-  {k:"sreq",    t:"Driver minta dijadwalkan",  d:"Plat belum ada di jadwal DCCP / diingatkan update DCCP", roles:["delivery","koordinator","admin"], def:"radar"},
+  {k:"sreq",    t:"Driver minta dijadwalkan",  d:"Plat belum ada di jadwal DCCP (CC dari luar minta dibuatkan jadwal) / diingatkan update DCCP", roles:["delivery","koordinator","admin"], def:"radar"},
   {k:"tanya",   t:"Delivery tanya alasan (KR)", d:"Delivery/Admin/Leader bertanya kenapa CC LP-mu belum jalan; isi alasannya", roles:["koordinator"], def:"nenaw"},
   {k:"chgreq",  t:"Permintaan tukar / ganti CC (dari KR)", d:"Koordinator minta tukar jam, ganti CC, atau edit jadwal; menunggu persetujuanmu", roles:["delivery","admin"], def:"telepon"},
   {k:"chgres",  t:"Jawaban permintaan tukar / ganti CC", d:"Delivery menyetujui / menolak permintaan tukar-ganti CC darimu", roles:["koordinator"], def:"chime"},
@@ -2571,7 +2572,31 @@ function sndPlay(tone, quiet){
     if(!quiet) setTimeout(()=>{ try{ if(ctx.state!=="running") sndToast("Suara diblokir HP. Tekan ▶ Coba sekali lagi dan naikkan volume MEDIA HP (bukan volume dering)."); }catch(e){} }, 700);
   }catch(e){ if(!quiet) sndToast("Suara gagal diputar: "+(e&&e.message||e)); }
 }
-function soundEv(ev){ const t=sndTone(ev); sndPlay(t); if(t==="senyap" || ev==="giliran" || ev==="kecepatan"){ try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){} } }
+/* Satu kejadian = SATU suara. Aplikasi terbuka: hanya nada pilihanmu. Aplikasi di background / layar mati: hanya dering alarm bawaan APK (nada web tidak ikut bunyi). */
+const _nativeRing={};
+function soundEv(ev, detail){ const t=sndTone(ev);
+  let viaNative=false;
+  try{
+    if(appBg() && window.AndroidTLS && AndroidTLS.notify){
+      viaNative=true;
+      if(ev!=="giliran"){   // giliran punya alarm native sendiri (alarmStart), jangan dobel
+        const now=Date.now(); if(!_nativeRing[ev] || now-_nativeRing[ev]>6000){ _nativeRing[ev]=now; _nativeRing._any=now; const e=SND_EV.find(x=>x.k===ev); AndroidTLS.notify(e?e.t:"RADAR", String(detail||(e?e.d:""))); }
+      }
+    }
+  }catch(x){}
+  if(!viaNative) sndPlay(t);
+  try{ sndBanner(ev, detail); }catch(e){} if(t==="senyap" || ev==="giliran" || ev==="kecepatan"){ try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){} } }
+/* Tanda di layar saat ada nada berbunyi: pengguna langsung tahu bunyi itu untuk apa. Ketuk untuk menutup; hilang sendiri setelah 14 detik. */
+const SND_ICON={absen:"✅",sj:"📄",lapor:"⚠️",chat:"💬",draft:"🚚",jadwal:"⏰",ilstls:"🧾",ambilalih:"🔁",sreq:"📅",tanya:"❓",chgreq:"📝",chgres:"📝",jawab:"💬",koord:"🚚",naikstall:"🅿️"};
+function sndBanner(ev, detail){
+  if(ev==="giliran" || ev==="kecepatan") return;   // dua ini sudah punya layar peringatan sendiri
+  const e=SND_EV.find(x=>x.k===ev); if(!e) return;
+  let b=document.getElementById("sndBn");
+  if(!b){ b=document.createElement("div"); b.id="sndBn"; b.style.cssText="position:fixed;z-index:2147482000;left:10px;right:10px;top:64px;max-width:560px;margin:0 auto;background:#0F2A4A;color:#fff;border-left:6px solid #F5B800;border-radius:12px;padding:10px 14px;box-shadow:0 6px 22px rgba(0,0,0,.35);font:13px/1.45 Inter,Arial,sans-serif;cursor:pointer;"; b.onclick=()=>{ try{ b.remove(); }catch(x){} }; document.body.appendChild(b); }
+  const esc=t=>String(t==null?"":t).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  b.innerHTML=`<div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:#F5B800;">🔔 BARUSAN BUNYI</div><div style="font-weight:800;font-size:14px;margin-top:2px;">${SND_ICON[ev]||"🔔"} ${esc(e.t)}</div><div style="margin-top:3px;opacity:.92;">${esc(detail||e.d)}</div><div style="font-size:10px;opacity:.6;margin-top:4px;">ketuk untuk menutup</div>`;
+  clearTimeout(b._t); b._t=setTimeout(()=>{ try{ b.remove(); }catch(x){} }, 14000);
+}
 function sndSet(ev,t){ const m=sndMap(); if(t===(SND_EV.find(x=>x.k===ev)||{}).def) delete m[ev]; else m[ev]=t; try{ localStorage.setItem("radar_tones",JSON.stringify(m)); }catch(e){} sndTest(ev); }
 function sndTest(ev){ const t=sndTone(ev); if(t==="senyap"){ try{ navigator.vibrate && navigator.vibrate([200,100,200]); }catch(e){} return; } sndPlay(t); }
 function sndReset(){ try{ localStorage.removeItem("radar_tones"); }catch(e){} sndOpen(); }
@@ -3280,12 +3305,12 @@ function whyCheck(){
       if(x.status==="ask" && now-x.ts<60*60000 && currentUser.role==="koordinator"){
         const my=myKoordLP(); if(my && lpCanon(my)!==lpCanon(x.lp)) return;
         const key=x.k+"|"+x.ts, st=_whySeen[key]||{n:0,t:0}; if(st.n>=4 || (st.n>0 && now-st.t<2*60000)) return;
-        _whySeen[key]={n:st.n+1,t:now}; soundEv("tanya"); try{ navigator.vibrate&&navigator.vibrate([300,150,300,150,300]); }catch(e){}
+        _whySeen[key]={n:st.n+1,t:now}; soundEv("tanya", x.plat+" (LP "+(x.lp||"-")+") baru "+x.rit+"/"+x.tot+" rit. Isi alasannya."); try{ navigator.vibrate&&navigator.vibrate([300,150,300,150,300]); }catch(e){}
         try{ ringBg("❓ Delivery tanya alasan", x.plat+" (LP "+(x.lp||"-")+") baru "+x.rit+"/"+x.tot+" rit. Buka RADAR, isi alasannya."); }catch(e){}
       }
       if(x.status==="done" && x.byUser && x.byUser===currentUser.username && x.ansTs && now-x.ansTs<30*60000){
         const key=x.k+"|a|"+x.ansTs; if(_whySeen[key]) return; _whySeen[key]={n:1,t:now};
-        soundEv("jawab"); try{ ringBg("💬 Alasan dari Koordinator", x.plat+": "+x.reason); }catch(e){}
+        soundEv("jawab", x.plat+": "+x.reason); try{ ringBg("💬 Alasan dari Koordinator", x.plat+": "+x.reason); }catch(e){}
       }
     });
   }catch(e){}
@@ -3683,7 +3708,7 @@ function draftCardsHtml(data){
 /* Alarm + notifikasi ke MP Delivery saat ada CC siap loading dengan stall penuh (aplikasi harus terbuka) */
 let _draftSeen = new Set(); try{ _draftSeen = new Set(JSON.parse(localStorage.getItem("apcc_draftseen")||"[]")); }catch(e){}
 function checkDraftAlerts(){
-  if(!currentUser || (currentUser.role!=="delivery" && currentUser.role!=="viewer")) return;
+  if(!currentUser || (currentUser.role!=="delivery" && currentUser.role!=="admin" && currentUser.role!=="viewer")) return;
   const P = ccProposals(DB.get()).filter(p=>!p.dismissed); let fired = false;
   for(const p of P){
     let key, txt;
@@ -3693,7 +3718,7 @@ function checkDraftAlerts(){
     else continue;
     if(_draftSeen.has(key)) continue;
     _draftSeen.add(key); fired = true;
-    soundEv('draft'); if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
+    soundEv('draft',txt); if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
     try{ ringBg('🚚 CC Siap Loading', txt); }catch(e){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification('🚚 CC Siap Loading', {body:txt}); }catch(e){} }
   }
@@ -4018,26 +4043,26 @@ function koordStatusHtml(data){
 }
 let _koordSeen=new Set(); try{ _koordSeen=new Set(JSON.parse(localStorage.getItem("apcc_koordseen")||"[]")); }catch(e){}
 function checkKoordAlerts(){
-  if(!currentUser || (currentUser.role!=="koordinator" && currentUser.role!=="delivery" && currentUser.role!=="viewer")) return;
-  const isKo=(currentUser.role==="koordinator"||currentUser.role==="viewer"), isDel=(currentUser.role==="delivery"||currentUser.role==="viewer");   // Pengamat merasakan bunyi Delivery + Koordinator   // Delivery: bunyi saat CC absen (hanya yang baru, ≤10 menit); validasi ILS tetap untuk Koordinator
+  if(!currentUser || (currentUser.role!=="koordinator" && currentUser.role!=="delivery" && currentUser.role!=="admin" && currentUser.role!=="viewer")) return;
+  const isKo=(currentUser.role==="koordinator"||currentUser.role==="viewer"), isDel=(currentUser.role==="delivery"||currentUser.role==="admin"||currentUser.role==="viewer");   // Pengamat merasakan bunyi Delivery + Koordinator   // Delivery: bunyi saat CC absen (hanya yang baru, ≤10 menit); validasi ILS tetap untuk Koordinator
   const L=koordStatusList(DB.get()); let fired=false;
   if(isDel){ ilsPendingList(DB.get()).forEach(b=>{
     if(Date.now()-(b.ts||0)<6*60000) return;
     const key="tlsp|"+b.id; if(_koordSeen.has(key)) return; _koordSeen.add(key); fired=true;
     const txt="ILS "+b.ccPlat+" ("+b.units.length+" unit) belum ditandai 'Sudah di-input ke TLS'. Tandai supaya Koordinator bisa validasi.";
-    soundEv('ilstls'); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⚠ ILS belum ditandai Sudah di TLS", txt); }catch(e){}
+    soundEv('ilstls',txt); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⚠ ILS belum ditandai Sudah di TLS", txt); }catch(e){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("⚠ ILS belum ditandai Sudah di TLS",{body:txt}); }catch(e){} }
   }); }
-  if(isDel){ (Array.isArray(DB.get().holdRel)?DB.get().holdRel:[]).forEach(e=>{
+  if(currentUser.role==='viewer'){ (Array.isArray(DB.get().holdRel)?DB.get().holdRel:[]).forEach(e=>{   // bunyi 'CC masuk sesuai jadwal' dihapus untuk Delivery/Admin (permintaan Delivery); hanya Pengamat
     if(!e||Date.now()-e.ts>15*60000) return; const key="rel|"+e.id; if(_koordSeen.has(key)) return; _koordSeen.add(key); fired=true;
     const txt=`CC ${e.plat}${e.lp?" (LP "+e.lp+")":""} sudah waktunya masuk sesuai jadwal: `+(e.stall?`naik ke Stall CC ${ccLbl(e.stall)}.`:`masuk Waiting List${e.queue?" no. "+e.queue:""}.`);
-    soundEv('jadwal'); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⏰ CC Masuk Sesuai Jadwal", txt); }catch(x){}
+    soundEv('jadwal',txt); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⏰ CC Masuk Sesuai Jadwal", txt); }catch(x){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("⏰ CC Masuk Sesuai Jadwal",{body:txt}); }catch(x){} }
   }); }
   if(isDel){ Object.keys(DB.get().takeReq||{}).forEach(k=>{ const q=DB.get().takeReq[k];
     if(!q||q.status!=="wait"||Date.now()-q.ts>30*60000) return; const key="take|"+k+"|"+q.ts; if(_koordSeen.has(key)) return; _koordSeen.add(key); fired=true;
     const txt=`${q.toName} minta memakai plat ${q.plat} yang masih login atas nama ${q.fromName}. Buka RADAR untuk menyetujui atau menolak.`;
-    soundEv('ambilalih'); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("🔁 Minta Ambil Alih Plat", txt); }catch(x){}
+    soundEv('ambilalih',txt); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("🔁 Minta Ambil Alih Plat", txt); }catch(x){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("🔁 Minta Ambil Alih Plat",{body:txt}); }catch(x){} }
   }); }
   for(const x of L){
@@ -4049,7 +4074,7 @@ function checkKoordAlerts(){
     for(const [key,txt] of evs){
       if(_koordSeen.has(key)) continue;
       _koordSeen.add(key); fired=true;
-      soundEv('koord'); if(navigator.vibrate) navigator.vibrate([250,120,250]);
+      soundEv('koord',txt); if(navigator.vibrate) navigator.vibrate([250,120,250]);
       try{ ringBg(key.startsWith('tls')?'🧾 ILS Siap Validasi':'🚚 CC Absen', txt); }catch(e){}
       if('Notification' in window && Notification.permission==='granted'){ try{ new Notification(key.startsWith('tls')?'🧾 ILS Siap Validasi':'🚚 CC Absen',{body:txt}); }catch(e){} }
     }
@@ -5858,6 +5883,22 @@ function ccCallOk(id){
   try{ DB.set(d=>{ const a=ccCallsList(d).slice(); const x=a.find(y=>y&&y.id===id); if(x) x.ack=Date.now(); d.ccCalls=a; }); }catch(e){}
 }
 const _vwCallSeen=new Set();
+const _naikSeen=new Set();
+function naikStallCheck(){
+  try{
+    if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer()) return;
+    const d=DB.get(), now=Date.now();
+    ccCallsList(d).forEach(x=>{
+      if(!x || now-x.ts>10*60000 || _naikSeen.has(x.id)) return;
+      const cur=d.cc[x.stall]; if(!cur || normPlat(cur.plat)!==normPlat(x.plat)) return;
+      _naikSeen.add(x.id);
+      const txt=`CC ${x.plat}${cur.lp?" (LP "+cur.lp+")":""} dapat giliran masuk Stall CC ${ccLbl(x.stall)}. Siapkan unit dan buat ILS.`;
+      soundEv('naikstall', txt); if(navigator.vibrate) navigator.vibrate([300,150,300]);
+      try{ ringBg("🅿️ CC Naik ke Stall — Buat ILS", txt); }catch(e){}
+      if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("🅿️ CC Naik ke Stall — Buat ILS",{body:txt}); }catch(e){} }
+    });
+  }catch(e){}
+}
 function ccCallCheck(){
   if(isViewer()){   // Pengamat ikut merasakan panggilan giliran parkir ke driver mana pun
     const dv=DB.get(), cv=ccCallsList(dv).filter(x=>x && !x.ack && !_vwCallSeen.has(x.id) && Date.now()-x.ts<10*60000).sort((a,b)=>b.ts-a.ts).find(x=>{ const cur=dv.cc[x.stall]; return cur && normPlat(cur.plat)===normPlat(x.plat); });
@@ -6811,12 +6852,12 @@ function chgCheck(){
     chgList(d).forEach(r=>{
       if(r.status==="pending" && canKeluarkanCC() && now-r.ts<6*3600000){
         const key=r.k+"|p", st=_chgSeen[key]||{n:0,t:0}; if(st.n>=4 || (st.n>0 && now-st.t<2*60000)) return;
-        _chgSeen[key]={n:st.n+1,t:now}; soundEv("chgreq"); try{ navigator.vibrate&&navigator.vibrate([300,150,300]); }catch(e){}
+        _chgSeen[key]={n:st.n+1,t:now}; soundEv("chgreq", (r.by||"KR")+": "+r.summary); try{ navigator.vibrate&&navigator.vibrate([300,150,300]); }catch(e){}
         try{ ringBg("📝 Permintaan "+(CHG_KIND[r.kind]||"")+" dari KR", r.summary+". Buka RADAR untuk menyetujui / menolak."); }catch(e){}
       }
       if(r.status!=="pending" && r.byUser===currentUser.username && r.decTs && now-r.decTs<30*60000){
         const key=r.k+"|d"; if(_chgSeen[key]) return; _chgSeen[key]={n:1,t:now};
-        soundEv("chgres"); try{ ringBg(r.status==="approved"?"✔ Permintaan disetujui":"✖ Permintaan ditolak", r.summary+(r.note?" — "+r.note:"")); }catch(e){}
+        soundEv("chgres", (r.status==="approved"?"Disetujui: ":"Ditolak: ")+r.summary+(r.note?" — "+r.note:"")); try{ ringBg(r.status==="approved"?"✔ Permintaan disetujui":"✖ Permintaan ditolak", r.summary+(r.note?" — "+r.note:"")); }catch(e){}
       }
     });
   }catch(e){}
@@ -9008,15 +9049,15 @@ function schedReqCheck(){
       const now=Date.now(), stale=Object.keys(d.schedReq||{}).filter(k=>{ const r=d.schedReq[k]; return !r || now-(r.ts||0)>=SREQ_TTL || ccPlatRegistered(r.plat); });
       if(stale.length) DB.set(x=>{ stale.forEach(k=>{ if(x.schedReq) delete x.schedReq[k]; }); });
     }
-    if(role!=="koordinator" && role!=="delivery" && role!=="viewer") return;
-    (role==="viewer"?["edit","dccp"]:[role==="koordinator"?"edit":"dccp"]).forEach(kind=>
+    if(role!=="koordinator" && role!=="delivery" && role!=="admin" && role!=="viewer") return;
+    (role==="viewer"||role==="delivery"||role==="admin"?["edit","dccp"]:["edit"]).forEach(kind=>
     schedReqList(d).forEach(r=>{
       const t=(r.kinds||{})[kind]; if(!t || Date.now()-t>15*60000) return;
       if(role==="koordinator" && !lpMine(r.lp)) return;
       const key=kind+"|"+r.k+"|"+t; if(_sreqSeen.has(key)) return; _sreqSeen.add(key);
       const title=kind==="edit"?"📅 Driver minta dijadwalkan":"⬆ Diingatkan update DCCP";
       const txt=kind==="edit"?`${r.plat}${r.lp?" (LP "+r.lp+")":""} · ${r.name||""}: plat belum ada di jadwal. Tambahkan lewat Spot Order atau Edit CC.`:`${r.plat}${r.lp?" (LP "+r.lp+")":""} · ${r.name||""}: plat belum ada di jadwal. Mohon upload DCCP terbaru.`;
-      soundEv('sreq'); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg(title, txt); }catch(e){}
+      soundEv('sreq',title+" — "+txt); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg(title, txt); }catch(e){}
       if('Notification' in window && Notification.permission==='granted'){ try{ new Notification(title,{body:txt}); }catch(e){} }
       try{ render(); }catch(e){}
     }));
@@ -10400,7 +10441,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueResort(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); whyCheck(); chgCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueResort(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); whyCheck(); chgCheck(); naikStallCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
