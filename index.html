@@ -5942,8 +5942,10 @@ function keluarkanCC(n){
   const why=prompt(`Keluarkan CC ${c.plat} dari Stall ${ccLbl(n)}?\n`+(ils?`• ILS #${ils.id} ikut dibatalkan, unit kembali ke stall\n`:"")+`• Stall ${ccLbl(n)} dikosongkan`+(q?`\n• CC berikutnya naik: ${q.plat}`:"")+`\n\nDikeluarkan oleh: ${(currentUser&&currentUser.name)||"-"} (otomatis dari akun login)\n\nKetik alasan (wajib, mis. tidak lolos verifikasi / unit NG):`, "");
   if(why===null) return;
   if(String(why).trim().length<3){ alert("Alasan wajib diketik (minimal 3 huruf). CC tidak jadi dikeluarkan."); return; }
+  const gone=confirm("Apakah CC "+c.plat+" SUDAH BERANGKAT jalan ke NVDC?\n\nOK = Ya, sudah jalan. Absen CC ini dikunci sampai tiba di NVDC (seperti Delout).\nBatal = Tidak, masih di yard (mis. salah absen / dobel). Boleh absen lagi.");
   DB.set(d=>{
     const cur=d.cc[n]; if(!cur) return;
+    if(gone){ d.ccGone=d.ccGone||{}; d.ccGone[normPlat(cur.plat)]=Date.now(); const ks=Object.keys(d.ccGone); if(ks.length>60) ks.sort((a,b)=>d.ccGone[a]-d.ccGone[b]).slice(0,ks.length-60).forEach(k=>delete d.ccGone[k]); }
     const oi=(d.ils||[]).findIndex(b=>b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===normPlat(cur.plat));
     let ilsId=null;
     if(oi>=0){ const x=d.ils[oi]; ilsId=x.id; (x.units||[]).forEach(u=>{ const un=d.units[u.slot]; if(un && un.ilsId===x.id) delete un.ilsId; }); (x.loadSnap||[]).forEach(e=>{ if(e.v && !d.units[e.slot]){ const v=Object.assign({},e.v); delete v.ilsId; d.units[e.slot]=v; } }); d.ils.splice(oi,1); }
@@ -8895,7 +8897,7 @@ function ccDirNow(d, plat){
     const o=trkCompute(r, d.mapPoints||DB.get().mapPoints||{}); return (o&&o.dir)||null; }catch(e){ return null; }
 }
 /* Sesudah Delout / dikeluarkan, CC TIDAK boleh absen lagi sampai posisinya tercatat di NVDC (d.ccNvdc). Tanpa titik NVDC: aturan jam lama. Kalau GPS CC tidak terbaca di NVDC, Delivery/Admin absen manual. */
-function ccLastDelout(d, plat){ const k=normPlat(plat); let lo=0; (d.ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===k && x.outTs>lo) lo=x.outTs; }); return lo; }   /* tanda keluar dari ADM = Delout (bukan CC yang cuma dikeluarkan dari stall) */
+function ccLastDelout(d, plat){ const k=normPlat(plat); let lo=((d.ccGone||{})[k])||0; (d.ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===k && x.outTs>lo) lo=x.outTs; }); return lo; }   /* tanda keluar dari ADM = Delout (bukan CC yang cuma dikeluarkan dari stall) */
 function ccNeedNvdc(d, plat){
   const mp=d.mapPoints||{}; if(!(mp.nvdc && typeof mp.nvdc.lat==="number")) return false;
   const lo=ccLastDelout(d, plat); if(!lo) return false;
