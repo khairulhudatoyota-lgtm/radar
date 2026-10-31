@@ -175,7 +175,9 @@ html,body{max-width:100%; overflow-x:hidden;}
 .slot .id{font-size:11px; color:var(--text-dim); font-weight:700;}
 .slot .val{font-size:12px; font-weight:700; margin-top:3px; word-break:break-all;}
 .slot.filled .val{color:var(--red);}
-.slot:not(.filled) .val{color:var(--green);}
+.slot:not(.filled):not(.picked){background:#EEF0F3; border-color:#B4BBC6;}
+.slot.picked:not(.filled){background:#EEF0F3;}
+.slot:not(.filled) .val{color:#8A94A3;}
 
 /* ===== CC cards ===== */
 .ccrow{display:flex; gap:10px; overflow-x:auto; padding-bottom:6px;}
@@ -324,11 +326,11 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
   min-height:52px; display:flex; flex-direction:column; justify-content:center; cursor:pointer;
 }
 .yardcell.filled{background:var(--red-bg); border-color:#7a3030; border-style:solid;}
-.yardcell.empty{background:var(--green-bg); border-color:#2a6b45;}
+.yardcell.empty{background:#EEF0F3; border-color:#B4BBC6;}
 .yardcell .id{font-size:9px; color:var(--text-dim); font-weight:700; font-family:'Space Mono',monospace;}
 .yardcell .v{font-size:10px; font-weight:800; margin-top:3px; word-break:break-word; line-height:1.15;}
 .yardcell.filled .v{color:var(--red);}
-.yardcell.empty .v{color:var(--green);}
+.yardcell.empty .v{color:#8A94A3;}
 .lane{
   position:relative; height:26px; margin:8px 0;
   background:repeating-linear-gradient(90deg, var(--gold-dim) 0 14px, transparent 14px 26px);
@@ -1848,8 +1850,8 @@ function renderInner(){
   vp.className = "view v-"+activeTab;
   if(activeTab==="dispatcher"){ setVP(vp, renderDispatcher()); if(_vpChanged && vinDraft) setTimeout(()=>{ if(document.getElementById("vinInput")) onVinInput(); },0); }
   else if(activeTab==="orderstall") setVP(vp, renderOrderStall());
-  else if(activeTab==="delivery") setVP(vp, schedReqHtml()+renderDelivery());
-  else if(activeTab==="koordinator") setVP(vp, schedReqHtml()+renderKoordinator());
+  else if(activeTab==="delivery") setVP(vp, chgReqHtml()+schedReqHtml()+renderDelivery());
+  else if(activeTab==="koordinator") setVP(vp, chgReqHtml()+schedReqHtml()+renderKoordinator());
   else if(activeTab==="defect"){ setVP(vp, renderDefectReport()); if(_vpChanged) setTimeout(init3DCarDiagram, 0); }
   else if(activeTab==="confirmdefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccplan") setVP(vp, renderCCPlan());
@@ -1857,7 +1859,7 @@ function renderInner(){
   else if(activeTab==="prio") setVP(vp, renderPrioPage());
   else if(activeTab==="dashboard") setVP(vp, renderLeaderDashboard());
   else if(activeTab==="speedlog") setVP(vp, renderSpeedLog());
-  else if(activeTab==="dccp") setVP(vp, schedReqHtml()+renderDccpUpload());
+  else if(activeTab==="dccp") setVP(vp, chgReqHtml()+schedReqHtml()+renderDccpUpload());
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
   else if(activeTab==="ccreport"){ setVP(vp, renderCcReport()); if(_vpChanged) setTimeout(()=>tripLoad().then(rptUpdate),0); }
@@ -2507,6 +2509,8 @@ const SND_EV=[
   {k:"ambilalih",t:"Minta ambil alih plat",    d:"Driver lain minta memakai plat yang masih login", roles:["delivery","admin"], def:"turun"},
   {k:"sreq",    t:"Driver minta dijadwalkan",  d:"Plat belum ada di jadwal DCCP / diingatkan update DCCP", roles:["delivery","koordinator","admin"], def:"radar"},
   {k:"tanya",   t:"Delivery tanya alasan (KR)", d:"Delivery/Admin/Leader bertanya kenapa CC LP-mu belum jalan; isi alasannya", roles:["koordinator"], def:"nenaw"},
+  {k:"chgreq",  t:"Permintaan tukar / ganti CC (dari KR)", d:"Koordinator minta tukar jam, ganti CC, atau edit jadwal; menunggu persetujuanmu", roles:["delivery","admin"], def:"telepon"},
+  {k:"chgres",  t:"Jawaban permintaan tukar / ganti CC", d:"Delivery menyetujui / menolak permintaan tukar-ganti CC darimu", roles:["koordinator"], def:"chime"},
   {k:"jawab",   t:"Alasan dari Koordinator",   d:"Koordinator sudah mengisi alasan atas pertanyaanmu", roles:["delivery","admin","leader"], def:"chime"},
   {k:"koord",   t:"Notifikasi Koordinator",    d:"CC masuk stall, ILS sudah di TLS, dan kabar lain untuk LP-mu", roles:["koordinator"], def:"naik"}
 ];
@@ -6491,6 +6495,18 @@ function dccpSaveEdit(){
   const rec = {lp, police, model:g("dfModel"), driver:g("dfDriver"), drvCode:(_dc?_dc.value.trim().toUpperCase():undefined), schedTime:g("dfTime"), dest:g("dfDest"), note:g("dfNote"), planTrip:Math.max(0,parseInt(g("dfTrip"))||0), planUnit:Math.max(0,parseInt(g("dfUnit"))||0)};
   const idx = dccpEditIdx;
   if(rec.drvCode===undefined) delete rec.drvCode;   // koordinator tidak mengubah kode driver
+  if(idx!==-1 && currentUser && currentUser.role==="koordinator"){
+    const o0=DB.get().dccpSchedule[idx]; if(!o0) return;
+    const ch=[]; if(normPlat(o0.police)!==normPlat(rec.police)) ch.push("plat "+o0.police+" → "+rec.police); if((o0.driver||"")!==(rec.driver||"")) ch.push("driver "+(o0.driver||"-")+" → "+(rec.driver||"-")); if((o0.lp||"")!==(rec.lp||"")) ch.push("LP "+(o0.lp||"-")+" → "+rec.lp); if((o0.schedTime||"")!==(rec.schedTime||"")) ch.push("jam "+(o0.schedTime||"-")+" → "+(rec.schedTime||"-")); if((o0.dest||"")!==(rec.dest||"")) ch.push("tujuan "+(o0.dest||"-")+" → "+(rec.dest||"-"));
+    if(!ch.length){ ch.push("ubah data/catatan"); }
+    if(chgReqCreate("edit", {old:o0.police, rec}, "Edit "+o0.police+": "+ch.join("; "), o0.lp, [o0.police, rec.police], "")){ dccpEditIdx=null; alert("Permintaan perubahan dikirim ke Delivery. Belum berlaku sampai Delivery menyetujui."); render(); }
+    return;
+  }
+  editExecIdx(idx, rec);
+  dccpEditIdx=null; render();
+}
+function editExec(P){ const i=(DB.get().dccpSchedule||[]).findIndex(x=>normPlat(x.police)===normPlat(P.old)); if(i<0) return "CC "+P.old+" tidak ada di jadwal (jadwal berubah)."; editExecIdx(i, P.rec); return ""; }
+function editExecIdx(idx, rec){
   DB.set(d=>{
     if(idx===-1){
       d.dccpSchedule.push({...rec, extra:true, schedTime: rec.schedTime || ""});
@@ -6501,7 +6517,6 @@ function dccpSaveEdit(){
       { const nr=d.dccpSchedule[idx]; if(normPlat(old.police)!==normPlat(nr.police) || (old.driver||"")!==(nr.driver||"") || (old.drvCode||"")!==(nr.drvCode||"")){ ccRenameEverywhere(d, old.police, {plat:nr.police, lp:nr.lp, drvCode:nr.drvCode, driver:nr.driver}); ccPurgeStale(d); holdResync(d); } }
     }
   });
-  dccpEditIdx=null; render();
 }
 
 /* ===== CC PENGGANTI (per ritase atau sampai ritase terakhir) ===== */
@@ -6591,8 +6606,18 @@ function dccpGantiDo(ri){
   if(!plat){ msg.innerHTML=`<div class="msg err">Isi plat CC pengganti.</div>`; return; }
   const cur=DB.get().dccpSchedule[ri]; if(!cur) return;
   if(normPlat(plat)===normPlat(cur.police)){ msg.innerHTML=`<div class="msg err">Plat pengganti sama dengan CC semula.</div>`; return; }
+  const P={old:cur.police, chosen, plat, lp, drv, code, why};
+  if(currentUser && currentUser.role==="koordinator"){
+    if(chgReqCreate("ganti", P, "Ganti CC "+cur.police+" → "+plat+" (rit "+chosen.join(", ")+")"+(drv?" · driver "+drv:""), cur.lp, [cur.police, plat], why)){ closeModal(); alert("Permintaan ganti CC dikirim ke Delivery. Belum berlaku sampai Delivery menyetujui."); render(); }
+    return;
+  }
+  const e=gantiExec(P); if(e){ msg.innerHTML=`<div class="msg err">${e}</div>`; return; }
+  closeModal(); try{ holdRelease(); }catch(e2){} render();
+}
+function gantiExec(P){
+  const {chosen,plat,lp,drv,code,why}=P; let err="";
   DB.set(d=>{
-    const old=d.dccpSchedule[ri]; if(!old) return;
+    const ri=d.dccpSchedule.findIndex(x=>normPlat(x.police)===normPlat(P.old)); const old=d.dccpSchedule[ri]; if(!old){ err="CC "+P.old+" tidak ada di jadwal (jadwal berubah)."; return; }
     const trips=dccpTripList(old), n=chosen.length;
     const pt=(old.planTrip!=null?Number(old.planTrip):trips.length)||trips.length||1;
     const pu=old.planUnit!=null?Number(old.planUnit):pt*6;
@@ -6621,7 +6646,8 @@ function dccpGantiDo(ri){
     }
     holdResync(d);
   });
-  closeModal(); try{ holdRelease(); }catch(e){} render();
+  try{ holdRelease(); }catch(e){}
+  return err;
 }
 /* ===== TUKAR JAM LOADING ANTAR CC =====
    - Hanya bisa sebelum loading pertama (kedua CC belum punya ILS hari ini).
@@ -6670,8 +6696,19 @@ function tukarDo(ri){
   const pi=parseInt(v("tkP"),10), why=v("tkWhy");
   if(why.length<3){ msg.innerHTML=`<div class="msg err">Alasan wajib diketik (minimal 3 huruf).</div>`; return; }
   if(isNaN(pi)){ msg.innerHTML=`<div class="msg err">Pilih CC pasangannya.</div>`; return; }
+  const D=DB.get(), A=D.dccpSchedule[ri], B=D.dccpSchedule[pi]; if(!A||!B){ msg.innerHTML=`<div class="msg err">Data jadwal berubah, ulangi.</div>`; return; }
+  if(currentUser && currentUser.role==="koordinator"){
+    if(chgReqCreate("tukar", {a:A.police, b:B.police, why}, "Tukar jam "+A.police+" ("+dccpTripList(A).join(", ")+") ⇄ "+B.police+" ("+dccpTripList(B).join(", ")+")", A.lp, [A.police,B.police], why)){ closeModal(); alert("Permintaan tukar dikirim ke Delivery. Belum berlaku sampai Delivery menyetujui."); render(); }
+    return;
+  }
+  const err=tukarExec(A.police, B.police, why, "", "");
+  if(err){ msg.innerHTML=`<div class="msg err">${err}</div>`; return; }
+  closeModal(); holdRelease(); render();
+}
+function tukarExec(aPlat, bPlat, why, by, appr){
   let err="";
   DB.set(d=>{
+    const ri=d.dccpSchedule.findIndex(x=>normPlat(x.police)===normPlat(aPlat)), pi=d.dccpSchedule.findIndex(x=>normPlat(x.police)===normPlat(bPlat));
     const a=d.dccpSchedule[ri], b=d.dccpSchedule[pi]; if(!a||!b){ err="Data jadwal berubah, ulangi."; return; }
     const c=tukarCands(d,ri);
     if(!tukarOk(a,d)||!tukarOk(b,d)){ err="Salah satu CC sudah loading, tukar jam tidak bisa lagi."; return; }
@@ -6682,12 +6719,87 @@ function tukarDo(ri){
     put(a,ib); put(b,ia);
     a.origPolice=ia.police; b.origPolice=ib.police;
     a.tukar=ia.police; b.tukar=ib.police;
-    d.swapLog=d.swapLog||[]; d.swapLog.push({ts:Date.now(), a:ia.police, lpA:ia.lp||"", drA:ia.driver||"", tA:ta.join(", "), b:ib.police, lpB:ib.lp||"", drB:ib.driver||"", tB:tb.join(", "), cross:String(ia.lp||"").toUpperCase()!==String(ib.lp||"").toUpperCase(), why, by:(currentUser&&currentUser.name)||""});
+    d.swapLog=d.swapLog||[]; d.swapLog.push({ts:Date.now(), a:ia.police, lpA:ia.lp||"", drA:ia.driver||"", tA:ta.join(", "), b:ib.police, lpB:ib.lp||"", drB:ib.driver||"", tB:tb.join(", "), cross:String(ia.lp||"").toUpperCase()!==String(ib.lp||"").toUpperCase(), why, by:by||((currentUser&&currentUser.name)||"")+"", appr:appr||""});
     if(d.swapLog.length>200) d.swapLog=d.swapLog.slice(-200);
     holdResync(d); ccQueueSort(d);
   });
-  if(err){ msg.innerHTML=`<div class="msg err">${err}</div>`; return; }
-  closeModal(); holdRelease(); render();
+  return err;
+}
+
+/* ===== KONFIRMASI DELIVERY: Koordinator tidak bisa langsung Tukar Jam / Ganti CC / Edit jadwal — dikirim sebagai permintaan, berlaku setelah Delivery (atau Admin) menyetujui =====
+   data.chgReq[id] = {id, kind:"tukar"|"ganti"|"edit", payload, summary, lp, why, plats:[...], by, byUser, ts, status:"pending"|"approved"|"rejected", decBy, decTs, note} */
+const CHG_KIND={tukar:"🔄 Tukar Jam / CC", ganti:"🔁 Ganti CC (pengganti)", edit:"✏️ Edit jadwal CC"};
+function chgMap(d){ const m=(d||DB.get()).chgReq; return (m&&typeof m==="object")?m:{}; }
+function chgList(d){ const m=chgMap(d); return Object.keys(m).map(k=>Object.assign({k},m[k])).filter(r=>r&&r.kind); }
+function chgReqCreate(kind, payload, summary, lp, plats, why){
+  if(FBS.enabled && fbCurrentState()!=="online"){ alert("Sinyal belum Online. Permintaan tidak dikirim supaya tidak dobel. Tunggu sampai ● Online lalu coba lagi."); return false; }
+  const pl=(plats||[]).map(normPlat).filter(Boolean);
+  const busy=chgList(DB.get()).find(r=>r.status==="pending" && (r.plats||[]).some(x=>pl.includes(normPlat(x))));
+  if(busy){ alert("Sudah ada permintaan yang menunggu konfirmasi Delivery untuk "+(busy.plats||[]).join(" / ")+". Tunggu diputuskan dulu."); return false; }
+  const id="r"+Date.now();
+  const rec={id, kind, payload:JSON.parse(JSON.stringify(payload)), summary, lp:lp||"", why:why||"", plats:(plats||[]).map(platFmt), by:(currentUser&&currentUser.name)||"", byUser:(currentUser&&currentUser.username)||"", ts:Date.now(), status:"pending"};
+  DB.set(d=>{ d.chgReq=(d.chgReq&&typeof d.chgReq==="object")?d.chgReq:{}; const cut=Date.now()-24*3600000; Object.keys(d.chgReq).forEach(k=>{ const x=d.chgReq[k]; if(!x||(x.ts||0)<cut) delete d.chgReq[k]; }); d.chgReq[id]=rec; });
+  return true;
+}
+function chgApprove(k){
+  if(!canKeluarkanCC()){ alert("Hanya Delivery / Admin yang boleh menyetujui."); return; }
+  const r=chgMap()[k]; if(!r || r.status!=="pending") return;
+  const P=r.payload||{}; let err="";
+  if(!confirm("Setujui permintaan ini?\n\n"+r.summary+(r.why?"\nAlasan: "+r.why:"")+"\nDiminta oleh: "+r.by)) return;
+  if(r.kind==="tukar") err=tukarExec(P.a,P.b,P.why,r.by,(currentUser&&currentUser.name)||"");
+  else if(r.kind==="ganti") err=gantiExec(P);
+  else if(r.kind==="edit") err=editExec(P);
+  if(err){ alert("Tidak bisa diterapkan: "+err+"\nTolak saja permintaan ini, minta Koordinator mengajukan ulang."); return; }
+  const me=(currentUser&&currentUser.name)||"";
+  DB.set(d=>{ const x=(d.chgReq||{})[k]; if(x){ x.status="approved"; x.decBy=me; x.decTs=Date.now(); } });
+  try{ holdRelease(); }catch(e){} render();
+}
+function chgReject(k){
+  if(!canKeluarkanCC()){ alert("Hanya Delivery / Admin yang boleh menolak."); return; }
+  const r=chgMap()[k]; if(!r || r.status!=="pending") return;
+  const note=prompt("Tolak permintaan:\n"+r.summary+"\n\nAlasan penolakan (boleh kosong):","");
+  if(note===null) return;
+  const me=(currentUser&&currentUser.name)||"";
+  DB.set(d=>{ const x=(d.chgReq||{})[k]; if(x){ x.status="rejected"; x.decBy=me; x.decTs=Date.now(); x.note=String(note||"").trim().slice(0,200); } });
+  render();
+}
+function chgReqHtml(){
+  try{
+    if(!currentUser || !["koordinator","delivery","admin"].includes(currentUser.role)) return "";
+    const d=DB.get(), now=Date.now(), isD=canKeluarkanCC();
+    const mine=r=>isD || r.byUser===currentUser.username || (myKoordLP() && r.lp && lpCanon(myKoordLP())===lpCanon(r.lp));
+    const L=chgList(d).filter(mine);
+    const pend=L.filter(r=>r.status==="pending").sort((a,b)=>a.ts-b.ts);
+    const rec=L.filter(r=>r.status!=="pending" && now-(r.decTs||0)<2*3600000 && (isD || r.byUser===currentUser.username)).sort((a,b)=>b.decTs-a.decTs);
+    if(!pend.length && !rec.length) return "";
+    const hm=t=>t?new Date(t).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"}):"";
+    const row=r=>`<div style="border-top:1px solid var(--border);padding:8px 0;">
+      <div style="font-size:12px;font-weight:800;">${CHG_KIND[r.kind]||r.kind} <span style="font-weight:400;color:var(--text-dim);">· LP ${xlEsc(r.lp||"-")} · ${xlEsc(r.by||"")} · ${hm(r.ts)}</span></div>
+      <div style="font-size:13px;margin:3px 0;">${xlEsc(r.summary)}</div>${r.why?`<div style="font-size:12px;color:var(--text-dim);">Alasan: ${xlEsc(r.why)}</div>`:""}
+      ${r.status==="pending" ? (isD ? `<div style="display:flex;gap:8px;margin-top:6px;"><button class="btn btn-primary btn-sm" style="width:auto;" onclick="chgApprove('${r.k}')">✔ Setujui</button><button class="btn btn-outline btn-sm" style="width:auto;color:var(--red);border-color:var(--red);" onclick="chgReject('${r.k}')">✖ Tolak</button></div>` : `<div style="font-size:12px;color:#C77700;font-weight:700;margin-top:4px;">⏳ Menunggu konfirmasi Delivery — belum berlaku</div>`)
+        : `<div style="font-size:12px;font-weight:700;margin-top:4px;color:${r.status==="approved"?"#1E9E5A":"#D64545"};">${r.status==="approved"?"✔ Disetujui":"✖ Ditolak"} oleh ${xlEsc(r.decBy||"-")} · ${hm(r.decTs)}${r.note?" — "+xlEsc(r.note):""}</div>`}
+    </div>`;
+    return `<div class="card" style="border-left:5px solid #C77700;"><h3 style="margin:0 0 4px;">📝 Konfirmasi Delivery${pend.length?` (${pend.length} menunggu)`:""}</h3>
+      <div style="font-size:12px;color:var(--text-dim);">Tukar jam, ganti CC, dan edit jadwal oleh Koordinator baru berlaku setelah disetujui Delivery / Admin.</div>
+      ${pend.map(row).join("")}${rec.map(row).join("")}</div>`;
+  }catch(e){ return ""; }
+}
+const _chgSeen={};
+function chgCheck(){
+  try{
+    if(!currentUser || isViewer()) return; const d=DB.get(), now=Date.now();
+    chgList(d).forEach(r=>{
+      if(r.status==="pending" && canKeluarkanCC() && now-r.ts<6*3600000){
+        const key=r.k+"|p", st=_chgSeen[key]||{n:0,t:0}; if(st.n>=4 || (st.n>0 && now-st.t<2*60000)) return;
+        _chgSeen[key]={n:st.n+1,t:now}; soundEv("chgreq"); try{ navigator.vibrate&&navigator.vibrate([300,150,300]); }catch(e){}
+        try{ ringBg("📝 Permintaan "+(CHG_KIND[r.kind]||"")+" dari KR", r.summary+". Buka RADAR untuk menyetujui / menolak."); }catch(e){}
+      }
+      if(r.status!=="pending" && r.byUser===currentUser.username && r.decTs && now-r.decTs<30*60000){
+        const key=r.k+"|d"; if(_chgSeen[key]) return; _chgSeen[key]={n:1,t:now};
+        soundEv("chgres"); try{ ringBg(r.status==="approved"?"✔ Permintaan disetujui":"✖ Permintaan ditolak", r.summary+(r.note?" — "+r.note:"")); }catch(e){}
+      }
+    });
+  }catch(e){}
 }
 function swapLogHtml(data){
   const mid=prodMidnight(), L=(data.swapLog||[]).filter(x=>x.ts>=mid).slice().reverse(); if(!L.length) return "";
@@ -10268,7 +10380,7 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 if(loginShift) setLoginShift(loginShift);
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueResort(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); whyCheck(); }catch(e){} }, 3000);
+setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueResort(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); whyCheck(); chgCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
