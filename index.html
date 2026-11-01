@@ -624,17 +624,20 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .colhead{font-size:16px !important; font-weight:900 !important; letter-spacing:0.04em;}
 .stallcol.sideA .colhead{color:#1E6FD9 !important;}
 .stallcol.sideB .colhead{color:#C98F00 !important;}
-.stallcol.sideA .yardcell .id{font-size:12px; font-weight:900; color:#1E6FD9;}
-.stallcol.sideB .yardcell .id{font-size:12px; font-weight:900; color:#C98F00;}
-.stallcol.sideA .yardcell{border-left:4px solid #1E6FD9;}
-.stallcol.sideB .yardcell{border-left:4px solid #C98F00;}
+.stallcol .yardcell .id{font-size:12px; font-weight:900; color:#5B6573;}
+/* warna sisi A/B hanya di judul stall; di slot warna = ada unit */
 .stallgroup .lbl{font-size:15px !important; font-weight:900 !important;}
 .stallgroup.sideA .lbl{color:#1E6FD9 !important;}
 .stallgroup.sideB .lbl{color:#C98F00 !important;}
-.stallgroup.sideA .slot .id{font-size:13px; font-weight:900; color:#1E6FD9;}
-.stallgroup.sideB .slot .id{font-size:13px; font-weight:900; color:#C98F00;}
-.stallgroup.sideA .slot{border-left:4px solid #1E6FD9;}
-.stallgroup.sideB .slot{border-left:4px solid #C98F00;}
+.stallgroup .slot .id{font-size:13px; font-weight:900; color:#5B6573;}
+.slot.filled .id, .slot.filled .val, .yardcell.filled .id, .yardcell.filled .v{color:var(--slotfg,#fff) !important;}
+.slot.filled .id, .yardcell.filled .id{opacity:.85;}
+.slot .val, .yardcell .v{font-size:12px; font-weight:900; letter-spacing:0; white-space:nowrap; word-break:normal; overflow:hidden; text-overflow:clip;}
+.slot.filled, .yardcell.filled{border-width:2px !important; border-style:solid !important;}
+.slot:not(.filled), .yardcell.empty{background:#F4F5F7 !important; border:2px dashed #C9CED6 !important;}
+.slot:not(.filled) .val, .yardcell.empty .v{color:#A3ABB7 !important; font-weight:700;}
+.yardcell.empty .v{font-size:11px;}
+.slot.picked:not(.filled){border:2px solid var(--gold) !important; box-shadow:0 0 0 2px var(--gold) inset;}
 
 .ugroup{border:1.5px solid var(--border); border-radius:10px; margin-bottom:6px; background:var(--panel2); overflow:hidden;}
 .ugroup>summary{cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px; padding:8px 12px; font-weight:900; font-size:15px;}
@@ -1198,6 +1201,9 @@ function detectModel(vin, models){
   }
   return null;
 }
+/* Slot terisi = kotak warna model PENUH (tulisan putih / gelap otomatis sesuai terang-gelapnya warna). Slot kosong = abu-abu polos. */
+function slotFg(hex){ try{ const h=String(hex||"").replace("#",""); const r=parseInt(h.substr(0,2),16), g=parseInt(h.substr(2,2),16), b=parseInt(h.substr(4,2),16); return (0.299*r+0.587*g+0.114*b)>170 ? "#1B2430" : "#FFFFFF"; }catch(e){ return "#FFFFFF"; } }
+function slotFillStyle(mc){ const fg=slotFg(mc); return `background:${mc}; border:2px solid ${mc}; color:${fg}; --slotfg:${fg};`; }
 function getModelColor(model, data){
   return (data.models[model] && data.models[model].color) || '#DE4B4B';
 }
@@ -1999,15 +2005,15 @@ function offLocCheck(loc){
   return true;
 }
 
-/* Ringkasan input dispatcher shift ini (semua dispatcher, semua area), per model. Sumber sama dengan "UNIT DIINPUT" di Display. Hanya tampilan, tidak mengubah data. */
+/* Ringkasan WIP saat ini (unit yang masih ada di stall / luar stall = belum dikirim), per model. Sama dengan WIP di Dashboard. Hanya tampilan, tidak mengubah data. */
 function dispSumHtml(data){
-  const sh=currentShift(), w=shiftWindow(prodDayStart(), sh), by={}, byL={}; let tot=0;
-  (data.unitLog||[]).forEach(e=>{ if(e && e.parkedTs!=null && e.parkedTs>=w[0] && e.parkedTs<w[1]){ tot++; const m=e.model||"?"; by[m]=(by[m]||0)+1; const l=e.line||"-"; byL[l]=(byL[l]||0)+1; } });
+  const by={}; let tot=0;
+  Object.values(data.units||{}).forEach(u=>{ if(!u) return; tot++; const m=u.model||"?"; by[m]=(by[m]||0)+1; });
   const ms=Object.keys(by).sort((a,b)=>by[b]-by[a]||a.localeCompare(b));
   const chip=m=>{ const c=getModelColor(m,data)||"#16213E"; return `<span style="display:inline-flex;align-items:center;gap:6px;border:1.5px solid ${c};background:${c}14;border-radius:999px;padding:4px 10px;font-size:13px;"><b style="color:${c};">${escH(m)}</b><b style="font-size:15px;">${by[m]}</b></span>`; };
   return `<div class="card d-sum" style="padding:12px 14px;">
-    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:${tot?8:0}px;"><h3 style="margin:0;">📊 Input ${sh==="1"?"Shift Day":"Shift Night"}</h3><span style="font-size:22px;font-weight:800;color:var(--green);">${tot}</span><span style="font-size:12px;color:var(--text-dim);">unit</span></div>
-    ${tot?`<div style="display:flex;gap:6px;flex-wrap:wrap;">${ms.map(chip).join("")}</div>`:`<div style="font-size:12px;color:var(--text-dim);">Belum ada unit yang diinput di shift ini.</div>`}
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:${tot?8:0}px;"><h3 style="margin:0;">📦 WIP (belum dikirim)</h3><span style="font-size:22px;font-weight:800;color:#E8833A;">${tot}</span><span style="font-size:12px;color:var(--text-dim);">unit</span></div>
+    ${tot?`<div style="display:flex;gap:6px;flex-wrap:wrap;">${ms.map(chip).join("")}</div>`:`<div style="font-size:12px;color:var(--text-dim);">Stall kosong, semua unit sudah dikirim.</div>`}
   </div>`;
 }
 function renderDispatcher(){
@@ -2020,9 +2026,9 @@ function renderDispatcher(){
       const occ = data.units[id];
       const isPicked = pickedSlot===id;
       const mc = occ ? getModelColor(occ.model, data) : null;
-      cells += `<div class="slot ${occ?'filled':''} ${isPicked?'picked':''}" data-slot="${id}" ${occ?`style="background:${mc}20; border-color:${mc};"`:''} onclick="${occ ? `openDispatcherSlotEdit('${id}')` : `onPickSlot('${id}')`}">
+      cells += `<div class="slot ${occ?'filled':''} ${isPicked?'picked':''}" data-slot="${id}" ${occ?`style="${slotFillStyle(mc)}"`:''} onclick="${occ ? `openDispatcherSlotEdit('${id}')` : `onPickSlot('${id}')`}">
         <div class="id">${id}</div>
-        <div class="val" ${occ?`style="color:${mc};"`:''}>${occ? (occ.model||'?') : 'KOSONG'}</div>${occ&&(occ.batam||occ.prio)?`<div>${unitTagsHtml(occ,true)}</div>`:""}
+        <div class="val">${occ? (occ.model||'?') : 'KOSONG'}</div>${occ&&(occ.batam||occ.prio)?`<div>${unitTagsHtml(occ,true)}</div>`:""}
       </div>`;
     }
     return `<div class="stallgroup side${g.slice(-1)}"><div class="lbl">Stall ${g}${isBatamStall(data,g)?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;">KHUSUS BATAM</span>`:""}${canKeluarkanCC()&&Object.keys(data.units||{}).some(k=>data.units[k]&&!data.units[k].ilsId&&!isOffKey(k)&&groupOf(k)===g)?` <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:1px 8px;font-size:10px;margin-left:6px;color:var(--red);border-color:var(--red);" onclick="clearStallUnits('${g}')">🗑 Kosongkan</button>`:""}</div><div class="slotgrid">${cells}</div></div>`;
@@ -2057,7 +2063,7 @@ function renderDispatcher(){
 
     <div class="card d-slots ${geoIsIn()?'':'geolocked'}">
       <h3>🅿️ Pilih Slot Stall Tujuan (Opsional)</h3>
-      <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Ketuk slot kosong (hijau) kalau mau pilih posisi manual. Ketuk slot terisi (merah) buat keluarkan/edit unit.</p>
+      <p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Ketuk slot kosong (abu-abu) kalau mau pilih posisi manual. Ketuk slot terisi (berwarna) buat keluarkan/edit unit.</p>
       ${clearAllBtn}<div class="stallgrid">${slotsHtml}</div>
     </div>
 
@@ -7195,7 +7201,7 @@ function ldrCompute(data){
   const slots = [];
   for(let i=0;i<nb;i++){
     const a = rs+i*LDR_SLOT_MS, b = a+LDR_SLOT_MS;
-    slots.push({a, b, label: ldrHM(a), inp:0, out:0, wip:0, byModel:{}});
+    slots.push({a, b, label: ldrHM(a), inp:0, out:0, cc:0, _cc:{}, wip:0, byModel:{}});
   }
   const modelSet = new Set(Object.keys(data.models||{}));
   const idxOf = ts=>{ if(ts==null || ts<rs || ts>=re) return -1; const i=Math.floor((ts-rs)/LDR_SLOT_MS); return i<nb?i:-1; };
@@ -7208,7 +7214,7 @@ function ldrCompute(data){
     const i = idxOf(e.parkedTs);
     if(i>=0){ slots[i].inp++; slots[i].byModel[e.model]=(slots[i].byModel[e.model]||0)+1; tIn++; m.inp++; const ln=e.line||"-"; byLine[ln]=(byLine[ln]||0)+1; }
     const j = idxOf(e.sentTs);
-    if(j>=0){ slots[j].out++; tOut++; m.out++; const lo=e.line||"-"; byLineOut[lo]=(byLineOut[lo]||0)+1; }
+    if(j>=0){ slots[j].out++; tOut++; m.out++; const lo=e.line||"-"; byLineOut[lo]=(byLineOut[lo]||0)+1; if(e.ilsId!=null && !slots[j]._cc[e.ilsId]){ slots[j]._cc[e.ilsId]=1; slots[j].cc++; } }   /* Delivery by CC = jumlah CC (ILS) yang unitnya terkirim di slot itu */
     if(e.status==="parked"||e.status==="ils") m.wip++;
   });
   const _wipE = (()=>{ try{ const base = ldrPeriod==="yesterday" ? prodDayStart()-86400000 : prodDayStart(); return normPlanEntry((data.prodPlan||{})[prodDateKey(base+3600000)]); }catch(e){ return {wip0:0,wipL:{}}; } })();
@@ -7232,9 +7238,10 @@ function ldrCompute(data){
   }
   const wipList = log.filter(e=>e.status==="parked"||e.status==="ils").sort((a,b)=>(a.parkedTs||0)-(b.parkedTs||0));
   // buang slot kosong di awal (sebelum aktivitas pertama) agar tabel ringkas
-  let first = slots.findIndex(s=>s.inp||s.out);
+  let first = slots.findIndex(s=>s.inp||s.out||s.cc);
   if(first<0) first = Math.max(0, nb-4);
-  return {slots: slots.slice(first), tIn:_tIn2, tInRaw:tIn, tOut, byModel, byLine:_bl2, models:[...modelSet], wipList, wip0:_wip0, wipL:_wipE.wipL||{}, wipByLine:(()=>{ const o={}; PROD_LINES.forEach(l=>{ o[l]=_cum.L[l]; }); return o; })(), wipTotal: _cum.t, cum:_cum};
+  const tCC = slots.reduce((a,s)=>a+s.cc,0);
+  return {slots: slots.slice(first), tIn:_tIn2, tInRaw:tIn, tOut, tCC, byModel, byLine:_bl2, models:[...modelSet], wipList, wip0:_wip0, wipL:_wipE.wipL||{}, wipByLine:(()=>{ const o={}; PROD_LINES.forEach(l=>{ o[l]=_cum.L[l]; }); return o; })(), wipTotal: _cum.t, cum:_cum};
 }
 function ldrChartSVG(slots){
   const n = slots.length;
@@ -7252,7 +7259,7 @@ function ldrChartSVG(slots){
   slots.forEach((s,i)=>{
     const cx = L+gw*i+gw/2;
     bars += `<rect x="${cx-bw-1}" y="${y(s.inp)}" width="${bw}" height="${T+ph-y(s.inp)}" fill="#16213E" rx="2"><title>${s.label} Input: ${s.inp}</title></rect>`;
-    bars += `<rect x="${cx+1}" y="${y(s.out)}" width="${bw}" height="${T+ph-y(s.out)}" fill="#1E9E5A" rx="2"><title>${s.label} Kirim: ${s.out}</title></rect>`;
+    bars += `<rect x="${cx+1}" y="${y(s.out)}" width="${bw}" height="${T+ph-y(s.out)}" fill="#1E9E5A" rx="2"><title>${s.label} Delivery by Unit: ${s.out}</title></rect>`;
     pts.push([cx, y(s.wip), s]);
     if(n<=16 || i%2===0) bars += `<text x="${cx}" y="${H-B+16}" text-anchor="middle" font-size="10" fill="#6B7686">${s.label}</text>`;
   });
@@ -7261,7 +7268,7 @@ function ldrChartSVG(slots){
   return `<div style="overflow-x:auto;"><svg viewBox="0 0 ${W} ${H}" style="min-width:${n>12?W:0}px;width:100%;height:auto;">${g}${bars}<path d="${line}" fill="none" stroke="#E8833A" stroke-width="2.5"/>${dots}</svg></div>
   <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin-top:4px;">
     <span><i style="display:inline-block;width:10px;height:10px;background:#16213E;border-radius:2px;"></i> Input</span>
-    <span><i style="display:inline-block;width:10px;height:10px;background:#1E9E5A;border-radius:2px;"></i> Terkirim</span>
+    <span><i style="display:inline-block;width:10px;height:10px;background:#1E9E5A;border-radius:2px;"></i> Delivery by Unit</span>
     <span><i style="display:inline-block;width:14px;height:3px;background:#E8833A;"></i> WIP (akhir slot)</span></div>`;
 }
 function ldrStackSVG(slots, models, data){
@@ -7323,6 +7330,8 @@ function ldrExportCSV(){
   a.href = URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv"}));
   a.download = "log-unit-"+new Date().toISOString().slice(0,10)+".csv"; a.click();
 }
+let _ldrSlotSeen=0;
+setInterval(()=>{ try{ if(activeTab!=="dashboard") return; const k=Math.floor(Date.now()/LDR_SLOT_MS); if(k!==_ldrSlotSeen){ _ldrSlotSeen=k; fbRender(); } }catch(e){} }, 10000);   /* slot 30 menit baru langsung muncul walau belum ada data baru */
 function renderLeaderDashboard(){
   const data = DB.get();
   const R = ldrCompute(data);
@@ -7356,7 +7365,8 @@ function renderLeaderDashboard(){
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
     ${tile("Unit Diinput", R.tIn, "#16213E", "periode terpilih")}
-    ${tile("Unit Terkirim", R.tOut, "#1E9E5A", "periode terpilih")}
+    ${tile("Delivery by Unit", R.tOut, "#1E9E5A", "periode terpilih")}
+    ${tile("Delivery by CC", R.tCC, "#0E7C66", "jumlah CC · periode terpilih")}
     ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>l+" "+(R.wipByLine[l]||0)).join(" · ")+" · stok unit di stall / luar stall"+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
   </div>
 
@@ -7364,13 +7374,13 @@ function renderLeaderDashboard(){
   ${planVsInputHtml(data, R)}
   ${rptShiftHtml(data)}
 
-  <div class="card"><h3>Input vs Kirim per 30 menit</h3>${ldrChartSVG(R.slots)}</div>
+  <div class="card"><h3>Input vs Delivery per 30 menit</h3>${ldrChartSVG(R.slots)}</div>
 
   <div class="card"><h3>Rincian per 30 menit</h3>
     <div style="overflow-x:auto;max-height:360px;overflow-y:auto;"><table style="font-size:13px;">
-      <tr><th style="${th}">Jam</th><th style="${th}">Input</th><th style="${th}">Kirim</th><th style="${th}">WIP</th></tr>
-      ${R.slots.map(s=>`<tr style="border-top:1px solid var(--border);"><td style="${td}">${s.label}–${ldrHM(s.b)}</td><td style="${td}"><b>${s.inp}</b></td><td style="${td}"><b>${s.out}</b></td><td style="${td}">${s.wip}</td></tr>`).join("")}
-      <tr style="border-top:2px solid var(--gold);font-weight:800;"><td style="${td}">TOTAL</td><td style="${td}">${totIn}</td><td style="${td}">${totOut}</td><td style="${td}">${R.wipTotal}</td></tr>
+      <tr><th style="${th}">Jam</th><th style="${th}">Input</th><th style="${th}line-height:1.25;">Delivery<br>by Unit</th><th style="${th}line-height:1.25;">Delivery<br>by CC</th><th style="${th}">WIP</th></tr>
+      ${R.slots.map(s=>`<tr style="border-top:1px solid var(--border);"><td style="${td}">${s.label}–${ldrHM(s.b)}</td><td style="${td}"><b>${s.inp}</b></td><td style="${td}"><b>${s.out}</b></td><td style="${td}"><b>${s.cc}</b></td><td style="${td}">${s.wip}</td></tr>`).join("")}
+      <tr style="border-top:2px solid var(--gold);font-weight:800;"><td style="${td}">TOTAL</td><td style="${td}">${totIn}</td><td style="${td}">${totOut}</td><td style="${td}">${R.tCC}</td><td style="${td}">${R.wipTotal}</td></tr>
     </table></div>
   </div>
 
@@ -7385,11 +7395,11 @@ function renderLeaderDashboard(){
 
   <div class="card"><h3>Ringkasan per Model</h3>
     ${modelRows.map(r=>`<div style="margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;font-size:13px;"><b style="color:${getModelColor(r.m,data)};">${r.m}</b><span>Input <b>${r.inp}</b> · Kirim <b>${r.out}</b> · WIP <b>${r.wip}</b></span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;"><b style="color:${getModelColor(r.m,data)};">${r.m}</b><span>Input <b>${r.inp}</b> · Delivery <b>${r.out}</b> · WIP <b>${r.wip}</b></span></div>
       <div style="height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:3px;"><div style="height:100%;width:${r.inp/mxModel*100}%;background:${getModelColor(r.m,data)};"></div></div>
       <div style="height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:3px;"><div style="height:100%;width:${r.out/mxModel*100}%;background:#1E9E5A;"></div></div>
     </div>`).join("")}
-    <div style="font-size:11px;color:var(--text-dim);">Bar atas = input, bar bawah hijau = terkirim.</div>
+    <div style="font-size:11px;color:var(--text-dim);">Bar atas = input, bar bawah hijau = delivery by unit.</div>
   </div>
 
   <div class="card"><h3>📦 WIP — Unit Belum Terkirim (${R.wipTotal})</h3>
@@ -10446,9 +10456,9 @@ function renderDisplay(){
       const id = groupId+i;
       const v = data.units[id];
       const mc = v ? getModelColor(v.model, data) : null;
-      cells += `<div class="yardcell ${v?'filled':'empty'}" ${v?`style="background:${mc}20; border-color:${mc}; border-style:solid;"`:''} onclick="openSlotDetail('${id}')">
+      cells += `<div class="yardcell ${v?'filled':'empty'}" ${v?`style="${slotFillStyle(mc)}"`:''} onclick="openSlotDetail('${id}')">
         <div class="id">${id}</div>
-        <div class="v" ${v?`style="color:${mc};"`:''}>${v ? v.model : 'KOSONG'}${v&&v.prio?' ⭐':''}${v&&v.batam?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 3px;font-size:9px;">B</span>':''}</div>
+        <div class="v">${v ? v.model : 'KOSONG'}${v&&v.prio?' ⭐':''}${v&&v.batam?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 3px;font-size:9px;">B</span>':''}</div>
       </div>`;
     }
     const occ = [1,2,3,4,5,6].filter(i=>data.units[groupId+i]).length;
