@@ -444,11 +444,11 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 }
 /* ---------- Tablet landscape / laptop: Dispatcher & Delivery 2 kolom ---------- */
 @media(min-width:900px){
-  #viewport.v-dispatcher{display:grid; grid-template-columns:minmax(340px,5fr) minmax(0,7fr); gap:16px; align-items:start; grid-template-areas:"scan slots" "offin slots" "confirm slots" "offlist slots"; grid-template-rows:auto auto auto 1fr;}
+  #viewport.v-dispatcher{display:grid; grid-template-columns:minmax(340px,5fr) minmax(0,7fr); gap:16px; align-items:start; grid-template-areas:"sum sum" "scan slots" "offin slots" "confirm slots" "offlist slots"; grid-template-rows:auto auto auto auto 1fr;}
   #viewport.v-dispatcher>*{margin-bottom:0 !important;}
   #viewport.v-dispatcher>.d-scan{grid-area:scan;} #viewport.v-dispatcher>.d-slots{grid-area:slots;}
   #viewport.v-dispatcher>.d-offin{grid-area:offin;} #viewport.v-dispatcher>.d-offlist{grid-area:offlist;}
-  #viewport.v-dispatcher>.d-confirm{grid-area:confirm;}
+  #viewport.v-dispatcher>.d-confirm{grid-area:confirm;} #viewport.v-dispatcher>.d-sum{grid-area:sum;}
   #viewport.v-dispatcher .stallgrid{grid-template-columns:repeat(2,minmax(0,1fr));}
   #viewport.v-delivery{display:grid; grid-template-columns:minmax(340px,5fr) minmax(0,7fr); gap:16px; align-items:start;}
   #viewport.v-delivery>.dl-left{display:block;grid-column:1;min-width:0;} #viewport.v-delivery>.dl-right{display:block;grid-column:2;min-width:0;}
@@ -1999,6 +1999,17 @@ function offLocCheck(loc){
   return true;
 }
 
+/* Ringkasan input dispatcher shift ini (semua dispatcher, semua area), per model. Sumber sama dengan "UNIT DIINPUT" di Display. Hanya tampilan, tidak mengubah data. */
+function dispSumHtml(data){
+  const sh=currentShift(), w=shiftWindow(prodDayStart(), sh), by={}, byL={}; let tot=0;
+  (data.unitLog||[]).forEach(e=>{ if(e && e.parkedTs!=null && e.parkedTs>=w[0] && e.parkedTs<w[1]){ tot++; const m=e.model||"?"; by[m]=(by[m]||0)+1; const l=e.line||"-"; byL[l]=(byL[l]||0)+1; } });
+  const ms=Object.keys(by).sort((a,b)=>by[b]-by[a]||a.localeCompare(b));
+  const chip=m=>{ const c=getModelColor(m,data)||"#16213E"; return `<span style="display:inline-flex;align-items:center;gap:6px;border:1.5px solid ${c};background:${c}14;border-radius:999px;padding:4px 10px;font-size:13px;"><b style="color:${c};">${escH(m)}</b><b style="font-size:15px;">${by[m]}</b></span>`; };
+  return `<div class="card d-sum" style="padding:12px 14px;">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:${tot?8:0}px;"><h3 style="margin:0;">📊 Input ${sh==="1"?"Shift Day":"Shift Night"}</h3><span style="font-size:22px;font-weight:800;color:var(--green);">${tot}</span><span style="font-size:12px;color:var(--text-dim);">unit</span></div>
+    ${tot?`<div style="display:flex;gap:6px;flex-wrap:wrap;">${ms.map(chip).join("")}</div>`:`<div style="font-size:12px;color:var(--text-dim);">Belum ada unit yang diinput di shift ini.</div>`}
+  </div>`;
+}
 function renderDispatcher(){
   geoStart();
   const data = DB.get();
@@ -2020,6 +2031,7 @@ function renderDispatcher(){
 
   return `
     <div id="geoBanner">${geoBannerHtml()}</div>
+    ${dispSumHtml(data)}
     <div class="card d-scan">
       <h3>📷 Scan / Input No. Rangka</h3>
       ${(()=>{ const ar=myDispArea(), eff=ar||dispLine, v=(myDispAccount()||{}).vendor; if(ar) dispLine=ar;
