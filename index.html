@@ -3558,6 +3558,7 @@ function renderDelivery(){
   const _grp={};
   filledSlots.forEach(e=>{ const k=isOffKey(e[0])?"OFF":groupOf(e[0]); (_grp[k]=_grp[k]||[]).push(e); });
   const _gkeys=Object.keys(_grp).sort((a,b)=>{ if(a==="OFF") return 1; if(b==="OFF") return -1; const na=parseInt(a), nb=parseInt(b); return na!==nb ? na-nb : a.slice(-1).localeCompare(b.slice(-1)); });
+  try{ window._dlOrder=[].concat(..._gkeys.map(k=>_grp[k].map(e=>e[0]))); }catch(e){}   /* urutan tampil, dipakai Salin No. Rangka */
   const unitRows = _gkeys.map(k=>{
     const L=_grp[k], nSel=L.filter(e=>deliverySelUnits.includes(e[0])).length, nPrio=L.filter(e=>e[1].prio).length;
     const side=k==="OFF"?"":("side"+k.slice(-1));
@@ -3627,6 +3628,7 @@ function renderDelivery(){
       <h3>📦 Pilih Unit (maks ${CONFIG.MAX_LOAD_PER_CC})</h3>
       <p style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">Terpilih: ${deliverySelUnits.length}/${CONFIG.MAX_LOAD_PER_CC}${filledSlots.some(([k])=>isOffKey(k))?` · 📍 ${filledSlots.filter(([k])=>isOffKey(k)).length} unit di luar stall (ditandai 📍)`:""}</p>
       ${filledSlots.length===0 ? `<div class="emptystate">Belum ada unit terparkir.</div>` : `<div class="unitlist">${unitRows}</div>`}
+      ${filledSlots.length?`<button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="dlCopyFrames(this)" ${deliverySelUnits.length?"":"disabled"}>📋 Salin No. Rangka (${deliverySelUnits.length} unit)</button>`:""}
     </div>
 
     ${mixedSel?`<div class="msg err">⚠ Pilihan mencampur unit <b>BATAM</b> dan <b>reguler</b>. Tujuan kirim berbeda — pisahkan jadi ILS sendiri-sendiri.</div>`:""}
@@ -3641,6 +3643,14 @@ function renderDelivery(){
   `;
 }
 let dlUnitOpen={};
+/* Salin No. Rangka unit yang dicentang, satu per baris: di Excel cukup tempel sekali, otomatis turun ke bawah */
+function dlCopyFrames(btn){
+  const d=DB.get(), ord=window._dlOrder||[];
+  const sel=deliverySelUnits.slice().sort((a,b)=>{ const ia=ord.indexOf(a), ib=ord.indexOf(b); return (ia<0?1e9:ia)-(ib<0?1e9:ib); });
+  const fr=sel.map(k=>((d.units||{})[k]||{}).frame).filter(Boolean);
+  if(!fr.length){ alert("Centang dulu unit yang mau disalin."); return; }
+  tlsCopy(fr.join("\n"), btn);
+}
 function toggleUnitSel(id){
   const idx = deliverySelUnits.indexOf(id);
   if(idx>=0){ deliverySelUnits.splice(idx,1); }
