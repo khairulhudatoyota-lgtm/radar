@@ -1011,7 +1011,7 @@ function fbState(s){
   const m = map[s] || map.off; el.className = "syncb "+m[0]; el.textContent = m[1];
 }
 function fbCurrentState(){ return !FBS.enabled ? "off" : (!FBS.authed ? "connecting" : (FBS.conn ? (FBS.ready?"online":"connecting") : "offline")); }
-function fbPush(k, pre, fn, T, seed){
+function fbPush(k, pre, fn, T, seed, retried){
   if(!FBS.enabled) return;
   if(!FBS.ready){ FBS.q.push([k,pre,fn,T,seed]); return; }
   FBS.db.ref(FB_ROOT+"/"+k).transaction(cur=>{
@@ -1021,7 +1021,15 @@ function fbPush(k, pre, fn, T, seed){
     runMut(nt, fn, T, seed);
     const v = cloneJ(nt[k]);
     return v===undefined ? null : v;
-  }, (err,committed)=>{ if(err) console.warn("sync gagal:", k, err); try{ if(window._fbAck) window._fbAck(k,err,committed); }catch(e){} }, true);
+  }, (err,committed)=>{
+    if(err) console.warn("sync gagal:", k, err);
+    /* ditolak server (sesi Firebase hilang): login ulang lalu kirim ulang perubahan yang sama, supaya ILS / Delout tidak hanya tersimpan di HP ini */
+    if(err && fbDenied(err)){
+      if(!retried){ fbReauth().then(ok=>{ if(ok) fbPush(k, pre, fn, T, seed, true); else fbPushFailWarn(); }); }
+      else fbPushFailWarn();
+    }
+    try{ if(window._fbAck) window._fbAck(k,err,committed); }catch(e){}
+  }, true);
 }
 function fbStart(){
   if(typeof firebase === "undefined" || !/^https?:/.test(location.protocol)){ fbState("off"); return; }
@@ -1031,8 +1039,24 @@ function fbStart(){
     FBS.db.ref(".info/connected").on("value", s=>{ FBS.conn = !!s.val(); fbState(fbCurrentState()); });
     firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); trackAttach(); })
       .catch(e=>{ console.warn("login anonim gagal", e); fbState("offline"); });
+    /* Sesi Firebase hilang di tengah jalan (mis. penyimpanan WebView terhapus saat Logout penuh TLS): login ulang otomatis lalu pasang ulang semua listener */
+    firebase.auth().onAuthStateChanged(u=>{ if(!u && FBS.authed){ FBS.authed=false; fbState(fbCurrentState()); fbReauth(); } });
   }catch(e){ console.warn(e); fbState("off"); }
 }
+let _fbReP=null, _fbReT=[], _fbWarnTs=0;
+function fbPushFailWarn(){ const n=Date.now(); if(n-_fbWarnTs<60000) return; _fbWarnTs=n; try{ fbState("offline"); }catch(e){} alert("⚠ Perubahan terakhir TIDAK terkirim ke server (izin ditolak).\nTutup lalu buka lagi RADAR, cek di HP lain, dan ulangi kalau belum muncul (mis. buat ILS / Delout)."); }
+function fbReauth(){
+  if(_fbReP) return _fbReP;
+  const now=Date.now(); _fbReT=_fbReT.filter(t=>now-t<60000); if(_fbReT.length>=3) return Promise.resolve(false);   /* maks 3x per menit: kalau aturan Firebase memang menolak, jangan berputar terus */
+  _fbReT.push(now);
+  _fbReP = firebase.auth().signInAnonymously().then(()=>{
+    FBS.authed = true;
+    try{ [FB_ROOT, TRK_PATH, LAP_PATH, CHAT_PATH].forEach(p=>FBS.db.ref(p).off()); }catch(e){}
+    fbAttach(); trackAttach(); fbState(fbCurrentState()); return true;
+  }).catch(e=>{ console.warn("login ulang gagal", e); return false; }).finally(()=>{ _fbReP=null; });
+  return _fbReP;
+}
+const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
 function fbAttach(){
   const ref = FBS.db.ref(FB_ROOT);
   ref.on("value", snap=>{
@@ -1049,7 +1073,7 @@ function fbAttach(){
     const wasReady = FBS.ready; FBS.ready = true; fbState(fbCurrentState());
     if(!wasReady && FBS.q.length){ const q = FBS.q; FBS.q = []; q.forEach(a=>fbPush.apply(null,a)); }
     fbRender();
-  }, err=>{ console.warn("listener ditolak:", err); fbState("offline"); });
+  }, err=>{ console.warn("listener ditolak:", err); fbState("offline"); if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth(); }catch(e){} }, 1500); });
 }
 function fbRender(){
   const mv = document.getElementById("mainView"); if(!mv || mv.classList.contains("hidden")) return;
@@ -2761,6 +2785,7 @@ function onAutoPos(pos){
 function doAutoRegister(dist){
   const prof = getCcProfile();
   const res = registerCC(prof.plat, prof.lp, dist, true);
+  if(res.offline){ autoAbsen.state="armed"; autoAbsen.hits=0; autoAbsen.warn="Sinyal belum Online. Absen otomatis dicoba lagi begitu tersambung."; updateAutoStatus(); return; }
   if(res.far){ autoAbsen.state="armed"; autoAbsen.hits=0; autoAbsen.warn=`Masih ${dist.toFixed(1)} km dari yard (radius ${res.radius} km). Absen belum dicatat.`; updateAutoStatus(); return; }
   autoAbsen.state = "done"; autoAbsen.doneTs = Date.now();
   autoAbsen.msg = res.dup ? ccAbsenTolakMsg(prof.plat, res)
@@ -3167,7 +3192,8 @@ function ccRenameEverywhere(d, oldPlat, nu){
   (d.queue||[]).forEach(q=>{ if(q && normPlat(q.plat)===ko) apply(q); });
   (d.hold||[]).forEach(q=>{ if(q && normPlat(q.plat)===ko) apply(q); });
   if(ko!==kn && d.earlyOk && d.earlyOk[ko]){ d.earlyOk[kn]=d.earlyOk[ko]; delete d.earlyOk[ko]; n++; }
-  (d.ils||[]).forEach(b=>{ if(b && !b.outTs && b.status==="open" && normPlat(b.ccPlat)===ko){ b.ccPlat=platFmt(nu.plat); if(nu.lp) b.lp=nu.lp; if(nu.drvCode) b.drvCode=nu.drvCode; b.drvName=nu.driver||""; n++; } });
+  const _knAct=ko!==kn && (d.ils||[]).some(b=>b && !b.outTs && b.status==="open" && normPlat(b.ccPlat)===kn);   /* plat baru sudah punya ILS aktif: jangan jadi dua ILS untuk satu plat */
+  (d.ils||[]).forEach(b=>{ if(!_knAct && b && !b.outTs && b.status==="open" && normPlat(b.ccPlat)===ko){ b.ccPlat=platFmt(nu.plat); if(nu.lp) b.lp=nu.lp; if(nu.drvCode) b.drvCode=nu.drvCode; b.drvName=nu.driver||""; n++; } });
   try{ ccDedupe(d); }catch(e){}
   return n;
 }
@@ -3356,6 +3382,7 @@ function ccOnlineBelumAbsenHtml(data){
 /* Daftarkan truk ke stall kosong / antrian / ruang tunggu jadwal. Return {stall:n} | {queue:n} | {hold:true,due:ts} | {dup:true} */
 /* Satu driver tidak bisa membawa dua truk: nama driver sama + LP sama, tapi plat lain sudah di stall / antrian / ruang tunggu / ILS aktif → tolak. */
 function ccDriverBusy(d, plat, lp){
+  if(!ccStrict(d)) return null;
   try{
     const nm=s=>String(s||"").toLowerCase().replace(/[^a-z]/g,""); const k=normPlat(plat), me=nm(ccDriverAny(plat)); if(me.length<4) return null;
     const row=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k), myLp=lpCanon((row&&row.lp)||lp||"");
@@ -3367,6 +3394,7 @@ function ccDriverBusy(d, plat, lp){
   return null;
 }
 function registerCC(plat, lp, dist, auto, manual, src){
+  if(FBS.enabled && fbCurrentState()!=="online") return {offline:true};   /* sinyal putus: absen tidak disimpan di HP lalu dikirim belakangan dengan data lama */
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
     if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k) || (d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k)){   /* satu plat = satu data: sudah di stall / antrian / ILS aktif → semua jalur absen (otomatis, peta, manual KR/Delivery) ditolak */ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
@@ -3416,6 +3444,45 @@ function ccDedupe(d){
   return dropCc.length+dropQ.size+dropH.size;
 }
 setInterval(()=>{ try{ if(currentUser && ccDupFind(DB.get())) DB.set(d=>{ ccDedupe(d); }); }catch(e){} }, 4000);
+/* PENJAGA (tiap 5 detik, data server terbaru): plat yang tidak boleh ada di daftar masuk dikeluarkan otomatis.
+   - stall: sudah Delout / "sudah jalan" & belum tiba di NVDC, atau ritase shift ini sudah habis — kecuali sedang punya ILS aktif (sedang rit terakhir)
+   - waiting list / Parkir Luar: alasan di atas, atau plat sudah punya ILS aktif
+   Menutup absen yang terkirim terlambat dari HP yang sinyalnya putus, ganti plat, dan jalur lain. Tercatat di "CC dikeluarkan" oleh Sistem. */
+function ccGuardWhy(d, plat, inStall){
+  const k=normPlat(plat); if(!k) return "";
+  const act=(d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k);
+  if(inStall && act) return "";
+  if(!inStall && act) return "otomatis: plat sudah punya ILS aktif";
+  if(ccNeedNvdc(d, plat)) return "otomatis: sudah Delout, belum tiba di NVDC";
+  if(ccRitHabis(d, plat)) return "otomatis: ritase shift ini sudah selesai";
+  return "";
+}
+function ccGuardScan(d){
+  const out=[];
+  Object.keys(d.cc||{}).forEach(n=>{ const c=d.cc[n]; if(c){ const w=ccGuardWhy(d,c.plat,true); if(w) out.push({w:"cc",n,plat:c.plat,lp:c.lp||"",why:w}); } });
+  (d.queue||[]).forEach(q=>{ if(q){ const w=ccGuardWhy(d,q.plat,false); if(w) out.push({w:"queue",plat:q.plat,lp:q.lp||"",why:w}); } });
+  (d.hold||[]).forEach(q=>{ if(q){ const w=ccGuardWhy(d,q.plat,false); if(w) out.push({w:"hold",plat:q.plat,lp:q.lp||"",why:w}); } });
+  return out;
+}
+function ccGuardTick(){
+  try{
+    if(!currentUser || isViewer()) return;
+    if(!ccStrict(DB.get())) return;
+    if(FBS.enabled && fbCurrentState()!=="online") return;
+    if(!ccGuardScan(DB.get()).length) return;
+    DB.set(d=>{
+      const bad=ccGuardScan(d); if(!bad.length) return;
+      const ks=new Set(bad.filter(b=>b.w!=="cc").map(b=>normPlat(b.plat)));
+      bad.filter(b=>b.w==="cc").forEach(b=>{ d.cc[b.n]=null; });
+      d.queue=(d.queue||[]).filter(q=>!(q && ks.has(normPlat(q.plat)) && ccGuardWhy(d,q.plat,false)));
+      d.hold=(d.hold||[]).filter(q=>!(q && ks.has(normPlat(q.plat)) && ccGuardWhy(d,q.plat,false)));
+      d.ccOutLog=d.ccOutLog||[];
+      bad.forEach(b=>d.ccOutLog.push({ts:Date.now(), plat:b.plat, lp:b.lp, ccNum:b.n?+b.n:0, why:b.why+(b.w==="queue"?" (waiting list)":b.w==="hold"?" (Parkir Luar)":""), by:"Sistem"}));
+      if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
+    });
+  }catch(e){}
+}
+setInterval(ccGuardTick, 5000);
 function submitOrderStall(){
   const plat = document.getElementById("ccPlat").value.trim().toUpperCase();
   const lp = document.getElementById("ccLP").value.trim();
@@ -3425,6 +3492,7 @@ function submitOrderStall(){
 
   if(absenState.ts && Date.now()-absenState.ts > 5*60000){ absenState={verified:false,distanceKm:null}; msgEl.innerHTML=`<div class="msg err">Cek lokasi sudah kedaluwarsa (lebih dari 5 menit). Tekan Absen Manual (cek lokasi) lagi.</div>`; render(); return; }
   const res = registerCC(plat, lp, absenState.distanceKm, false, !!absenState.manual);
+  if(res.offline){ msgEl.innerHTML=`<div class="msg err">Sinyal belum Online. Absen tidak dicatat, coba lagi saat pojok atas tertulis ● Online.</div>`; return; }
   if(res.far){ absenState={verified:false,distanceKm:null}; msgEl.innerHTML=`<div class="msg err">❌ Masih ${res.dist.toFixed(1)} km dari yard (radius ${res.radius} km). Absen ditolak.</div>`; return; }
   if(res.dup) msgEl.innerHTML = `<div class="msg info">${ccAbsenTolakMsg(plat, res)}</div>`;
   else if(res.hold) msgEl.innerHTML = `<div class="msg info">🕒 Absen ${plat} tercatat. Jadwal loading kamu jam <b>${holdHm(res.due)}</b>, jadi belum masuk slot / waiting list. Tunggu di luar, otomatis masuk antrian ${ccEarlyMin()} menit sebelum jadwal.</div>`;
@@ -4333,8 +4401,13 @@ async function sjStore(id,name,b64,mime){
   if(size>900000){ alert("PDF terlalu besar (maks ±900 KB)."); return false; }
   if(!sjCanStore()){ alert("RADAR sedang offline — PDF belum bisa disimpan. Coba lagi saat online."); return false; }
   const ts=Date.now();
-  try{ await FBS.db.ref(SJ_PATH+"/"+id).set({name:name||"surat-jalan.pdf", mime:mime||"application/pdf", ts, b64}); }
-  catch(e){ alert("Gagal menyimpan PDF: "+(e&&e.message||e)+"\nPeriksa aturan (Rules) Firebase Realtime Database untuk path radar_sj."); return false; }
+  const _put=()=>FBS.db.ref(SJ_PATH+"/"+id).set({name:name||"surat-jalan.pdf", mime:mime||"application/pdf", ts, b64});
+  try{ await _put(); }
+  catch(e){
+    let err=e;
+    if(fbDenied(e)){ try{ if(await fbReauth()){ await _put(); err=null; } }catch(e2){ err=e2; } }   /* sesi Firebase kedaluwarsa / terhapus: login ulang lalu coba sekali lagi */
+    if(err){ alert("Gagal menyimpan PDF: "+(err&&err.message||err)+(fbDenied(err)?"\nSesi RADAR ke server terputus. Tutup lalu buka lagi aplikasi RADAR, kemudian simpan ulang PDF ini.":"")); return false; }
+  }
   DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.sj={name:name||"surat-jalan.pdf", size, ts}; if(!b.tlsTs){ b.tlsTs=ts; b.tlsBy=((currentUser&&currentUser.name)||"")+" (otomatis, PDF masuk)"; } } });   // PDF dari TLS sudah ada = ILS sudah di TLS
   sjIndex(id,b64);   // baca No. SJKB & Cabang di latar belakang (untuk manifest)
   return true;
@@ -5947,7 +6020,7 @@ function keluarkanCC(n){
   const why=prompt(`Keluarkan CC ${c.plat} dari Stall ${ccLbl(n)}?\n`+(ils?`• ILS #${ils.id} ikut dibatalkan, unit kembali ke stall\n`:"")+`• Stall ${ccLbl(n)} dikosongkan`+(q?`\n• CC berikutnya naik: ${q.plat}`:"")+`\n\nDikeluarkan oleh: ${(currentUser&&currentUser.name)||"-"} (otomatis dari akun login)\n\nKetik alasan (wajib, mis. tidak lolos verifikasi / unit NG):`, "");
   if(why===null) return;
   if(String(why).trim().length<3){ alert("Alasan wajib diketik (minimal 3 huruf). CC tidak jadi dikeluarkan."); return; }
-  const gone=confirm("Apakah CC "+c.plat+" SUDAH BERANGKAT jalan ke NVDC?\n\nOK = Ya, sudah jalan. Absen CC ini dikunci sampai tiba di NVDC (seperti Delout).\nBatal = Tidak, masih di yard (mis. salah absen / dobel). Boleh absen lagi.");
+  const gone=ccStrict(d0) && confirm("Apakah CC "+c.plat+" SUDAH BERANGKAT jalan ke NVDC?\n\nOK = Ya, sudah jalan. Absen CC ini dikunci sampai tiba di NVDC (seperti Delout).\nBatal = Tidak, masih di yard (mis. salah absen / dobel). Boleh absen lagi.");
   DB.set(d=>{
     const cur=d.cc[n]; if(!cur) return;
     if(gone){ d.ccGone=d.ccGone||{}; d.ccGone[normPlat(cur.plat)]=Date.now(); const ks=Object.keys(d.ccGone); if(ks.length>60) ks.sort((a,b)=>d.ccGone[a]-d.ccGone[b]).slice(0,ks.length-60).forEach(k=>delete d.ccGone[k]); }
@@ -8393,6 +8466,9 @@ function renderAdmin(){
         ${blk("yard","Titik absensi",yp)}
         <div class="field"><label>Radius absen (km)</label><input id="yardRadius" type="text" value="${y.radiusKm ?? 5}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Semakin kecil semakin ketat. Pilih radius yang <b>tidak mencakup NVDC / jalan luar</b> (mis. 1–2 km), supaya CC yang masih di luar tidak terabsen.</div></div>
         <div class="field"><label>Jeda absen ulang sesudah keluar (menit)</label><input id="reabsenMin" type="text" value="${ccReabsenMin(data)}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Sesudah Delout / dikeluarkan, absen otomatis dan peta tidak mencatat CC itu lagi selama jeda ini (dan sampai terlihat keluar area).</div></div>
+        <div class="field" style="border:1px solid var(--border);border-radius:10px;padding:10px;"><label>🔒 Aturan absen ketat</label>
+          <div style="font-size:11px;color:var(--text-dim);margin:4px 0 8px;">Kunci sampai tiba di NVDC sesudah Delout, absen mati kalau ritase habis, satu driver satu truk, dan penjaga yang mengeluarkan plat otomatis. Nyalakan hanya kalau GPS semua driver sudah terpantau sampai NVDC.</div>
+          <button type="button" class="btn ${ccStrict(data)?'btn-primary':'btn-outline'} btn-sm" onclick="ccStrictToggle()">${ccStrict(data)?'● NYALA — tekan untuk mematikan':'○ MATI — tekan untuk menyalakan'}</button></div>
         <button class="btn btn-primary" onclick="saveYardLocation()">💾 Simpan Lokasi Absensi</button>
       </div>
       <div class="card">
@@ -8767,7 +8843,8 @@ function trackAttach(){
   try{ lapAttach(); }catch(e){}
   try{
     FBS.db.ref(TRK_PATH).on("value", snap=>{ TRACK = snap.val() || {}; TRKERR = ""; try{ routeRecTick(); }catch(e){} if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); },
-      err=>{ TRKERR = "Peta CC belum diizinkan oleh aturan Firebase (tambahkan node radar_track)."; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); });
+      err=>{ TRKERR = fbDenied(err) ? "Sambungan peta ke server terputus. Menyambung ulang…" : "Peta CC belum diizinkan oleh aturan Firebase (tambahkan node radar_track)."; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate();
+        if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth().then(ok=>{ if(!ok){ TRKERR="Peta CC terputus dari server. Tutup lalu buka lagi RADAR."; if(activeTab==="ccmap") updateTrackUI(); } }); }catch(e){} }, 1500); });   /* sesi hilang: login ulang lalu pasang ulang listener peta */
   }catch(e){}
 }
 function trkKey(plat){ return String(plat||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
@@ -8811,7 +8888,8 @@ function onSharePos(pos){
   try{ const _t=tripSt().t; if(_t&&_t.dir) rec.dir=_t.dir; }catch(e){}
   try{ refTrailTick(pos); }catch(e){}
   ref.set(rec).then(()=>{ shareTrk.msg = "✔ Posisi terkirim "+new Date(now).toLocaleTimeString("id-ID")+" (±"+rec.acc+" m)"; shareStatusUpdate(); })
-    .catch(e=>{ shareTrk.msg = "Gagal kirim posisi: "+(e&&e.message||e)+" — minta Admin menambah aturan Firebase 'radar_track'."; shareStatusUpdate(); });
+    .catch(e=>{ if(fbDenied(e)){ shareTrk.msg = "Sambungan ke server terputus, menyambung ulang…"; shareTrk.last = 0; try{ fbReauth(); }catch(x){} shareStatusUpdate(); return; }   /* sesi hilang: login ulang, posisi berikutnya terkirim lagi */
+      shareTrk.msg = "Gagal kirim posisi: "+(e&&e.message||e)+" — minta Admin menambah aturan Firebase 'radar_track'."; shareStatusUpdate(); });
 }
 /* ===== Wajib isi plat truk setiap masuk sebagai Driver CC (driver sering berganti truk) ===== */
 let ccPlatOk=false;
@@ -8904,6 +8982,7 @@ function ccDirNow(d, plat){
 /* Sesudah Delout / dikeluarkan, CC TIDAK boleh absen lagi sampai posisinya tercatat di NVDC (d.ccNvdc). Tanpa titik NVDC: aturan jam lama. Kalau GPS CC tidak terbaca di NVDC, Delivery/Admin absen manual. */
 /* Ritase shift ini sudah habis (sesuai DCCP, termasuk +1 Rit): absen dimatikan untuk plat ini, CC hanya dipantau di peta. Change Shift (sisa rit dibawa) dan plat di luar DCCP tidak kena. */
 function ccRitHabis(d, plat){
+  if(!ccStrict(d)) return false;
   try{ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); if(!r || csActive(d,plat)) return false;
     const t=dccpTripList(r); if(!t.length) return false; return dccpDoneCount(r,d) >= t.length; }catch(e){ return false; }
 }
@@ -8914,11 +8993,15 @@ function ccAbsenTolakMsg(plat, res){   // pesan penolakan absen yang jelas
        : `${plat} sudah tercatat di stall / antrian / ILS aktif.`;
 }
 function ccLastDelout(d, plat){ const k=normPlat(plat); let lo=((d.ccGone||{})[k])||0; (d.ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===k && x.outTs>lo) lo=x.outTs; }); return lo; }   /* tanda keluar dari ADM = Delout (bukan CC yang cuma dikeluarkan dari stall) */
+/* Saklar Admin: aturan absen ketat (kunci NVDC, rit habis, driver sama, penjaga otomatis). Bawaan MATI sampai diuji di lapangan. */
+function ccStrict(d){ return !!((d||DB.get()).strictAbsen); }
+function ccStrictToggle(){ const on=!ccStrict(); if(!confirm((on?"NYALAKAN":"MATIKAN")+" aturan absen ketat?")) return; DB.set(d=>{ d.strictAbsen=on; }); }
 function ccNeedNvdc(d, plat){
+  if(!ccStrict(d)) return false;
   const mp=d.mapPoints||{}; if(!(mp.nvdc && typeof mp.nvdc.lat==="number")) return false;
   const lo=ccLastDelout(d, plat); if(!lo) return false;
-  { const now=Date.now(); if(lo < shiftWindow(prodDayStart(now), currentShift())[0]) return false; }   /* awal shift: Delout shift sebelumnya tidak mengunci (rit pertama pakai CC yang hadir + jam DCCP) */
-  return !(((d.ccNvdc||{})[normPlat(plat)]||0) > lo);
+  { const now=Date.now(); if(lo < shiftWindow(prodDayStart(now), currentShift())[0] && now-lo >= 90*60000) return false; }   /* Delout dekat pergantian shift tetap terkunci sampai 90 menit */   /* awal shift: Delout shift sebelumnya tidak mengunci (rit pertama pakai CC yang hadir + jam DCCP) */
+  return !(((d.ccNvdc||{})[normPlat(plat)]||0) >= lo);
 }
 function ccOutbound(d, plat){   // true = baru keluar (≤4 jam) dan masih berjalan ke arah NVDC / baru <45 menit keluar
   if(ccNeedNvdc(d, plat)) return true;
@@ -8958,7 +9041,7 @@ function mapAbsenTick(){
       const km=haversineKm(r.lat,r.lng,y.lat,y.lng);
       if(km>rad+1) MAPABS.out[k]=now;
       try{ const nv=(d.mapPoints||{}).nvdc, lo0=ccLastDelout(d,r.plat);   /* tercatat tiba di NVDC (≤1 km) sesudah Delout → boleh absen lagi */
-        if(nv && lo0 && (r.ts||0)>lo0 && haversineKm(r.lat,r.lng,nv.lat,nv.lng)<=1 && !(((d.ccNvdc||{})[k]||0)>lo0)) DB.set(x=>{ x.ccNvdc=x.ccNvdc||{}; if(!((x.ccNvdc[k]||0)>lo0)) x.ccNvdc[k]=Date.now(); }); }catch(e){}
+        if(nv && lo0 && (r.ts||0)>lo0 && haversineKm(r.lat,r.lng,nv.lat,nv.lng)<=1 && !(((d.ccNvdc||{})[k]||0)>=lo0)) DB.set(x=>{ x.ccNvdc=x.ccNvdc||{}; if(!((x.ccNvdc[k]||0)>=lo0)) x.ccNvdc[k]=lo0; }); }catch(e){}   /* yang disimpan = cap Delout yang sudah sampai NVDC (tidak bergantung jam HP) */
       if(have.has(k) || !ccPlatRegistered(r.plat) || ccRitHabis(d, r.plat)){ delete MAPABS.hits[k]; return; }
       const lo=ccLastLeft(d,r.plat);
       if(lo && ccOutbound(d,r.plat)){ delete MAPABS.hits[k]; return; }   // baru Delout & menuju NVDC: bukan absen
@@ -8975,6 +9058,7 @@ function absenkanCC(plat, lp){
   if(!canKeluarkanCC()) return;
   if(!confirm("Absenkan "+plat+" sekarang (atas nama driver)?\n\nPakai hanya kalau CC sudah ada di lokasi tetapi absen otomatisnya belum jalan.")) return;
   const r=registerCC(plat, lp||((ccPlatRow(plat)||{}).lp)||"", null, false, true);
+  if(r.offline){ alert("Sinyal belum Online. Absen tidak dicatat, coba lagi saat pojok atas tertulis ● Online."); return; }
   alert(r.dup?ccAbsenTolakMsg(plat, r):r.hold?plat+" tercatat, menunggu di Parkir Luar sampai jam "+holdHm(r.due)+".":r.stall?plat+" masuk STALL "+ccLbl(r.stall)+".":plat+" masuk antrian no. "+r.queue+".");
   render();
 }
