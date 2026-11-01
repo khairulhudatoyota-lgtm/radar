@@ -458,6 +458,10 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
   #viewport.v-dashboard>.card:first-child{grid-column:1/-1;}
 }
 @media(min-width:1600px){ #viewport.v-dispatcher .stallgrid{grid-template-columns:repeat(4,minmax(0,1fr));} }
+/* slot tidak boleh melebar keluar kotak stall (PC lebar: 4 stall berjejer) */
+.slotgrid{grid-template-columns:repeat(3,minmax(0,1fr)) !important;}
+.slot,.yardcell{min-width:0; overflow:hidden;}
+@media(min-width:1600px){ #viewport.v-dispatcher .slotgrid{gap:5px;} #viewport.v-dispatcher .slot{padding:8px 2px;} #viewport.v-dispatcher .stallgroup .slot .id{font-size:12px;} #viewport.v-dispatcher .slot .val{font-size:10px; letter-spacing:-0.01em;} }
 /* ---------- Laptop / PC: sidebar menu di kiri ---------- */
 @media(min-width:1100px){
   #mainView:not(.hidden){display:grid !important; grid-template-columns:236px minmax(0,1fr); grid-template-rows:auto 1fr; grid-template-areas:"top top" "side main"; min-height:100vh;}
@@ -4695,7 +4699,7 @@ function mfRows(data, dateStr, lp, shift){
   const inShift=m=>{ const dt=new Date(m.t), mn=dt.getHours()*60+dt.getMinutes(), d=mfDateStr(m.t);
     if(shift==="Day") return d===dateStr && mn>=MF_DAY_FROM && mn<=MF_DAY_TO;
     if(shift==="Night") return (d===dateStr && mn>MF_DAY_TO) || (d===nextDs && mn<MF_DAY_FROM);
-    return d===dateStr; };
+    return (d===dateStr && mn>=MF_DAY_FROM) || (d===nextDs && mn<MF_DAY_FROM); };   /* Semua shift = satu hari produksi: Day + Night (07:00 tanggal ini – 06:59 besok) */
   let L=mfRecords(data).filter(m=>inShift(m) && (!lp || lpCanon(m.lp)===lpCanon(lp))).sort((a,b)=>a.t-b.t);
   /* nomor rangka yang sama hanya satu baris (ILS dobel): ambil yang paling akhir */
   { const seen=new Set(); L=L.slice().sort((a,b)=>(b.out||0)-(a.out||0)).map(m=>{ const U=(Array.isArray(m.u)?m.u:(m.u?Object.values(m.u):[])).filter(u=>{ const f=String(u[0]||"").toUpperCase(); if(!f) return true; if(seen.has(f)) return false; seen.add(f); return true; }); return U.length?Object.assign({},m,{u:U}):null; }).filter(Boolean).sort((a,b)=>a.t-b.t); }
@@ -4746,7 +4750,7 @@ function mfSave(name, mime, bytes){
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([bytes],{type:mime})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),800);
 }
 async function downloadManifest(){
-  const ds=(document.getElementById("mfDate")||{}).value||mfDateStr(Date.now());
+  const ds=(document.getElementById("mfDate")||{}).value||mfDateStr(prodDayStart());
   const lpSel=(document.getElementById("mfLP")||{}).value||"";
   const shf=(document.getElementById("mfShift")||{}).value||"";
   try{ await mfEnsureParsed(); }catch(e){}
@@ -4768,7 +4772,7 @@ function mfMissing(data, ds, lpSel, shf, rows){
   const inD=t=>{ const d=new Date(t), mn=d.getHours()*60+d.getMinutes(), k=mfDateStr(t);
     if(shf==="Day") return k===ds && mn>=MF_DAY_FROM && mn<=MF_DAY_TO;
     if(shf==="Night") return (k===ds && mn>MF_DAY_TO) || (k===nextDs && mn<MF_DAY_FROM);
-    return k===ds; };
+    return (k===ds && mn>=MF_DAY_FROM) || (k===nextDs && mn<MF_DAY_FROM); };
   const out=[];
   (data.ils||[]).filter(b=>b && b.outTs && inD(b.outTs) && (!lpSel || lpCanon(b.lp)===lpCanon(lpSel))).forEach(b=>{
     const fr=(b.units||[]).map(u=>String(u.frame||"").toUpperCase()).filter(Boolean); if(!fr.length || fr.every(f=>inRows.has(f))) return;
@@ -5835,7 +5839,7 @@ function renderAdminSig(){
 function mfCell(c){ if(c&&typeof c==="object"){ if(c.d!=null){ const dt=new Date(Date.UTC(1899,11,30)+c.d*86400000); return dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0")+"-"+String(dt.getUTCDate()).padStart(2,"0"); } return ""; } return String(c==null?"":c).replace(/[\t\r\n]+/g," ").trim(); }
 function mfTsvBuild(){
   const g=id=>((document.getElementById(id)||{}).value||"");
-  const rows=mfRows(DB.get(), g("mfDate")||mfDateStr(Date.now()), g("mfLP"), g("mfShift"));
+  const rows=mfRows(DB.get(), g("mfDate")||mfDateStr(prodDayStart()), g("mfLP"), g("mfShift"));
   return {n:rows.length, tsv:rows.map(r=>r.map(mfCell).join("\t")).join("\n")};
 }
 /* Kirim lewat email ke flow Power Automate: tiap baris ditulis [[kolom1|kolom2|...]] supaya mudah dipecah. Baris yang sudah pernah dikirim (nomor rangka tercatat di database) tidak dikirim ulang. */
@@ -5844,7 +5848,7 @@ function sendManifestMail(all){
   const g=id=>((document.getElementById(id)||{}).value||""), msg=document.getElementById("mfCopyMsg"), to=(xlCfg().mail||"").trim();
   const say=(t,ok)=>{ if(msg) msg.innerHTML=`<span style="color:${ok?"#1E9E5A":"#b91c1c"};font-weight:700;">${t}</span>`; };
   if(!to){ say("Isi dulu Email tujuan flow di Admin → Excel."); return; }
-  const date=g("mfDate")||mfDateStr(Date.now()), shift=g("mfShift"), all_=mfRows(DB.get(), date, g("mfLP"), shift), sent=DB.get().mfSent||{};
+  const date=g("mfDate")||mfDateStr(prodDayStart()), shift=g("mfShift"), all_=mfRows(DB.get(), date, g("mfLP"), shift), sent=DB.get().mfSent||{};
   const rows=all?all_:all_.filter(r=>!sent[String(r[1])]);
   if(!all_.length){ say("Tidak ada data untuk pilihan ini."); return; }
   if(!rows.length){ say("Semua "+all_.length+" baris sudah pernah dikirim. Pakai tombol Kirim semua lagi kalau perlu."); return; }
@@ -5871,14 +5875,14 @@ function openExcelManifest(){
   copyManifest().then(()=>{ try{ window.open(link,"_blank"); }catch(e){} });
 }
 function manifestCardHtml(data){
-  const today=mfDateStr(Date.now());
+  const today=mfDateStr(prodDayStart());   /* hari produksi: jam 06.00 pagi masih tanggal kemarin (shift malam belum selesai) */
   const lps=(()=>{ const seen=new Set(), o=[]; [...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean).forEach(l=>{ const c=lpCanon(l); if(seen.has(c)) return; seen.add(c); o.push(mfLpLabel(data,l)); }); return o; })();
   const nToday=mfRows(data,today,"").length;
   return `<div class="card"><h3>📊 Download Manifest (Excel)</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 14 hari. Hari ini: <b>${nToday} unit</b>. Nama Cabang dan No. SJKB diisi dari PDF surat jalan; sel kuning berarti PDF-nya belum ada.</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 14 hari. Hari produksi ini: <b>${nToday} unit</b>. Nama Cabang dan No. SJKB diisi dari PDF surat jalan; sel kuning berarti PDF-nya belum ada.</div>
     ${xlStatusLine(data)}
     <div class="field"><label>Tanggal delivery</label><input id="mfDate" type="date" value="${today}"></div>
-    <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (00:00–23:59)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 tanggal ini – 06:59 hari berikutnya)</option></select></div>
+    <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (Day + Night: 07:00 tanggal ini – 06:59 besok)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 tanggal ini – 06:59 hari berikutnya)</option></select></div>
     <div class="field"><label>Isi file</label><select id="mfLP"><option value="">Semua LP (sheet ALL + satu sheet per LP)</option>${lps.map(l=>`<option value="${l}">Hanya LP ${l}</option>`).join("")}</select></div>
     <button class="btn btn-primary" onclick="downloadManifest()">⬇ Download Excel</button>
     ${(window.AndroidTLS&&window.AndroidTLS.openExcel)?`<button class="btn btn-green" style="margin-top:8px;" onclick="openExcelManifest()">📊 Buka Excel Manifest (baris sudah disalin)</button>`:""}
