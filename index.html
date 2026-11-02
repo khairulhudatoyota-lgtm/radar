@@ -1126,29 +1126,35 @@ function watchTick(){
     if(!currentUser || currentUser.role==="viewer"){ el.style.display="none"; return; }
     const d=DB.get(), real=watchReal(d)>0, sim=!real && watchSimOn(d), on=real||sim;
     el.style.display=on?"":"none";
-    if(currentUser.role==="admin"){ const msg = real ? "Asli: Pengamat sedang membuka RADAR." : "Mode acak (keterangan ini hanya terlihat di akun Admin)."; el.title=msg; el.onclick=()=>alert(msg); el.style.cursor="pointer"; }
-    else { el.title=""; el.onclick=null; el.style.cursor=""; }
+    el.title=""; el.onclick=null; el.style.cursor="";
   }catch(e){}
 }
 setInterval(watchTick, 5000);
+let _wsTaps=[];
+document.addEventListener("click", e=>{ try{
+  if(!currentUser || currentUser.role!=="admin") return;
+  if(!(e.target && e.target.closest && e.target.closest(".topbar .brand"))) return;
+  const n=Date.now(); _wsTaps=_wsTaps.filter(t=>n-t<3000); _wsTaps.push(n);
+  if(_wsTaps.length>=5){ _wsTaps=[]; showModal(watchCardHtml(DB.get())); }
+}catch(x){} }, true);
 function watchSimSave(){
   const on=!!(document.getElementById("wsOn")||{}).checked, dt=((document.getElementById("wsUntil")||{}).value||"").trim();
   const until=dt ? new Date(dt+"T23:59:59").getTime() : 0;
   if(on && !(until>Date.now())){ alert("Isi tanggal berakhir (hari ini atau sesudahnya)."); return; }
   DB.set(d=>{ const o=d.watchSim||{}; d.watchSim={on, until, seed:(o.seed||Math.floor(Math.random()*1e9)), by:(currentUser&&currentUser.name)||""}; });
-  alert(on ? "Mode acak aktif sampai "+new Date(until).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})+" 23.59." : "Mode acak dimatikan. Tanda hanya muncul kalau Pengamat benar-benar membuka RADAR.");
-  render();
+  try{ closeModal(); }catch(e){}
+  alert(on ? "Tersimpan. Aktif sampai "+new Date(until).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})+" 23.59." : "Tersimpan. Mode acak mati.");
 }
 function watchCardHtml(data){
   const w=data.watchSim||{}, act=!!(w.on && Date.now()<(+w.until||0)), real=watchReal(data);
   const sun=(()=>{ const t=new Date(); t.setDate(t.getDate()+((7-t.getDay())%7)); return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0"); })();
   const val=w.until? (()=>{ const t=new Date(+w.until); return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0"); })() : sun;
-  return `<div class="card"><h3>👁 Tanda Pengamat</h3>
+  return `<div><h3 style="margin:0 0 6px;">👁 Tanda Pengamat</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Saat akun <b>Pengamat</b> membuka RADAR, semua role lain melihat tanda <b style="color:#B42318;">👁 Dipantau Pengamat</b> di atas layar. Akun Pengamat sendiri tidak melihat tanda ini. Sekarang: <b>${real?real+" Pengamat sedang membuka RADAR":"tidak ada Pengamat yang membuka"}</b>.</div>
     <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:8px;"><input type="checkbox" id="wsOn" ${act?"checked":""}> <b>Mode acak</b>: tanda muncul acak (±8 kali per shift, sekali muncul 8–20 menit) seakan-akan Pengamat memantau</label>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span style="font-size:13px;">Berakhir otomatis</span><input id="wsUntil" type="date" value="${val}" style="width:auto;"><span style="font-size:13px;">23.59</span>
     <button class="btn btn-primary btn-sm" style="width:auto;" onclick="watchSimSave()">Simpan</button></div>
-    ${act?`<div style="font-size:12px;margin-top:8px;color:var(--text-dim);">Aktif sampai ${new Date(+w.until).toLocaleString('id-ID',{weekday:'long',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}. Di akun Admin, ketuk tanda itu untuk melihat apakah asli atau acak.</div>`:""}
+    ${act?`<div style="font-size:12px;margin-top:8px;color:var(--text-dim);">Aktif sampai ${new Date(+w.until).toLocaleString('id-ID',{weekday:'long',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}. Tanda saat ini: <b>${real?"asli (Pengamat membuka)":(watchSimOn(data)?"acak":"tidak tampil")}</b>.</div>`:""}
   </div>`;
 }
 let _uiAt=0; ["click","keydown","touchend"].forEach(ev=>{ try{ window.addEventListener(ev,()=>{ _uiAt=Date.now(); },true); }catch(e){} });
@@ -8497,7 +8503,6 @@ function renderAdmin(){
   if(adminTab==="users"){
     return `${tabsHtml}
       ${renderRegCard()}
-      ${watchCardHtml(data)}
       <div class="card"><h3>⏱ Keluar otomatis Driver CC</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Driver CC yang lupa keluar dari aplikasi otomatis di-logout setelah sekian jam sejak login, sehingga posisinya berhenti dibagikan. Isi 0 untuk mematikan.</div>
         <div style="display:flex;gap:8px;align-items:center;"><input id="ccAutoOutH" type="number" min="0" max="48" value="${ccAutoOutHours()}" style="width:90px;"><span style="font-size:13px;">jam</span><button class="btn btn-primary btn-sm" style="width:auto;" onclick="ccAutoOutSave()">💾 Simpan</button></div></div>
       <div class="card"><h3>Daftar User <span style="font-size:12px;color:var(--text-dim);font-weight:500;" id="usrCnt"></span></h3>
