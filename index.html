@@ -109,10 +109,6 @@ html,body{max-width:100%; overflow-x:hidden;}
 .nsBtn:active{transform:scale(.97)}
 .nsOk{animation:nsPopIn .45s cubic-bezier(.2,1.6,.4,1) both}
 .nsFoot{font-size:12px;color:var(--text-dim);margin-top:10px;animation:nsBlink 2s ease-in-out infinite}
-#watchBadge.watchb{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:3px 10px;border-radius:999px;background:#FDECEC;color:#B42318;border:1px solid #F3B4B4;font-size:11px;font-weight:800;white-space:nowrap;animation:wbIn .4s ease;}
-#watchBadge.watchb i{width:8px;height:8px;border-radius:50%;background:#D92D20;display:inline-block;animation:wbPulse 1.4s infinite;}
-@keyframes wbPulse{0%{box-shadow:0 0 0 0 rgba(217,45,32,.6)}70%{box-shadow:0 0 0 7px rgba(217,45,32,0)}100%{box-shadow:0 0 0 0 rgba(217,45,32,0)}}
-@keyframes wbIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
 @keyframes nsIn{from{opacity:0;transform:translateY(24px) scale(.92)}to{opacity:1;transform:none}}
 @keyframes nsUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @keyframes nsDrive{from{left:-15%}to{left:105%}}
@@ -882,7 +878,7 @@ window.RSnd=(function(){
   <!-- ============ MAIN APP (after login) ============ -->
   <div id="mainView" class="hidden" style="display:flex; flex-direction:column; min-height:100vh;">
     <div class="topbar">
-      <div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMEYyQTRBIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDgxNzJCIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTE2IiBmaWxsPSJ1cmwoI2cpIi8+CjxnIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CjxwYXRoIGQ9Ik0xNzAgMzkyVjEzMkgyNjJBNzggNzggMCAwIDEgMjYyIDI4OEgxNzAiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI1NCIvPgo8cGF0aCBkPSJNMjU4IDI5MkwzNDYgMzkyIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iNTQiLz4KPHBhdGggZD0iTTI1OCAzMDZMMzMwIDM4NiIgc3Ryb2tlPSIjMEYyQTRBIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1kYXNoYXJyYXk9IjIgMTYiLz4KPHBhdGggZD0iTTMzNiAxMThBNjYgNjYgMCAwIDEgNDAyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2Ii8+CjxwYXRoIGQ9Ik0zMzYgNzhBMTA2IDEwNiAwIDAgMSA0NDIgMTg0IiBzdHJva2U9IiNGRkIwMjAiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1vcGFjaXR5PSIuNyIvPgo8cGF0aCBkPSJNMzM2IDM4QTE0NiAxNDYgMCAwIDEgNDgyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2IiBzdHJva2Utb3BhY2l0eT0iLjQiIC8+CjwvZz4KPHBhdGggZD0iTTI0MCAyMzhDMjIyIDIxNCAyMTYgMjA0IDIxNiAxOTJBMjQgMjQgMCAwIDEgMjY0IDE5MkMyNjQgMjA0IDI1OCAyMTQgMjQwIDIzOFoiIGZpbGw9IiNGRkIwMjAiLz4KPGNpcmNsZSBjeD0iMjQwIiBjeT0iMTkyIiByPSI5IiBmaWxsPSIjMDgxNzJCIi8+Cjwvc3ZnPg==" alt="" style="width:28px;height:28px;border-radius:7px;display:block"><h1>RADAR</h1><span id="syncBadge" class="syncb sync-local">● Lokal</span><span id="watchBadge" class="watchb" style="display:none;"><i></i>👁 Dipantau Pengamat</span></div>
+      <div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMEYyQTRBIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMDgxNzJCIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iMTE2IiBmaWxsPSJ1cmwoI2cpIi8+CjxnIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CjxwYXRoIGQ9Ik0xNzAgMzkyVjEzMkgyNjJBNzggNzggMCAwIDEgMjYyIDI4OEgxNzAiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI1NCIvPgo8cGF0aCBkPSJNMjU4IDI5MkwzNDYgMzkyIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iNTQiLz4KPHBhdGggZD0iTTI1OCAzMDZMMzMwIDM4NiIgc3Ryb2tlPSIjMEYyQTRBIiBzdHJva2Utd2lkdGg9IjUiIHN0cm9rZS1kYXNoYXJyYXk9IjIgMTYiLz4KPHBhdGggZD0iTTMzNiAxMThBNjYgNjYgMCAwIDEgNDAyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2Ii8+CjxwYXRoIGQ9Ik0zMzYgNzhBMTA2IDEwNiAwIDAgMSA0NDIgMTg0IiBzdHJva2U9IiNGRkIwMjAiIHN0cm9rZS13aWR0aD0iMTYiIHN0cm9rZS1vcGFjaXR5PSIuNyIvPgo8cGF0aCBkPSJNMzM2IDM4QTE0NiAxNDYgMCAwIDEgNDgyIDE4NCIgc3Ryb2tlPSIjRkZCMDIwIiBzdHJva2Utd2lkdGg9IjE2IiBzdHJva2Utb3BhY2l0eT0iLjQiIC8+CjwvZz4KPHBhdGggZD0iTTI0MCAyMzhDMjIyIDIxNCAyMTYgMjA0IDIxNiAxOTJBMjQgMjQgMCAwIDEgMjY0IDE5MkMyNjQgMjA0IDI1OCAyMTQgMjQwIDIzOFoiIGZpbGw9IiNGRkIwMjAiLz4KPGNpcmNsZSBjeD0iMjQwIiBjeT0iMTkyIiByPSI5IiBmaWxsPSIjMDgxNzJCIi8+Cjwvc3ZnPg==" alt="" style="width:28px;height:28px;border-radius:7px;display:block"><h1>RADAR</h1><span id="syncBadge" class="syncb sync-local">● Lokal</span></div>
       <div class="sub">Real-time Arrival, Dispatch &amp; Release</div>
       <div id="clockBadge" style="font-size:12px;font-weight:700;color:var(--text);margin-top:6px;font-variant-numeric:tabular-nums;"></div>
       <div class="userchip">
@@ -1094,69 +1090,8 @@ function fbRender(){
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
 function isViewer(){ return !!(currentUser && currentUser.role==="viewer"); }
-/* ===== TANDA PENGAMAT =====
-   - Akun Pengamat (viewer) yang sedang membuka RADAR mengirim tanda hadir ke radar/viewOn tiap 45 detik (hilang sendiri saat ditutup).
-   - Semua role lain melihat "👁 Pengamat sedang memantau". Akun Pengamat sendiri TIDAK melihat tanda ini.
-   - Mode acak (Admin, ada batas tanggal): tanda muncul acak seakan-akan Pengamat memantau. Jadwal acaknya sama di semua perangkat. */
-const WATCH_SID = (()=>{ try{ let v=sessionStorage.getItem("radar_wsid"); if(!v){ v=Math.random().toString(36).slice(2,10); sessionStorage.setItem("radar_wsid",v); } return v; }catch(e){ return Math.random().toString(36).slice(2,10); } })();
-let _watchRef=null;
-function watchHeartbeat(){
-  try{
-    if(!FBS.enabled || fbCurrentState()!=="online") return;
-    if(currentUser && currentUser.role==="viewer"){
-      _watchRef=FBS.db.ref(FB_ROOT+"/viewOn/"+WATCH_SID);
-      _watchRef.onDisconnect().remove();
-      _watchRef.set({ts:Date.now()}).catch(()=>{});
-    } else if(_watchRef){ _watchRef.remove().catch(()=>{}); _watchRef=null; }
-  }catch(e){}
-}
-setInterval(watchHeartbeat, 45000); setTimeout(watchHeartbeat, 4000);
-function watchReal(d){ const o=(d||DB.get()).viewOn||{}, now=Date.now(); return Object.keys(o).filter(k=>o[k] && now-(+o[k].ts||0)<150000).length; }
-function watchHash(a,b){ let h=(a^0x9e3779b9)>>>0; h=Math.imul(h^(b>>>0),2654435761)>>>0; h^=h>>>15; h=Math.imul(h,2246822519)>>>0; h^=h>>>13; return h>>>0; }
-function watchSimOn(d){
-  const w=(d||DB.get()).watchSim||{}; if(!w.on || !(Date.now()<(+w.until||0))) return false;
-  const SL=30*60000, now=Date.now(), slot=Math.floor(now/SL), h=watchHash(+w.seed||1, slot);
-  if(h%100 >= 36) return false;                          // ±1/3 dari slot 30 menit ada "pengamat"
-  const start=(h>>>8)%(10*60000), dur=8*60000+((h>>>16)%(12*60000));   // mulai di menit acak, lama 8–20 menit
-  const t=now-slot*SL; return t>=start && t<start+dur;
-}
-function watchTick(){
-  try{
-    const el=document.getElementById("watchBadge"); if(!el) return;
-    if(!currentUser || currentUser.role==="viewer"){ el.style.display="none"; return; }
-    const d=DB.get(), real=watchReal(d)>0, sim=!real && watchSimOn(d), on=real||sim;
-    el.style.display=on?"":"none";
-    el.title=""; el.onclick=null; el.style.cursor="";
-  }catch(e){}
-}
-setInterval(watchTick, 5000);
-let _wsTaps=[];
-document.addEventListener("click", e=>{ try{
-  if(!currentUser || currentUser.role!=="admin") return;
-  if(!(e.target && e.target.closest && e.target.closest(".topbar .brand"))) return;
-  const n=Date.now(); _wsTaps=_wsTaps.filter(t=>n-t<3000); _wsTaps.push(n);
-  if(_wsTaps.length>=5){ _wsTaps=[]; showModal(watchCardHtml(DB.get())); }
-}catch(x){} }, true);
-function watchSimSave(){
-  const on=!!(document.getElementById("wsOn")||{}).checked, dt=((document.getElementById("wsUntil")||{}).value||"").trim();
-  const until=dt ? new Date(dt+"T23:59:59").getTime() : 0;
-  if(on && !(until>Date.now())){ alert("Isi tanggal berakhir (hari ini atau sesudahnya)."); return; }
-  DB.set(d=>{ const o=d.watchSim||{}; d.watchSim={on, until, seed:(o.seed||Math.floor(Math.random()*1e9)), by:(currentUser&&currentUser.name)||""}; });
-  try{ closeModal(); }catch(e){}
-  alert(on ? "Tersimpan. Aktif sampai "+new Date(until).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})+" 23.59." : "Tersimpan. Mode acak mati.");
-}
-function watchCardHtml(data){
-  const w=data.watchSim||{}, act=!!(w.on && Date.now()<(+w.until||0)), real=watchReal(data);
-  const sun=(()=>{ const t=new Date(); t.setDate(t.getDate()+((7-t.getDay())%7)); return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0"); })();
-  const val=w.until? (()=>{ const t=new Date(+w.until); return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0"); })() : sun;
-  return `<div><h3 style="margin:0 0 6px;">👁 Tanda Pengamat</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Saat akun <b>Pengamat</b> membuka RADAR, semua role lain melihat tanda <b style="color:#B42318;">👁 Dipantau Pengamat</b> di atas layar. Akun Pengamat sendiri tidak melihat tanda ini. Sekarang: <b>${real?real+" Pengamat sedang membuka RADAR":"tidak ada Pengamat yang membuka"}</b>.</div>
-    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:8px;"><input type="checkbox" id="wsOn" ${act?"checked":""}> <b>Mode acak</b>: tanda muncul acak (±8 kali per shift, sekali muncul 8–20 menit) seakan-akan Pengamat memantau</label>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><span style="font-size:13px;">Berakhir otomatis</span><input id="wsUntil" type="date" value="${val}" style="width:auto;"><span style="font-size:13px;">23.59</span>
-    <button class="btn btn-primary btn-sm" style="width:auto;" onclick="watchSimSave()">Simpan</button></div>
-    ${act?`<div style="font-size:12px;margin-top:8px;color:var(--text-dim);">Aktif sampai ${new Date(+w.until).toLocaleString('id-ID',{weekday:'long',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}. Tanda saat ini: <b>${real?"asli (Pengamat membuka)":(watchSimOn(data)?"acak":"tidak tampil")}</b>.</div>`:""}
-  </div>`;
-}
+/* bersihkan data lama yang sudah tidak dipakai */
+setInterval(()=>{ try{ if(!FBS.enabled || fbCurrentState()!=="online" || isViewer()) return; const d=DB.get(); if(d.watchSim!==undefined) FBS.db.ref(FB_ROOT+"/watchSim").remove().catch(()=>{}); if(d.viewOn!==undefined) FBS.db.ref(FB_ROOT+"/viewOn").remove().catch(()=>{}); }catch(e){} }, 20000);
 let _uiAt=0; ["click","keydown","touchend"].forEach(ev=>{ try{ window.addEventListener(ev,()=>{ _uiAt=Date.now(); },true); }catch(e){} });
 let _vbT=0;
 function viewerBlockedToast(){
@@ -1837,7 +1772,6 @@ function ccForceOutCheck(){
 }
 function ccAutoOutSave(){ const v=(document.getElementById("ccAutoOutH")||{}).value; const n=Math.max(0,Math.min(48,+v||0)); DB.set(d=>{ d.ccAutoOutH=n; }); alert(n?("Driver CC otomatis keluar setelah "+n+" jam login."):"Keluar otomatis dimatikan."); render(); }
 function doLogout(){
-  try{ if(_watchRef){ _watchRef.remove().catch(()=>{}); _watchRef=null; } }catch(e){}
   try{ if(currentUser && currentUser.username){ const un=currentUser.username, t=Date.now(); DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===un) x.lo=t; }); }); } }catch(e){}   // tandai sudah logout: titik petanya tidak dianggap punya akun aktif
   ccPlatOk=false; try{ stopShare(true); }catch(e){}
   spdStop(); spdCloseOverlay();
@@ -2077,15 +2011,22 @@ function offLocCheck(loc){
   return true;
 }
 
-/* Ringkasan WIP saat ini (unit yang masih ada di stall / luar stall = belum dikirim), per model. Sama dengan WIP di Dashboard. Hanya tampilan, tidak mengubah data. */
+/* Ringkasan WIP saat ini (unit yang masih ada di stall / luar stall = belum dikirim), dipisah REGULER dan BATAM, format "Model = jumlah".
+   Model yang muncul di kelompok itu dalam 3 hari terakhir tetap ditampilkan walau jumlahnya 0, supaya daftarnya tetap. Hanya tampilan. */
 function dispSumHtml(data){
-  const by={}; let tot=0;
-  Object.values(data.units||{}).forEach(u=>{ if(!u) return; tot++; const m=u.model||"?"; by[m]=(by[m]||0)+1; });
-  const ms=Object.keys(by).sort((a,b)=>by[b]-by[a]||a.localeCompare(b));
-  const chip=m=>{ const c=getModelColor(m,data)||"#16213E"; return `<span style="display:inline-flex;align-items:center;gap:6px;border:1.5px solid ${c};background:${c}14;border-radius:999px;padding:4px 10px;font-size:13px;"><b style="color:${c};">${escH(m)}</b><b style="font-size:15px;">${by[m]}</b></span>`; };
+  const G={R:{t:0,by:{}}, B:{t:0,by:{}}}; let tot=0;
+  Object.values(data.units||{}).forEach(u=>{ if(!u) return; tot++; const g=u.batam?G.B:G.R, m=String(u.model||"?").toUpperCase(); g.t++; g.by[m]=(g.by[m]||0)+1; });
+  const cut=Date.now()-3*86400000;
+  (data.unitLog||[]).forEach(e=>{ if(!e || !e.model || (e.parkedTs||0)<cut) return; const g=e.batam?G.B:G.R, m=String(e.model).toUpperCase(); if(g.by[m]===undefined) g.by[m]=0; });
+  const nm=m=>m.charAt(0)+m.slice(1).toLowerCase();
+  const col=(lbl,c,bg,g)=>{ const ms=Object.keys(g.by).sort((a,b)=>g.by[b]-g.by[a]||a.localeCompare(b));
+    return `<div style="flex:1;min-width:150px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="background:${bg};color:${c};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:900;letter-spacing:.03em;">${lbl}</span><b style="font-size:18px;color:${c};">${g.t}</b></div>
+      ${ms.length?ms.map(m=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed var(--border);font-size:15px;${g.by[m]?"":"opacity:.45;"}"><b style="color:${getModelColor(m,data)||"#16213E"};">${escH(nm(m))}</b><span>= <b>${g.by[m]}</b></span></div>`).join(""):`<div style="font-size:12px;color:var(--text-dim);">tidak ada</div>`}
+    </div>`; };
   return `<div class="card d-sum" style="padding:12px 14px;">
-    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:${tot?8:0}px;"><h3 style="margin:0;">📦 WIP (belum dikirim)</h3><span style="font-size:22px;font-weight:800;color:#E8833A;">${tot}</span><span style="font-size:12px;color:var(--text-dim);">unit</span></div>
-    ${tot?`<div style="display:flex;gap:6px;flex-wrap:wrap;">${ms.map(chip).join("")}</div>`:`<div style="font-size:12px;color:var(--text-dim);">Stall kosong, semua unit sudah dikirim.</div>`}
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px;"><h3 style="margin:0;">📦 WIP (belum dikirim)</h3><span style="font-size:22px;font-weight:800;color:#E8833A;">${tot}</span><span style="font-size:12px;color:var(--text-dim);">unit</span></div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;">${col("REGULER","#16213E","#E9EDF5",G.R)}${col("BATAM","#B25A12","#FDEBDC",G.B)}</div>
   </div>`;
 }
 function renderDispatcher(){
@@ -8021,7 +7962,7 @@ function offListHtml(data, editable){
     return `<div class="unitrow" ${editable?`onclick="openOffEdit('${k}')"`:""} style="cursor:${editable?"pointer":"default"};">
       <div class="info"><b>${u.frame}</b>${unitTagsHtml(u)}${u.ilsId?`<span style="background:#2E7D32;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800;margin-left:4px;">ILS</span>`:""}
         <span><b style="color:${mc};">${u.model}</b> · 📍 ${u.loc||"-"}</span>
-        <span>${new Date(u.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${u.line?` · ${u.line}`:""}</span></div>
+        <span>${new Date(u.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${u.line?` · ${u.line}`:""} · 👤 ${escH(u.driver||"-")}</span></div>
     </div>`;
   }).join("");
   return `<div class="card" style="border-left:4px solid #E8833A;">
@@ -8035,7 +7976,7 @@ function openOffEdit(k){
   showModal(`
     <h3>📍 Luar Stall — ${v.frame}</h3>
     <div class="field"><label>Lokasi parkir</label><input id="offEditLoc" type="text" value="${String(v.loc||"").replace(/"/g,'&quot;')}"></div>
-    <div class="msg info">${v.model} · diparkir ${new Date(v.ts).toLocaleString('id-ID')}</div>
+    <div class="msg info">${v.model} · diparkir oleh <b>${escH(v.driver||"-")}</b> · ${new Date(v.ts).toLocaleString('id-ID')}</div>
     <button class="btn btn-primary" style="margin-top:10px;" onclick="saveOffEdit('${k}')">💾 Simpan Lokasi</button>
     ${v.ilsId?"":`<button class="btn btn-danger" style="margin-top:8px;" onclick="removeOff('${k}')">🔧 Keluarkan Unit (Servis / Batal)</button>`}
   `);
