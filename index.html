@@ -3660,7 +3660,7 @@ function renderDelivery(){
 
     <div class="dl-right"><div class="dlbatches" id="dlSecAktif">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
-    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}${dfLettersCardHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${absenLogCardHtml(data)}${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
+    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}${dfLettersCardHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${absenLogCardHtml(data)}${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}${inputXlCardHtml(data,'batam')}</div></details></div>
   `;
 }
 let dlUnitOpen={};
@@ -5894,6 +5894,70 @@ function openExcelManifest(){
   try{ if(window.AndroidTLS && AndroidTLS.openExcel){ AndroidTLS.openExcel(link, r.tsv); return; } }catch(e){}
   copyManifest().then(()=>{ try{ window.open(link,"_blank"); }catch(e){} });
 }
+/* ======================================================================
+   DOWNLOAD DATA INPUT (Excel) — unit yang sudah diinput dispatcher, bisa khusus BATAM.
+   Mode "input": diinput pada tanggal (hari produksi) & shift dipilih. Mode "stok": semua unit yang saat ini masih di stall / luar stall.
+====================================================================== */
+function ixPdOf(ds){ const m=String(ds||"").match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return prodDayStart(); return new Date(+m[1],+m[2]-1,+m[3],SHIFT_START_H,0,0,0).getTime(); }
+function ixRows(data, o){
+  const isB=(f,b)=>{ if(b) return true; try{ const c=lookupUnitCat(data,f); return !!(c&&c.batam); }catch(e){ return false; } };
+  const hm=t=>{ if(!t) return ""; const d=new Date(t); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
+  const ser=t=>{ if(!t) return ""; const d=new Date(t); return {d:Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(1899,11,30))/86400000)}; };
+  const L=[];
+  if(o.mode==="stok"){
+    Object.entries(data.units||{}).forEach(([k,u])=>{ if(!u) return; const b=u.ilsId?(data.ils||[]).find(x=>x&&x.id===u.ilsId):null;
+      L.push({frame:u.frame, model:u.model, batam:isB(u.frame,u.batam), prio:!!u.prio, line:u.line||"", ts:u.ts, by:u.driver||"", loc:isOffKey(k)?("Luar stall: "+(u.loc||"-")):k,
+        status:b?"ILS dibuat (belum kirim)":(isOffKey(k)?"Luar stall":"Di stall"), cc:b?b.ccPlat:"", lp:b?b.lp:"", out:0}); });
+  } else {
+    const w=shiftWindow(ixPdOf(o.date), o.shift||"all");
+    (data.unitLog||[]).forEach(e=>{ if(!e || e.parkedTs==null || e.parkedTs<w[0] || e.parkedTs>=w[1]) return;
+      const st=e.status==="sent"?"Terkirim":e.status==="ils"?"ILS dibuat (belum kirim)":e.status==="removed"?"Dikeluarkan (servis/batal)":(/^Luar stall/.test(e.slot||"")?"Luar stall":"Di stall");
+      L.push({frame:e.frame, model:e.model, batam:isB(e.frame,e.batam), prio:!!e.prio, line:e.line||"", ts:e.parkedTs, by:e.parkedBy||"", loc:e.slot||"", status:st, cc:e.ccPlat||"", lp:e.lp||"", out:e.status==="sent"?(e.sentTs||0):0}); });
+  }
+  const R=L.filter(x=>o.kind==="batam"?x.batam:(o.kind==="reg"?!x.batam:true)).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const rows=R.map((x,i)=>{ const p=ppbjOf(data,x.frame);
+    return [i+1, x.frame, mfTitle(x.model), x.batam?"Batam":"Reguler", x.prio?"Ya":"", x.line, ser(x.ts), hm(x.ts), x.by, x.loc, x.status,
+      x.batam?(p?"Sudah":(ppbjHas(data)?"Belum":"-")):"", p?p.no:"", p&&p.dt?ppbjDt(p.dt):"", p?p.etd:"", x.cc, x.lp, x.out?hm(x.out):""]; });
+  return {R, rows};
+}
+const IX_HEAD=["No","No. Rangka","Model","Jenis","Prioritas","Line","Tgl Input","Jam Input","Diinput oleh","Lokasi","Status","PPBJ","No. PPBJ","Tgl PPBJ","ETD","No. Polisi CC","LP","Jam Kirim"];
+function ixSummary(R, data){
+  const g={}; R.forEach(x=>{ const k=(x.batam?"Batam":"Reguler")+"|"+mfTitle(x.model); const o=g[k]=g[k]||{n:0,stk:0,ils:0,out:0,rm:0,pp:0,np:0};
+    o.n++; if(/^Terkirim/.test(x.status)) o.out++; else if(/^Dikeluarkan/.test(x.status)) o.rm++; else if(/^ILS/.test(x.status)) o.ils++; else o.stk++;
+    if(x.batam){ if(ppbjOf(data,x.frame)) o.pp++; else o.np++; } });
+  const rows=Object.keys(g).sort().map(k=>{ const [j,m]=k.split("|"), o=g[k]; return [j,m,o.n,o.stk,o.ils,o.out,o.rm, j==="Batam"?o.pp:"", j==="Batam"?o.np:""]; });
+  const t=rows.reduce((a,r)=>{ [2,3,4,5,6].forEach(i=>a[i]+=r[i]); if(r[7]!=="") { a[7]+=r[7]; a[8]+=r[8]; } return a; }, ["TOTAL","",0,0,0,0,0,0,0]);
+  return [["Jenis","Model","Total","Di stall / luar stall","ILS (belum kirim)","Terkirim","Dikeluarkan","Sudah PPBJ","Belum PPBJ"]].concat(rows).concat(rows.length?[t]:[]);
+}
+function ixDownload(){
+  const g=id=>((document.getElementById(id)||{}).value||"");
+  const o={mode:g("ixMode")||"input", date:g("ixDate")||mfDateStr(prodDayStart()), shift:g("ixShift")||"all", kind:g("ixKind")||"batam"};
+  const data=DB.get(), X=ixRows(data,o);
+  const kn=o.kind==="batam"?"Batam":(o.kind==="reg"?"Reguler":"Semua");
+  if(!X.rows.length){ alert("Tidak ada data unit "+kn+(o.mode==="stok"?" yang sedang di stall.":" yang diinput pada "+o.date+(o.shift==="1"?" Shift Day":o.shift==="2"?" Shift Night":"")+".")); return; }
+  const out=mfXlsx([{name:"Unit "+kn, rows:[IX_HEAD].concat(X.rows)},{name:"Ringkasan", rows:ixSummary(X.R,data)}],[5,21,10,9,9,6,11,9,18,20,22,8,16,12,22,13,8,9]);
+  const nm=o.mode==="stok" ? "Stok-Unit-"+kn+"-"+mfDateStr(Date.now()) : "Input-Unit-"+kn+"-"+o.date+(o.shift==="1"?"-Day":o.shift==="2"?"-Night":"");
+  mfSave(nm+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",out);
+}
+let _ixMode="input";
+function inputXlCardHtml(data, defKind){
+  const today=mfDateStr(prodDayStart()), kind=defKind||"batam", cur=currentShift();
+  const nb=Object.values(data.units||{}).filter(u=>u&&u.batam).length;
+  return `<div class="card"><h3>📥 Download Data Input Unit (Excel)</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Daftar unit yang sudah diinput dispatcher: No. Rangka, model, line, jam input, lokasi, status kirim, CC, dan status <b>PPBJ</b> untuk unit Batam. Ada sheet <b>Ringkasan</b> per model. Unit Batam di stall saat ini: <b>${nb}</b>.</div>
+    <div class="field"><label>Data</label><select id="ixMode" onchange="_ixMode=this.value;document.getElementById('ixPer').style.display=this.value==='stok'?'none':''">
+      <option value="input" ${_ixMode==="input"?"selected":""}>Diinput pada tanggal & shift di bawah</option>
+      <option value="stok" ${_ixMode==="stok"?"selected":""}>Stok saat ini (unit yang masih di stall / luar stall)</option></select></div>
+    <div id="ixPer" style="${_ixMode==="stok"?"display:none;":""}">
+      <div class="field"><label>Tanggal (hari produksi)</label><input id="ixDate" type="date" value="${today}"></div>
+      <div class="field"><label>Shift</label><select id="ixShift"><option value="all">Semua shift (Day + Night)</option><option value="1" ${cur==="1"?"selected":""}>Day (07:00–20:00)</option><option value="2" ${cur==="2"?"selected":""}>Night (20:00–07:00)</option></select></div>
+    </div>
+    <div class="field"><label>Jenis unit</label><select id="ixKind"><option value="batam" ${kind==="batam"?"selected":""}>Batam saja</option><option value="all" ${kind==="all"?"selected":""}>Semua unit</option><option value="reg" ${kind==="reg"?"selected":""}>Reguler saja</option></select></div>
+    <button class="btn btn-primary" onclick="ixDownload()">⬇ Download Excel</button>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Unit yang sudah terkirim / dikeluarkan tersimpan ±26 jam. Untuk rekap yang lebih lama, download tiap shift.</div>
+  </div>`;
+}
+
 function manifestCardHtml(data){
   const today=mfDateStr(prodDayStart());   /* hari produksi: jam 06.00 pagi masih tanggal kemarin (shift malam belum selesai) */
   const lps=(()=>{ const seen=new Set(), o=[]; [...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean).forEach(l=>{ const c=lpCanon(l); if(seen.has(c)) return; seen.add(c); o.push(mfLpLabel(data,l)); }); return o; })();
@@ -7408,6 +7472,7 @@ function renderLeaderDashboard(){
   ${batamAlertHtml(data)}
   ${planVsInputHtml(data, R)}
   ${rptShiftHtml(data)}
+  ${inputXlCardHtml(data,'all')}
 
   <div class="card"><h3>Input vs Delivery per 30 menit</h3>${ldrChartSVG(R.slots)}</div>
 
@@ -8358,6 +8423,7 @@ function renderCatPage(kind){
   return `
   ${isB ? batamAlertHtml(data) : ""}
   ${isB ? ppbjCardHtml(data) : ""}
+  ${isB ? inputXlCardHtml(data,'batam') : ""}
   <div class="card">
     <h3>${ico} Upload Daftar Unit ${nm}</h3>
     <p style="font-size:13px;color:var(--text-dim);margin:6px 0 12px;">${isB
