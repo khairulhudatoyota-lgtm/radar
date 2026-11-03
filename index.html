@@ -109,6 +109,7 @@ html,body{max-width:100%; overflow-x:hidden;}
 .nsBtn:active{transform:scale(.97)}
 .nsOk{animation:nsPopIn .45s cubic-bezier(.2,1.6,.4,1) both}
 .nsFoot{font-size:12px;color:var(--text-dim);margin-top:10px;animation:nsBlink 2s ease-in-out infinite}
+.ppbjb{background:#fff;color:#1E9E5A;border-radius:3px;padding:0 3px;font-size:9px;font-weight:900;letter-spacing:0;}
 @keyframes nsIn{from{opacity:0;transform:translateY(24px) scale(.92)}to{opacity:1;transform:none}}
 @keyframes nsUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @keyframes nsDrive{from{left:-15%}to{left:105%}}
@@ -2041,7 +2042,7 @@ function renderDispatcher(){
       const mc = occ ? getModelColor(occ.model, data) : null;
       cells += `<div class="slot ${occ?'filled':''} ${isPicked?'picked':''}" data-slot="${id}" ${occ?`style="${slotFillStyle(mc)}"`:''} onclick="${occ ? `openDispatcherSlotEdit('${id}')` : `onPickSlot('${id}')`}">
         <div class="id">${id}</div>
-        <div class="val">${occ? (occ.model||'?') : 'KOSONG'}</div>${occ&&(occ.batam||occ.prio)?`<div>${unitTagsHtml(occ,true)}</div>`:""}
+        <div class="val">${occ? (occ.model||'?') : 'KOSONG'}</div>${occ&&(occ.batam||occ.prio)?`<div>${unitTagsHtml(occ,true,true)}</div>`:""}
       </div>`;
     }
     return `<div class="stallgroup side${g.slice(-1)}"><div class="lbl">Stall ${g}${isBatamStall(data,g)?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;">KHUSUS BATAM</span>`:""}${canKeluarkanCC()&&Object.keys(data.units||{}).some(k=>data.units[k]&&!data.units[k].ilsId&&!isOffKey(k)&&groupOf(k)===g)?` <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:1px 8px;font-size:10px;margin-left:6px;color:var(--red);border-color:var(--red);" onclick="clearStallUnits('${g}')">🗑 Kosongkan</button>`:""}</div><div class="slotgrid">${cells}</div></div>`;
@@ -2570,6 +2571,7 @@ const SND_EV=[
   {k:"jawab",   t:"Alasan dari Koordinator",   d:"Koordinator sudah mengisi alasan atas pertanyaanmu", roles:["delivery","admin","leader"], def:"chime"},
   {k:"defect",  t:"Unit defect dilaporkan",    d:"Driver CC / Dispatcher / Koordinator melaporkan unit defect; Delivery memutuskan lanjut atau tidak", roles:["delivery","admin","koordinator"], def:"sirene"},
   {k:"dfres",   t:"Keputusan unit defect",     d:"Delivery sudah memutuskan laporan defect (OK / dengan catatan / tidak lanjut); surat bisa dibuka", roles:["cc","koordinator"], def:"chime"},
+  {k:"ppbj",    t:"Data PPBJ Batam masuk",     d:"Data PPBJ Batam diperbarui; unit Batam di stall yang sudah PPBJ siap dikirim", roles:["delivery","admin"], def:"chime"},
   {k:"koord",   t:"Notifikasi Koordinator",    d:"CC masuk stall, ILS sudah di TLS, dan kabar lain untuk LP-mu", roles:["koordinator"], def:"naik"}
 ];
 const SND_TONES={
@@ -3633,6 +3635,7 @@ function renderDelivery(){
     ${csCardHtml(data)}
     ${earlyBox}
     ${batamAlertHtml(data)}
+    ${ppbjDelHtml(data)}
     ${draftCardsHtml(data)}
     <div id="dlSecBuat" style="height:0;"></div>
     <div class="dl-left">
@@ -3703,6 +3706,7 @@ function createILS(ccNum, slots){
   { const _dupS=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum==ccNum);   // stall CC terkunci: 1 stall = 1 plat = 1 ILS aktif
     if(_dupS){ alert("Stall "+ccLbl(ccNum)+" sudah terkunci untuk "+_dupS.ccPlat+" (ILS #"+_dupS.id+"). Satu stall CC hanya boleh satu plat / satu ILS aktif sampai CC itu berangkat (Delout)."); return false; } }
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
+  if(ppbjHas(data)){ const np=units.filter(u=>u.batam && !ppbjOf(data,u.frame)); if(np.length && !confirm(np.length+" unit Batam BELUM ada di data PPBJ:\n"+np.map(u=>"• "+u.frame+" ("+u.model+")").join("\n")+"\n\nDokumen PPBJ unit ini belum keluar. Tetap buat ILS?")) return false; }
   { const bl=units.map(u=>({u, b:dfBlockOf(data,u.frame)})).filter(z=>z.b); if(bl.length){ alert("Unit defect tidak bisa dimasukkan ILS:\n"+bl.map(z=>"• "+z.u.frame+" ("+z.u.model+") — "+z.b.why).join("\n")+"\n\nPutuskan dulu di Konfirmasi Defect, atau pilih unit lain."); return false; } }
   { const fr=new Set(units.map(u=>String(u.frame||"").toUpperCase())); const dupF=(data.ils||[]).find(b=>b && !b.outTs && b.status==="open" && (b.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())));
     if(dupF){ alert("Unit ini sudah ada di ILS #"+dupF.id+" (CC "+dupF.ccPlat+") yang masih aktif. Batalkan ILS itu dulu bila memang mau dibuat ulang, supaya tidak dobel."); return false; } }
@@ -4245,7 +4249,7 @@ function renderKoordinator(){
     </div>`).join("");
 
   return `
-    ${dfAlertHtml(data)}${whyKoordCardHtml(data)}${koordStatusHtml(data)}${dfLettersCardHtml(data)}
+    ${dfAckHtml(data)}${dfAlertHtml(data)}${whyKoordCardHtml(data)}${koordStatusHtml(data)}${dfLettersCardHtml(data)}
     ${sjBoxHtml("koor","Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""), "Muncul setelah Delout. Terhapus otomatis 7 hari. Tekan Buka untuk mencari per tanggal, shift, plat no, atau no surat jalan.")}
     <div class="card">
       <h3>🧭 Kelola Stall Car Carrier</h3>
@@ -7122,6 +7126,7 @@ function renderDccpUpload(){
 ====================================================================== */
 const RETAIN_MS = 26*3600*1000;   // lama simpan data unit terkirim (jam)
 function syncUnitLog(d){
+  try{ dfSync(d); }catch(e){}
   d.unitLog = d.unitLog || [];
   const log = d.unitLog, now = Date.now();
   if(!d.migAvanzaBY){ d.migAvanzaBY = true; const a = d.models && d.models.AVANZA; if(a && Array.isArray(a.vin_codes) && !a.vin_codes.includes("BY")) a.vin_codes.push("BY"); }   // Avanza baru (W100RE) berkode BY
@@ -8034,14 +8039,16 @@ function normVin(v){ return String(v||"").toUpperCase().replace(/[\s\-]/g,""); }
 function lookupUnitCat(d, vin){
   vin = normVin(vin); const m = d.unitCat||{};
   if(!vin) return null;
-  if(m[vin]) return m[vin];
-  if(vin.length>=8){ for(const k in m){ if(k.length>=6 && k.length<vin.length && vin.endsWith(k)) return m[k]; } }
-  return null;
+  let hit = m[vin] || null;
+  if(!hit && vin.length>=8){ for(const k in m){ if(k.length>=6 && k.length<vin.length && vin.endsWith(k)){ hit=m[k]; break; } } }
+  try{ if(ppbjOf(d, vin)) return hit ? (hit.batam ? hit : Object.assign({}, hit, {batam:true})) : {batam:true, prio:false, src:"ppbj"}; }catch(e){}   /* frame ada di data PPBJ = unit Batam */
+  return hit;
 }
-function unitTagsHtml(u, small){
+function unitTagsHtml(u, small, noPpbj){
   if(!u) return "";
   const fs = small?"10px":"11px";
-  return `${dfTagHtml(u.frame, fs)}${u.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">BATAM</span>`:""}${u.prio?`<span style="background:#F5B800;color:#3a2a00;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">⭐ PRIO</span>`:""}`;
+  let pp=""; if(!noPpbj){ try{ const d=DB.get(), x=ppbjOf(d,u.frame); if(x) pp=`<span title="${xlEsc(ppbjInfoTxt(x))}" style="background:#1E9E5A;color:#fff;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">✅ PPBJ</span>`; else if(u.batam && !small && ppbjHas(d)) pp=`<span style="background:#EEF0F3;color:#6B7686;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">⏳ belum PPBJ</span>`; }catch(e){} }
+  return `${dfTagHtml(u.frame, fs)}${u.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">BATAM</span>`:""}${pp}${u.prio?`<span style="background:#F5B800;color:#3a2a00;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">⭐ PRIO</span>`:""}`;
 }
 function makeUnitRecord(vin, model, d){
   try{ const L=d.speedAlerts||[]; for(let i=L.length-1;i>=0;i--){ const x=L[i]; if(x && x.dev===spdDev() && x.role==="dispatcher" && !x.unit && Date.now()-x.ts<15*60000){ x.unit=(model?model+" · ":"")+vin; break; } } }catch(e){}
@@ -8178,6 +8185,151 @@ function batamQuickCheck(v){
   const c = lookupUnitCat(DB.get(), q);
   el.innerHTML = c ? `<div class="msg ok"><b>${q}</b> terdaftar: ${c.batam?"<b style='color:#E8833A;'>BATAM</b> ":""}${c.prio?"<b>⭐ PRIORITAS</b>":""}${(!c.batam&&!c.prio)?"reguler":""} <span style="font-size:11px;color:var(--text-dim);">(${c.src==="manual"?"ditandai manual":"dari file"})</span></div>` : `<div class="msg info">${q} tidak ada di daftar → diperlakukan reguler.</div>`;
 }
+/* ======================================================================
+   PPBJ BATAM — Delivery/Admin upload file "Detail units yang sudah mendapatkan PPBJ" (banyak sheet per ETD).
+   d.ppbj = {ts, by, file, n, read, sh:[nama sheet ETD], s:"FRAME|NO_PPBJ|YYYYMMDD|idxSheet;..."}  (disimpan ringkas, 180 hari terakhir)
+   Frame yang ada di PPBJ = unit Batam yang dokumennya sudah keluar → tanda ✅ PPBJ, siap dikirim.
+====================================================================== */
+const PPBJ_KEEP_DAYS = 180;
+let _ppbjMemo = {s:null, map:null}, ppbjPreview = null;
+function ppbjMap(d){
+  const p=(d||DB.get()).ppbj, s=(p&&p.s)||"";
+  if(_ppbjMemo.s===s && _ppbjMemo.map) return _ppbjMemo.map;
+  const m={}, sh=(p&&p.sh)?(Array.isArray(p.sh)?p.sh:Object.values(p.sh)):[];
+  if(s) s.split(";").forEach(x=>{ const a=x.split("|"); if(a[0]) m[a[0]]={no:a[1]||"", dt:a[2]||"", etd:sh[+a[3]]||""}; });
+  _ppbjMemo={s, map:m}; return m;
+}
+function ppbjOf(d, frame){ const k=normVin(frame); return k ? (ppbjMap(d)[k]||null) : null; }
+function ppbjHas(d){ const p=(d||DB.get()).ppbj; return !!(p && p.s); }
+function ppbjDt(s){ s=String(s||""); if(s.length!==8) return ""; const M=["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"]; return (+s.slice(6))+" "+M[(+s.slice(4,6))-1]+" "+s.slice(0,4); }
+function ppbjInfoTxt(x){ return "PPBJ "+x.no+(x.dt?" · "+ppbjDt(x.dt):"")+(x.etd?" · "+x.etd:""); }
+function parsePpbjWorkbook(wb){
+  const T=v=>v==null?"":String(v).trim(), U=v=>T(v).toUpperCase().replace(/\s+/g," ");
+  /* tanggal = jam 00:00 UTC hari itu (tidak tergeser zona waktu HP) */
+  const toD=v=>{ if(v instanceof Date && !isNaN(v)) return new Date(Date.UTC(v.getFullYear(),v.getMonth(),v.getDate())); if(typeof v==="number" && v>20000 && v<90000) return new Date(Math.round(v-25569)*86400000);
+    const m=T(v).match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if(m){ const y=+m[3]<100?2000+(+m[3]):+m[3]; return new Date(Date.UTC(y,+m[2]-1,+m[1])); } return null; };
+  const best={}, sheets=[], cut=Date.now()-PPBJ_KEEP_DAYS*86400000; let read=0, notYet=0, old=0, other=0;
+  wb.SheetNames.forEach(name=>{
+    const grid=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null});
+    let hr=-1,cF=-1,cP=-1,cD=-1,cI=-1,cR=-1,cM=-1;
+    for(let r=0;r<Math.min(15,grid.length)&&hr<0;r++){
+      const row=grid[r]||[], p=row.findIndex(x=>/^PPBJ\s*NO/.test(U(x))); if(p<0) continue;
+      let f=-1; for(let c=p-1;c>=0;c--){ if(/^FRAME( NO| NUMBER)?\.?$/.test(U(row[c]))){ f=c; break; } }
+      if(f<0) continue;
+      hr=r; cF=f; cP=p;
+      cD=row.findIndex((x,i)=>i>p && /^PPBJ DATE/.test(U(x)));
+      cI=row.findIndex((x,i)=>i<p && /PDI DATE/.test(U(x)));
+      cR=row.findIndex((x,i)=>i>p && /^REMARK/.test(U(x)));
+      cM=row.findIndex((x,i)=>i<p && /^(MFG|MAKER|PLANT|PABRIK)$/.test(U(x)));
+    }
+    if(hr<0) return;
+    let si=-1;
+    for(let r=hr+1;r<grid.length;r++){
+      const row=grid[r]||[], fr=normVin(row[cF]); if(fr.length<11 || !/[A-Z]/.test(fr) || !/\d/.test(fr)) continue;
+      read++;
+      if(cM>=0 && U(row[cM]) && !/ADM/.test(U(row[cM]))){ other++; continue; }   /* hanya unit buatan ADM (EKY: Avanza, Raize, Rush, Agya GR); TMMIN dilewati */
+      const no=T(row[cP]).replace(/\.0+$/,"").replace(/[|;]/g,""), rem=cR>=0?U(row[cR]):"";
+      if(!no || /NOT YET/.test(rem)){ notYet++; continue; }
+      const dt=(cD>=0 && toD(row[cD])) || (cI>=0 && toD(row[cI])) || null;
+      if(dt && dt.getTime()<cut){ old++; continue; }
+      if(si<0){ si=sheets.length; sheets.push(T(name).replace(/^ETD\.?\s*/i,"ETD ").replace(/[|;]/g,"")); }
+      const t=dt?dt.getTime():0, prev=best[fr];
+      if(!prev || t>=prev.t) best[fr]={fr, no, t, si};
+    }
+  });
+  return {rows:Object.values(best), sheets, read, notYet, old, other};
+}
+function ppbjFile(evt){
+  const f=evt.target.files && evt.target.files[0], msg=document.getElementById("ppbjMsg"); if(!f) return;
+  if(typeof XLSX==="undefined"){ if(msg) msg.innerHTML=`<div class="msg err">Library Excel belum termuat (perlu internet). Coba lagi.</div>`; return; }
+  if(msg) msg.innerHTML=`<div class="msg">Membaca file…</div>`;
+  const rd=new FileReader();
+  rd.onload=e=>{ try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+      const P=parsePpbjWorkbook(wb);
+      if(!P.rows.length){ if(msg) msg.innerHTML=`<div class="msg err">Tidak ada data PPBJ yang terbaca${P.read?` (${P.read} frame terbaca, tapi semuanya belum dokumen / lebih dari ${PPBJ_KEEP_DAYS} hari)`:""}. Pastikan file berisi kolom <b>FRAME NO</b> dan <b>PPBJ NO</b>.</div>`; return; }
+      P.fileName=f.name; ppbjPreview=P; render();
+    }catch(err){ if(msg) msg.innerHTML=`<div class="msg err">Gagal membaca file: ${xlEsc(err.message||err)}</div>`; } };
+  rd.readAsArrayBuffer(f);
+}
+function ppbjSave(){
+  const P=ppbjPreview; if(!P) return;
+  if(!canKeluarkanCC()){ alert("Hanya Delivery / Admin yang bisa upload PPBJ."); return; }
+  const p2=n=>String(n).padStart(2,"0"), ymd=t=>{ if(!t) return ""; const d=new Date(t); return d.getUTCFullYear()+p2(d.getUTCMonth()+1)+p2(d.getUTCDate()); };
+  const s=P.rows.map(r=>[r.fr, r.no, ymd(r.t), r.si].join("|")).join(";"), set=new Set(P.rows.map(r=>r.fr)), ts=Date.now();
+  try{ localStorage.setItem("radar_ppbjseen", String(ts)); }catch(e){}
+  let marked=0;
+  DB.set(d=>{
+    d.ppbj={ts, by:(currentUser&&currentUser.name)||"", file:P.fileName||"", n:P.rows.length, read:P.read, sh:P.sheets, s};
+    Object.values(d.units||{}).forEach(u=>{ if(u && set.has(normVin(u.frame)) && !u.batam){ u.batam=true; marked++; } });   // frame PPBJ = unit Batam
+  });
+  ppbjPreview=null; render();
+  const R=ppbjParked(DB.get());
+  alert("Data PPBJ tersimpan: "+P.rows.length+" frame.\n\nUnit Batam di stall yang sudah PPBJ (siap kirim): "+R.ready.length+"\nBelum PPBJ: "+R.wait.length+(marked?"\n\n"+marked+" unit di stall otomatis ditandai BATAM karena ada di data PPBJ.":""));
+}
+function ppbjParked(d){
+  const ready=[], wait=[], inIls=[];
+  Object.entries(d.units||{}).forEach(([k,u])=>{ if(!u) return; const x=ppbjOf(d,u.frame);
+    if(u.ilsId){ if(x) inIls.push({k,u,x}); return; }
+    if(x) ready.push({k,u,x}); else if(u.batam) wait.push({k,u}); });
+  const ord=k=>{ const i=PARK_ORDER.indexOf(groupOf(k)); return isOffKey(k)?999:(i<0?500:i); };
+  ready.sort((a,b)=>ord(a.k)-ord(b.k)||a.k.localeCompare(b.k)); wait.sort((a,b)=>ord(a.k)-ord(b.k)||a.k.localeCompare(b.k));
+  return {ready, wait, inIls};
+}
+function ppbjCardHtml(data){
+  const p=data.ppbj, P=ppbjPreview, can=canKeluarkanCC(), R=ppbjParked(data);
+  let pv="";
+  if(P){ const set={}; P.rows.forEach(r=>set[r.fr]=r); const hit=Object.entries(data.units||{}).filter(([k,u])=>u && set[normVin(u.frame)]);
+    pv=`<div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:10px;">
+      <b>${xlEsc(P.fileName)}</b><div style="font-size:13px;margin-top:4px;">${P.read} frame terbaca · <b style="color:#1E9E5A;">${P.rows.length} sudah PPBJ</b> (${PPBJ_KEEP_DAYS} hari terakhir)${P.notYet?` · ${P.notYet} belum dokumen`:""}${P.old?` · ${P.old} data lama dilewati`:""}${P.other?` · ${P.other} unit TMMIN dilewati (bukan dari EKY)`:""}</div>
+      <div style="font-size:13px;margin-top:4px;">Cocok dengan unit di stall sekarang: <b>${hit.length}</b></div>
+      ${hit.length?`<div style="max-height:160px;overflow-y:auto;margin-top:6px;font-size:12px;">${hit.slice(0,30).map(([k,u])=>`<div style="padding:3px 0;border-top:1px solid var(--border);"><b>${xlEsc(u.frame)}</b> · ${xlEsc(u.model||"")} · ${isOffKey(k)?"Luar stall":k} · ${xlEsc(set[normVin(u.frame)].no)}</div>`).join("")}</div>`:""}
+      <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-primary" onclick="ppbjSave()">✔ Simpan (ganti data PPBJ lama)</button><button class="btn btn-sm" style="width:auto;" onclick="ppbjPreview=null;render()">Batal</button></div></div>`; }
+  return `<div class="card" style="border-left:4px solid #1E9E5A;">
+    <h3>✅ Upload Data PPBJ Batam</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:6px 0 10px;">File <b>"Detail units yang sudah mendapatkan PPBJ"</b> (semua sheet ETD dibaca, hanya unit MFG <b>ADM</b>). Unit di stall yang frame-nya ada di data ini diberi tanda <b style="color:#1E9E5A;">✅ PPBJ</b> = dokumen sudah keluar, <b>siap dikirim</b>. Upload baru menggantikan data lama.</p>
+    ${p&&p.s?`<div class="msg ok" style="margin-bottom:10px;">Data aktif: <b>${p.n} frame</b> · ${xlEsc(p.file||"")} · upload ${new Date(p.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})} oleh ${xlEsc(p.by||"-")}<br>Di stall: <b>${R.ready.length} siap kirim</b> · ${R.wait.length} unit Batam belum PPBJ${R.inIls.length?` · ${R.inIls.length} sudah di ILS`:""}</div>`:`<div class="msg info" style="margin-bottom:10px;">Belum ada data PPBJ.</div>`}
+    ${can?`<input type="file" accept=".xlsx,.xls,.csv" onchange="ppbjFile(event)"><div id="ppbjMsg" style="margin-top:10px;"></div>${pv}`:`<div style="font-size:12px;color:var(--text-dim);">Upload hanya oleh Delivery / Admin.</div>`}
+  </div>`;
+}
+/* Delivery: kartu unit Batam siap kirim */
+function ppbjDelHtml(data){
+  const R=ppbjParked(data);
+  if(!ppbjHas(data)){ return R.wait.length?`<div class="card" style="border-left:4px solid #E8833A;"><h3>🟠 Unit Batam di Stall (${R.wait.length})</h3><div style="font-size:12px;color:var(--text-dim);">Data PPBJ belum diupload. Upload di menu <b>Unit Batam</b> supaya kelihatan unit mana yang sudah PPBJ dan siap dikirim.</div></div>`:""; }
+  if(!R.ready.length && !R.wait.length) return "";
+  const G={}; R.ready.forEach(z=>{ const g=isOffKey(z.k)?"OFF":groupOf(z.k); (G[g]=G[g]||[]).push(z); });
+  const can=canKeluarkanCC();
+  return `<div class="card" style="border-left:4px solid #1E9E5A;">
+    <h3>✅ Unit Batam Siap Kirim (PPBJ) <span class="badge" style="background:#E7F6EC;color:#1E9E5A;">${R.ready.length}</span>${R.wait.length?` <span class="badge">⏳ belum PPBJ ${R.wait.length}</span>`:""}</h3>
+    ${R.ready.length?Object.keys(G).map(g=>`<div style="border-top:1px solid var(--border);padding:8px 0;">
+      <div style="display:flex;align-items:center;gap:8px;"><b>${g==="OFF"?"📍 Luar stall":"Stall "+g}</b><span style="font-size:12px;color:var(--text-dim);">${G[g].length} unit</span>${can?`<button class="btn btn-sm btn-green" style="width:auto;margin-left:auto;" onclick="ppbjPick('${g}')">Pilih untuk ILS</button>`:""}</div>
+      ${G[g].map(z=>`<div style="font-size:12px;padding:2px 0;"><b>${xlEsc(z.u.frame)}</b> · ${xlEsc(z.u.model||"")} · ${isOffKey(z.k)?xlEsc(slotText(z.k,z.u)):z.k} <span style="color:#1E9E5A;">${xlEsc(ppbjInfoTxt(z.x))}</span>${dfBlockOf(data,z.u.frame)?` <b style="color:#C0392B;">⚠ defect</b>`:""}</div>`).join("")}</div>`).join(""):`<div style="font-size:12px;color:var(--text-dim);">Belum ada unit Batam di stall yang sudah PPBJ.</div>`}
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Data PPBJ: ${new Date(data.ppbj.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})} (${xlEsc(data.ppbj.by||"-")}). Unit Batam yang belum PPBJ jangan dikirim dulu.</div>
+  </div>`;
+}
+function ppbjPick(g){
+  const d=DB.get(), R=ppbjParked(d);
+  const L=R.ready.filter(z=>(g==="OFF"?isOffKey(z.k):(!isOffKey(z.k) && groupOf(z.k)===g)) && !dfBlockOf(d,z.u.frame)).map(z=>z.k).slice(0,CONFIG.MAX_LOAD_PER_CC);
+  if(!L.length){ alert("Tidak ada unit yang bisa dipilih."); return; }
+  deliverySelUnits=L; try{ dlUnitOpen[g]=true; }catch(e){}
+  render();
+  setTimeout(()=>{ try{ const h=[...document.querySelectorAll('h3')].find(x=>/Pilih Unit/.test(x.textContent)); if(h) h.scrollIntoView({behavior:"smooth",block:"start"}); }catch(e){} },80);
+}
+/* bunyi di Delivery saat data PPBJ baru masuk (dari perangkat lain) */
+function ppbjTick(){
+  try{
+    if(!currentUser || !["delivery","admin"].includes(currentUser.role)) return;
+    const d=DB.get(), p=d.ppbj; if(!p || !p.ts) return;
+    let seen=0; try{ seen=+localStorage.getItem("radar_ppbjseen")||0; }catch(e){}
+    if(!seen){ try{ localStorage.setItem("radar_ppbjseen", String(p.ts)); }catch(e){} return; }
+    if(p.ts<=seen) return;
+    try{ localStorage.setItem("radar_ppbjseen", String(p.ts)); }catch(e){}
+    const R=ppbjParked(d);
+    soundEv('ppbj', "Data PPBJ Batam diperbarui"+(p.by?" oleh "+p.by:"")+": "+R.ready.length+" unit Batam di stall sudah PPBJ, siap kirim.");
+  }catch(e){}
+}
+setInterval(ppbjTick, 5000);
+
 function renderBatamPage(){ return renderCatPage("batam"); }
 function renderPrioPage(){ return renderCatPage("prio"); }
 function renderCatPage(kind){
@@ -8195,6 +8347,7 @@ function renderCatPage(kind){
   const col = isB ? "#E8833A" : "#C99700";
   return `
   ${isB ? batamAlertHtml(data) : ""}
+  ${isB ? ppbjCardHtml(data) : ""}
   <div class="card">
     <h3>${ico} Upload Daftar Unit ${nm}</h3>
     <p style="font-size:13px;color:var(--text-dim);margin:6px 0 12px;">${isB
@@ -8405,6 +8558,39 @@ function dfLink(d, rec){
   else { const s=Object.keys(d.units||{}).find(s=>d.units[s] && normVin(d.units[s].frame)===k); if(s){ const u=d.units[s]; rec.slot=u.loc?("Luar stall: "+u.loc):s; } }
   return rec;
 }
+/* Sambungkan laporan defect ke CC yang MENGANGKUT unit itu (ILS terbaru yang memuat frame tsb), otomatis.
+   Dipanggil di setiap perubahan data (syncUnitLog). ILS dibatalkan & unit kembali ke stall = sambungan dilepas. */
+function dfSync(d){
+  const L=d.defects; if(!Array.isArray(L) || !L.length) return;
+  const now=Date.now(), ils=Array.isArray(d.ils)?d.ils:[];
+  L.forEach(x=>{
+    if(!x || now-(x.ts||0)>=DF_KEEP_MS || !(x.status==="open"||x.status==="decided")) return;
+    const k=normVin(x.frame); if(!k) return;
+    let b=null; ils.forEach(y=>{ if(y && (y.units||[]).some(u=>normVin(u.frame)===k) && (!b || (y.ts||0)>(b.ts||0))) b=y; });
+    if(b){
+      let drv=""; try{ drv=b.drvName||ccDriverAny(b.ccPlat)||""; }catch(e){}
+      if(x.ilsId!==b.id || x.ccPlat!==(b.ccPlat||"") || (b.lp && x.lp!==b.lp) || (drv && x.drvName!==drv)){
+        const nw=x.ilsId!==b.id; x.ilsId=b.id; x.ccPlat=b.ccPlat||""; x.lp=b.lp||x.lp||""; if(drv) x.drvName=drv;
+        if(nw){ x.linkTs=now; delete x.ccAck; delete x.koAck; }
+      }
+      return;
+    }
+    if(x.ilsId && x.ccPlat && Object.values(d.units||{}).some(u=>u && !u.ilsId && normVin(u.frame)===k)){ delete x.ilsId; x.ccPlat=""; x.lp=""; x.drvName=""; delete x.linkTs; delete x.ccAck; delete x.koAck; }
+  });
+}
+/* Surat yang belum dibuka Driver CC / Koordinator (peringatan supaya tidak lupa) */
+function dfAckList(d){
+  if(!currentUser) return []; const r=currentUser.role, now=Date.now(), fresh=x=>now-Math.max(x.linkTs||0,(x.decision&&x.decision.ts)||0,x.ts||0)<48*3600000;
+  if(r==="cc"){ const k=myCcPlatKey(); if(!k) return []; return dfDecided(d).filter(x=>normPlat(x.ccPlat)===k && !x.ccAck && fresh(x)); }
+  if(r==="koordinator"){ const lp=myKoordLP(); return dfDecided(d).filter(x=>x.ccPlat && (!lp || lpKey(x.lp)===lp) && !x.koAck && fresh(x)); }
+  return [];
+}
+function dfAckHtml(data){
+  const L=dfAckList(data); if(!L.length) return ""; const cc=currentUser.role==="cc";
+  return `<div class="card alertcard" style="margin-bottom:12px;"><h3 style="color:#C0392B;">⚠ Surat Laporan Unit Defect Belum Dibuka (${L.length})</h3>
+    <div style="font-size:12px;margin-bottom:4px;">Unit ${cc?"di truk kamu":"yang diangkut CC LP-mu"} punya laporan defect yang sudah diperiksa Delivery. <b>Buka & simpan suratnya</b> sebagai bukti defect ditemukan di area EKY, bukan kesalahan Driver CC.</div>
+    ${L.map(x=>dfRowHtml(x)).join("")}</div>`;
+}
 async function dfPhotoGet(x){
   if(x.photo) return x.photo;
   if(!x.photoRef || !(FBS.enabled && FBS.db)) return "";
@@ -8415,9 +8601,9 @@ let _dfCc={foto:null};
 function dfMyIls(d){ const k=myCcPlatKey(); if(!k) return null; return (d.ils||[]).find(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===k)||null; }
 function dfCcCardHtml(data){
   if(!currentUser || currentUser.role!=="cc") return "";
-  const b=dfMyIls(data), k=myCcPlatKey();
+  const b=dfMyIls(data), k=myCcPlatKey(), ack=dfAckHtml(data);
   const mine=dfList(data).filter(x=>k && normPlat(x.ccPlat)===k).sort((a,c)=>(c.ts||0)-(a.ts||0));
-  return `<div class="card" style="border-left:4px solid #C0392B;">
+  return `${ack}<div class="card" style="border-left:4px solid #C0392B;">
     <h3>⚠ Unit Defect</h3>
     ${b?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Temukan baret / penyok / cacat di unit yang akan kamu bawa? Laporkan <b>sebelum berangkat</b> supaya dicek Delivery dan kamu tidak disalahkan.</div>
       <button class="btn btn-danger" onclick="dfCcOpen()">⚠ Lapor Unit Defect</button>`:`<div style="font-size:12px;color:var(--text-dim);">Tombol lapor muncul setelah ILS untuk truk kamu dibuat.</div>`}
@@ -8526,7 +8712,8 @@ async function dfDraw(x){
   text("SURAT LAPORAN UNIT DEFECT",105,44,15,true,{align:"center"}); text("No. "+dfNo(x),105,51,9.5,false,{align:"center"});
   // data unit
   const drv=x.drvName||ccDriverAny(x.ccPlat)||(x.src==="cc"?x.reportedBy:"")||"-";
-  const rows=[["No. Rangka",x.frame],["Model",x.model],["Lokasi temuan","Area EKY"+(x.slot?" · "+x.slot:"")],["Tanggal / jam temuan",fT(x.ts)],["No. Polisi CC",x.ccPlat||"-"],["Driver CC",drv],["LP",x.lp||"-"],["Dilaporkan oleh",(x.reportedBy||"-")+" ("+dfRoleName(x.src)+")"]];
+  const _b=(data.ils||[]).find(y=>y && y.id===x.ilsId), sjkb=(_b && _b.sjkb)||"";
+  const rows=[["No. Rangka",x.frame],["Model",x.model],["Lokasi temuan","Area EKY"+(x.slot?" · "+x.slot:"")],["Tanggal / jam temuan",fT(x.ts)],["No. Polisi CC",x.ccPlat||"- (belum dimuat ke CC)"],["Driver CC",drv],["LP",x.lp||"-"]].concat(sjkb?[["No. SJKB",sjkb]]:[]).concat([["Dilaporkan oleh",(x.reportedBy||"-")+" ("+dfRoleName(x.src)+")"]]);
   let y=56; rect(15,y,180,rows.length*6+4,0.3);
   rows.forEach((r,i)=>{ const yy=y+6.5+i*6; text(r[0],19,yy,9.5); text(":",62,yy,9.5); text(r[1],65,yy,9.5,i===0); });
   y+=rows.length*6+12;
@@ -8562,6 +8749,9 @@ let _dfPdf=null;
 function dfFileName(x){ return "Laporan Defect "+String(x.frame||"").trim()+" "+String(x.ccPlat||"").trim()+".pdf"; }
 async function dfLetterOpen(id){
   const x=dfList().find(y=>y.id===id); if(!x || !x.decision){ alert("Surat belum tersedia (belum diputuskan)."); return; }
+  try{ const r=currentUser&&currentUser.role;
+    if(r==="cc" && !x.ccAck && x.ccPlat && normPlat(x.ccPlat)===myCcPlatKey()) DB.set(d=>{ const y=(d.defects||[]).find(z=>z.id===id); if(y && !y.ccAck) y.ccAck=Date.now(); });
+    if(r==="koordinator" && !x.koAck && x.ccPlat){ const lp=myKoordLP(); if(!lp || lpKey(x.lp)===lp) DB.set(d=>{ const y=(d.defects||[]).find(z=>z.id===id); if(y && !y.koAck) y.koAck=Date.now(); }); } }catch(e){}
   showModal('<h3 style="margin:0 0 6px;">📄 Surat Laporan Unit Defect</h3><div class="msg">Menyiapkan surat…</div>');
   try{
     const cv=await dfDraw(x); _dfPdf={pdf:esjPdf(cv,595.28,841.89), name:dfFileName(x), text:"Laporan Unit Defect "+x.frame+(x.ccPlat?" · "+x.ccPlat:"")+" · "+DF_DEC[x.decision.k].s};
@@ -8590,15 +8780,18 @@ function dfTick(){
     const d=DB.get(), L=dfList(d), now=Date.now(), lp=r==="koordinator"?myKoordLP():"", k=r==="cc"?myCcPlatKey():"";
     let ch=false;
     L.forEach(x=>{
-      if(now-(x.ts||0)>3*3600000 && !(x.decision && now-(x.decision.ts||0)<3*3600000)) return;
+      const rc=t=>now-(t||0)<3*3600000; if(!rc(x.ts) && !(x.decision && rc(x.decision.ts)) && !rc(x.linkTs)) return;
+      if(x.status==="open" && r==="cc" && k && normPlat(x.ccPlat)===k && x.reportedUser!==currentUser.username){
+        const key=currentUser.username+"|o|"+x.id; if(!_dfSeen.has(key)){ _dfSeen.add(key); ch=true; soundEv('dfres', "Unit "+x.frame+" di truk kamu dilaporkan defect oleh "+(x.reportedBy||"-")+". Tunggu keputusan Delivery sebelum berangkat."); } }
       if(x.status==="open" && (r==="delivery"||r==="admin"||(r==="koordinator" && (!lp || lpKey(x.lp)===lp)))){
         const key=currentUser.username+"|n|"+x.id; if(_dfSeen.has(key)) return; _dfSeen.add(key); ch=true;
         if(x.reportedUser===currentUser.username) return;
         soundEv('defect', "⚠ Unit defect: "+x.frame+" ("+(x.model||"")+")"+(x.ccPlat?" · "+x.ccPlat:"")+" · "+(x.defectType||"")+" · lapor "+(x.reportedBy||"")+(r==="koordinator"?". Menunggu keputusan Delivery.":". Putuskan lanjut / tidak."));
       }
       if(x.status==="decided" && x.decision && ((r==="cc" && k && normPlat(x.ccPlat)===k) || (r==="koordinator" && (!lp || lpKey(x.lp)===lp)))){
-        const key=currentUser.username+"|d|"+x.id; if(_dfSeen.has(key)) return; _dfSeen.add(key); ch=true;
-        soundEv('dfres', "Keputusan defect "+x.frame+": "+DF_DEC[x.decision.k].s+(x.decision.note?" · "+x.decision.note:"")+". Surat ada di menu Unit Defect.");
+        const key=currentUser.username+"|d|"+x.id+"|"+(x.ilsId||""); if(_dfSeen.has(key)) return; _dfSeen.add(key); ch=true;
+        const late=x.linkTs && x.decision && x.linkTs>x.decision.ts;
+        soundEv('dfres', late ? ("Unit "+x.frame+" yang diangkut "+x.ccPlat+" punya Surat Laporan Unit Defect ("+DF_DEC[x.decision.k].s+"). Buka & simpan suratnya.") : ("Keputusan defect "+x.frame+": "+DF_DEC[x.decision.k].s+(x.decision.note?" · "+x.decision.note:"")+". Surat ada di menu Unit Defect."));
       }
     });
     if(ch){ try{ localStorage.setItem("radar_dfseen", JSON.stringify([..._dfSeen].slice(-300))); }catch(e){} }
@@ -8758,19 +8951,35 @@ function renderAdmin(){
       ${routeAdminHtml()}`;
   }
   if(adminTab==="models"){
-    const rows = Object.entries(data.models).map(([mdl,cfg])=>`
-      <tr><td><b>${mdl}</b></td><td class="mono">${cfg.vin_codes.join(", ")}</td>
-      <td><button class="btn-danger btn btn-sm" onclick="deleteModel('${mdl}')">Hapus</button></td></tr>`).join("");
+    const cnt={}; Object.values(data.units||{}).forEach(u=>{ if(u) cnt[u.model]=(cnt[u.model]||0)+1; });
+    const rows = Object.entries(data.models||{}).map(([mdl,cfg])=>{ const c=cfg.color||"#3C86D4", m=xlEsc(mdl);
+      return `<div style="border-top:1px solid var(--border);padding:10px 0;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <input type="color" value="${xlEsc(c)}" title="Warna model di peta stall" data-m="${m}" onchange="modelSetColor(this)" style="width:42px;height:34px;padding:2px;border-radius:8px;flex:none;">
+          <span style="background:${c};color:${slotFg(c)};border-radius:8px;padding:6px 12px;font-weight:900;min-width:86px;text-align:center;">${m}</span>
+          <span style="font-size:12px;color:var(--text-dim);">${cnt[mdl]||0} unit di stall</span>
+          <button class="btn-danger btn btn-sm" style="width:auto;margin-left:auto;" onclick="deleteModel('${m}')">Hapus</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;"><span style="font-size:12px;min-width:62px;">Kode VIN</span>
+          <input type="text" class="mono" value="${xlEsc((cfg.vin_codes||[]).join(", "))}" data-m="${m}" style="flex:1;min-width:0;text-transform:uppercase;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--panel2);font-size:14px;" onkeydown="if(event.key==='Enter')modelSaveCodes(this)">
+          <button class="btn btn-outline btn-sm" style="width:auto;" data-m="${m}" onclick="modelSaveCodes(this.previousElementSibling)">Simpan</button></div>
+      </div>`; }).join("");
     return `${tabsHtml}
       <div class="card">
-        <h3>➕ Tambah / Model Baru</h3>
-        <p style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">Kode VIN = 2 karakter di posisi ke-7 & ke-8 No. Rangka. Pisahkan dengan koma jika lebih dari satu kode.</p>
-        <div class="field"><label>Nama Model</label><input id="newModelName" type="text" placeholder="Misal: YARIS CROSS"></div>
-        <div class="field"><label>Kode VIN</label><input id="newModelCodes" type="text" placeholder="Misal: XZ, XY"></div>
-        <button class="btn btn-primary" onclick="addModel()">Tambah Model</button>
+        <h3>➕ Tambah Model Unit</h3>
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Kode VIN = huruf ke-7 & ke-8 No. Rangka. Contoh: MHKAB1<b>BY</b>7TJ031919 → kode <b>BY</b>. Lebih dari satu kode pisahkan dengan koma. Kalau nama model sudah ada, kodenya ditambahkan ke model itu.</p>
+        <div class="field"><label>Nama Model</label><input id="newModelName" type="text" placeholder="Misal: RUSH" style="text-transform:uppercase;"></div>
+        <div class="field"><label>Kode VIN</label><input id="newModelCodes" type="text" placeholder="Misal: B3, A3, B2" style="text-transform:uppercase;"></div>
+        <div class="field"><label>Warna di peta stall</label><input id="newModelColor" type="color" value="${modelFreeColor(data)}" style="width:60px;height:38px;padding:2px;border-radius:8px;"></div>
+        <button class="btn btn-primary" onclick="addModel()">➕ Tambah Model</button>
       </div>
-      <div class="card"><h3>Master Model Aktif</h3>
-        <table><thead><tr><th>Model</th><th>Kode VIN</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="card"><h3>🔎 Cek No. Rangka</h3>
+        <input type="search" placeholder="Ketik / tempel No. Rangka" oninput="modelTestVin(this.value)" style="width:100%;text-transform:uppercase;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;background:var(--panel2);font-size:14px;font-size:16px;" autocomplete="off">
+        <div id="mdlTest" style="margin-top:8px;font-size:13px;"></div>
+      </div>
+      <div class="card"><h3>Master Model Aktif (${Object.keys(data.models||{}).length})</h3>
+        <div style="font-size:12px;color:var(--text-dim);">Ubah warna atau kode VIN langsung di sini. Perubahan langsung berlaku di semua HP.</div>
+        ${rows||`<div class="emptystate">Belum ada model.</div>`}
       </div>`;
   }
 
@@ -10549,11 +10758,41 @@ function saveUserEdit(i){
       const o=d.users[k]; d.users[k]=Object.assign({}, o, {username:u, name:n, role:r, lp, drvCode, area:(r==="dispatcher"?((document.getElementById("editArea")||{}).value||""):""), vendor:(r==="dispatcher"?((document.getElementById("editVendor")||{}).value||"").trim().slice(0,60):"")}, h?{password:h, mustChange:true}:{}); }); closeModal(); };
   if(p) pwHash(p).then(apply).catch(e=>alert(e.message||e)); else apply(null);
 }
+const MODEL_PALETTE=["#3C86D4","#8E5BD6","#E3B23C","#DE4B4B","#0E9F8E","#D6336C","#8A6C24","#F08C00","#2F9E44","#5C7CFA","#495057","#C2255C"];
+function modelFreeColor(d){ const used=new Set(Object.values((d||DB.get()).models||{}).map(m=>String(m.color||"").toLowerCase())); return MODEL_PALETTE.find(c=>!used.has(c.toLowerCase()))||"#3C86D4"; }
+function modelCodesParse(str){ return [...new Set(String(str||"").toUpperCase().split(/[\s,;\/]+/).map(x=>x.trim()).filter(Boolean))]; }
+function modelCodeCheck(d, codes, self){
+  const bad=codes.filter(k=>!/^[A-Z0-9]{2}$/.test(k)); if(bad.length) return "Kode harus 2 huruf/angka: "+bad.join(", ");
+  const dup=[]; Object.entries(d.models||{}).forEach(([m,c])=>{ if(m===self) return; (c.vin_codes||[]).forEach(k=>{ if(codes.includes(k)) dup.push(k+" sudah dipakai "+m); }); });
+  return dup.length ? "Kode bentrok: "+dup.join(", ")+". Satu kode hanya untuk satu model." : "";
+}
 function addModel(){
-  const name = document.getElementById("newModelName").value.trim().toUpperCase();
-  const codes = document.getElementById("newModelCodes").value.trim().toUpperCase().split(",").map(s=>s.trim()).filter(Boolean);
+  const name = document.getElementById("newModelName").value.trim().toUpperCase().replace(/\s+/g," ");
+  const codes = modelCodesParse(document.getElementById("newModelCodes").value);
+  const col = (document.getElementById("newModelColor")||{}).value||"";
   if(!name || codes.length===0){ alert("Lengkapi nama model dan kode VIN."); return; }
-  DB.set(d=>{ d.models[name] = {vin_codes: codes, color:"#3C86D4"}; });
+  if(/[.#$\/\[\]]/.test(name)){ alert("Nama model tidak boleh memakai tanda . # $ / [ ]"); return; }
+  const d0=DB.get(), ex=(d0.models||{})[name], err=modelCodeCheck(d0, codes, name); if(err){ alert(err); return; }
+  if(ex){ const add=codes.filter(k=>!(ex.vin_codes||[]).includes(k)); if(!add.length){ alert("Model "+name+" sudah punya kode itu."); return; }
+    if(!confirm("Model "+name+" sudah ada (kode "+(ex.vin_codes||[]).join(", ")+").\n\nTambahkan kode "+add.join(", ")+" ke model ini?")) return;
+    DB.set(d=>{ const m=d.models[name]; if(m) m.vin_codes=[...new Set([...(m.vin_codes||[]),...add])]; }); }
+  else DB.set(d=>{ d.models[name] = {vin_codes: codes, color: col||modelFreeColor(d)}; });
+  alert("✔ Model "+name+" tersimpan. No. Rangka dengan kode "+codes.join(", ")+" sekarang terbaca sebagai "+name+".");
+}
+function modelSaveCodes(inp){
+  const name=inp&&inp.dataset&&inp.dataset.m; if(!name) return; const codes=modelCodesParse(inp.value), d0=DB.get();
+  if(!codes.length){ alert("Kode VIN tidak boleh kosong. Kalau model tidak dipakai, tekan Hapus."); return; }
+  const err=modelCodeCheck(d0, codes, name); if(err){ alert(err); return; }
+  DB.set(d=>{ if(d.models[name]) d.models[name].vin_codes=codes; });
+  alert("✔ Kode VIN "+name+": "+codes.join(", "));
+}
+function modelSetColor(inp){ const name=inp&&inp.dataset&&inp.dataset.m, c=inp&&inp.value; if(!name||!/^#[0-9a-f]{6}$/i.test(c||"")) return; DB.set(d=>{ if(d.models[name]) d.models[name].color=c; }); }
+function modelTestVin(v){
+  const el=document.getElementById("mdlTest"); if(!el) return; const q=String(v||"").toUpperCase().replace(/[\s\-]/g,"");
+  if(q.length<8){ el.innerHTML=""; return; }
+  const m=detectModel(q, DB.get().models), k=q.substring(6,8);
+  el.innerHTML = m ? `<span style="color:#1E9E5A;font-weight:800;">✔ Terbaca sebagai ${xlEsc(m)}</span> <span style="color:var(--text-dim);">(kode ${xlEsc(k)})</span>`
+    : `<span style="color:#C0392B;font-weight:800;">✖ Tidak terdeteksi</span> <span style="color:var(--text-dim);">— kode <b>${xlEsc(k)}</b> belum terdaftar. Tambahkan kode ini ke modelnya.</span>`;
 }
 function deleteModel(name){
   const data = DB.get();
@@ -10711,7 +10950,7 @@ function renderDisplay(){
       const v = data.units[id];
       const mc = v ? getModelColor(v.model, data) : null;
       cells += `<div class="yardcell ${v?'filled':'empty'}" ${v?`style="${slotFillStyle(mc)}"`:''} onclick="openSlotDetail('${id}')">
-        <div class="id">${id}</div>
+        <div class="id">${id}${v&&ppbjOf(data,v.frame)?' <span class="ppbjb">PPBJ</span>':''}</div>
         <div class="v">${v ? v.model : 'KOSONG'}${v&&v.prio?' ⭐':''}${v&&v.batam?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 3px;font-size:9px;">B</span>':''}</div>
       </div>`;
     }
