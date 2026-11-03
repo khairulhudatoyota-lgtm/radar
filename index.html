@@ -2568,6 +2568,8 @@ const SND_EV=[
   {k:"chgreq",  t:"Permintaan tukar / ganti CC (dari KR)", d:"Koordinator minta tukar jam, ganti CC, atau edit jadwal; menunggu persetujuanmu", roles:["delivery","admin"], def:"telepon"},
   {k:"chgres",  t:"Jawaban permintaan tukar / ganti CC", d:"Delivery menyetujui / menolak permintaan tukar-ganti CC darimu", roles:["koordinator"], def:"chime"},
   {k:"jawab",   t:"Alasan dari Koordinator",   d:"Koordinator sudah mengisi alasan atas pertanyaanmu", roles:["delivery","admin","leader"], def:"chime"},
+  {k:"defect",  t:"Unit defect dilaporkan",    d:"Driver CC / Dispatcher / Koordinator melaporkan unit defect; Delivery memutuskan lanjut atau tidak", roles:["delivery","admin","koordinator"], def:"sirene"},
+  {k:"dfres",   t:"Keputusan unit defect",     d:"Delivery sudah memutuskan laporan defect (OK / dengan catatan / tidak lanjut); surat bisa dibuka", roles:["cc","koordinator"], def:"chime"},
   {k:"koord",   t:"Notifikasi Koordinator",    d:"CC masuk stall, ILS sudah di TLS, dan kabar lain untuk LP-mu", roles:["koordinator"], def:"naik"}
 ];
 const SND_TONES={
@@ -2927,6 +2929,7 @@ function renderOrderStall(){
   const absenBlock = verifiedForm + profileCard + autoCard + manualCard;
 
   return `
+    ${dfCcCardHtml(data)}
     ${sjBoxHtml("cc","Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah Delout. Terhapus otomatis 7 hari.":"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
     ${ccMyPosHtml(data)}
     ${absenBlock}
@@ -3625,6 +3628,7 @@ function renderDelivery(){
   const earlyBox=`<details class="card" style="margin:0 0 10px;" ${(_earlyOpen!==null?_earlyOpen:(_hn&&!_ea))?"open":""} ontoggle="if(event.isTrusted)_earlyOpen=this.open"><summary style="cursor:pointer;font-weight:800;">🔓 Izin masuk sebelum jadwal${_ea?` <span class="badge" style="background:#1E9E5A;color:#fff;">SEMUA DIIZINKAN</span>`:""}${_hn?` <span class="badge gold">Parkir Luar ${_hn}</span>`:""}</summary><div style="margin-top:8px;">${earlyCardHtml(data)}${holdCardHtml(data,false)}</div></details>`;
   return `
     ${jump}
+    ${dfAlertHtml(data)}
     ${takeCardHtml(data)}
     ${csCardHtml(data)}
     ${earlyBox}
@@ -3652,7 +3656,7 @@ function renderDelivery(){
 
     <div class="dl-right"><div class="dlbatches" id="dlSecAktif">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
-    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${absenLogCardHtml(data)}${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
+    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}${dfLettersCardHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${absenLogCardHtml(data)}${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}</div></details></div>
   `;
 }
 let dlUnitOpen={};
@@ -3699,6 +3703,7 @@ function createILS(ccNum, slots){
   { const _dupS=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum==ccNum);   // stall CC terkunci: 1 stall = 1 plat = 1 ILS aktif
     if(_dupS){ alert("Stall "+ccLbl(ccNum)+" sudah terkunci untuk "+_dupS.ccPlat+" (ILS #"+_dupS.id+"). Satu stall CC hanya boleh satu plat / satu ILS aktif sampai CC itu berangkat (Delout)."); return false; } }
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
+  { const bl=units.map(u=>({u, b:dfBlockOf(data,u.frame)})).filter(z=>z.b); if(bl.length){ alert("Unit defect tidak bisa dimasukkan ILS:\n"+bl.map(z=>"• "+z.u.frame+" ("+z.u.model+") — "+z.b.why).join("\n")+"\n\nPutuskan dulu di Konfirmasi Defect, atau pilih unit lain."); return false; } }
   { const fr=new Set(units.map(u=>String(u.frame||"").toUpperCase())); const dupF=(data.ils||[]).find(b=>b && !b.outTs && b.status==="open" && (b.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())));
     if(dupF){ alert("Unit ini sudah ada di ILS #"+dupF.id+" (CC "+dupF.ccPlat+") yang masih aktif. Batalkan ILS itu dulu bila memang mau dibuat ulang, supaya tidak dobel."); return false; } }
   DB.set(d=>{
@@ -3738,7 +3743,7 @@ function generateILS(){
 let draftType = {};            // {ccNum: "B"|"R"} override manual jenis muatan
 function stallStats(data){
   const g = {};
-  for(const [k,u] of Object.entries(data.units||{})){ if(!u || isOffKey(k) || u.ilsId) continue; (g[groupOf(k)] = g[groupOf(k)] || []).push([k,u]); }
+  for(const [k,u] of Object.entries(data.units||{})){ if(!u || isOffKey(k) || u.ilsId || dfBlockOf(data,u.frame)) continue; (g[groupOf(k)] = g[groupOf(k)] || []).push([k,u]); }   /* unit defect belum diputuskan / NG tidak ikut draft ILS */
   return Object.entries(g).map(([st,arr])=>{
     arr.sort((a,b)=>a[0].localeCompare(b[0]));
     const b = arr.filter(([k,u])=>u.batam).length, ts = arr.map(a=>a[1].ts||0);
@@ -4240,7 +4245,7 @@ function renderKoordinator(){
     </div>`).join("");
 
   return `
-    ${whyKoordCardHtml(data)}${koordStatusHtml(data)}
+    ${dfAlertHtml(data)}${whyKoordCardHtml(data)}${koordStatusHtml(data)}${dfLettersCardHtml(data)}
     ${sjBoxHtml("koor","Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""), "Muncul setelah Delout. Terhapus otomatis 7 hari. Tekan Buka untuk mencari per tanggal, shift, plat no, atau no surat jalan.")}
     <div class="card">
       <h3>🧭 Kelola Stall Car Carrier</h3>
@@ -4300,6 +4305,7 @@ function loadingSelesai(id){
 }
 function delout(id){
   const b=sjILS(id); if(!b||b.status!=="open") return;
+  { const bl=(b.units||[]).map(u=>({u, z:dfBlockOf(DB.get(),u.frame)})).filter(q=>q.z); if(bl.length){ alert("Belum bisa Delout. Ada unit defect:\n"+bl.map(q=>"• "+q.u.frame+" — "+q.z.why).join("\n")+"\n\nPutuskan di Konfirmasi Defect. Kalau TIDAK LANJUT, batalkan ILS lalu buat ulang dengan unit pengganti."); return; } }
   const data=DB.get(), q=(data.queue||[])[0];
   const msg=`Delout ${b.ccPlat}?\n\n• CC keluar dari Stall ${ccLbl(b.ccNum)}\n• ${b.units.length} unit dihapus dari stall (sudah loading)\n`+(q?`• CC berikutnya naik ke stall: ${q.plat} (${q.lp||"-"})\n`:"")+(b.sj?"• Surat jalan jadi terlihat oleh CC & Koordinator":"• PDF surat jalan belum masuk — bisa diunggah nanti")+"\n\nBisa dibatalkan dalam 5 menit.";
   if(!confirm(msg)) return;
@@ -8035,7 +8041,7 @@ function lookupUnitCat(d, vin){
 function unitTagsHtml(u, small){
   if(!u) return "";
   const fs = small?"10px":"11px";
-  return `${u.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">BATAM</span>`:""}${u.prio?`<span style="background:#F5B800;color:#3a2a00;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">⭐ PRIO</span>`:""}`;
+  return `${dfTagHtml(u.frame, fs)}${u.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">BATAM</span>`:""}${u.prio?`<span style="background:#F5B800;color:#3a2a00;border-radius:4px;padding:1px 6px;font-size:${fs};font-weight:800;margin-left:4px;">⭐ PRIO</span>`:""}`;
 }
 function makeUnitRecord(vin, model, d){
   try{ const L=d.speedAlerts||[]; for(let i=L.length-1;i>=0;i--){ const x=L[i]; if(x && x.dev===spdDev() && x.role==="dispatcher" && !x.unit && Date.now()-x.ts<15*60000){ x.unit=(model?model+" · ":"")+vin; break; } } }catch(e){}
@@ -8324,11 +8330,11 @@ function saveDefectReport(){
   const model = detectModel(vin, data.models) || "-";
   DB.set(d=>{
     if(!d.defects) d.defects = [];
-    d.defects.push({
+    d.defects.push(dfLink(d, {
       id: Date.now(), frame: vin, model, defectType: dtype, part, side, position: pos, note, subLoc,
-      locX, locY, diagramSnapshot, photo: defectPhotoDataUrl, reportedBy: currentUser.name, ts: Date.now(),
+      locX, locY, diagramSnapshot, photo: defectPhotoDataUrl, reportedBy: currentUser.name, reportedUser: currentUser.username, src: currentUser.role, ts: Date.now(),
       status: "open", confirmedBy: null, confirmedTs: null
-    });
+    }));
   });
   defectPhotoDataUrl = null;
   defectFormState = { vin:"", type:"", part:"", side:"", pos:"", note:"", locX:null, locY:null, subLoc:"", diagramSnapshot:null };
@@ -8345,34 +8351,14 @@ function zoomDefectPhoto(el){
 }
 
 function renderConfirmDefect(){
-  const data = DB.get();
-  const openList = (data.defects||[]).filter(x=>x.status==="open");
-  const listHtml = openList.length===0 ? `<div class="emptystate">Tidak ada defect yang perlu dikonfirmasi saat ini.</div>` :
-    openList.slice().reverse().map(x=>`
-      <div class="card" style="margin-bottom:10px;">
-        <div style="display:flex; justify-content:space-between; gap:10px;">
-          <div>
-            <b>${x.frame}</b> · ${x.model}<br>
-            <span style="font-size:13px; font-weight:700; color:var(--red);">${x.defectType}</span><br>
-            <span style="font-size:12px; color:var(--text-dim);">${x.part}${x.side?(' · '+x.side):''}${x.position?(' · '+x.position):''}${x.subLoc?(' · '+x.subLoc):''}</span><br>
-            ${x.note?`<span style="font-size:11px; color:var(--text-dim);">Catatan: ${x.note}</span><br>`:''}
-            <span style="font-size:11px; color:var(--text-dim);">Lapor: ${x.reportedBy} · ${new Date(x.ts).toLocaleString('id-ID')}</span>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
-            ${defectLocationThumb(x)}
-            ${x.photo?`<img src="${x.photo}" data-photo="${x.photo}" style="width:64px;height:64px;object-fit:cover;border-radius:8px;flex:none;cursor:pointer;" onclick="zoomDefectPhoto(this)">`:''}
-          </div>
-        </div>
-        <button class="btn btn-green" style="margin-top:10px;" onclick="confirmDefect(${x.id})">✔ Konfirmasi — Ditemukan Juga di Sini</button>
-      </div>
-    `).join("");
-
+  const data = DB.get(), L=dfPending(data).sort((a,b)=>(a.ts||0)-(b.ts||0));
   return `
     <div class="card">
-      <h3>✅ Konfirmasi Unit Defect</h3>
-      <p style="font-size:12px; color:var(--text-dim);">Cek defect di bawah. Kalau kamu juga menemukan defect yang sama di unit ini, klik Konfirmasi — datanya akan hilang dari daftar aktif tapi tetap tersimpan di laporan (Admin Panel).</p>
+      <h3>✅ Keputusan Unit Defect</h3>
+      <p style="font-size:12px; color:var(--text-dim);">Laporan defect dari Driver CC, Dispatcher, dan Koordinator. Cek unitnya, lalu putuskan <b>OK lanjut</b>, <b>lanjut dengan catatan</b>, atau <b>tidak lanjut</b>. Surat laporan ber-TTD MP Delivery otomatis dibuat dan bisa dibuka Koordinator & Driver CC.</p>
+      ${L.length?L.map(x=>dfRowHtml(x,true)).join(""):`<div class="emptystate">Tidak ada defect yang menunggu keputusan.</div>`}
     </div>
-    ${listHtml}
+    ${dfLettersCardHtml(data)}
   `;
 }
 
@@ -8382,6 +8368,251 @@ function confirmDefect(id){
     if(item){ item.status="confirmed"; item.confirmedBy = currentUser.name; item.confirmedTs = Date.now(); }
   });
 }
+/* ======================================================================
+   LAPORAN UNIT DEFECT + SURAT (PDF)
+   Alur: Driver CC / Dispatcher / Koordinator lapor → Delivery & Koordinator dapat bunyi + tanda →
+   Delivery memutuskan: OK lanjut / Lanjut dengan catatan / Tidak lanjut (ganti unit), dengan TTD MP Delivery →
+   Surat Laporan Unit Defect (PDF) tampil di Delivery, Koordinator (LP-nya), dan Driver CC (platnya). Disimpan 14 hari.
+====================================================================== */
+const DF_KEEP_MS = 14*24*3600*1000;
+const DF_DEC = {ok:{t:"OK, LANJUT KIRIM", s:"OK lanjut", c:"#1E9E5A", bg:"#E7F6EC"}, note:{t:"LANJUT DENGAN CATATAN", s:"Lanjut dgn catatan", c:"#B7791F", bg:"#FFF4D6"}, no:{t:"TIDAK LANJUT (UNIT DIGANTI)", s:"Tidak lanjut", c:"#C0392B", bg:"#FDECEA"}};
+function dfList(d){ return ((d||DB.get()).defects||[]).filter(x=>x && Date.now()-(x.ts||0)<DF_KEEP_MS); }
+function dfPending(d){ return dfList(d).filter(x=>x.status==="open"); }
+function dfDecided(d){ return dfList(d).filter(x=>x.status==="decided" && x.decision); }
+let _dfMemo={ref:null, sg:"", map:null};
+function dfByFrame(d){   // frame → defect terbaru (memo per versi data)
+  const arr=(d||DB.get()).defects||[], sg=arr.length+"|"+arr.map(x=>x?(x.id+(x.status||"")+(x.fixedTs?"f":"")+((x.decision&&x.decision.k)||"")):"").join(",");
+  if(_dfMemo.ref===arr && _dfMemo.sg===sg && _dfMemo.map) return _dfMemo.map;   /* array diubah di tempat oleh DB.set: pakai tanda isi, bukan hanya referensi */
+  const m={}; arr.forEach(x=>{ if(!x || Date.now()-(x.ts||0)>=DF_KEEP_MS) return; const k=normVin(x.frame); if(!m[k] || (x.ts||0)>(m[k].ts||0)) m[k]=x; });
+  _dfMemo={ref:arr, sg, map:m}; return m;
+}
+/* unit diblok dari ILS / Delout: laporan belum diputuskan, atau dinyatakan tidak lanjut dan belum ditandai sudah diperbaiki */
+function dfBlockOf(d, frame){ const x=dfByFrame(d)[normVin(frame)]; if(!x) return null; if(x.status==="open") return {x, why:"belum diputuskan Delivery"}; if(x.status==="decided" && x.decision && x.decision.k==="no" && !x.fixedTs) return {x, why:"dinyatakan TIDAK LANJUT"}; return null; }
+function dfTagHtml(frame, fs){
+  try{ const x=dfByFrame(DB.get())[normVin(frame)]; if(!x) return "";
+    if(x.status==="open") return `<span style="background:#C0392B;color:#fff;border-radius:4px;padding:1px 6px;font-size:${fs||"11px"};font-weight:800;margin-left:4px;">⚠ DEFECT</span>`;
+    if(x.status==="decided" && x.decision){ if(x.decision.k==="no" && !x.fixedTs) return `<span style="background:#7a1f1f;color:#fff;border-radius:4px;padding:1px 6px;font-size:${fs||"11px"};font-weight:800;margin-left:4px;">✖ NG</span>`;
+      return `<span style="background:${DF_DEC[x.decision.k].bg};color:${DF_DEC[x.decision.k].c};border-radius:4px;padding:1px 6px;font-size:${fs||"11px"};font-weight:800;margin-left:4px;">✔ DEFECT ${x.decision.k==="note"?"(catatan)":"OK"}</span>`; }
+  }catch(e){} return "";
+}
+function dfNo(x){ const t=new Date(x.ts||Date.now()), p=n=>String(n).padStart(2,"0"); return "DF/EKY/"+t.getFullYear()+p(t.getMonth()+1)+p(t.getDate())+"/"+String(x.id).slice(-4); }
+function dfRoleName(r){ return ({cc:"Driver CC",dispatcher:"Dispatcher",koordinator:"Koordinator",delivery:"Delivery",admin:"Admin",leader:"Leader"})[r]||r||"-"; }
+/* sambungkan laporan ke unit di stall / ILS aktif (dipakai semua jalur lapor) */
+function dfLink(d, rec){
+  const k=normVin(rec.frame);
+  const b=(d.ils||[]).filter(y=>y && y.status==="open" && !y.outTs).find(y=>(y.units||[]).some(u=>normVin(u.frame)===k));
+  if(b){ rec.ilsId=b.id; rec.ccPlat=b.ccPlat||""; rec.lp=b.lp||""; rec.drvName=b.drvName||ccDriverAny(b.ccPlat)||""; const u=(b.units||[]).find(u=>normVin(u.frame)===k); if(u) rec.slot=u.loc?("Luar stall: "+u.loc):(u.slot||""); }
+  else { const s=Object.keys(d.units||{}).find(s=>d.units[s] && normVin(d.units[s].frame)===k); if(s){ const u=d.units[s]; rec.slot=u.loc?("Luar stall: "+u.loc):s; } }
+  return rec;
+}
+async function dfPhotoGet(x){
+  if(x.photo) return x.photo;
+  if(!x.photoRef || !(FBS.enabled && FBS.db)) return "";
+  try{ const v=(await FBS.db.ref(FOTO_PATH+"/"+x.photoRef).once("value")).val(); return v&&v.b64 ? "data:image/jpeg;base64,"+v.b64 : ""; }catch(e){ return ""; }
+}
+/* ---------- Driver CC: lapor defect dari unit di ILS truknya ---------- */
+let _dfCc={foto:null};
+function dfMyIls(d){ const k=myCcPlatKey(); if(!k) return null; return (d.ils||[]).find(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===k)||null; }
+function dfCcCardHtml(data){
+  if(!currentUser || currentUser.role!=="cc") return "";
+  const b=dfMyIls(data), k=myCcPlatKey();
+  const mine=dfList(data).filter(x=>k && normPlat(x.ccPlat)===k).sort((a,c)=>(c.ts||0)-(a.ts||0));
+  return `<div class="card" style="border-left:4px solid #C0392B;">
+    <h3>⚠ Unit Defect</h3>
+    ${b?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Temukan baret / penyok / cacat di unit yang akan kamu bawa? Laporkan <b>sebelum berangkat</b> supaya dicek Delivery dan kamu tidak disalahkan.</div>
+      <button class="btn btn-danger" onclick="dfCcOpen()">⚠ Lapor Unit Defect</button>`:`<div style="font-size:12px;color:var(--text-dim);">Tombol lapor muncul setelah ILS untuk truk kamu dibuat.</div>`}
+    ${mine.length?`<div style="margin-top:10px;">${mine.map(x=>dfRowHtml(x)).join("")}</div>`:""}
+  </div>`;
+}
+function dfCcOpen(){
+  const d=DB.get(), b=dfMyIls(d); if(!b){ alert("Belum ada ILS untuk truk kamu."); return; }
+  _dfCc={foto:null};
+  showModal(`<h3 style="margin:0 0 6px;">⚠ Lapor Unit Defect</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${xlEsc(b.ccPlat)} · ILS ${b.units.length} unit. Pilih unit yang defect.</div>
+    <div class="field"><label>Unit</label>${(b.units||[]).map((u,i)=>`<label style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--border);"><input type="radio" name="dfU" value="${xlEsc(u.frame)}" ${i===0?"checked":""} style="width:auto;flex:none;margin:0;"> <span style="flex:1;"><b>${xlEsc(u.frame)}</b> <span style="font-size:12px;color:var(--text-dim);">${xlEsc(u.model||"")}</span></span></label>`).join("")}</div>
+    <div class="field"><label>Jenis defect</label><select id="dfType"><option value="">-- pilih --</option>${(d.defectTypes||[]).map(t=>`<option>${xlEsc(t)}</option>`).join("")}</select></div>
+    <div class="field"><label>Bagian</label><select id="dfPart"><option value="">-- pilih --</option>${(d.defectParts||[]).map(t=>`<option>${xlEsc(t)}</option>`).join("")}</select></div>
+    <div class="field"><label>Keterangan (posisi, ukuran, dll)</label><input id="dfNote" type="text" placeholder="mis. pintu kanan depan, baret 5 cm"></div>
+    <div class="field"><label>Foto (wajib)</label><input type="file" accept="image/*" capture="environment" onchange="dfCcFoto(this)"><div id="dfPrev"></div></div>
+    <button class="btn btn-danger" style="margin-top:6px;" onclick="dfCcSave()">✔ Kirim Laporan ke Delivery</button>`);
+}
+async function dfCcFoto(inp){ const f=inp.files&&inp.files[0]; if(!f) return; try{ _dfCc.foto=await lapCompress(f); const p=document.getElementById("dfPrev"); if(p) p.innerHTML=`<img src="${_dfCc.foto}" style="width:100%;max-width:220px;border-radius:10px;margin-top:8px;display:block;">`; }catch(e){ alert(e.message||e); } }
+async function dfCcSave(){
+  const fr=(document.querySelector('input[name="dfU"]:checked')||{}).value||"", ty=(document.getElementById("dfType")||{}).value||"", pt=(document.getElementById("dfPart")||{}).value||"", nt=((document.getElementById("dfNote")||{}).value||"").trim();
+  if(!fr){ alert("Pilih unitnya."); return; } if(!ty){ alert("Pilih jenis defect."); return; } if(!pt){ alert("Pilih bagian yang defect."); return; } if(!_dfCc.foto){ alert("Ambil foto defect dulu."); return; }
+  if(FBS.enabled && fbCurrentState()!=="online"){ alert("Sinyal belum Online. Laporan belum terkirim, coba lagi."); return; }
+  const d0=DB.get(), b=dfMyIls(d0), u=b&&(b.units||[]).find(x=>x.frame===fr), id=Date.now();
+  let photo="", photoRef="";
+  if(FBS.enabled && FBS.db){ try{ await FBS.db.ref(FOTO_PATH+"/df"+id).set({b64:_dfCc.foto.split(",")[1], ts:id}); photoRef="df"+id; }catch(e){ photo=_dfCc.foto; } } else photo=_dfCc.foto;
+  DB.set(d=>{ d.defects=d.defects||[]; const rec=dfLink(d,{id, frame:fr, model:(u&&u.model)||detectModel(fr,d.models)||"-", defectType:ty, part:pt, note:nt, photo:photo||null, photoRef, reportedBy:currentUser.name, reportedUser:currentUser.username, src:"cc", ts:id, status:"open", confirmedBy:null, confirmedTs:null});
+    if(!rec.ccPlat && b){ rec.ccPlat=b.ccPlat; rec.lp=b.lp; rec.ilsId=b.id; } d.defects.push(rec); });
+  _dfCc={foto:null}; closeModal(); alert("Laporan terkirim. Tunggu keputusan Delivery sebelum berangkat.");
+}
+/* ---------- Delivery: tanda + keputusan ---------- */
+function dfRowHtml(x, withActs){
+  const dc=x.decision?DF_DEC[x.decision.k]:null;
+  return `<div style="border-top:1px solid var(--border);padding:8px 0;display:flex;gap:10px;align-items:flex-start;">
+    <div style="flex:1;min-width:0;"><b>${xlEsc(x.frame)}</b> · ${xlEsc(x.model||"")}${x.ccPlat?` · 🚚 ${xlEsc(x.ccPlat)}`:""}<br>
+      <span style="font-size:13px;font-weight:700;color:#C0392B;">${xlEsc(x.defectType||"")}</span> <span style="font-size:12px;color:var(--text-dim);">${xlEsc([x.part,x.side,x.position,x.subLoc].filter(Boolean).join(" · "))}${x.note?" · "+xlEsc(x.note):""}</span><br>
+      <span style="font-size:11px;color:var(--text-dim);">Lapor: ${xlEsc(x.reportedBy||"-")} (${dfRoleName(x.src)}) · ${new Date(x.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
+      ${dc?`<div style="margin-top:4px;"><span style="background:${dc.bg};color:${dc.c};border-radius:6px;padding:2px 8px;font-size:12px;font-weight:800;">${dc.s}</span> <span style="font-size:11px;color:var(--text-dim);">oleh ${xlEsc(x.decision.byName||"-")}${x.fixedTs?" · ✔ sudah diperbaiki":""}</span></div>`:`<div style="margin-top:4px;"><span style="background:#FDECEA;color:#C0392B;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:800;">⏳ Menunggu keputusan Delivery</span></div>`}
+      ${withActs && x.status==="open" && canKeluarkanCC()?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn btn-sm btn-green" style="width:auto;" onclick="dfDecideOpen(${x.id},'ok')">✔ OK lanjut</button>
+        <button class="btn btn-sm btn-outline" style="width:auto;color:#B7791F;border-color:#B7791F;" onclick="dfDecideOpen(${x.id},'note')">📝 Lanjut dgn catatan</button>
+        <button class="btn btn-sm btn-danger" style="width:auto;" onclick="dfDecideOpen(${x.id},'no')">✖ Tidak lanjut</button></div>`:""}
+      ${x.status==="decided" && x.decision && x.decision.k==="no" && !x.fixedTs && canKeluarkanCC()?`<button class="btn btn-sm btn-outline" style="width:auto;margin-top:6px;" onclick="dfFixed(${x.id})">🔧 Unit sudah diperbaiki (boleh dikirim lagi)</button>`:""}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+      ${x.photo||x.photoRef?`<button class="btn btn-sm btn-outline" style="width:auto;" onclick="dfPhotoShow(${x.id})">📷 Foto</button>`:""}
+      ${x.status==="decided"?`<button class="btn btn-sm btn-primary" style="width:auto;" onclick="dfLetterOpen(${x.id})">📄 Surat</button>`:""}
+    </div></div>`;
+}
+async function dfPhotoShow(id){ const x=dfList().find(y=>y.id===id); if(!x) return; showModal('<h3>📷 Foto Defect</h3><div class="msg">Memuat foto…</div>'); const p=await dfPhotoGet(x); showModal(`<h3>📷 Foto Defect · ${xlEsc(x.frame)}</h3>${p?`<img src="${p}" style="width:100%;border-radius:10px;">`:`<div class="msg err">Foto tidak bisa dimuat.</div>`}`); }
+function dfAlertHtml(data){
+  const ko=currentUser&&currentUser.role==="koordinator", lp=ko?myKoordLP():"";
+  if(!currentUser || !(canKeluarkanCC() || ko || currentUser.role==="viewer")) return "";
+  const L=dfPending(data).filter(x=>!lp || lpKey(x.lp)===lp).sort((a,b)=>(a.ts||0)-(b.ts||0)); if(!L.length) return "";
+  return `<div class="card alertcard" style="margin-bottom:12px;"><h3 style="color:#C0392B;">⚠ Unit Defect Menunggu Keputusan (${L.length})</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px;">${canKeluarkanCC()?"Cek unitnya, lalu putuskan. Unit ini tidak bisa dibuat ILS / Delout sampai diputuskan.":"Menunggu keputusan Delivery. Unit ini belum boleh berangkat."}</div>
+    ${L.map(x=>dfRowHtml(x,true)).join("")}</div>`;
+}
+function dfLettersCardHtml(data){
+  if(!currentUser) return "";
+  const r=currentUser.role, ko=r==="koordinator", lp=ko?myKoordLP():"", k=r==="cc"?myCcPlatKey():"";
+  if(!(canKeluarkanCC() || ko || r==="viewer" || r==="leader")) return "";
+  const L=dfDecided(data).filter(x=>!lp || lpKey(x.lp)===lp).sort((a,b)=>(b.decision.ts||0)-(a.decision.ts||0));
+  return `<details class="card" style="margin-top:12px;"><summary style="cursor:pointer;font-weight:800;">📄 Surat Laporan Unit Defect <span class="badge">${L.length}</span></summary>
+    <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">Tersimpan 14 hari. Tekan Surat untuk lihat, kirim WhatsApp, atau simpan PDF.</div>
+    ${L.length?L.map(x=>dfRowHtml(x)).join(""):`<div class="emptystate">Belum ada surat.</div>`}</details>`;
+}
+function dfDecideOpen(id, k){
+  if(!canKeluarkanCC()){ alert("Hanya Delivery yang memutuskan."); return; }
+  const x=dfList().find(y=>y.id===id); if(!x) return; const D=DF_DEC[k];
+  const us=esjPicUsers(), me=currentUser.role==="delivery"?currentUser.username:((us.find(u=>sigGet("mp",u.username))||us[0]||{}).username||"");
+  const sigOk=u=>{ const o=us.find(z=>z.username===u); return !!(o && esjPicSig(o).sig); };
+  showModal(`<h3 style="margin:0 0 6px;color:${D.c};">${D.t}</h3>
+    <div style="font-size:13px;margin-bottom:8px;"><b>${xlEsc(x.frame)}</b> · ${xlEsc(x.model||"")} · ${xlEsc(x.defectType||"")} (${xlEsc(x.part||"")})${x.ccPlat?" · "+xlEsc(x.ccPlat):""}</div>
+    <div class="field"><label>Catatan ${k==="ok"?"(opsional)":"(wajib)"}</label><textarea id="dfDecNote" rows="3" style="width:100%;" placeholder="${k==="no"?"mis. penyok dalam, unit diganti dengan unit lain":"mis. baret halus 3 cm, sudah diinfokan ke cabang"}"></textarea></div>
+    <div class="field"><label>MP Delivery (TTD di surat)</label><select id="dfSigU" onchange="document.getElementById('dfSigW').style.display=(${JSON.stringify(us.filter(u=>!sigOk(u.username)).map(u=>u.username)).replace(/"/g,"&quot;")}).includes(this.value)?'':'none'">${us.map(u=>`<option value="${xlEsc(u.username)}" ${u.username===me?"selected":""}>${xlEsc(u.name||u.username)}</option>`).join("")}</select>
+      <div id="dfSigW" class="msg err" style="margin-top:6px;${me&&!sigOk(me)?"":"display:none;"}">TTD MP Delivery ini belum ada. Surat tetap dibuat dengan nama saja. Isi TTD di Admin → ✍ TTD.</div></div>
+    ${k==="no"?`<div class="msg info" style="margin-bottom:8px;">Unit diberi tanda NG dan tidak bisa dikirim. ${x.ilsId?"Unit ini ada di ILS "+xlEsc(x.ccPlat||"")+": batalkan ILS lalu buat ulang dengan unit pengganti (kalau sudah di TLS, ubah juga di TLS).":""}</div>`:""}
+    <button class="btn btn-primary" onclick="dfDecideSave(${id},'${k}')">✍ Simpan Keputusan & Buat Surat</button>`);
+}
+function dfDecideSave(id, k){
+  const nt=((document.getElementById("dfDecNote")||{}).value||"").trim(), su=(document.getElementById("dfSigU")||{}).value||"";
+  if(k!=="ok" && nt.length<3){ alert("Isi catatannya (minimal 3 huruf)."); return; }
+  const uo=(DB.get().users||[]).find(u=>u.username===su);
+  let done=false;
+  DB.set(d=>{ const x=(d.defects||[]).find(y=>y.id===id); if(!x || x.status!=="open") return; x.status="decided"; x.decision={k, note:nt, by:currentUser.username, byName:currentUser.name||"", sigUser:su, sigName:(uo&&uo.name)||su, ts:Date.now()}; x.confirmedBy=currentUser.name; x.confirmedTs=Date.now(); done=true; });
+  closeModal(); if(done) dfLetterOpen(id); else alert("Laporan ini sudah diputuskan sebelumnya.");
+}
+function dfFixed(id){ if(!canKeluarkanCC()) return; if(!confirm("Tandai unit sudah diperbaiki dan boleh dikirim lagi?")) return; DB.set(d=>{ const x=(d.defects||[]).find(y=>y.id===id); if(x){ x.fixedTs=Date.now(); x.fixedBy=currentUser.name||""; } }); }
+/* ---------- Surat PDF ---------- */
+async function dfDraw(x){
+  const data=DB.get(), K=5, W=210*K, H=297*K, c=document.createElement("canvas"); c.width=W; c.height=H;
+  const g=c.getContext("2d"), mm=v=>v*K;
+  g.fillStyle="#fff"; g.fillRect(0,0,W,H); g.strokeStyle="#000"; g.textBaseline="alphabetic";
+  const font=(pt,b)=>{ g.font=(b?"bold ":"")+Math.round(pt*K*0.3528)+"px Arial,Helvetica,sans-serif"; };
+  const text=(t,x0,y,pt,b,o)=>{ o=o||{}; font(pt,b); g.fillStyle=o.color||"#000"; g.textAlign=o.align||"left"; g.fillText(String(t==null?"":t),mm(x0),mm(y)); g.textAlign="left"; };
+  const wrap=(t,x0,y,w,pt,lh,b)=>{ font(pt,b); g.fillStyle="#000"; const words=String(t||"").split(/\s+/); let line="", yy=y; words.forEach(wd=>{ const tt=line?line+" "+wd:wd; if(g.measureText(tt).width>mm(w) && line){ g.fillText(line,mm(x0),mm(yy)); yy+=lh; line=wd; } else line=tt; }); if(line){ g.fillText(line,mm(x0),mm(yy)); yy+=lh; } return yy; };
+  const rect=(x0,y,w,h,lw,fill)=>{ if(fill){ g.fillStyle=fill; g.fillRect(mm(x0),mm(y),mm(w),mm(h)); } g.lineWidth=(lw||0.3)*K; g.strokeRect(mm(x0),mm(y),mm(w),mm(h)); };
+  const put=(im,x0,y,w,h)=>{ if(!im) return; const sc=Math.min(mm(w)/im.width, mm(h)/im.height); const iw=im.width*sc, ih=im.height*sc; g.drawImage(im, mm(x0)+(mm(w)-iw)/2, mm(y)+(mm(h)-ih)/2, iw, ih); };
+  const uo=(data.users||[]).find(u=>u.username===(x.decision&&x.decision.sigUser)), sg=uo?esjPicSig(uo):{name:(x.decision&&x.decision.sigName)||"",sig:""};
+  const [logo, sig, foto] = await Promise.all([esjImg(((data.sigs||{}).logo)||ESJ_LOGO_TAM), esjImg(sg.sig), dfPhotoGet(x).then(esjImg)]);
+  const fT=t=>t?new Date(t).toLocaleString('id-ID',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):"-";
+  // kepala
+  put(logo,15,12,16,16); text("PT. TOYOTA-ASTRA MOTOR",35,19,12,true); text("Vehicle Logistic Division · East Karawang Yard (EKY)",35,25,9);
+  g.lineWidth=0.6*K; g.beginPath(); g.moveTo(mm(15),mm(32)); g.lineTo(mm(195),mm(32)); g.stroke();
+  text("SURAT LAPORAN UNIT DEFECT",105,44,15,true,{align:"center"}); text("No. "+dfNo(x),105,51,9.5,false,{align:"center"});
+  // data unit
+  const drv=x.drvName||ccDriverAny(x.ccPlat)||(x.src==="cc"?x.reportedBy:"")||"-";
+  const rows=[["No. Rangka",x.frame],["Model",x.model],["Lokasi temuan","Area EKY"+(x.slot?" · "+x.slot:"")],["Tanggal / jam temuan",fT(x.ts)],["No. Polisi CC",x.ccPlat||"-"],["Driver CC",drv],["LP",x.lp||"-"],["Dilaporkan oleh",(x.reportedBy||"-")+" ("+dfRoleName(x.src)+")"]];
+  let y=56; rect(15,y,180,rows.length*6+4,0.3);
+  rows.forEach((r,i)=>{ const yy=y+6.5+i*6; text(r[0],19,yy,9.5); text(":",62,yy,9.5); text(r[1],65,yy,9.5,i===0); });
+  y+=rows.length*6+12;
+  // defect + foto
+  text("DETAIL DEFECT",15,y,10.5,true); y+=3;
+  rect(15,y,180,54,0.3);
+  text("Jenis",19,y+7,9.5); text(":",42,y+7,9.5); text(x.defectType||"-",45,y+7,9.5,true);
+  text("Bagian",19,y+13,9.5); text(":",42,y+13,9.5); let yb=wrap([x.part,x.side,x.position,x.subLoc].filter(Boolean).join(" · ")||"-",45,y+13,58,9.5,5);
+  text("Keterangan",19,yb+1,9.5); text(":",42,yb+1,9.5); wrap(x.note||"-",45,yb+1,58,9.5,5);
+  if(foto){ put(foto,107,y+2,86,50); } else text("(tanpa foto)",150,y+29,9,false,{align:"center",color:"#777"});
+  y+=62;
+  // keputusan
+  text("KEPUTUSAN MP DELIVERY",15,y,10.5,true); y+=3;
+  const dk=x.decision?x.decision.k:"";
+  rect(15,y,180,27,0.3);
+  [["ok","OK, lanjut kirim"],["note","Lanjut kirim dengan catatan"],["no","Tidak lanjut (unit diganti / tidak dikirim)"]].forEach((o,i)=>{ const yy=y+7.5+i*7; rect(19,yy-4,4.5,4.5,0.35); if(dk===o[0]){ font(11,true); g.fillStyle="#000"; g.fillText("✓",mm(19.4),mm(yy)); } text(o[1],26,yy,9.5,dk===o[0]); });
+  text("Catatan :",112,y+7.5,9.5,true); wrap((x.decision&&x.decision.note)||"-",112,y+13,80,9,4.6);
+  y+=35;
+  // pernyataan
+  text("PERNYATAAN",15,y,10.5,true); y+=6;
+  y=wrap("Dengan ini MP Delivery menyatakan bahwa defect pada unit di atas DITEMUKAN DI AREA EKY sebelum unit diberangkatkan, telah diperiksa, dan diputuskan seperti di atas. Defect tersebut bukan akibat proses pengangkutan oleh Driver CC yang tercantum di surat ini.",15,y,180,9.5,5.2);
+  y=Math.max(y+3, 244);
+  // TTD
+  const tw=60, th=32; ["Dilaporkan oleh","Diperiksa & disetujui","Driver CC"].forEach((h,i)=>{ rect(15+i*tw,y,tw,th,0.3); text(h,15+i*tw+tw/2,y+5.5,9,false,{align:"center"}); });
+  text("MP Delivery",15+tw+tw/2,y+9.5,8,false,{align:"center",color:"#555"});
+  put(sig,15+tw+6,y+10.5,tw-12,14);
+  [x.reportedBy||"-", (sg.name||(x.decision&&x.decision.sigName)||"-"), drv].forEach((n,i)=>text(n,15+i*tw+tw/2,y+th-3.5,9,true,{align:"center"}));
+  text(fT(x.decision&&x.decision.ts),15+tw+tw/2,y+th+5,8,false,{align:"center",color:"#555"});
+  text("Dibuat otomatis oleh RADAR EKY · "+fT(Date.now()),105,288,8,false,{align:"center",color:"#777"});
+  return c;
+}
+let _dfPdf=null;
+function dfFileName(x){ return "Laporan Defect "+String(x.frame||"").trim()+" "+String(x.ccPlat||"").trim()+".pdf"; }
+async function dfLetterOpen(id){
+  const x=dfList().find(y=>y.id===id); if(!x || !x.decision){ alert("Surat belum tersedia (belum diputuskan)."); return; }
+  showModal('<h3 style="margin:0 0 6px;">📄 Surat Laporan Unit Defect</h3><div class="msg">Menyiapkan surat…</div>');
+  try{
+    const cv=await dfDraw(x); _dfPdf={pdf:esjPdf(cv,595.28,841.89), name:dfFileName(x), text:"Laporan Unit Defect "+x.frame+(x.ccPlat?" · "+x.ccPlat:"")+" · "+DF_DEC[x.decision.k].s};
+    const canShare=!!(navigator.canShare && window.File && navigator.canShare({files:[new File([_dfPdf.pdf],_dfPdf.name,{type:"application/pdf"})]}));
+    showModal(`<h3 style="margin:0 0 6px;">📄 Surat Laporan Unit Defect</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${xlEsc(dfNo(x))} · ${xlEsc(x.frame)} · <b style="color:${DF_DEC[x.decision.k].c};">${DF_DEC[x.decision.k].s}</b></div>
+      <img src="${cv.toDataURL("image/jpeg",0.75)}" alt="Surat" style="width:100%;border:1px solid var(--border,#ccc);border-radius:8px;background:#fff;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        ${window.AndroidTLS&&window.AndroidTLS.sharePdf?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="dfShareApp()">📤 Kirim (WhatsApp)</button>`:(canShare?`<button type="button" class="btn btn-primary" style="flex:1;min-width:140px;" onclick="dfShare()">📤 Kirim (WhatsApp)</button>`:"")}
+        ${window.AndroidTLS&&window.AndroidTLS.openPdf?`<button type="button" class="btn btn-outline" style="flex:1;min-width:140px;" onclick="dfOpenPdf()">📄 Buka PDF</button>`:""}
+        <button type="button" class="btn btn-outline" style="flex:1;min-width:140px;" onclick="dfSave()">⬇ Simpan PDF</button>
+      </div>`);
+  }catch(e){ showModal(`<h3>📄 Surat Laporan Unit Defect</h3><div class="msg err">Gagal membuat surat: ${xlEsc(e&&e.message||e)}</div>`); }
+}
+function dfB64(){ let s=""; const b=_dfPdf.pdf; for(let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192)); return btoa(s); }
+function dfSave(){ if(_dfPdf) mfSave(_dfPdf.name,"application/pdf",_dfPdf.pdf); }
+function dfShareApp(){ if(!_dfPdf) return; try{ window.AndroidTLS.sharePdf(_dfPdf.name, dfB64(), _dfPdf.text); }catch(e){ dfSave(); } }
+function dfOpenPdf(){ if(!_dfPdf) return; try{ window.AndroidTLS.openPdf(_dfPdf.name, dfB64()); }catch(e){ dfSave(); } }
+async function dfShare(){ if(!_dfPdf) return; try{ await navigator.share({files:[new File([_dfPdf.pdf],_dfPdf.name,{type:"application/pdf"})], title:_dfPdf.name, text:_dfPdf.text}); }catch(e){ if(e && e.name!=="AbortError") dfSave(); } }
+/* ---------- bunyi: laporan baru (Delivery/Koordinator), keputusan (Driver CC/Koordinator) ---------- */
+let _dfSeen=null;
+function dfTick(){
+  try{
+    if(!currentUser) return; const r=currentUser.role;
+    if(!_dfSeen){ try{ _dfSeen=new Set(JSON.parse(localStorage.getItem("radar_dfseen")||"[]")); }catch(e){ _dfSeen=new Set(); } }
+    const d=DB.get(), L=dfList(d), now=Date.now(), lp=r==="koordinator"?myKoordLP():"", k=r==="cc"?myCcPlatKey():"";
+    let ch=false;
+    L.forEach(x=>{
+      if(now-(x.ts||0)>3*3600000 && !(x.decision && now-(x.decision.ts||0)<3*3600000)) return;
+      if(x.status==="open" && (r==="delivery"||r==="admin"||(r==="koordinator" && (!lp || lpKey(x.lp)===lp)))){
+        const key=currentUser.username+"|n|"+x.id; if(_dfSeen.has(key)) return; _dfSeen.add(key); ch=true;
+        if(x.reportedUser===currentUser.username) return;
+        soundEv('defect', "⚠ Unit defect: "+x.frame+" ("+(x.model||"")+")"+(x.ccPlat?" · "+x.ccPlat:"")+" · "+(x.defectType||"")+" · lapor "+(x.reportedBy||"")+(r==="koordinator"?". Menunggu keputusan Delivery.":". Putuskan lanjut / tidak."));
+      }
+      if(x.status==="decided" && x.decision && ((r==="cc" && k && normPlat(x.ccPlat)===k) || (r==="koordinator" && (!lp || lpKey(x.lp)===lp)))){
+        const key=currentUser.username+"|d|"+x.id; if(_dfSeen.has(key)) return; _dfSeen.add(key); ch=true;
+        soundEv('dfres', "Keputusan defect "+x.frame+": "+DF_DEC[x.decision.k].s+(x.decision.note?" · "+x.decision.note:"")+". Surat ada di menu Unit Defect.");
+      }
+    });
+    if(ch){ try{ localStorage.setItem("radar_dfseen", JSON.stringify([..._dfSeen].slice(-300))); }catch(e){} }
+  }catch(e){}
+}
+setInterval(dfTick, 4000);
+/* hapus laporan > 14 hari beserta fotonya (perangkat mana pun yang online) */
+setInterval(()=>{ try{
+  if(!currentUser || isViewer() || (FBS.enabled && fbCurrentState()!=="online")) return;
+  const old=((DB.get().defects)||[]).filter(x=>x && Date.now()-(x.ts||0)>=DF_KEEP_MS); if(!old.length) return;
+  const ids=new Set(old.map(x=>x.id)); DB.set(d=>{ d.defects=(d.defects||[]).filter(x=>!(x && ids.has(x.id))); });
+  old.forEach(x=>{ if(x.photoRef){ try{ FBS.db.ref(FOTO_PATH+"/"+x.photoRef).remove(); }catch(e){} } });
+}catch(e){} }, 600000);
+
 
 /* ======================================================================
    5) ADMIN VIEW
