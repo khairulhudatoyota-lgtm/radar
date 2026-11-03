@@ -2114,7 +2114,7 @@ function quickParkOK(){
   if(offKey && data.units[offKey].ilsId){ alert("Unit ini sudah masuk ILS (sedang loading), tidak bisa dipindah ke stall."); return; }
   const model = detectModel(vin, data.models);
   if(!model){ alert("Model tidak terdeteksi dari No. Rangka. Periksa kembali atau tambahkan kode di Admin Panel."); return; }
-  const _cat = lookupUnitCat(data, vin), _isB = !!(_cat && _cat.batam) || batamManual;
+  const _cat = lookupUnitCat(data, vin), _isB = !!(_cat && _cat.batam) || batamManual || !!(offKey && data.units[offKey] && data.units[offKey].batam);   /* pindah dari luar stall: status Batam ikut */
   const slot = pickedSlot || findFirstEmptySlot(data, _isB);
   if(!slot){ alert(_isB && batamStallList(data).length ? "Stall khusus BATAM penuh / tidak ada slot kosong." : (batamStallList(data).length ? "Stall reguler penuh / tidak ada slot kosong." : "Semua stall penuh, tidak ada slot kosong.")); return; }
   if(!slotAllowed(data, slot, _isB)){ alert(`Slot ${slot} untuk unit ${_isB?"reguler":"BATAM"}. Unit ${_isB?"BATAM":"reguler"} tidak boleh dicampur — pilih stall yang sesuai.`); return; }
@@ -2140,6 +2140,7 @@ function openDispatcherSlotEdit(id){
     <div class="field"><label>Model</label><div style="font-size:14px; font-weight:700; color:var(--gold);">${v.model}</div></div>
     <div class="msg info">Diparkir oleh ${v.driver||'-'} · ${new Date(v.ts).toLocaleString('id-ID')}</div>
     <button class="btn btn-primary" style="margin-top:10px;" onclick="saveSlotEdit('${id}')">💾 Simpan Perubahan No. Rangka</button>
+    ${v.ilsId?"":`<button class="btn btn-outline" style="margin-top:8px;${v.batam?"":"color:#E8833A;border-color:#E8833A;"}" onclick="setUnitBatam(['${id}'], ${v.batam?"false":"true"})">${v.batam?"Ubah jadi Reguler (bukan Batam)":"🟠 Tandai unit ini BATAM"}</button>`}
     <button class="btn btn-danger" style="margin-top:8px;" onclick="clearSlotForRepair('${id}')">🔧 Keluarkan Unit (Servis / Ganti / Batal)</button>
   `);
 }
@@ -2151,7 +2152,7 @@ function saveSlotEdit(id){
   if(dupSlot){ alert(`No. Rangka ini sudah dipakai di stall ${dupSlot}.`); return; }
   const model = detectModel(newVin, data.models);
   if(!model){ alert("Model tidak terdeteksi dari No. Rangka baru. Periksa kembali."); return; }
-  DB.set(d=>{ const c=lookupUnitCat(d,newVin); d.units[id] = {...d.units[id], frame:newVin, model:model, batam:!!(c&&c.batam), prio:!!(c&&c.prio)}; });
+  DB.set(d=>{ const c=lookupUnitCat(d,newVin), o=d.units[id]||{}, same=normVin(o.frame)===normVin(newVin); d.units[id] = {...o, frame:newVin, model:model, batam:!!(c&&c.batam)||(same&&!!o.batam), prio:!!(c&&c.prio)||(same&&!!o.prio)}; });   /* No. Rangka sama: tanda Batam/Prioritas manual tetap */
   closeModal();
 }
 /* ===== konfirmasi password akun yang sedang login (untuk aksi sensitif, mis. keluarkan unit) ===== */
@@ -2339,7 +2340,7 @@ function confirmPark(){
   const offKey = dupSlot || null;
   if(offKey && data.units[offKey].ilsId){ alert("Unit ini sudah masuk ILS (sedang loading), tidak bisa dipindah ke stall."); return; }
   if(!model){ alert("Model tidak terdeteksi dari No. Rangka. Periksa kembali."); return; }
-  const _cat2 = lookupUnitCat(data, vin), _isB2 = !!(_cat2 && _cat2.batam) || batamManual;
+  const _cat2 = lookupUnitCat(data, vin), _isB2 = !!(_cat2 && _cat2.batam) || batamManual || !!(offKey && data.units[offKey] && data.units[offKey].batam);
   if(!slotAllowed(data, pickedSlot, _isB2)){ alert(`Slot ${pickedSlot} untuk unit ${_isB2?"reguler":"BATAM"}. Unit ${_isB2?"BATAM":"reguler"} tidak boleh dicampur — pilih stall yang sesuai.`); return; }
   const _ps = pickedSlot;
   if(!fifoOk(data, _ps, _isB2, pickedAuto)) return;
@@ -8027,6 +8028,7 @@ function moveOffToSlot(d, offKey, slot){
   const o = d.units[offKey]; if(!o) return;
   const n = d.units[slot];
   n.ts = o.ts; n.driver = o.driver || n.driver; n.movedFrom = o.loc || "";
+  if(o.batam) n.batam = true; if(o.prio) n.prio = true;   /* tanda BATAM / PRIORITAS dari luar stall tidak boleh hilang */
   delete d.units[offKey];
 }
 function batamStallList(data){ return data.batamStalls||[]; }
@@ -8062,6 +8064,13 @@ function makeUnitRecord(vin, model, d){
   }
   return { frame:vin, model, driver: currentUser.name, line: myDispArea()||dispLine||"", vendor: ((myDispAccount()||{}).vendor||""), batam, prio, ts: Date.now(), geo: geoNeeded()?(geoIsIn()?"in":"out"):"" };
 }
+function setUnitBatam(ids, on){
+  const d0=DB.get(), L=(ids||[]).filter(k=>d0.units[k] && !d0.units[k].ilsId); if(!L.length) return;
+  if(!confirm((on?"Tandai ":"Ubah ")+L.length+" unit "+(on?"sebagai BATAM":"jadi REGULER")+"?\n\n"+L.map(k=>k+" · "+d0.units[k].frame).join("\n"))) return;
+  DB.set(d=>{ d.unitCat=d.unitCat||{}; L.forEach(k=>{ const u=d.units[k]; if(!u || u.ilsId) return; u.batam=!!on; const v=normVin(u.frame), old=d.unitCat[v]||{};
+    d.unitCat[v]={...old, batam:!!on, prio:!!old.prio, src:old.src||"manual", by:(currentUser&&currentUser.name)||"", ts:Date.now()}; if(!d.unitCat[v].batam && !d.unitCat[v].prio) delete d.unitCat[v]; }); });
+  try{ closeModal(); }catch(e){} render();
+}
 function batamIssues(data){
   const groups = {}, misplaced = [];
   const restricted = batamStallList(data).length>0;
@@ -8083,6 +8092,7 @@ function batamAlertHtml(data){
       ${I.mixed.map(x=>`<div style="padding:4px 0;"><b>Stall ${x.g}</b>: ${x.b} unit <b style="color:#E8833A;">BATAM</b> + ${x.r} unit reguler dalam satu stall</div>`).join("")}
       ${I.misplaced.length?`<div style="margin-top:6px;font-weight:700;">Salah stall (${I.misplaced.length}):</div>${I.misplaced.slice(0,12).map(x=>`<div style="padding:2px 0;">${x.frame} (${x.batam?"Batam":"Reguler"}) ada di ${x.slot} — stall ${x.batam?"reguler":"khusus Batam"}</div>`).join("")}${I.misplaced.length>12?`<div style="color:var(--text-dim);">…dan ${I.misplaced.length-12} lainnya</div>`:""}`:""}
     </div>
+    ${(()=>{ const rg=I.misplaced.filter(x=>!x.batam && data.units[x.slot] && !data.units[x.slot].ilsId).map(x=>x.slot); return rg.length && currentUser && ["delivery","admin","dispatcher"].includes(currentUser.role) ? `<button class="btn btn-sm" style="width:auto;margin-top:8px;background:#E8833A;color:#fff;" onclick='setUnitBatam(${JSON.stringify(rg)}, true)'>🟠 Unit reguler di stall khusus Batam (${rg.length}) ini memang Batam? Tandai BATAM</button>` : ""; })()}
     <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Tujuan kirim Batam dan reguler berbeda. Pindahkan/keluarkan unit yang salah sebelum membuat ILS.</div>
   </div>`;
 }
