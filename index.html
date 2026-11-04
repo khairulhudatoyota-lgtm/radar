@@ -2007,6 +2007,19 @@ function offLocError(loc){
   if(raw.split(/[^A-Z0-9]+/).some(t=>slots.includes(t))) return true;
   return slots.some(s=>compact.indexOf("STALL"+s)>=0 || compact.indexOf("STAL"+s)>=0 || compact.indexOf("SLOT"+s)>=0);
 }
+/* Stall (khusus Batam / reguler) penuh → unit langsung dicatat di Parkir Luar Stall. Lokasi terakhir dipakai sebagai isian awal. */
+function stallFullToOff(vin, offKey, isB){
+  const data=DB.get(), nm=isB && batamStallList(data).length ? "Stall khusus BATAM" : (batamStallList(data).length ? "Stall reguler" : "Semua stall");
+  if(offKey && data.units[offKey]){ alert(nm+" penuh.\n\nUnit "+vin+" tetap tercatat di luar stall: "+(data.units[offKey].loc||"-")+". Masukkan ke stall lagi nanti saat ada slot kosong."); return; }
+  let last=""; try{ last=localStorage.getItem("radar_lastoffloc")||""; }catch(e){}
+  if(!last){ const o=Object.entries(data.units||{}).filter(([k,u])=>u && isOffKey(k) && u.loc && (!isB || u.batam)).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0))[0]; if(o) last=o[1].loc; }
+  const loc=prompt(nm+" penuh.\n\nParkir unit "+vin+(isB?" (BATAM)":"")+" di LUAR STALL? Ketik lokasinya (mis. belakang audit), lalu OK. Batal = tidak jadi.", last||"");
+  if(loc===null) return;
+  const L=String(loc).trim(); if(!L){ alert("Lokasi belum diisi. Unit belum dicatat."); return; }
+  if(!offLocCheck(L)) return;
+  const el=document.getElementById("offLocInput"); if(el) el.value=L; offLocDraft=L;
+  parkOffStall();
+}
 function offLocCheck(loc){
   if(offLocError(loc)){ alert("Lokasi luar stall tidak boleh memakai nama stall/slot yang ada ("+PARK_ORDER.join(", ")+").\nTulis nama tempat lain, contoh: depan audit, lahan kosong sebelah gudang."); return false; }
   return true;
@@ -2116,7 +2129,7 @@ function quickParkOK(){
   if(!model){ alert("Model tidak terdeteksi dari No. Rangka. Periksa kembali atau tambahkan kode di Admin Panel."); return; }
   const _cat = lookupUnitCat(data, vin), _isB = !!(_cat && _cat.batam) || batamManual || !!(offKey && data.units[offKey] && data.units[offKey].batam);   /* pindah dari luar stall: status Batam ikut */
   const slot = pickedSlot || findFirstEmptySlot(data, _isB);
-  if(!slot){ alert(_isB && batamStallList(data).length ? "Stall khusus BATAM penuh / tidak ada slot kosong." : (batamStallList(data).length ? "Stall reguler penuh / tidak ada slot kosong." : "Semua stall penuh, tidak ada slot kosong.")); return; }
+  if(!slot){ stallFullToOff(vin, offKey, _isB); return; }   /* stall penuh: tawarkan parkir di luar stall (tidak terbatas) */
   if(!slotAllowed(data, slot, _isB)){ alert(`Slot ${slot} untuk unit ${_isB?"reguler":"BATAM"}. Unit ${_isB?"BATAM":"reguler"} tidak boleh dicampur — pilih stall yang sesuai.`); return; }
   if(!fifoOk(data, slot, _isB, !pickedSlot || pickedAuto)) return;
   DB.set(d=>{
@@ -2288,7 +2301,8 @@ function onVinInput(){
     return;
   }
   const cat = lookupUnitCat(data, vin);
-  const listB = !!(cat && cat.batam);
+  const _offB = (()=>{ try{ const k=findVinSlot(normVin(vin), data); return !!(k && isOffKey(k) && data.units[k] && data.units[k].batam); }catch(e){ return false; } })();   /* unit Batam dari luar stall */
+  const listB = !!(cat && cat.batam) || _offB;
   const isB = listB || batamManual;
   if(chk){ chk.checked = isB; chk.disabled = listB; }
   const pchk = document.getElementById("prioChk"); const listP = !!(cat && cat.prio);
@@ -2313,7 +2327,7 @@ function onVinInput(){
     }else if(pickedSlot){
       el.innerHTML = banner + `<div class="msg ok">Model terdeteksi: <b>${model}</b> — akan diparkir ke stall <b>${pickedSlot}</b></div>`;
     }else{
-      el.innerHTML = banner + `<div class="msg ok">Model terdeteksi: <b>${model}</b></div><div class="msg err">${isB&&restricted?"Stall khusus BATAM penuh.":(restricted?"Stall reguler penuh.":"Semua stall penuh, tidak ada slot kosong.")}</div>`;
+      el.innerHTML = banner + `<div class="msg ok">Model terdeteksi: <b>${model}</b></div><div class="msg err">${isB&&restricted?"Stall khusus BATAM penuh.":(restricted?"Stall reguler penuh.":"Semua stall penuh, tidak ada slot kosong.")} Tekan <b>OK</b> untuk parkir di <b>luar stall</b> (isi lokasinya).</div>`;
     }
   }else if(vin.length>=8){
     el.innerHTML = banner + `<div class="msg err">Kode model tidak dikenali. Cek No. Rangka atau tambahkan kode di Admin Panel.</div>`;
@@ -8083,6 +8097,7 @@ function parkOffStall(){
   const model = detectModel(vin, data.models);
   if(!model){ alert("Model tidak terdeteksi dari No. Rangka. Periksa kembali atau tambahkan kode di Admin Panel."); return; }
   DB.set(d=>{ const r = makeUnitRecord(vin, model, d); r.loc = loc; d.units["OFF-"+r.ts+"-"+Math.floor(Math.random()*1000)] = r; });
+  try{ localStorage.setItem("radar_lastoffloc", loc); }catch(e){}
   pickedSlot = null; offLocDraft = "";
   document.getElementById("vinInput").value = ""; vinDraft = ""; batamManual = false; prioManual = false; specialAlertVin = "";
   stopScanner();
