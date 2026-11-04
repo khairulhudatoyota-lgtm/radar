@@ -121,6 +121,7 @@ html,body{max-width:100%; overflow-x:hidden;}
 @keyframes nsBlink{0%,100%{opacity:.6}50%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.nsPop *,.nsPop{animation:none!important}}
 @keyframes ringPulse{from{transform:scale(1)}to{transform:scale(1.025)}}
+#verBar{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:10050;display:flex;align-items:center;gap:10px;background:#0F2A4A;color:#fff;border-radius:14px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.35);font-size:13px;max-width:560px;margin:0 auto;}
 #ccProf{position:fixed;left:0;right:0;bottom:0;z-index:9998;background:var(--panel,#fff);color:var(--text);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.4);padding:0 0 14px;max-height:75vh;overflow:auto;}
 .mapDot{position:absolute;left:-6px;top:-6px;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.4);}
 .tabbar{display:flex; overflow-x:auto; gap:6px; padding:8px 10px; background:var(--panel); border-bottom:1px solid var(--border); scrollbar-width:none;}
@@ -1090,8 +1091,35 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="04 Nov 2026 23.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="04 Nov 2026 23.35";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
+/* ===== Cek versi baru di server =====
+   Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
+   Ada versi baru: di layar login langsung dimuat ulang sendiri (sekali); kalau sedang bekerja muncul pita "Muat ulang" supaya isian tidak hilang. */
+let _verNew="", _verLast=0, _verHide=0;
+const _verRe=new RegExp('const RADAR_'+'BUILD="([^"]+)"');
+async function verCheck(force){
+  try{
+    if(!/^https?:/.test(location.protocol)) return;
+    if(!force && Date.now()-_verLast<4*60000) return; _verLast=Date.now();
+    const base=location.href.split("#")[0].split("?")[0], url=/\.html?$/i.test(base)?base:base.replace(/\/?$/,"/")+"index.html";
+    const res=await fetch(url,{cache:"no-cache"}); if(!res||!res.ok) return;
+    const m=(await res.text()).match(_verRe); if(!m || m[1]===RADAR_BUILD) return;
+    _verNew=m[1];
+    if(!currentUser){ let done=""; try{ done=sessionStorage.getItem("radar_verreload")||""; }catch(e){}
+      if(done!==_verNew){ try{ sessionStorage.setItem("radar_verreload",_verNew); }catch(e){} location.reload(); return; } }
+    verBanner();
+  }catch(e){}
+}
+function verBanner(){
+  let el=document.getElementById("verBar");
+  if(!_verNew || Date.now()<_verHide){ if(el) el.remove(); return; }
+  if(!el){ el=document.createElement("div"); el.id="verBar"; document.body.appendChild(el); }
+  el.innerHTML=`<div style="flex:1;min-width:0;"><b>🔄 Versi baru RADAR tersedia</b><div style="font-size:11px;opacity:.85;">build ${escH(_verNew)} · sekarang ${escH(RADAR_BUILD)}</div></div><button type="button" onclick="verReload()" style="background:#E8B923;color:#0F2A4A;border:0;border-radius:10px;padding:9px 14px;font-weight:900;font-size:13px;">Muat ulang</button><button type="button" onclick="_verHide=Date.now()+30*60000;verBanner();" aria-label="Nanti" style="background:transparent;color:#fff;border:0;font-size:18px;padding:4px 6px;">✕</button>`;
+}
+function verReload(){ try{ location.reload(); }catch(e){} }
+setInterval(()=>{ verCheck(); }, 5*60000); setTimeout(()=>{ verCheck(true); }, 15000);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") verCheck(); });
 function isViewer(){ return !!(currentUser && currentUser.role==="viewer"); }
 /* bersihkan data lama yang sudah tidak dipakai */
 setInterval(()=>{ try{ if(!FBS.enabled || fbCurrentState()!=="online" || isViewer()) return; const d=DB.get(); if(d.watchSim!==undefined) FBS.db.ref(FB_ROOT+"/watchSim").remove().catch(()=>{}); if(d.viewOn!==undefined) FBS.db.ref(FB_ROOT+"/viewOn").remove().catch(()=>{}); }catch(e){} }, 20000);
