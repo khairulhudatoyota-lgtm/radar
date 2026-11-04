@@ -1756,7 +1756,7 @@ function ccUserOfPlat(plat){
   const e=(DB.get().ccShiftPlat||[]).filter(x=>normPlat(x.plat)===k && !x.lo).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
   return e?e.u:null;
 }
-function ccProfForceOut(){ const un=ccUserOfPlat(ccProfPlat); if(!un){ alert("Akun driver untuk plat ini belum terdeteksi. Keluarkan lewat Admin → User."); return; } forceOutUser(un, platFmt(ccProfPlat)+" ("+un+")"); }
+function ccProfForceOut(){ const _o=(window._trkRows||[]).find(x=>normPlat(x.plat)===normPlat(ccProfPlat)), un=(_o&&_o.u)||ccUserOfPlat(ccProfPlat); if(!un){ alert("Akun driver untuk plat ini belum terdeteksi. Keluarkan lewat Admin → User."); return; } forceOutUser(un, platFmt(ccProfPlat)+" ("+un+")"); }
 function ccForceOutCheck(){
   if(!currentUser || currentUser.role==="display" || !currentUser.username) return;
   const d=DB.get(), un=currentUser.username, fo=+((d.forceOut||{})[un])||0;
@@ -9460,6 +9460,8 @@ function onSharePos(pos){
   const now = Date.now(); if(now - shareTrk.last < 15000) return;
   shareTrk.last = now;
   const prof = getCcProfile(), ref = FBS.db.ref(TRK_PATH+"/"+shareTrk.key);
+  { const me=(currentUser&&currentUser.username)||"", hold=ccUserOfPlat(prof.plat);   /* plat sudah login di akun lain (driver sekarang): HP ini tidak boleh menimpa posisi truk */
+    if(me && hold && hold!==me){ const ho=(DB.get().users||[]).find(x=>x.username===hold); shareTrk.msg="⚠ Plat "+prof.plat+" sedang dipakai akun "+((ho&&ho.name)||hold)+". Posisi dari HP ini tidak dikirim. Ganti plat kalau kamu membawa truk lain."; shareStatusUpdate(); return; } }
   const rec = {plat:prof.plat, lp:prof.lp, u:(currentUser&&currentUser.username)||"", lat:+pos.coords.latitude.toFixed(6), lng:+pos.coords.longitude.toFixed(6), acc:Math.round(pos.coords.accuracy||0), spd:Math.round((pos.coords.speed||0)*3.6), ts:now};
   try{ const _t=tripSt().t; if(_t&&_t.dir) rec.dir=_t.dir; }catch(e){}
   try{ refTrailTick(pos); }catch(e){}
@@ -9689,6 +9691,26 @@ function ccPlatGateOpen(cancelable){
   const x=document.querySelector("#modalRoot .close-x"); if(x) x.remove();
   setTimeout(()=>{ try{ document.getElementById("cgPlat").focus(); }catch(e){} },80);
 }
+/* Ambil alih plat otomatis: akun yang namanya sesuai nama driver plat itu di Jadwal DCCP (shift aktif ATAU DCCP shift berikutnya yang sudah diupload),
+   mulai 1 jam sebelum rit pertamanya sampai 3 jam sesudah rit terakhirnya. Di luar itu tetap lewat persetujuan Delivery. */
+const CC_TAKE_EARLY_MIN = 60;
+function ccDccpRowsFor(d, plat){
+  const k=normPlat(plat), out=[], seen=new Set();
+  const add=(rows, meta)=>{ const dd=(meta&&(meta.dateTs||dccpFileDate(meta.fileName)))||prodMidnight(); (Array.isArray(rows)?rows:Object.values(rows||{})).forEach(r=>{ if(!r || normPlat(r.police)!==k) return; const sig=dd+"|"+(r.driver||"")+"|"+dccpTripList(r).join(","); if(seen.has(sig)) return; seen.add(sig); out.push({r, dd}); }); };
+  add(d.dccpSchedule, d.dccpMeta);
+  const st=d.dccpStore||{}; Object.keys(st).forEach(sh=>{ const x=st[sh]; if(x && x.rows) add(x.rows, x.meta); });
+  return out;
+}
+function ccNameMatch(a, b){ const A=ccNameTokens(a), B=ccNameTokens(b); return !!A.length && !!B.length && A.some(x=>B.some(y=>x===y || (x.length>=4 && y.length>=4 && (x.includes(y)||y.includes(x))))); }
+function ccDccpTakeOk(d, plat, name){
+  try{ const now=Date.now();
+    for(const {r,dd} of ccDccpRowsFor(d,plat)){
+      if(!r.driver || !ccNameMatch(r.driver, name)) continue;
+      const T=dccpTripList(r).map(t=>ccTimeToTs(t,dd)).sort((a,b)=>a-b); if(!T.length) continue;
+      if(now >= T[0]-CC_TAKE_EARLY_MIN*60000 && now <= T[T.length-1]+3*3600000) return {ok:true, first:T[0], driver:r.driver};
+    } }catch(e){}
+  return {ok:false};
+}
 function ccTakeOther(plat){ const k=normPlat(plat), me=currentUser&&currentUser.username; return (DB.get().ccShiftPlat||[]).find(x=>normPlat(x.plat)===k && x.u!==me && !x.lo && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift())||null; }
 function takeDecide(k, ok){
   if(!canKeluarkanCC()) return;
@@ -9774,7 +9796,15 @@ function ccPlatGateSave(){
   if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
   if(!ccPlatRegistered(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="nsPop"><div class="nsRoad"><span class="nsTruck">🚛</span><i></i></div><div class="nsBell">🔔</div><div class="nsTit">Maaf, plat ${xlEsc(plat)} belum ada jadwal</div><div class="nsSub">Kamu tetap login, tapi belum tampil di peta dan belum bisa absen<span class="nsDots"><b>.</b><b>.</b><b>.</b></span></div><button type="button" class="btn btn-primary nsBtn" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal<small>bunyi di Koordinator</small></button><button type="button" class="btn btn-outline nsBtn" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update?<small>ingatkan Delivery</small></button><div id="cgReqMsg"></div><div class="nsFoot">⏳ Layar ini menunggu dan otomatis lanjut begitu plat terdaftar.</div></div>`; return; }
   { const oth=ccTakeOther(plat), k=normPlat(plat), me=currentUser.username, q=(DB.get().takeReq||{})[k], fresh=q&&q.to===me&&Date.now()-q.ts<30*60000;
-    if(oth){
+    const _tk = oth ? ccDccpTakeOk(DB.get(), plat, (currentUser&&currentUser.name)||"") : {ok:false};
+    if(oth && _tk.ok){   /* nama akun sesuai DCCP plat ini & sudah ≤1 jam sebelum rit pertamanya: ambil alih otomatis, akun lama dikeluarkan */
+      const on=(()=>{ const u=(DB.get().users||[]).find(y=>y.username===oth.u); return (u&&u.name)||oth.u; })(), now=Date.now();
+      DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===oth.u && normPlat(x.plat)===k && !x.lo) x.lo=now; }); d.forceOut=d.forceOut||{}; d.forceOut[oth.u]=now;
+        if(d.takeReq) delete d.takeReq[k];
+        d.takeLog=(Array.isArray(d.takeLog)?d.takeLog:[]).concat([{ts:now, plat:platFmt(plat), from:oth.u, fromName:on, to:me, toName:(currentUser.name||me), auto:"dccp"}]).slice(-50); });
+      window._takeAutoMsg="Plat "+platFmt(plat)+" diambil alih otomatis dari "+on+" karena nama kamu sesuai Jadwal DCCP ("+_tk.driver+"). Akun "+on+" dikeluarkan dan posisi truk sekarang dari HP kamu.";
+    }
+    else if(oth){
       const on=(()=>{ const u=(DB.get().users||[]).find(y=>y.username===oth.u); return (u&&u.name)||oth.u; })();
       if(fresh && q.status==="no"){ DB.set(d=>{ if(d.takeReq) delete d.takeReq[k]; }); window._cgPend=null; msg.innerHTML=`<div class="msg err">Delivery menolak pengambilalihan <b>${xlEsc(plat)}</b> dari ${xlEsc(on)}. Cek plat yang benar, atau hubungi Delivery.</div>`; return; }
       window._cgPend=plat;
@@ -9790,6 +9820,7 @@ function ccPlatGateSave(){
   try{ const r=[plat].concat(ccRecentPlats().filter(p=>p!==plat)).slice(0,4); localStorage.setItem(CC_PLATS_KEY, JSON.stringify(r)); }catch(e){}
   ccPlatOk=true; closeModal();
   ccPlatRememberSave(plat); ccShiftPlatSave(plat);
+  if(window._takeAutoMsg){ const m=window._takeAutoMsg; window._takeAutoMsg=null; setTimeout(()=>{ try{ alert("✔ "+m); }catch(e){} },300); }
   try{ syncCcProfileFromAccount(); }catch(e){}
   try{ startAutoAbsen(true); }catch(e){}
   render(); try{ ccAutoTrack(); }catch(e){}
@@ -9963,7 +9994,7 @@ function ritEditSave(plat,n){
   try{ closeModal(); }catch(e){} try{ updateTrackUI(); }catch(e){}
 }
 function trkCompute(r, mp){
-  const o = {plat:r.plat, lp:r.lp, lat:r.lat, lng:r.lng, spd:r.spd||0, age:Math.max(0,Date.now()-(r.ts||0))};
+  const o = {plat:r.plat, lp:r.lp, lat:r.lat, lng:r.lng, spd:r.spd||0, age:Math.max(0,Date.now()-(r.ts||0)), u:r.u||"", acc:r.acc||0};
   const R = routeGet();
   if(R){ const pj=routeProject(R, r.lat, r.lng); o.dA=pj.along; o.dB=Math.max(0,R.km-pj.along); o.t=R.km>0?pj.along/R.km:0; o.total=R.km; o.off=pj.d; o.dir=trkDirOf(r,o.t,R.km); return o; }
   if(mp && mp.adm && mp.nvdc){
@@ -10233,6 +10264,11 @@ function ccProfRefresh(force){
       <div><b>Driver:</b> ${escH(who)}</div>
       ${o?`<div><b>LP:</b> ${escH(o.lp||"-")}</div>
       <div><b>Posisi:</b> ${stale?'⚠ ':'🟢 '}${mins<1?"baru saja":mins+" mnt lalu"}${o.spd?` · ${o.spd} km/j`:" · berhenti"}</div>
+      ${(currentUser&&["admin","delivery"].includes(currentUser.role))?(()=>{ const us=DB.get().users||[], su=us.find(x=>x.username===o.u), hold=ccUserOfPlat(ccProfPlat), ho=us.find(x=>x.username===hold);
+        const other=!!(o.u && hold && o.u!==hold);
+        return `<div><b>📱 Dikirim dari HP akun:</b> ${escH((su&&su.name)||o.u||"-")}${o.u?` <span style="color:var(--text-dim);font-size:12px;">(${escH(o.u)})</span>`:""}${o.acc?` · GPS ±${o.acc} m`:""}</div>`+
+          (other?`<div style="background:#FDECEA;color:#B42318;border-radius:8px;padding:6px 8px;font-size:12px;margin-top:4px;">⚠ Plat ini terakhir login di akun <b>${escH((ho&&ho.name)||hold)}</b>, tapi posisi dikirim dari akun lain. Kemungkinan HP lain masih memakai plat ini. Tekan <b>Keluarkan dari aplikasi</b> untuk akun pengirim.</div>`:"")+
+          (o.acc>1000?`<div style="background:#FFF4D6;color:#8a6100;border-radius:8px;padding:6px 8px;font-size:12px;margin-top:4px;">⚠ Akurasi GPS kasar (±${(o.acc/1000).toFixed(1)} km). Posisi bisa meleset jauh; minta driver menyalakan Lokasi akurat / GPS.</div>`:""); })():""}
       ${o.dA!=null?`<div><b>Rute:</b> ${trkTxt(o)}${o.off!=null&&o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>`:""}`:`<div style="color:var(--text-dim);">CC ini sudah tidak membagikan posisi.</div>`}
       ${last.length?`<div style="margin-top:6px;"><b>Chat terakhir:</b>${last.map(m=>`<div style="font-size:13px;background:var(--panel2,#f1f4f8);border-radius:8px;padding:4px 8px;margin-top:3px;">${escH(m.text||"📷 foto")} <span style="color:var(--text-dim);font-size:11px;">· ${lapAgo(m.ts)}</span></div>`).join("")}</div>`:""}
       <div style="display:flex;gap:8px;margin-top:12px;">
