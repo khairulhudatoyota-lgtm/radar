@@ -747,6 +747,10 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .pdiCamBox.rot180 video{transform:rotate(180deg);}
 .pdiKitG{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 8px;align-items:center;margin:6px 0 8px;font-size:12px;}
 .pdiKitG select,.pdiKitG input{width:100%;min-width:0;box-sizing:border-box;margin:0;}
+.pdiTabAct{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:-2px 0 8px;font-size:12px;color:var(--text-dim);}
+.pdiTabAct>span{flex:1 1 auto;min-width:0;}
+.pdiFld.wait{border-color:#f59e0b;background:#FFFBEB;}
+.pdiFld.wait input::placeholder{color:#b45309;font-weight:800;opacity:1;font-size:.62em;letter-spacing:0;font-family:system-ui,sans-serif;}
 /* ===== END PDI CSS ===== */
 </style>
 <style>
@@ -1184,7 +1188,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="07 Nov 2026 03.00";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="07 Nov 2026 03.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -11483,7 +11487,7 @@ setInterval(()=>{
      d.pdiCfg        = planning, prefix engine, kode model kartu baru, pintu, cek buku
 ====================================================================== */
 const PDI_PATH = "radar_pdi";
-const PDI_STATIONS = [{k:"KP1", label:"KP 1"}];          // KP 2 menyusul (cara input berbeda)
+const PDI_STATIONS = [{k:"KP1", label:"KP 1", src:"card"}, {k:"KP2", label:"KP 2", src:"tablet"}];   // KP 1 = kartu DC, KP 2 = layar tablet TAM PDI
 const PDI_ENG_DEF = ["1GD","2GD","2NR","2TR","2XM","M20A"];
 const PDI_MODELS_DEF = {   /* kartu DC baru: model dari 7 digit awal Frame No (sama seperti v51) */
   "BZ4X":                {codes:["MHFACDE"], color:"#0f766e"},
@@ -11717,9 +11721,85 @@ function pdiResetUnit(say){
   try{ pdiTlsPipClose(); }catch(e){}
   pdiOvClose(); pdiUi();
 }
+/* ===== KP 2: kamera membaca layar tablet "TAM PDI" (3 QR: VIN, Engine No, Key No) =====
+   Layar tablet diam di unit terakhir dan berganti sendiri. Data baru HANYA diinput kalau ketiganya
+   (Frame, Engine, Kunci) sudah berbeda dari unit sebelumnya — karena layar kadang berganti tidak bersamaan
+   (Frame sudah baru tapi Kunci / Engine masih unit lama). Selama masih sama dengan unit sebelumnya: tidak input. */
+const PDI_TAB = {sig:"", n:0, waitSince:0, canForce:false, cur:null, st:{}, ph:{}};
+function pdiTabMode(){ return (PDI_STATIONS.find(s=>s.k===pdiStation())||{}).src==="tablet"; }
+function pdiTabLast(){ try{ return JSON.parse(localStorage.getItem("radar_pdi_tablast")||"null"); }catch(e){ return null; } }
+function pdiTabLastSave(x){ try{ if(x) localStorage.setItem("radar_pdi_tablast", JSON.stringify(x)); else localStorage.removeItem("radar_pdi_tablast"); }catch(e){} }
+function pdiTabReset(){ Object.assign(PDI_TAB, {sig:"", n:0, waitSince:0, canForce:false, st:{}, ph:{}}); }
+function pdiTabClassify(text){
+  const t = String(text||"").toUpperCase().replace(/\s+/g,"").trim(); if(!t) return [null,""];
+  const m = t.match(PDI_VIN_RE); if(m && m[0].length===17) return ["vin", m[0]];
+  if(/^[0-9]{5}$/.test(t)) return ["key", t];
+  if(/^[A-Z0-9\-]{5,14}$/.test(t) && !t.startsWith("MH")) return ["engine", t];
+  return [null, t];
+}
+function pdiTabAccept(cur){
+  pdiTabLastSave({f:cur.f, e:cur.e, k:cur.k, ts:Date.now()});
+  pdiTabReset();
+  PDI.vin = cur.f; PDI.eng = cur.e; PDI.key = cur.k; PDI.keySrc = "QR"; PDI.seen = {};
+  pdiFieldsUi(); pdiUnitReady();
+}
+/* tombol: pakai data yang terbaca sekarang walau Engine / Kunci sama dengan unit sebelumnya */
+function pdiTabForce(){ const c = PDI_TAB.cur; if(PDI.step==="scan" && c && c.f && c.e && c.k && ![c.f,c.e,c.k].includes("?")) pdiTabAccept(c); }
+/* tombol: baca ulang unit yang sedang tampil di tablet (mis. tadi dibatalkan) */
+function pdiTabReread(){ pdiTabLastSave(null); pdiTabReset(); pdiToast("Unit di tablet akan dibaca ulang"); pdiUi(); }
+/* Tiap kotak terisi sendiri begitu nilainya BERUBAH dari unit sebelumnya (stabil 2 frame).
+   Yang belum berubah: kotak kosong bertulisan "… belum berubah". Ketiganya baru → popup konfirmasi. */
+function pdiProcessTablet(codes){
+  if(PDI.step!=="scan") return;
+  const marks = [], view = [], got = {vin:[], engine:[], key:[]};
+  const COL = {vin:"#22c55e", engine:"#3b82f6", key:"#f97316"}, LAB = {vin:"VIN", engine:"ENGINE", key:"KUNCI"};
+  codes.forEach(c=>{ const t = String(c.t||"").toUpperCase().trim(), [f,v] = pdiTabClassify(c.t);
+    if(!f){ marks.push({q:c.q, col:"#9ca3af", lab:"x"}); view.push([c.kind, t, "diabaikan: bukan Frame / Engine / Kunci"]); return; }
+    got[f].push(v); marks.push({q:c.q, col:COL[f], lab:LAB[f]}); view.push([c.kind, t, LAB[f]+" ✔"]); });
+  const one = a=>{ const u = [...new Set(a)]; return u.length===1 ? u[0] : (u.length>1 ? "?" : ""); };
+  const cur = {f:one(got.vin), e:one(got.engine), k:one(got.key)}, L = pdiTabLast();
+  PDI_TAB.cur = cur; PDI.marks = marks; PDI.view = view;
+  const F = [["f","vin","Frame","frame"], ["e","eng","Engine","engine"], ["k","key","Kunci","key"]];
+  let g = "", canForce = false;
+  if([cur.f, cur.e, cur.k].includes("?")){
+    g = "⚠ Lebih dari 1 kode sejenis terbaca — arahkan kamera ke 1 layar tablet saja"; PDI_TAB.sig = ""; PDI_TAB.n = 0;
+  } else {
+    const isNew = x=>!!cur[x] && (!L || cur[x]!==L[x]);
+    const anyNew = F.some(([x])=>isNew(x));
+    if(!cur.f && !cur.e && !cur.k){ g = "📱 Arahkan kamera ke layar tablet TAM PDI"; }
+    else if(L && !anyNew){ g = "✔ "+L.f+" sudah diinput — menunggu unit baru di tablet"; }
+    F.forEach(([x, fld, nm, say])=>{
+      if(isNew(x)){
+        const s = PDI_TAB.st[x]; if(s && s.v===cur[x]) s.n++; else PDI_TAB.st[x] = {v:cur[x], n:1};
+        if(PDI_TAB.st[x].n>=2 && PDI[fld]!==cur[x]){ PDI[fld] = cur[x]; pdiSay(say); }
+        PDI_TAB.ph[fld] = "";
+      } else {
+        delete PDI_TAB.st[x]; if(PDI[fld]) PDI[fld] = "";
+        PDI_TAB.ph[fld] = !anyNew ? "" : (cur[x] ? "belum berubah" : "belum terbaca");
+      }
+    });
+    if(anyNew){
+      const wait = F.filter(([x])=>!isNew(x)).map(([x,,nm])=>(cur[x] ? (x==="f"?"Frame":"No "+nm.toLowerCase())+" belum berubah" : nm+" belum terbaca"));
+      if(!wait.length){
+        const sig = cur.f+"|"+cur.e+"|"+cur.k;
+        if(PDI_TAB.sig===sig) PDI_TAB.n++; else { PDI_TAB.sig = sig; PDI_TAB.n = 1; }
+        if(PDI_TAB.n>=3){ pdiTabAccept(cur); return; }          // 3 frame berturut-turut sama → data stabil → popup
+        g = "⏳ Data unit baru lengkap — memastikan…";
+      } else {
+        PDI_TAB.sig = ""; PDI_TAB.n = 0;
+        if(!PDI_TAB.waitSince) PDI_TAB.waitSince = Date.now();
+        g = "⏳ "+wait.join(" · ")+" — tunggu tablet berganti";
+        canForce = !!(isNew("f") && cur.e && cur.k && Date.now()-PDI_TAB.waitSince > 10000);
+      }
+    } else { PDI_TAB.sig = ""; PDI_TAB.n = 0; PDI_TAB.waitSince = 0; }
+  }
+  PDI_TAB.canForce = canForce; PDI.guide = g;
+  pdiFieldsUi();
+}
 /* Proses semua barcode di 1 frame kamera. codes = [{t, kind:"QR"|"1D", q:{topLeft..}}] */
 function pdiProcessCodes(codes){
   if(PDI.step!=="scan") return;
+  if(pdiTabMode()) return pdiProcessTablet(codes);
   const cfg = pdiCfg(), minF = 2;
   let vinIn = null;
   const roi = pdiRoi(), roiOn = !!roi.on;
@@ -12817,7 +12897,8 @@ function renderPdiPage(){
     <div id="pdiErr"></div>
     <div class="pdiMain">
       <div class="pdiLeft">
-        <div class="pdiGuide" id="pdiGuide">① SCAN FRAME NO kartu DC</div>
+        <div class="pdiGuide" id="pdiGuide">${pdiTabMode()?"📱 Arahkan kamera ke layar tablet TAM PDI":"① SCAN FRAME NO kartu DC"}</div>
+        <div class="pdiTabAct" id="pdiTabAct" style="display:none;"></div>
         <div class="pdiCamBox" id="pdiCamBox"><video id="pdiVideo" muted playsinline></video><canvas id="pdiMarks"></canvas><div id="pdiCamMsg" class="pdiCamMsg"></div></div>
         <div class="pdiFields" id="pdiFields"></div>
         <div class="pdiScanIn"><span>🔫</span><input id="pdiScanBox" type="text" autocomplete="off" placeholder="Scanner tembak / ketik Frame No, Engine, atau No Kunci lalu Enter" onkeydown="pdiScanKey(event,this)"></div>
@@ -12870,17 +12951,22 @@ function pdiUi(){
     if(PDI_TLS.dir && PDI_TLS.perm!=="granted") msgs.push(`📁 Folder RADAR PDI perlu diizinkan lagi setelah browser dibuka ulang. <button type="button" class="tlscp" onclick="pdiTlsReperm()">Izinkan</button>`);
     er.innerHTML = msgs.length ? `<div class="msg err" style="margin:0 0 8px;font-size:12px;">${msgs.join("<br>")}</div>` : ""; }
   const cm = document.getElementById("pdiCamMsg");
-  if(cm) cm.innerHTML = PDI.cam.on ? (window._pdiZxReady ? "" : "Memuat pembaca barcode…") : PDI.cam.starting ? `<div><div style="font-size:42px;">📷</div><div style="font-weight:800;margin:6px 0;">Menyalakan kamera…</div><div style="font-size:12px;opacity:.85;">Kalau Chrome bertanya izin kamera, pilih <b>Izinkan / Allow</b>.</div></div>` : `<div><div style="font-size:42px;">📷</div><div style="font-weight:800;margin:6px 0;">${PDI.cam.err?"Kamera belum tersambung":"Kamera mati"}</div>${PDI.cam.err?`<div style="font-size:12px;max-width:440px;margin:0 auto 8px;color:#fde68a;">${escH(PDI.cam.err)}</div>`:""}<button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="pdiCamToggle()">Nyalakan Kamera</button> <button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="pdiCfgOpen()">Pilih kamera</button><div style="font-size:11px;margin-top:8px;opacity:.8;">Tanpa kamera tetap bisa pakai scanner tembak / ketik di kotak bawah.</div></div>`;
+  if(cm) cm.innerHTML = PDI.cam.on ? (window._pdiZxReady ? "" : "Memuat pembaca barcode…") : PDI.cam.starting ? `<div><div style="font-size:42px;">📷</div><div style="font-weight:800;margin:6px 0;">Menyalakan kamera…</div><div style="font-size:12px;opacity:.85;">Kalau Chrome bertanya izin kamera, pilih <b>Izinkan / Allow</b>.</div></div>` : `<div><div style="font-size:42px;">📷</div><div style="font-weight:800;margin:6px 0;">${PDI.cam.err?"Kamera belum tersambung":"Kamera mati"}</div>${PDI.cam.err?`<div style="font-size:12px;max-width:440px;margin:0 auto 8px;color:#fde68a;">${escH(PDI.cam.err)}</div>`:""}<button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="pdiCamToggle()">Nyalakan Kamera</button> <button type="button" class="btn btn-outline btn-sm" style="width:auto;color:#fff;border-color:rgba(255,255,255,.6);background:transparent;" onclick="pdiCfgOpen()">Pilih kamera</button><div style="font-size:11px;margin-top:8px;opacity:.8;">Tanpa kamera tetap bisa pakai scanner tembak / ketik di kotak bawah.</div></div>`;
   pdiFieldsUi();
   const r = document.getElementById("pdiRight"); if(r) r.innerHTML = pdiDashHtml(d, st, s, stt);
 }
 function pdiFieldsUi(){
   const g = document.getElementById("pdiGuide");
-  if(g){ const txt = PDI.step==="scan" ? (PDI.guide || "① SCAN FRAME NO kartu DC") : ({model:"🆕 Pilih model", confirm:"Konfirmasi data unit", tls:"⏳ Input TLS", book:"📘 Cek buku "+PDI.model, done:"✔ Selesai"}[PDI.step]||""); g.textContent = txt; g.className = "pdiGuide"+(/⚠/.test(txt)?" warn":(PDI.step!=="scan"?" busy":"")); }
+  if(g){ const txt = PDI.step==="scan" ? (PDI.guide || (pdiTabMode() ? "📱 Arahkan kamera ke layar tablet TAM PDI" : "① SCAN FRAME NO kartu DC")) : ({model:"🆕 Pilih model", confirm:"Konfirmasi data unit", tls:"⏳ Input TLS", book:"📘 Cek buku "+PDI.model, done:"✔ Selesai"}[PDI.step]||""); g.textContent = txt; g.className = "pdiGuide"+(/⚠/.test(txt)?" warn":(PDI.step!=="scan"?" busy":"")); }
+  const ta = document.getElementById("pdiTabAct");
+  if(ta){ const on = pdiTabMode() && PDI.step==="scan", L = on ? pdiTabLast() : null;
+    const h = !on ? "" : `<span>📱 KP 2 · layar tablet TAM PDI${L?` · unit terakhir: <b>${escH(L.f)}</b>`:""}</span>${PDI_TAB.canForce?`<button type="button" class="tlscp" style="background:#d97706;color:#fff;" onclick="pdiTabForce()" title="Engine / Kunci memang sama dengan unit sebelumnya">✔ Pakai data sekarang</button>`:""}${L?`<button type="button" class="tlscp" onclick="pdiTabReread()" title="Unit yang tampil di tablet dibaca lagi (mis. tadi dibatalkan)">↻ Baca ulang unit ini</button>`:""}`;
+    if(ta.dataset.h!==h){ ta.dataset.h = h; ta.innerHTML = h; ta.style.display = on ? "" : "none"; } }
   const f = document.getElementById("pdiFields");
   if(f){
     const a = document.activeElement; if(a && a.closest && a.closest("#pdiFields")) return;   // sedang mengetik di kolom
-    const fld = (k,l,v,ok)=>`<div class="pdiFld ${v?"ok":""}"><label>${l}</label><input type="text" value="${escH(v||"")}" placeholder="${k==="vin"?"17 karakter":(k==="key"?"5 angka":"-")}" onchange="pdiFieldEdit('${k}',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();this.blur();}"></div>`;
+    const tph = (pdiTabMode() && PDI.step==="scan") ? (PDI_TAB.ph||{}) : {};
+    const fld = (k,l,v,ok)=>`<div class="pdiFld ${v?"ok":(tph[k]?"wait":"")}"><label>${l}</label><input type="text" value="${escH(v||"")}" placeholder="${escH(tph[k] || (k==="vin"?"17 karakter":(k==="key"?"5 angka":"-")))}" onchange="pdiFieldEdit('${k}',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();this.blur();}"></div>`;
     f.innerHTML = fld("vin","① FRAME NO",PDI.vin)+fld("eng","② ENGINE NO",PDI.eng)+fld("key","③ NO KUNCI",PDI.key)+
       `<button type="button" class="pdiReset" onclick="pdiResetUnit()" title="Kosongkan (Esc)">↺</button>`;
   }
@@ -13096,7 +13182,7 @@ function pdiBookRevert(m){ if(!confirm("Pakai lagi foto buku bawaan untuk "+m+"?
 function pdiBookThrReset(m){ DB.set(d=>{ const c = d.pdiCfg = d.pdiCfg||{}; if(c.bookThr) delete c.bookThr[m]; }); pdiCfgOpen(); }
 function pdiCfgLocalHtml(){
   return `<div class="card"><h3 style="margin:0 0 8px;">💻 Pengaturan PC ini</h3>
-    <div class="field"><label>Lokasi</label><select id="pdiSt" onchange="try{localStorage.setItem('radar_pdi_station',this.value)}catch(e){};pdiUi();">${PDI_STATIONS.map(s=>`<option value="${s.k}" ${pdiStation()===s.k?"selected":""}>${s.label}</option>`).join("")}</select></div>
+    <div class="field"><label>Lokasi</label><select id="pdiSt" onchange="try{localStorage.setItem('radar_pdi_station',this.value)}catch(e){};pdiUi();">${PDI_STATIONS.map(s=>`<option value="${s.k}" ${pdiStation()===s.k?"selected":""}>${s.label} — ${s.src==="tablet"?"baca layar tablet TAM PDI":"scan kartu DC"}</option>`).join("")}</select></div>
     <div class="field"><label>Kamera</label><select id="pdiCamSel" onchange="try{localStorage.setItem('radar_pdi_cam',this.value)}catch(e){};pdiCamStop();pdiCamStart();"><option value="">Kamera bawaan / pertama</option></select></div>
     <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiLight()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_light',this.checked?'1':'0')}catch(e){}"> Mode ringan (PC lama: kamera dibaca lebih jarang)</label>
     <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiVoiceOn()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_voice',this.checked?'1':'0')}catch(e){};pdiUi();"> Suara</label>
