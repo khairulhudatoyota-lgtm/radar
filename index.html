@@ -742,6 +742,8 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .pdiAS-b:hover{filter:brightness(1.15);} .pdiAS-b.ok{background:#16a34a !important;}
 .pdiAS-s{border:1px solid #30363d;background:#2D3748;color:#c9d1d9;border-radius:3px;font-size:11px;padding:3px 8px;cursor:pointer;}
 .pdiAS-msg{font-size:11px;color:#3fb950;white-space:pre-line;padding:6px 6px 0;min-height:16px;text-align:left;}
+.pdiDelB{border:1px solid var(--border);background:var(--panel);border-radius:6px;padding:2px 6px;font-size:13px;cursor:pointer;line-height:1.2;}
+.pdiDelB:hover{border-color:var(--red,#dc2626);background:#fdeaea;}
 /* ===== END PDI CSS ===== */
 </style>
 <style>
@@ -1179,7 +1181,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="06 Nov 2026 22.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="06 Nov 2026 23.05";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -11583,7 +11585,25 @@ const PDI_OUTBOX = "radar_pdi_outbox";
 function pdiNeedRec(){ return !!(currentUser && ["pdi","admin","leader"].includes(currentUser.role)); }
 function pdiOutbox(){ try{ return JSON.parse(localStorage.getItem(PDI_OUTBOX)||"{}") || {}; }catch(e){ return {}; } }
 function pdiOutboxSave(o){ try{ localStorage.setItem(PDI_OUTBOX, JSON.stringify(o)); }catch(e){} }
-function pdiAll(){ const o = Object.assign({}, PDI_REC); Object.values(pdiOutbox()).forEach(r=>{ if(r && r.id && (!o[r.id] || (o[r.id].up||0) <= (r.up||0))) o[r.id] = r; }); return o; }
+function pdiAll(){ const o = Object.assign({}, PDI_REC); Object.values(pdiOutbox()).forEach(r=>{ if(r && r.id && (!o[r.id] || (o[r.id].up||0) <= (r.up||0))) o[r.id] = r; }); Object.keys(pdiDelQ()).forEach(id=>{ delete o[id]; }); return o; }
+/* Hapus data PDI (mis. data trial / salah input): antrean hapus disimpan di PC ini sampai server mengonfirmasi */
+const PDI_DELQ = "radar_pdi_delq";
+function pdiDelQ(){ try{ return JSON.parse(localStorage.getItem(PDI_DELQ)||"{}") || {}; }catch(e){ return {}; } }
+function pdiDelQSave(o){ try{ localStorage.setItem(PDI_DELQ, JSON.stringify(o)); }catch(e){} }
+function pdiCanDel(){ return !!(currentUser && ["pdi","admin"].includes(currentUser.role)); }
+function pdiRecDel(id){
+  if(!pdiCanDel()) return;
+  const r = pdiAll()[id]; if(!r) return;
+  if(!confirm("Hapus data PDI ini?\n\n"+r.f+"\n"+(r.m||"-")+" · "+(r.st||"-")+" · "+new Date(r.doneTs||r.ts).toLocaleString("id-ID")+"\n\nData hilang dari Riwayat, hitungan Actual, Per Jam dan Excel.")) return;
+  const q = pdiDelQ(); q[id] = Date.now(); pdiDelQSave(q);
+  const o = pdiOutbox(); if(o[id]){ delete o[id]; pdiOutboxSave(o); }
+  delete PDI_REC[id];
+  const op = (DB.get().pdiOpen||{})[r.f]; if(op && (!op.id || op.id===id)) DB.set(d=>{ if(d.pdiOpen && d.pdiOpen[r.f] && (!d.pdiOpen[r.f].id || d.pdiOpen[r.f].id===id)) delete d.pdiOpen[r.f]; });
+  try{ if(PDI.rec && PDI.rec.id===id) pdiResetUnit(); }catch(e){}
+  pdiFlush(); pdiToast("Data "+r.f+" dihapus");
+  try{ pdiUi(); }catch(e){}
+  try{ const mr = document.getElementById("modalRoot"); if(mr && /Riwayat PDI/i.test(mr.textContent||"")) pdiHistOpen(); }catch(e){}
+}
 function pdiRecList(){ return Object.values(pdiAll()).filter(r=>r && r.id && r.f); }
 function pdiPut(rec){
   rec.up = Date.now();
@@ -11592,6 +11612,11 @@ function pdiPut(rec){
 }
 function pdiFlush(){
   if(!FBS.db || !FBS.authed) return;
+  Object.keys(pdiDelQ()).forEach(id=>{
+    if(_pdiSending["del|"+id]) return; _pdiSending["del|"+id] = 1;
+    let p; try{ p = FBS.db.ref(PDI_PATH+"/"+id).remove(); }catch(e){ delete _pdiSending["del|"+id]; return; }
+    p.then(()=>{ delete _pdiSending["del|"+id]; delete PDI_REC[id]; const q = pdiDelQ(); delete q[id]; pdiDelQSave(q); }).catch(()=>{ delete _pdiSending["del|"+id]; });
+  });
   Object.values(pdiOutbox()).forEach(r=>{
     if(!r || !r.id || _pdiSending[r.id]===r.up) return;
     _pdiSending[r.id] = r.up;
@@ -12779,7 +12804,7 @@ function pdiDashHtml(d, st, s, stt){
       <button type="button" class="btn btn-outline btn-sm" onclick="pdiCfgOpen()">⚙ Pengaturan</button>
     </div>
     <div class="card" style="padding:10px 12px;"><div style="font-size:12px;font-weight:800;color:var(--text-dim);margin-bottom:6px;">TERAKHIR</div>
-      ${last.length?`<table class="pdiTb"><tbody>${last.map(r=>`<tr><td>${holdHm(r.doneTs||r.ts)}</td><td><b style="font-family:monospace;">${escH(r.f)}</b> ${pdiTipeBadge(r.t,true)}</td><td>${escH(r.m||"")}</td><td>${stBadge(r)}</td></tr>`).join("")}</tbody></table>`:`<div style="font-size:12px;color:var(--text-dim);">-</div>`}
+      ${last.length?`<table class="pdiTb"><tbody>${last.map(r=>`<tr><td>${holdHm(r.doneTs||r.ts)}</td><td><b style="font-family:monospace;">${escH(r.f)}</b> ${pdiTipeBadge(r.t,true)}</td><td>${escH(r.m||"")}</td><td>${stBadge(r)}</td>${pdiCanDel()?`<td style="width:1%;"><button type="button" class="pdiDelB" title="Hapus data ini" onclick="pdiRecDel('${escH(r.id)}')">🗑</button></td>`:""}</tr>`).join("")}</tbody></table>`:`<div style="font-size:12px;color:var(--text-dim);">-</div>`}
     </div>
     ${pdiOpenCardHtml(d, {always:true})}`;
 }
@@ -12825,8 +12850,8 @@ function pdiHistOpen(){
       <input type="text" placeholder="Cari Frame / Engine / Kunci" value="${escH(_pdiHistQ)}" style="flex:1;min-width:160px;" onkeydown="if(event.key==='Enter'){_pdiHistQ=this.value;pdiHistOpen();}"></div>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"><button type="button" class="tlscp" style="${!_pdiHistM?"background:var(--gold);color:#fff;":""}" onclick="_pdiHistM='';pdiHistOpen()">Semua model</button>${msAll.map(m=>`<button type="button" class="tlscp" style="${_pdiHistM===m?"background:var(--gold);color:#fff;":""}" onclick="_pdiHistM='${escH(m)}';pdiHistOpen()">${escH(m)}</button>`).join("")}</div>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${L.length} unit${_pdiHistM?" · "+escH(_pdiHistM):""}</div>
-    <div style="max-height:60vh;overflow:auto;"><table class="pdiTb"><thead><tr><th>Waktu</th><th>Frame No</th><th>Engine</th><th>Kunci</th><th>Model</th><th>Status</th><th>PIC</th></tr></thead><tbody>
-    ${L.slice(0,400).map(r=>`<tr><td style="white-space:nowrap;">${escH(new Date(r.doneTs||r.ts).toLocaleDateString("id-ID",{day:"2-digit",month:"short"}))} ${holdHm(r.doneTs||r.ts)}</td><td><b style="font-family:monospace;">${escH(r.f)}</b> ${pdiTipeBadge(r.t,true)}</td><td style="font-family:monospace;">${escH(r.e||"")}</td><td>${escH(r.k||"")}</td><td>${escH(r.m||"")}</td><td>${escH(r.st||"")}${r.pb?`<div style="font-size:10px;color:#b45309;">${escH(r.pb)}</div>`:""}</td><td style="font-size:11px;">${escH(r.n||"")}</td></tr>`).join("")}
+    <div style="max-height:60vh;overflow:auto;"><table class="pdiTb"><thead><tr><th>Waktu</th><th>Frame No</th><th>Engine</th><th>Kunci</th><th>Model</th><th>Status</th><th>PIC</th>${pdiCanDel()?"<th></th>":""}</tr></thead><tbody>
+    ${L.slice(0,400).map(r=>`<tr><td style="white-space:nowrap;">${escH(new Date(r.doneTs||r.ts).toLocaleDateString("id-ID",{day:"2-digit",month:"short"}))} ${holdHm(r.doneTs||r.ts)}</td><td><b style="font-family:monospace;">${escH(r.f)}</b> ${pdiTipeBadge(r.t,true)}</td><td style="font-family:monospace;">${escH(r.e||"")}</td><td>${escH(r.k||"")}</td><td>${escH(r.m||"")}</td><td>${escH(r.st||"")}${r.pb?`<div style="font-size:10px;color:#b45309;">${escH(r.pb)}</div>`:""}</td><td style="font-size:11px;">${escH(r.n||"")}</td>${pdiCanDel()?`<td><button type="button" class="pdiDelB" title="Hapus data ini" onclick="pdiRecDel('${escH(r.id)}')">🗑</button></td>`:""}</tr>`).join("")}
     </tbody></table></div>`);
 }
 function pdiProbList(){
