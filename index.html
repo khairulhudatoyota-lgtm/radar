@@ -1091,7 +1091,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="04 Nov 2026 23.35";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="06 Nov 2026 07.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4140,7 +4140,6 @@ function openTLS(id){
   const head=(k,label,v,key)=>`<div class="tlsrow"><div class="k">${label}</div><div class="v">${v||"-"}</div>${key?`<button type="button" class="tlscp" onclick="tlsCopy(tlsHeadVal('${key}'),this)">Salin</button>`:""}</div>`;
   const rows=b.units.map((u,i)=>`<tr><td>${i+1}</td><td><b>${u.frame}</b></td><td><button type="button" class="tlscp" onclick="tlsCopy(tlsVal(${i},'frame'),this)">Salin</button></td></tr>`).join("");
   showModal(`<h3 style="margin:0 0 4px;">📋 Siap input ke TLS</h3>
-    <button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 8px;" onclick="tlsChromeGo()">🌐 Buka TLS di Chrome &amp; salin kode</button>
     ${window.AndroidTLS?`<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 8px;" onclick="tlsSendApp()">📲 Kirim ke TLS di aplikasi (otomatis)</button>`:`<button type="button" class="btn btn-green btn-sm" style="width:100%;margin:2px 0 4px;" onclick="tlsPcGo()">🖥 Buka TLS &amp; salin data (PC)</button><p style="font-size:11px;color:var(--text-dim);margin:0 0 10px;">Data ILS tersalin dan TLS terbuka di tab baru. Di tab TLS klik <b>⚡ RADAR→TLS</b> (bookmark / tombol Tampermonkey). Pasang sekali di Admin → TLS.</p>`}
     <button type="button" class="btn btn-primary btn-sm" style="width:100%;margin:2px 0 6px;" onclick="tlsCopyCode(this)">⚡ Salin kode isi TLS</button>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Di TLS (halaman Pembuatan ILS / SJKB): ketuk <b>kotak alamat</b>, ketik <b>javascript:</b> lalu <b>tempel</b>, tekan <b>Enter / Go</b>.</p>
