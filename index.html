@@ -1188,7 +1188,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="07 Nov 2026 03.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="07 Nov 2026 03.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -12158,16 +12158,39 @@ function pdiVoiceOn(){ try{ return localStorage.getItem("radar_pdi_voice")!=="0"
 function pdiVoiceToggle(){ try{ localStorage.setItem("radar_pdi_voice", pdiVoiceOn()?"0":"1"); }catch(e){} pdiUi(); }
 function pdiVoice(){ try{ const vs = speechSynthesis.getVoices(), want = (pdiVoiceCfg().voice||""); return (want && vs.find(v=>v.name===want)) || vs.find(v=>/andika/i.test(v.name)) || vs.find(v=>/^id([-_]|$)/i.test(v.lang)) || null; }catch(e){ return null; } }
 function pdiSpeak(m){ return String(m||"").replace(/\bBZ4X\b/ig,"B Z 4 X").replace(/HYBRID/ig,"Hybrid"); }
+/* Daftar suara Chrome / Edge sering masih kosong saat halaman baru dibuka → tunggu sebentar */
+function pdiVoicesReady(){
+  return new Promise(res=>{ try{ const v = speechSynthesis.getVoices(); if(v.length) return res(v); let done = false; const f = ()=>{ if(done) return; done = true; res(speechSynthesis.getVoices()); };
+    speechSynthesis.addEventListener("voiceschanged", f, {once:true}); setTimeout(f, 1500); }catch(e){ res([]); } });
+}
+let _pdiUtt = null, _pdiSayStart = 0, _pdiSayErr = "";
+function pdiSayErrText(er){
+  if(er==="not-allowed") return "Browser menahan suara sampai halaman diklik — klik sekali di halaman RADAR, lalu coba lagi";
+  if(/synthesis|unavailable/.test(er||"")) return "Suara Windows bermasalah / suara Bahasa Indonesia belum terpasang. Windows: Settings → Time & Language → Speech → Add voices → Indonesian (atau pakai Microsoft Edge)";
+  return "Suara gagal ("+er+")";
+}
 function pdiSay(k, model, force){
-  if((!pdiVoiceOn() && !force) || !window.speechSynthesis) return;
-  try{
-    const vc = pdiVoiceCfg(), ph = (vc.ph||{})[k] || {};
-    if(ph.on===false && !force) return;
-    const t = (ph.text || PDI_SAY[k] || k).replace(/\{model\}/g, pdiSpeak(model||PDI.model));
-    if(["frame","engine","key"].includes(k)) speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(t); u.lang = "id-ID"; const v = pdiVoice(); if(v){ u.voice = v; u.lang = v.lang; } u.rate = +vc.rate || 1.05; u.volume = vc.vol!=null ? +vc.vol : 1;
-    speechSynthesis.speak(u);
-  }catch(e){}
+  if(!window.speechSynthesis || typeof SpeechSynthesisUtterance==="undefined"){ if(force) pdiToast("Suara tidak bisa di browser / aplikasi ini (aplikasi HP tidak mendukung). Pakai Google Chrome atau Microsoft Edge di PC.", true); return; }
+  if(!pdiVoiceOn() && !force) return;
+  const vc = pdiVoiceCfg(), ph = (vc.ph||{})[k] || {};
+  if(ph.on===false && !force) return;
+  const t = (ph.text || PDI_SAY[k] || k).replace(/\{model\}/g, pdiSpeak(model||PDI.model));
+  const go = ()=>{
+    try{
+      const ss = speechSynthesis;
+      /* Chrome kadang "macet" (speaking terus tanpa suara) → reset dulu */
+      if(["frame","engine","key"].includes(k) || (ss.speaking && Date.now()-_pdiSayStart > 8000)) ss.cancel();
+      try{ ss.resume(); }catch(e){}
+      const u = new SpeechSynthesisUtterance(t), v = pdiVoice();
+      if(v){ u.voice = v; u.lang = v.lang; }        // tanpa suara Indonesia → pakai suara bawaan PC (tetap berbunyi)
+      u.rate = +vc.rate || 1.05; u.volume = vc.vol!=null ? +vc.vol : 1;
+      u.onerror = e=>{ const er = (e && e.error) || "error"; if(er==="interrupted" || er==="canceled") return; _pdiSayErr = er; if(force) pdiToast(pdiSayErrText(er), true); };
+      u.onstart = ()=>{ _pdiSayErr = ""; };
+      _pdiUtt = u; _pdiSayStart = Date.now();      // simpan referensi: Chrome bisa membuang ucapan yang tidak dipegang
+      ss.speak(u);
+    }catch(e){ if(force) pdiToast("Suara gagal: "+(e.message||e), true); }
+  };
+  try{ if(speechSynthesis.getVoices().length) go(); else pdiVoicesReady().then(go); }catch(e){ go(); }
 }
 
 /* ===== Kamera + pembaca barcode zxing-wasm ===== */
@@ -12690,9 +12713,20 @@ const PDI_SAY_LABEL = {frame:"Frame No terkunci", engine:"Engine terisi", key:"N
   buku:"Masuk scan buku", bukuok:"Buku sesuai", bukusalah:"Buku salah", selesai:"Selesai (tanpa cek buku)", problem:"Unit problem tercatat", probulang:"Unit problem discan ulang", tlserr:"TLS / PAD error"};
 function pdiVoiceCfg(){ try{ return JSON.parse(localStorage.getItem("radar_pdi_voicecfg")||"{}")||{}; }catch(e){ return {}; } }
 function pdiVoiceCfgSave(c){ try{ localStorage.setItem("radar_pdi_voicecfg", JSON.stringify(c)); }catch(e){} }
+function pdiVoiceInfo(){
+  if(!window.speechSynthesis) return `<span style="color:var(--red,#dc2626);">❌ Browser / aplikasi ini tidak punya suara (aplikasi HP tidak mendukung). Pakai Google Chrome atau Microsoft Edge di PC.</span>`;
+  const vs = speechSynthesis.getVoices(), v = pdiVoice(), id = vs.filter(x=>/^id([-_]|$)/i.test(x.lang));
+  if(!vs.length) return "⏳ Memuat daftar suara…";
+  return v ? `✔ Dipakai: <b>${escH(v.name)}</b> (${escH(v.lang)}) · ${vs.length} suara tersedia, ${id.length} Bahasa Indonesia`
+    : `<span style="color:#b45309;">⚠ Tidak ada suara Bahasa Indonesia di PC ini — memakai suara bawaan (logat Inggris). Tambah: Windows Settings → Time & Language → Speech → Add voices → <b>Indonesian</b>, atau pakai Microsoft Edge.</span> (${vs.length} suara tersedia)`;
+}
+function pdiVoiceTest(){ pdiVoiceTmp(); PDI_SAY.__tes = "Tes suara RADAR P D I. Unit {model}."; pdiSay("__tes", PDI.model||"AGYA", true); delete PDI_SAY.__tes;
+  setTimeout(()=>{ const el = document.getElementById("pdiVoiceInfo"); if(el) el.innerHTML = pdiVoiceInfo(); }, 300); }
 function pdiVoiceOpen(){
   const c = pdiVoiceCfg(), ph = c.ph||{}, vs = (window.speechSynthesis ? speechSynthesis.getVoices() : []);
+  if(window.speechSynthesis && !vs.length) pdiVoicesReady().then(v=>{ if(v.length && document.getElementById("pdiVoiceSel")){ const cur = pdiVoiceRead(); pdiVoiceCfgSave(Object.assign(pdiVoiceCfg(), {voice:cur.voice})); pdiVoiceOpen(); } });
   showModal(`<h3 style="margin:0 0 8px;">🔊 Setting Suara</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;"><button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="pdiVoiceTest()">🔊 Tes suara</button><div id="pdiVoiceInfo" style="flex:1;min-width:200px;font-size:11.5px;">${pdiVoiceInfo()}</div></div>
     <div class="field"><label>Suara</label><select id="pdiVoiceSel"><option value="">Otomatis (Bahasa Indonesia kalau ada)</option>${vs.map(v=>`<option value="${escH(v.name)}" ${c.voice===v.name?"selected":""}>${escH(v.name)} (${escH(v.lang)})</option>`).join("")}</select>
       <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Di Microsoft Edge ada suara alami <b>Gadis</b> (perempuan) / <b>Ardi</b> (laki-laki) — butuh internet. Suara Windows (Andika) jalan tanpa internet.</div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field"><label>Kecepatan</label><input id="pdiVoiceRate" type="range" min="0.6" max="1.6" step="0.05" value="${c.rate||1.05}"></div><div class="field"><label>Volume</label><input id="pdiVoiceVol" type="range" min="0.2" max="1" step="0.05" value="${c.vol||1}"></div></div>
@@ -12706,8 +12740,10 @@ function pdiVoiceRead(){
   document.querySelectorAll(".pdiPhTx").forEach(el=>{ const k = el.dataset.k, on = document.querySelector(`.pdiPhOn[data-k="${k}"]`); c.ph[k] = {on:!!(on && on.checked), text:el.value.trim()||PDI_SAY[k]}; });
   return c;
 }
-function pdiVoiceTry(k){ const prev = pdiVoiceCfg(); pdiVoiceCfgSave(pdiVoiceRead()); const ph = pdiVoiceCfg().ph[k]; pdiSay(k, PDI.model||"AGYA", true); pdiVoiceCfgSave(prev); }
-function pdiVoiceSave(){ pdiVoiceCfgSave(pdiVoiceRead()); closeModal(); pdiToast("Setting suara disimpan"); }
+let _pdiVoicePrev = null, _pdiVoicePrevT = 0;
+function pdiVoiceTmp(){ if(!_pdiVoicePrev) _pdiVoicePrev = pdiVoiceCfg(); pdiVoiceCfgSave(pdiVoiceRead()); clearTimeout(_pdiVoicePrevT); _pdiVoicePrevT = setTimeout(()=>{ if(_pdiVoicePrev){ pdiVoiceCfgSave(_pdiVoicePrev); _pdiVoicePrev = null; } }, 2500); }
+function pdiVoiceTry(k){ pdiVoiceTmp(); pdiSay(k, PDI.model||"AGYA", true); }
+function pdiVoiceSave(){ clearTimeout(_pdiVoicePrevT); _pdiVoicePrev = null; pdiVoiceCfgSave(pdiVoiceRead()); closeModal(); pdiToast("Setting suara disimpan"); }
 
 /* ---------- 🔆 Setting Kamera (kunci exposure / white balance / fokus supaya cahaya stabil) ---------- */
 const PDI_CAM_KEYS = [["exposureMode","Mode exposure"],["exposureTime","Exposure time"],["exposureCompensation","Kompensasi exposure"],["brightness","Brightness"],["contrast","Contrast"],["saturation","Saturation"],["sharpness","Sharpness"],["whiteBalanceMode","Mode white balance"],["colorTemperature","Suhu warna"],["focusMode","Mode fokus"],["focusDistance","Jarak fokus"],["zoom","Zoom"]];
