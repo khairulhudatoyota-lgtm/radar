@@ -655,6 +655,9 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .ugroup .gcnt{font-size:11px; font-weight:800; background:var(--bg,#eef); color:var(--text-dim); border-radius:999px; padding:2px 9px;}
 .ugroup .gcnt.sel{background:#1E9E5A; color:#fff;}
 .ugroup[open]>summary{border-bottom:1px solid var(--border);}
+.ugtool{display:flex; gap:6px; flex-wrap:wrap; padding:8px 8px 0;}
+.ugtool .btn{flex:1 1 140px; padding:7px 10px; margin:0;}
+.ugtool .btn.ok{background:#1E9E5A; color:#fff; border-color:#1E9E5A;}
 .unitrow.compact{padding:6px 10px; margin:6px; border-radius:8px;}
 .unitrow.compact .info b{font-size:13px;}
 /* ===== PDI ===== */
@@ -706,6 +709,40 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .pdiWarn{background:var(--red-bg);color:var(--red);font-weight:800;font-size:13px;padding:8px 14px;text-align:center;}
 .pdiRadio{display:block;padding:6px 0;font-size:14px;cursor:pointer;}
 .pdiToast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0F172A;color:#fff;padding:10px 18px;border-radius:12px;font-size:14px;font-weight:700;z-index:9500;display:none;box-shadow:0 8px 24px rgba(0,0,0,.3);} .pdiToast.warn{background:#b91c1c;}
+/* ⚙ Pengaturan Arduino — warna & tata letak seperti v51 */
+#modalRoot .modal.pdiASm{max-width:660px;padding:0;background:#0F1923;color:#c9d1d9;border-top:0;display:flex;flex-direction:column;overflow:hidden;max-height:92vh;}
+#modalRoot .modal.pdiASm>.close-x{color:#8b949e;z-index:3;top:12px;}
+.pdiAS{display:flex;flex-direction:column;min-height:0;flex:1;font-family:"Segoe UI",system-ui,sans-serif;}
+.pdiAS-hdr{background:#1E2A3B;display:flex;align-items:center;justify-content:space-between;padding:14px 56px 14px 20px;flex:0 0 auto;}
+.pdiAS-hdr b{font-size:16px;color:#58a6ff;letter-spacing:.3px;} .pdiAS-hdr span{font-size:12px;color:#8b949e;}
+.pdiAS-body{overflow-y:auto;flex:1;min-height:0;background:#0F1923;padding-bottom:6px;}
+.pdiAS-sec{margin:16px 18px 4px;padding-bottom:5px;border-bottom:1px solid #30363d;font-size:13px;font-weight:800;color:#58a6ff;}
+.pdiAS-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;margin:6px 22px;font-size:12.5px;}
+.pdiAS-row>label{width:150px;flex:0 0 150px;color:#c9d1d9;}
+.pdiAS-row input[type=text],.pdiAS-row select{background:#1E2A3B;color:#fff;border:1px solid #30363d;border-radius:3px;padding:5px 7px;font-size:13px;min-height:0;}
+.pdiAS-row input[type=text]:focus,.pdiAS-row select:focus{outline:none;border-color:#58a6ff;}
+.pdiAS-hint{font-size:11px;color:#8b949e;}
+.pdiAS-chk{display:flex;align-items:center;gap:6px;color:#c9d1d9;cursor:pointer;width:auto !important;flex:none !important;}
+.pdiAS-chk input{width:auto;margin:0;}
+.pdiAS-mode{margin:4px 22px;padding:7px 10px 8px;border-radius:2px;font-size:11px;line-height:1.5;}
+.pdiAS-mode label{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:3px;}
+.pdiAS-mode label input{width:auto;margin:0;}
+.pdiAS-mode>div{padding-left:22px;}
+.pdiAS-mode.dur{background:#2a1f0c;border:1px solid #b45309;color:#e6c485;} .pdiAS-mode.dur label{color:#fbd38d;}
+.pdiAS-mode.lim{background:#0c2a17;border:1px solid #1a7f37;color:#a3d4ab;} .pdiAS-mode.lim label{color:#7ee787;}
+.pdiAS-warn{margin:10px 22px 4px;padding:7px 10px;background:#2d0a0a;border:1px solid #dc2626;color:#fca5a5;font-size:11px;font-weight:700;line-height:1.5;}
+.pdiAS-note{margin:4px 22px;font-size:11px;color:#fbd38d;}
+.pdiAS-guide,.pdiAS-bhv{margin:6px 22px;padding:10px 12px;font-family:Consolas,"Courier New",monospace;white-space:pre;overflow-x:auto;line-height:1.35;}
+.pdiAS-guide{background:#1E2A3B;border:1px solid #30363d;color:#c9d1d9;font-size:12px;}
+.pdiAS-bhv{background:#0d1f2d;border:1px solid #0891b2;color:#67e8f9;font-size:11px;}
+.pdiAS-tips{margin:6px 22px;padding:8px 10px;background:#0c2a17;border:1px solid #1a7f37;color:#7ee787;font-size:11px;line-height:1.55;}
+.pdiAS-foot{background:#1E2A3B;flex:0 0 auto;padding:10px 10px 6px;}
+.pdiAS-btns{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;}
+.pdiAS-b{border:0;border-radius:3px;color:#fff;font-weight:800;font-size:12.5px;padding:8px 12px;cursor:pointer;font-family:inherit;}
+.pdiAS-b:hover{filter:brightness(1.15);} .pdiAS-b.ok{background:#16a34a !important;}
+.pdiAS-s{border:1px solid #30363d;background:#2D3748;color:#c9d1d9;border-radius:3px;font-size:11px;padding:3px 8px;cursor:pointer;}
+.pdiAS-msg{font-size:11px;color:#3fb950;white-space:pre-line;padding:6px 6px 0;min-height:16px;text-align:left;}
+/* ===== END PDI CSS ===== */
 </style>
 <style>
 .credit{margin:18px auto 0;text-align:center;line-height:1;user-select:none;}
@@ -1140,7 +1177,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="06 Nov 2026 16.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="06 Nov 2026 19.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3681,7 +3718,9 @@ function renderDelivery(){
     const L=_grp[k], nSel=L.filter(e=>deliverySelUnits.includes(e[0])).length, nPrio=L.filter(e=>e[1].prio).length;
     const side=k==="OFF"?"":("side"+k.slice(-1));
     const open = nSel>0 || !!dlUnitOpen[k];
-    return `<details class="ugroup ${side}" ${open?"open":""} ontoggle="dlUnitOpen['${k}']=this.open"><summary><span class="gname">${k==="OFF"?"📍 Luar stall":"Stall "+k}</span><span class="gcnt">${L.length} unit</span>${nPrio?`<span class="gcnt" style="background:#FFF1C2;color:#8a6100;">⭐ ${nPrio}</span>`:""}${nSel?`<span class="gcnt sel">✔ ${nSel} dipilih</span>`:""}</summary>${L.map(_unitRow).join("")}${canKeluarkanCC()&&L.some(e=>!e[1].ilsId)?`<button type="button" class="btn btn-outline btn-sm" style="margin:8px 0 2px;color:var(--red);border-color:var(--red);" onclick="event.stopPropagation();clearStallUnits('${k}')">🗑 Kosongkan ${k==="OFF"?"Luar Stall":"Stall "+k} (${L.filter(e=>!e[1].ilsId).length} unit)</button>`:""}</details>`;
+    const cpT = dlCopied[k] && Date.now()-dlCopied[k] < 4*3600000 ? holdHm(dlCopied[k]) : "";
+    const tool = `<div class="ugtool">${nSel<L.length && nSel<CONFIG.MAX_LOAD_PER_CC?`<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();dlSelStall('${k}',true)">☑ Centang semua</button>`:""}${nSel?`<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();dlSelStall('${k}',false)">☐ Hapus centang</button>`:""}<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();dlCopyStall('${k}',this)">📋 Salin No. Rangka (${nSel?nSel+" dicentang":L.length+" unit"})</button></div>`;
+    return `<details class="ugroup ${side}" ${open?"open":""} ontoggle="dlUnitOpen['${k}']=this.open"><summary><span class="gname">${k==="OFF"?"📍 Luar stall":"Stall "+k}</span>${cpT?`<span class="gcnt" style="background:#E0F2FE;color:#0369a1;" title="No. rangka stall ini sudah disalin di HP/PC ini">📋 ${cpT}</span>`:""}<span class="gcnt">${L.length} unit</span>${nPrio?`<span class="gcnt" style="background:#FFF1C2;color:#8a6100;">⭐ ${nPrio}</span>`:""}${nSel?`<span class="gcnt sel">✔ ${nSel} dipilih</span>`:""}</summary>${tool}${L.map(_unitRow).join("")}${canKeluarkanCC()&&L.some(e=>!e[1].ilsId)?`<button type="button" class="btn btn-outline btn-sm" style="margin:8px 0 2px;color:var(--red);border-color:var(--red);" onclick="event.stopPropagation();clearStallUnits('${k}')">🗑 Kosongkan ${k==="OFF"?"Luar Stall":"Stall "+k} (${L.filter(e=>!e[1].ilsId).length} unit)</button>`:""}</details>`;
   }).join("") + (canKeluarkanCC()&&_gkeys.length>1?`<button type="button" class="btn btn-outline btn-sm" style="margin:10px 0 0;color:var(--red);border-color:var(--red);" onclick="clearStallUnits('*')">🗑 Kosongkan SEMUA Stall</button>`:"");
 
   const ilsOfCC=n=>data.ils.find(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat((data.cc[n]||{}).plat));
@@ -3748,7 +3787,7 @@ function renderDelivery(){
       <h3>📦 Pilih Unit (maks ${CONFIG.MAX_LOAD_PER_CC})</h3>
       <p style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">Terpilih: ${deliverySelUnits.length}/${CONFIG.MAX_LOAD_PER_CC}${filledSlots.some(([k])=>isOffKey(k))?` · 📍 ${filledSlots.filter(([k])=>isOffKey(k)).length} unit di luar stall (ditandai 📍)`:""}</p>
       ${filledSlots.length===0 ? `<div class="emptystate">Belum ada unit terparkir.</div>` : `<div class="unitlist">${unitRows}</div>`}
-      ${filledSlots.length?`<button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="dlCopyFrames(this)" ${deliverySelUnits.length?"":"disabled"}>📋 Salin No. Rangka (${deliverySelUnits.length} unit)</button>`:""}
+      ${filledSlots.length?`<div style="display:flex;gap:8px;margin-top:10px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="dlCopyFrames(this)" ${deliverySelUnits.length?"":"disabled"}>📋 Salin No. Rangka (${deliverySelUnits.length} unit)</button>${deliverySelUnits.length?`<button type="button" class="btn btn-outline" style="width:auto;flex:0 0 auto;" onclick="dlSelClear()">✖ Hapus centang</button>`:""}</div>`:""}
     </div>
 
     ${mixedSel?`<div class="msg err">⚠ Pilihan mencampur unit <b>BATAM</b> dan <b>reguler</b>. Tujuan kirim berbeda — pisahkan jadi ILS sendiri-sendiri.</div>`:""}
@@ -3771,6 +3810,37 @@ function dlCopyFrames(btn){
   if(!fr.length){ alert("Centang dulu unit yang mau disalin."); return; }
   tlsCopy(fr.join("\n"), btn);
 }
+/* Per stall: salin no. rangka (yang dicentang di stall itu, atau semua unit stall kalau belum ada yang dicentang) & centang semua */
+let dlCopied = {};
+function dlStallIds(k){
+  const d=DB.get(), ord=window._dlOrder||[];
+  return ord.filter(id=>{ const v=(d.units||{})[id]; return v && !v.ilsId && (k==="OFF" ? isOffKey(id) : (!isOffKey(id) && groupOf(id)===k)); });
+}
+function dlCopyStall(k, btn){
+  const d=DB.get(), all=dlStallIds(k), sel=all.filter(id=>deliverySelUnits.includes(id)), use=sel.length?sel:all;
+  const fr=use.map(id=>((d.units||{})[id]||{}).frame).filter(Boolean);
+  if(!fr.length){ alert("Stall ini kosong."); return; }
+  tlsCopy(fr.join("\n"), btn); dlCopied[k]=Date.now();
+  setTimeout(()=>{ try{ if(activeTab==="delivery") render(); }catch(e){} }, 1300);
+}
+function dlSelStall(k, on){
+  const d=DB.get(), all=dlStallIds(k);
+  if(!all.length) return;
+  if(!on){ deliverySelUnits=deliverySelUnits.filter(id=>!all.includes(id)); render(); return; }
+  const isB=id=>!!((d.units||{})[id]||{}).batam, lbl=k==="OFF"?"Luar Stall":"Stall "+k;
+  if(new Set(all.map(isB)).size>1){ alert(lbl+" berisi unit BATAM dan reguler — centang manual satu per satu."); return; }
+  const others=deliverySelUnits.filter(id=>!all.includes(id));
+  let add=all.filter(id=>!deliverySelUnits.includes(id));
+  if(others.length && (isB(others[0])!==isB(all[0]) || deliverySelUnits.length+add.length>CONFIG.MAX_LOAD_PER_CC)){
+    if(!confirm(`Ganti centang ke ${lbl}?\nCentang di stall lain (${others.length} unit) akan dihapus.`)) return;
+    deliverySelUnits=deliverySelUnits.filter(id=>all.includes(id));
+  }
+  const room=CONFIG.MAX_LOAD_PER_CC-deliverySelUnits.length;
+  deliverySelUnits=deliverySelUnits.concat(add.slice(0,room));
+  dlUnitOpen[k]=true; render();
+  if(add.length>room) alert(`Maksimal ${CONFIG.MAX_LOAD_PER_CC} unit per Car Carrier — hanya ${room} unit pertama ${lbl} yang dicentang.`);
+}
+function dlSelClear(){ deliverySelUnits=[]; render(); }
 function toggleUnitSel(id){
   const idx = deliverySelUnits.indexOf(id);
   if(idx>=0){ deliverySelUnits.splice(idx,1); }
@@ -8270,7 +8340,7 @@ function parseBatamWorkbook(wb, kind){
   const isHdrVin = x=>{ const t=T(x); return t.length>0 && t.length<=30 && /^(no\.?\s*)?(rangka|vin|frame\s*(no|number)?|framenumber|chassis|chasis|no\.?\s*rgk)/i.test(t.replace(/\s+/g," ")); };
   wb.SheetNames.forEach(name=>{
     const grid = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, raw:true, defval:null});
-    let hr=-1, cV=-1, cK=-1, cD=-1;
+    let hr=-1, cV=-1, cK=-1, cD=-1, cX={};
     for(let r=0;r<Math.min(30,grid.length)&&hr<0;r++){
       const row = grid[r]||[];
       const c = row.findIndex(isHdrVin);
@@ -8278,6 +8348,9 @@ function parseBatamWorkbook(wb, kind){
         hr=r; cV=c;
         cK = row.findIndex(x=>{ const t=T(x); return t.length<=30 && /kategori|category|keterangan|^ket\b|status|prior|jenis/i.test(t); });
         cD = row.findIndex(x=>{ const t=T(x); return t.length<=30 && /branch|cabang|dealer|tujuan|dest|customer|kota|city/i.test(t); });
+        /* kolom tambahan (seperti daftar Batam / Prioritas di aplikasi PDI v51): tampil di popup PDI */
+        const fc = re=>row.findIndex(x=>{ const t=T(x); return t.length<=30 && re.test(t); });
+        cX = {TypeName:fc(/^type\s*name$|^tipe$|^type$/i), ModelName:fc(/^model\s*name$|^model$/i), ColorName:fc(/colou?r|warna/i), DTPLOD:fc(/dtplod|plod/i), Status:fc(/^status$/i), Keterangan:fc(/keterangan|^ket\.?$|remark|catatan|note/i)};
       }
     }
     for(let r=(hr>=0?hr+1:0); r<grid.length; r++){
@@ -8296,7 +8369,8 @@ function parseBatamWorkbook(wb, kind){
       if(kind==="prio") c = {batam:false, prio:true};            // semua unit di file prioritas = prioritas
       else c = {batam:c.batam, prio:false};                      // file Batam hanya menentukan Batam
       const prev = out.get(vin);
-      out.set(vin, {vin, batam:c.batam||(prev&&prev.batam)||false, prio:c.prio||(prev&&prev.prio)||false, explicit: c.batam||c.prio||(prev&&prev.explicit)||false, dest: dest||(prev&&prev.dest)||""});
+      const inf = {}; Object.entries(cX).forEach(([k,ci])=>{ if(ci>=0){ const v=T(row[ci]); if(v) inf[k]=v.slice(0,60); } }); if(dest) inf.BranchName = inf.BranchName || dest.slice(0,60);
+      out.set(vin, {vin, batam:c.batam||(prev&&prev.batam)||false, prio:c.prio||(prev&&prev.prio)||false, explicit: c.batam||c.prio||(prev&&prev.explicit)||false, dest: dest||(prev&&prev.dest)||"", inf:Object.assign({}, prev&&prev.inf, inf)});
     }
   });
   return [...out.values()];
@@ -8329,6 +8403,7 @@ function saveCatList(kind){
     p.rows.forEach(r=>{
       const old = d.unitCat[r.vin] || {};
       const e = {...old, src:"upload", file:p.fileName, by:(currentUser&&currentUser.name)||"", ts:Date.now()};
+      if(r.inf && Object.keys(r.inf).length) e.inf = Object.assign({}, old.inf, r.inf);
       if(kind==="batam"){
         const isB = r.explicit ? r.batam : (def==="batam");
         if(isB){ e.batam = true; if(r.dest) e.dest = r.dest; }
@@ -11424,7 +11499,7 @@ function pdiCfg(d){
     eng: (Array.isArray(c.eng) && c.eng.length) ? c.eng : PDI_ENG_DEF,
     models,
     door: Object.assign({auto:true, delay:5, dur:3, up:"UP", down:"DOWN"}, c.door||{}),
-    book: c.book || "manual",          // manual = operator konfirmasi buku · off = tanpa cek buku
+    book: c.book || "camera",          // camera = cocokkan sampul (v51) · manual = operator konfirmasi · off = tanpa cek buku
     tol: +c.tol || 0.12,
     layouts: (Array.isArray(c.layouts) && c.layouts.length) ? c.layouts : PDI_LEGACY_LAYOUT,
   };
@@ -11600,7 +11675,8 @@ const PDI = {
   cam:{stream:null, on:false, err:"", w:0, h:0, last:0, fps:0, dev:""},
 };
 function pdiResetUnit(say){
-  Object.assign(PDI, {step:"scan", vin:"", eng:"", key:"", keySrc:"", seen:{}, card:new Set(), guide:"", marks:[], view:[], model:"", tipe:"R", info:null, dup:false, prob:null, rec:null, tlsStart:0, tlsErr:""});
+  Object.assign(PDI, {step:"scan", vin:"", eng:"", key:"", keySrc:"", seen:{}, card:new Set(), guide:"", marks:[], view:[], model:"", tipe:"R", info:null, dup:false, prob:null, rec:null, tlsStart:0, tlsErr:"", bookManual:false, capturing:false});
+  try{ Object.assign(PB, {streak:0, cal:false, calBuf:[], ts:0, os:0, on:"", msg:"", err:""}); }catch(e){}
   if(PDI.tlsPoll){ clearInterval(PDI.tlsPoll); PDI.tlsPoll = null; }
   pdiOvClose(); pdiUi();
 }
@@ -11609,7 +11685,8 @@ function pdiProcessCodes(codes){
   if(PDI.step!=="scan") return;
   const cfg = pdiCfg(), minF = 2;
   let vinIn = null;
-  codes.forEach(c=>{ const [f,v] = pdiClassify(c.t, c.kind, cfg); if(f==="vin" && !vinIn) vinIn = v; });
+  const roi = pdiRoi(), roiOn = !!roi.on;
+  codes.forEach(c=>{ const [f,v] = pdiClassify(c.t, c.kind, cfg); if(f==="vin" && !vinIn && (!roiOn || pdiInZone(c.q, roi.vin) || v===PDI.vin)) vinIn = v; });
   const refVin = vinIn || PDI.vin, legacy = pdiIsLegacy(refVin);
   if(!legacy){   // angka 5 digit di dalam QR / teks panjang kartu DC (Body No dll.) bukan No Kunci
     codes.forEach(c=>{ const tu = String(c.t||"").toUpperCase().replace(/\s+/g," ").trim(); if(tu.replace(/ /g,"").length>12 && pdiClassify(c.t,c.kind,cfg)[0]!=="engine"){ (tu.match(/(?<![0-9])[0-9]{5}(?![0-9])/g)||[]).forEach(x=>PDI.card.add(x)); } });
@@ -11629,10 +11706,11 @@ function pdiProcessCodes(codes){
   codes.forEach((c,i)=>{
     const t = String(c.t||"").toUpperCase().replace(/\s+/g," ").trim(), [f,v] = pdiClassify(c.t, c.kind, cfg, legacy);
     const mk = (col,lab,why)=>{ marks.push({q:c.q, col, lab}); view.push([c.kind, t, why]); };
-    if(f==="vin"){ mk("#22c55e","VIN","VIN ✔"); return; }
+    if(f==="vin"){ if(roiOn && !pdiInZone(c.q, roi.vin) && v!==PDI.vin){ mk("#eab308","geser ke kotak VIN","VIN — di luar area scan"); return; } mk("#22c55e","VIN","VIN ✔"); return; }
     if(PDI.card.has(t)){ mk("#9ca3af","kartu","diabaikan: kode kartu DC"); return; }
     if(!f){ mk("#9ca3af","x", v==="tipe"?"diabaikan: tipe barcode":"diabaikan: pola tidak cocok"); return; }
     if(!vinOk){ mk("#eab308","scan VIN dulu", f.toUpperCase()+" — tunggu Frame No"); return; }
+    if(roiOn && !legacy && !pdiInZone(c.q, roi.ek)){ mk("#9ca3af","di luar area", f.toUpperCase()+" — di luar area scan"); return; }
     if(lay){
       if(!vg){ mk("#eab308","tunjukkan seluruh kartu", f.toUpperCase()+" — Frame No harus ikut terlihat"); return; }
       if(!layBest[f] || layBest[f][1]!==i){ mk("#9ca3af","posisi salah","diabaikan: bukan posisi "+f.toUpperCase()); return; }
@@ -11712,6 +11790,7 @@ function pdiConfirm(){
   const d = DB.get();
   PDI.step = "confirm"; PDI.tipe = pdiTipeOf(PDI.vin, d); PDI.info = null;
   try{ const p = ppbjOf(d, PDI.vin); if(p) PDI.info = "PPBJ "+(ppbjInfoTxt(p)||""); }catch(e){}
+  PDI.inf = PDI.tipe==="R" ? {} : pdiCatInfo(PDI.vin, d);   /* dari upload data Batam / Prioritas (seperti v51) */
   const last = pdiLastOk(PDI.vin); PDI.dup = !!last; PDI.prob = pdiOpenProblem(PDI.vin);
   if(PDI.dup) pdiSay("dup"); else if(PDI.prob) pdiSay("probulang"); else pdiSay(PDI.tipe==="B"?"batam":(PDI.tipe==="P"?"prioritas":"reguler"));
   const col = PDI.tipe==="B" ? "#0891b2" : (PDI.tipe==="P" ? "#7c3aed" : "#276749"), ic = PDI.tipe==="B" ? "🚢" : (PDI.tipe==="P" ? "⭐" : "🚗"), nm = PDI.tipe==="B" ? "BATAM" : (PDI.tipe==="P" ? "PRIORITAS" : "REGULER");
@@ -11720,7 +11799,8 @@ function pdiConfirm(){
     <div class="pdiCfHead" style="background:${col};"><div style="font-size:28px;font-weight:900;">${ic} UNIT ${nm}</div><div style="font-weight:800;opacity:.9;">${escH(PDI.model)}</div></div>
     ${PDI.dup?`<div class="pdiWarn">⚠ FRAME NO SUDAH DI-PDI — ${escH(holdHm(last.ts))} ${escH(new Date(last.ts).toLocaleDateString("id-ID"))} (${escH(last.n||"")})<br>Unit ini tidak dihitung lagi. Enter = batal.</div>`:""}
     ${PDI.prob?`<div class="pdiWarn" style="background:#FEF3C7;color:#92400E;">⚠ UNIT PROBLEM sebelumnya: ${escH(PDI.prob.pb||"")}${PDI.prob.pbNote?" — "+escH(PDI.prob.pbNote):""}<br>Kalau sudah diperbaiki IT, lanjutkan seperti biasa. Data lama berubah jadi OK.</div>`:""}
-    <div style="padding:14px 22px;">${row("FRAME NO",PDI.vin,true)}${row("ENGINE NO",PDI.eng,true)}${row("NO KUNCI",PDI.key,true)}${PDI.info?row("KETERANGAN",PDI.info):""}</div>
+    <div style="padding:14px 22px;">${row("FRAME NO",PDI.vin,true)}${row("ENGINE NO",PDI.eng,true)}${row("NO KUNCI",PDI.key,true)}
+      ${[["TYPE",PDI.inf.TypeName],["WARNA",PDI.inf.ColorName],["CABANG",PDI.inf.BranchName],["KETERANGAN",[PDI.inf.Status,PDI.inf.Keterangan].filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join(" · ")],["PPBJ",PDI.info?PDI.info.replace(/^PPBJ\s*/,""):""]].filter(x=>x[1]).map(x=>row(x[0],x[1])).join("")}</div>
     <div style="display:flex;gap:10px;padding:0 22px 18px;">
       <button type="button" class="btn" style="flex:1;background:${col};color:#fff;font-weight:900;padding:14px;" onclick="pdiConfirmOk()">${PDI.dup?"✔ KIRIM ULANG KE TLS":"✔ LANJUT INPUT TLS [Enter]"}</button>
       <button type="button" class="btn" style="flex:1;background:#2d3748;color:#fff;font-weight:900;padding:14px;" onclick="pdiCancel()">✖ BATAL / SCAN ULANG [Esc]</button>
@@ -11733,6 +11813,7 @@ function pdiConfirmOk(){
   if(!PDI.dup){
     const base = PDI.prob ? Object.assign({}, PDI.prob) : {id: "P"+now.toString(36)+Math.random().toString(36).slice(2,6)};
     PDI.rec = Object.assign(base, {f:PDI.vin, e:PDI.eng, k:PDI.key, m:PDI.model, t:PDI.tipe, s:st, u:currentUser.username, n:currentUser.name, tim:currentUser.shift||"", ts:now, pd:s.pd, sh:s.sh, st:"PROSES"});
+    if(PDI.inf && Object.keys(PDI.inf).length) PDI.rec.inf = Object.assign({}, PDI.inf);
     if(PDI.prob){ PDI.rec.pbHist = (PDI.prob.pbHist||[]).concat([{pb:PDI.prob.pb, note:PDI.prob.pbNote||"", ts:PDI.prob.ts}]); delete PDI.rec.pb; delete PDI.rec.pbNote; }
     pdiPut(PDI.rec);
   } else PDI.rec = null;
@@ -11839,24 +11920,24 @@ function pdiTlsDone(){
   if(PDI.step!=="tls") return;
   if(PDI.tlsPoll){ clearInterval(PDI.tlsPoll); PDI.tlsPoll = null; }
   PDI.tlsDoneTs = Date.now();
-  if(pdiCfg().book==="off"){ pdiFinish("OK"); return; }
-  PDI.step = "book"; pdiSay("buku");
-  pdiOv(`<div class="pdiCf" style="border-color:#0f766e;"><div class="pdiCfHead" style="background:#0f766e;"><div style="font-size:26px;font-weight:900;">📘 CEK BUKU</div><div style="font-size:22px;font-weight:900;">${escH(PDI.model)}</div></div>
-    <div style="padding:14px 22px;font-size:14px;">Pastikan buku manual yang dimasukkan adalah buku <b>${escH(PDI.model)}</b>.</div>
-    <div style="display:flex;gap:10px;padding:0 22px 18px;"><button type="button" class="btn" style="flex:2;background:#0f766e;color:#fff;font-weight:900;padding:14px;" onclick="pdiFinish('OK')">✔ BUKU ${escH(PDI.model)} SESUAI [Enter]</button>
-    <button type="button" class="btn btn-outline" style="flex:1;" onclick="pdiFinish('OK - BUKU SKIP')">⏩ Lewati Cek Buku</button></div></div>`, {enter:()=>pdiFinish("OK")});
+  if(pdiBookMode()==="off"){ pdiFinish("OK"); return; }
+  pdiBookStart();
 }
 function pdiFinish(st){
   if(PDI.step!=="book" && PDI.step!=="tls") return;
   const now = Date.now();
   if(PDI.rec){ PDI.rec.st = st; PDI.rec.doneTs = now; PDI.rec.tlsTs = PDI.tlsDoneTs||now; pdiPut(PDI.rec); pdiOpenAdd(PDI.rec); }
   else { const last = pdiLastOk(PDI.vin); if(last) pdiOpenAdd(Object.assign({}, last, {doneTs:now})); }
-  PDI.step = "done";
-  pdiSay(st==="OK" && pdiCfg().book!=="off" ? "bukuok" : "selesai");
+  PDI.step = "done"; PDI.bookManual = false;
+  pdiSay(st==="OK" && pdiBookMode()!=="off" ? "bukuok" : "selesai");
   pdiDoorOpen();
   const s = pdiShiftOf(now), stt = pdiShiftStats(s.pd, s.sh, pdiStation());
-  pdiOv(`<div class="pdiCf" style="border-color:#16a34a;"><div class="pdiCfHead" style="background:#16a34a;padding:22px;"><div style="font-size:40px;">✔</div><div style="font-size:20px;font-weight:900;">${escH(PDI.model)} ${PDI.dup?"(duplikat, tidak dihitung)":"TERCATAT"}</div>
-    <div style="font-size:13px;opacity:.9;margin-top:4px;">Total shift: ${stt.n} / ${stt.plan} · ${PDI_ARD.ok?"🔓 Pintu dibuka":"Arduino tidak tersambung — buka pintu manual"}</div></div></div>`);
+  /* sama seperti popup v51 setelah buku OK */
+  pdiOv(`<div class="pdiCf" style="border-color:#16a34a;max-width:460px;margin:0 auto;"><div class="pdiCfHead" style="background:#16a34a;padding:20px;"><div style="font-size:40px;line-height:1;">✔</div>
+    <div style="font-size:20px;font-weight:900;margin-top:6px;">${st==="OK - BUKU SKIP"?"BUKU DILEWATI":"BUKU  "+escH(PDI.model)+"  ✔  SESUAI!"}</div>
+    <div style="font-size:12px;opacity:.9;margin-top:6px;">Total: ${stt.n} unit | ${escH((currentUser&&currentUser.name)||"")} | ${escH(pdiShiftLabel(s.sh))}${PDI.dup?" | duplikat, tidak dihitung":""}</div>
+    ${pdiArdCfg().show_popup?`<div style="font-size:12px;font-weight:800;margin-top:6px;color:${pdiArdOn()?"#bbf7d0":"#fde68a"};">${pdiArdOn()?"🔓  Pintu sticker TERBUKA":"⚠  Arduino OFF — buka pintu manual"}</div>`:""}
+    <div style="font-size:11px;opacity:.8;margin-top:6px;">Mengarahkan ke scan berikutnya...</div></div></div>`);
   setTimeout(()=>{ if(PDI.step==="done") pdiResetUnit(); }, 1500);
 }
 function pdiOpenAdd(r){ if(!r || !r.f) return; DB.set(d=>{ d.pdiOpen = d.pdiOpen || {}; d.pdiOpen[r.f] = {m:r.m||"", t:r.t||"R", ts:r.doneTs||r.ts||Date.now(), s:r.s||"KP1", n:r.n||"", id:r.id||""}; }); }
@@ -11882,81 +11963,24 @@ function pdiProblemSave(){
   pdiResetUnit();
 }
 
-/* ===== Pintu (Arduino lewat Web Serial — Chrome / Edge di PC) ===== */
-const PDI_ARD = {port:null, ok:false, err:"", last:"", waiters:[], q:Promise.resolve(), reading:false};
-function pdiArdWanted(){ try{ return localStorage.getItem("radar_pdi_ard")==="1"; }catch(e){ return false; } }
-async function pdiArdInit(){
-  if(!navigator.serial || PDI_ARD.ok || !pdiArdWanted()) return;
-  try{ const ps = await navigator.serial.getPorts(); if(ps.length) await pdiArdOpen(ps[0]); }catch(e){}
-}
-async function pdiArdPick(){
-  if(!navigator.serial){ alert("Browser ini belum bisa menyambung Arduino.\nPakai Google Chrome atau Microsoft Edge di PC PDI."); return; }
-  try{ const p = await navigator.serial.requestPort(); try{ localStorage.setItem("radar_pdi_ard","1"); }catch(e){} await pdiArdOpen(p); }
-  catch(e){ if(e && e.name!=="NotFoundError") alert("Gagal menyambung Arduino: "+(e.message||e)); }
-}
-async function pdiArdOpen(p){
-  try{ await p.open({baudRate:9600}); }catch(e){ if(!/already open/i.test(String(e&&e.message||""))){ PDI_ARD.err = "Port Arduino tidak bisa dibuka ("+(e.message||e)+"). Tutup aplikasi lain yang memakai port COM ini (mis. PDI v51 / Arduino IDE)."; pdiUi(); return; } }
-  PDI_ARD.port = p; PDI_ARD.err = ""; pdiUi();
-  pdiArdReadLoop(p);
-  await new Promise(r=>setTimeout(r, 2000));   // Arduino restart saat port dibuka: tunggu siap
-  PDI_ARD.ok = true; pdiUi();
-}
-async function pdiArdReadLoop(p){
-  if(PDI_ARD.reading) return; PDI_ARD.reading = true;
-  let buf = "";
-  try{
-    while(p.readable){
-      const rd = p.readable.getReader();
-      try{
-        for(;;){ const {value, done} = await rd.read(); if(done) break;
-          buf += new TextDecoder().decode(value);
-          let i; while((i = buf.indexOf("\n")) >= 0){ const l = buf.slice(0,i).trim(); buf = buf.slice(i+1); if(l){ PDI_ARD.last = l; PDI_ARD.waiters.slice().forEach(f=>{ try{ f(l); }catch(e){} }); } } }
-      } catch(e){ break; } finally { try{ rd.releaseLock(); }catch(e){} }
-    }
-  } finally { PDI_ARD.reading = false; PDI_ARD.ok = false; pdiUi(); }
-}
-async function pdiArdClose(){ try{ localStorage.setItem("radar_pdi_ard","0"); }catch(e){} const p = PDI_ARD.port; PDI_ARD.ok = false; PDI_ARD.port = null; try{ if(p) await p.close(); }catch(e){} pdiUi(); }
-if(navigator.serial){ try{ navigator.serial.addEventListener("disconnect", ()=>{ PDI_ARD.ok = false; PDI_ARD.port = null; PDI_ARD.err = "Kabel Arduino terlepas."; try{ pdiUi(); }catch(e){} }); }catch(e){} }
-const PDI_ARD_FINAL = ["LIMIT_UP_HIT","LIMIT_DOWN_HIT","TIMEOUT","STOPPED","LIMIT_TIMEOUT_SAFETY"];
-function pdiArdCmd(cmd, dur, label){
-  PDI_ARD.q = PDI_ARD.q.then(()=>new Promise(async res=>{
-    if(!PDI_ARD.ok || !PDI_ARD.port){ res("OFF"); return; }
-    let done = false;
-    const fn = l=>{ if(PDI_ARD_FINAL.includes(l)) fin(l); };
-    const to = setTimeout(()=>fin("NO_RESPONSE"), Math.max(dur+5, 35)*1000);
-    function fin(r){
-      if(done) return; done = true; clearTimeout(to); PDI_ARD.waiters = PDI_ARD.waiters.filter(x=>x!==fn);
-      if(r==="LIMIT_TIMEOUT_SAFETY") alert("⚠ Limit switch tidak terdeteksi ("+label+").\nMotor sudah berhenti otomatis. Cek kabel / pin limit switch.");
-      if(r==="NO_RESPONSE" || r==="ERR") pdiToast("Arduino "+label+": tidak ada jawaban — cek kabel USB / sketch pdi_relay.ino", true);
-      res(r);
-    }
-    PDI_ARD.waiters.push(fn);
-    try{ const w = PDI_ARD.port.writable.getWriter(); await w.write(new TextEncoder().encode(cmd+":"+dur+"\n")); w.releaseLock(); }
-    catch(e){ PDI_ARD.err = "Gagal kirim ke Arduino: "+(e.message||e); fin("ERR"); }
-  }));
-  return PDI_ARD.q;
-}
-function pdiDoorOpen(){
-  if(!PDI_ARD.ok) return;
-  const c = pdiCfg().door;
-  pdiArdCmd(c.up, c.dur, "NAIK").then(r=>{ if(c.auto && r!=="OFF") setTimeout(()=>pdiArdCmd(c.down, c.dur, "TURUN"), (+c.delay||5)*1000); });
-}
-function pdiDoorClose(){ const c = pdiCfg().door; pdiArdCmd(c.down, c.dur, "TURUN"); }
+/* ===== Pintu (Arduino): lihat bagian PDI ARDUINO di bawah ===== */
 
 /* ===== Suara (Text-to-Speech bawaan Windows / Chrome, offline) ===== */
 const PDI_SAY = {frame:"Frame OK", engine:"Engine OK", key:"Kunci OK", reguler:"Unit reguler", batam:"Unit Batam", prioritas:"Unit prioritas",
-  dup:"Perhatian, frame sudah pernah discan", newmodel:"Kode frame belum terdaftar, pilih model", buku:"Silakan cek buku {model}", bukuok:"Buku {model} sesuai",
-  selesai:"Selesai", problem:"Unit problem tercatat", probulang:"Unit problem, input ulang", tlserr:"TLS error, cek layar"};
+  dup:"Perhatian, frame sudah pernah discan", newmodel:"Kode frame belum terdaftar, pilih model", buku:"Silakan scan buku {model}", bukuok:"Buku {model} sesuai",
+  bukusalah:"Buku salah. Scan buku {model}", selesai:"Selesai", problem:"Unit problem tercatat", probulang:"Unit problem, input ulang", tlserr:"TLS error, cek layar"};
 function pdiVoiceOn(){ try{ return localStorage.getItem("radar_pdi_voice")!=="0"; }catch(e){ return true; } }
 function pdiVoiceToggle(){ try{ localStorage.setItem("radar_pdi_voice", pdiVoiceOn()?"0":"1"); }catch(e){} pdiUi(); }
-function pdiVoice(){ try{ const vs = speechSynthesis.getVoices(); return vs.find(v=>/andika/i.test(v.name)) || vs.find(v=>/^id([-_]|$)/i.test(v.lang)) || null; }catch(e){ return null; } }
+function pdiVoice(){ try{ const vs = speechSynthesis.getVoices(), want = (pdiVoiceCfg().voice||""); return (want && vs.find(v=>v.name===want)) || vs.find(v=>/andika/i.test(v.name)) || vs.find(v=>/^id([-_]|$)/i.test(v.lang)) || null; }catch(e){ return null; } }
 function pdiSpeak(m){ return String(m||"").replace(/\bBZ4X\b/ig,"B Z 4 X").replace(/HYBRID/ig,"Hybrid"); }
-function pdiSay(k, model){
-  if(!pdiVoiceOn() || !window.speechSynthesis) return;
+function pdiSay(k, model, force){
+  if((!pdiVoiceOn() && !force) || !window.speechSynthesis) return;
   try{
-    const t = (PDI_SAY[k]||k).replace("{model}", pdiSpeak(model||PDI.model));
+    const vc = pdiVoiceCfg(), ph = (vc.ph||{})[k] || {};
+    if(ph.on===false && !force) return;
+    const t = (ph.text || PDI_SAY[k] || k).replace(/\{model\}/g, pdiSpeak(model||PDI.model));
     if(["frame","engine","key"].includes(k)) speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(t); u.lang = "id-ID"; const v = pdiVoice(); if(v) u.voice = v; u.rate = 1.05;
+    const u = new SpeechSynthesisUtterance(t); u.lang = "id-ID"; const v = pdiVoice(); if(v){ u.voice = v; u.lang = v.lang; } u.rate = +vc.rate || 1.05; u.volume = vc.vol!=null ? +vc.vol : 1;
     speechSynthesis.speak(u);
   }catch(e){}
 }
@@ -11989,7 +12013,7 @@ async function pdiCamStart(){
     const st = await navigator.mediaDevices.getUserMedia({audio:false, video: dev ? {deviceId:{exact:dev}, width:{ideal:1280}, height:{ideal:720}} : {width:{ideal:1280}, height:{ideal:720}}});
     const v = document.getElementById("pdiVideo"); if(!v){ st.getTracks().forEach(t=>t.stop()); return; }
     v.srcObject = st; await v.play().catch(()=>{});
-    PDI.cam.stream = st; PDI.cam.on = true; pdiUi();
+    PDI.cam.stream = st; PDI.cam.on = true; pdiUi(); pdiCamApplySaved();
     pdiZx().catch(e=>{ PDI.cam.err = e.message; pdiUi(); });
     pdiCamLoop();
   }catch(e){ PDI.cam.err = (e && e.name==="NotAllowedError") ? "Izin kamera ditolak. Klik ikon gembok di address bar → Kamera → Izinkan, lalu klik Nyalakan Kamera." : (e && e.name==="NotFoundError" ? "Kamera tidak ditemukan. Colok kamera USB lalu klik Nyalakan Kamera." : "Kamera gagal: "+(e.message||e)); pdiUi(); }
@@ -12025,7 +12049,11 @@ async function pdiCamLoop(){
   if(!PDI.cam.on) return;
   const v = document.getElementById("pdiVideo");
   if(!v || activeTab!=="pdi"){ pdiCamStop(); return; }
-  if(PDI.step==="scan" && v.readyState>=2 && v.videoWidth && !PDI.cam.busy && window._pdiZxReady){
+  if(PDI.step==="book" && !PDI.bookManual && !PDI.capturing && v.readyState>=2 && v.videoWidth && !PDI.cam.busy && window._pdiCvReady){
+    PDI.cam.busy = true; try{ pdiBookTick(); }catch(e){ PB.err = "Cek buku error: "+(e.message||e); try{ pdiBookUi(); }catch(e2){} } PDI.cam.busy = false;
+    const c = document.getElementById("pdiMarks"); if(c){ const x = c.getContext("2d"); x.clearRect(0,0,c.width,c.height); }
+  }
+  else if(PDI.step==="scan" && v.readyState>=2 && v.videoWidth && !PDI.cam.busy && window._pdiZxReady){
     PDI.cam.busy = true;
     try{
       const w = v.videoWidth, h = v.videoHeight, cv = PDI.cam.cv || (PDI.cam.cv = document.createElement("canvas"));
@@ -12044,8 +12072,599 @@ function pdiDrawMarks(){
   const c = document.getElementById("pdiMarks"); if(!c) return;
   const w = PDI.cam.w||1280, h = PDI.cam.h||720; if(c.width!==w || c.height!==h){ c.width = w; c.height = h; }
   const x = c.getContext("2d"); x.clearRect(0,0,w,h);
+  { const r = pdiRoi(); if(r.on && PDI.step==="scan"){ const z = (PDI.vin && !pdiIsLegacy(PDI.vin)) ? r.ek : r.vin; if(!(PDI.vin && pdiIsLegacy(PDI.vin))){ x.fillStyle = "rgba(0,0,0,0.45)"; x.fillRect(0,0,w,h); x.clearRect(z[0]*w, z[1]*h, (z[2]-z[0])*w, (z[3]-z[1])*h); x.strokeStyle = "#fde68a"; x.lineWidth = 3; x.strokeRect(z[0]*w, z[1]*h, (z[2]-z[0])*w, (z[3]-z[1])*h); x.fillStyle = "#fde68a"; x.font = "bold 24px sans-serif"; x.fillText(PDI.vin?"AREA SCAN ENGINE & KUNCI":"AREA SCAN FRAME NO", z[0]*w+8, z[1]*h+28); } } }
   (PDI.marks||[]).forEach(m=>{ const q = m.q; if(!q || !q.topLeft) return; x.strokeStyle = m.col; x.lineWidth = 4; x.beginPath(); x.moveTo(q.topLeft.x,q.topLeft.y); x.lineTo(q.topRight.x,q.topRight.y); x.lineTo(q.bottomRight.x,q.bottomRight.y); x.lineTo(q.bottomLeft.x,q.bottomLeft.y); x.closePath(); x.stroke();
     x.font = "bold 22px sans-serif"; const tw = x.measureText(m.lab).width; x.fillStyle = m.col; x.fillRect(q.topLeft.x, q.topLeft.y-28, tw+12, 26); x.fillStyle = "#fff"; x.fillText(m.lab, q.topLeft.x+6, q.topLeft.y-8); });
+}
+
+/* ===== Cek buku pakai kamera — sama seperti Toyota PDI v51 (mode NAMA MODEL) =====
+   Sampul buku di kamera diluruskan (homography ORB) ke foto contoh, lalu HANYA area nama model
+   yang dibandingkan ke area nama SEMUA model (NCC 80% + warna siluet 20%). Model kembar
+   (Zenix vs Zenix HEV, Yaris Cross vs Yaris Cross HEV) dibedakan dari bagian yang beda saja.
+   Lolos kalau skor ≥ batas (0.55 / hasil kalibrasi), unggul ≥ 0.06 dari model lain, stabil 3 frame. */
+const PDI_CV_SRC = "https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.12.0-release.1/dist/opencv.js";
+const PDI_BOOK = {threshold:0.55, margin:0.06, color_weight:0.20, streak:3, work_width:960, min_inliers:15, twin_gap:0.25};
+const PDI_BOOK_ROI_TMMIN = [0.12,0.45,0.88,0.63], PDI_BOOK_ROI_ADM = [0.12,0.42,0.88,0.60];
+const PDI_BOOK_FILES = {"AGYA":"buku-agya.jpg","CALYA":"buku-calya.jpg","RAIZE":"buku-raize.jpg","BZ4X":"buku-bz4x.jpg","FORTUNER":"buku-fortuner.jpg",
+  "INNOVA REBORN":"buku-innova-reborn.jpg","INNOVA ZENIX":"buku-innova-zenix.jpg","INNOVA ZENIX HYBRID":"buku-innova-zenix-hybrid.jpg","VELOZ HYBRID":"buku-veloz-hybrid.jpg",
+  "YARIS CROSS":"buku-yaris-cross.jpg","YARIS CROSS HYBRID":"buku-yaris-cross-hybrid.jpg","YARIS HATCHBACK":"buku-yaris-hatchback.jpg"};
+let _pdiCvP = null;
+function pdiCv(){
+  if(window._pdiCvReady) return Promise.resolve(true);   /* jangan resolve dengan cv: Module opencv.js "thenable" → Promise berputar tanpa henti */
+  if(_pdiCvP) return _pdiCvP;
+  _pdiCvP = new Promise((res,rej)=>{
+    /* opencv.js: window.cv = Module Emscripten (thenable yang resolve ke dirinya sendiri — JANGAN di-await) */
+    const done = async()=>{ try{
+      let c = window.cv; if(c instanceof Promise){ c = await c; window.cv = c; }
+      if(!(c && c.Mat)){ await new Promise((ok,no)=>{ const t0 = Date.now(); try{ if(c) c.onRuntimeInitialized = ok; }catch(e){} const iv = setInterval(()=>{ const z = window.cv; if(z && z.Mat){ clearInterval(iv); ok(); } else if(Date.now()-t0 > 60000){ clearInterval(iv); no(new Error("OpenCV tidak siap")); } }, 200); }); }
+      window._pdiCvReady = true; res(true); }catch(e){ _pdiCvP = null; rej(e); } };
+    if(window.cv && window.cv.Mat){ done(); return; }
+    const s = document.createElement("script"); s.src = window.PDI_CV_SRC_URL || PDI_CV_SRC; s.async = true;
+    s.onload = done; s.onerror = ()=>{ _pdiCvP = null; rej(new Error("Pembaca buku (OpenCV) gagal dimuat. Cek internet PC.")); };
+    document.head.appendChild(s);
+  });
+  return _pdiCvP;
+}
+function pdiBookCfg(d){ const c = ((d||DB.get()).pdiCfg)||{}; return {roi:c.bookRoi||{}, srv:c.bookSrv||{}, thr:c.bookThr||{}}; }
+function pdiBookRoi(m, d){ const r = pdiBookCfg(d).roi[m]; if(Array.isArray(r) && r.length===4) return r; if(["AGYA","CALYA","RAIZE"].includes(m)) return PDI_BOOK_ROI_ADM; if(PDI_MODELS_DEF[m]) return PDI_BOOK_ROI_TMMIN; return null; }
+function pdiBookSrc(m, d){ const k = pdiBookCfg(d).srv[m]; if(k) return {key:"srv:"+k, srv:k}; if(PDI_BOOK_FILES[m]) return {key:"file:"+PDI_BOOK_FILES[m], file:PDI_BOOK_FILES[m]}; return null; }
+function pdiBookHas(m, d){ return !!(pdiBookSrc(m,d) && pdiBookRoi(m,d)); }
+function pdiBookThr(m, d){ const v = +pdiBookCfg(d).thr[m]; return v>0 ? v : PDI_BOOK.threshold; }
+function pdiBookMode(d){ const b = pdiCfg(d).book; return b==="off" ? "off" : (b==="manual" ? "manual" : "camera"); }
+
+/* ---- template ---- */
+const PDI_TPL = {};   // model -> {key, gray, bgr, kp, des, roi, hist, tw, th}
+let _pdiOrb = null, _pdiBf = null, _pdiClahe = null, _pdiNoMask = null;
+function pdiCvTools(){
+  const cv = window.cv;
+  if(!_pdiOrb){ _pdiOrb = new cv.ORB(2500, 1.2, 8, 15, 0, 2, 0, 31, 12); _pdiBf = new cv.BFMatcher(cv.NORM_HAMMING, false); _pdiClahe = new cv.CLAHE(4.0, new cv.Size(8,8)); _pdiNoMask = new cv.Mat(); }
+  return {cv, orb:_pdiOrb, bf:_pdiBf, clahe:_pdiClahe, nomask:_pdiNoMask};
+}
+function pdiImg(src){ return new Promise((res,rej)=>{ const i = new Image(); i.onload = ()=>res(i); i.onerror = ()=>rej(new Error("foto buku tidak bisa dibuka")); i.src = src; }); }
+async function pdiBookSrcUrl(s){
+  if(s.file) return (window.PDI_BOOK_BASE||"./")+encodeURI(s.file);
+  if(s.srv){ if(!FBS.db) throw new Error("server belum tersambung"); const v = (await FBS.db.ref(FOTO_PATH+"/"+s.srv).once("value")).val(); const u = typeof v==="string" ? v : (v && (v.d||v.img||v.data)); if(!u) throw new Error("foto buku di server tidak ada"); return u; }
+  throw new Error("tidak ada foto");
+}
+function pdiColorHist(cv, rgba){
+  const rgb = new cv.Mat(), hsv = new cv.Mat(); cv.cvtColor(rgba, rgb, cv.COLOR_RGBA2RGB); cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV);
+  const lo = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [0,45,25,0]), hi = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180,255,235,0]), mask = new cv.Mat();
+  cv.inRange(hsv, lo, hi, mask);
+  const vec = new cv.MatVector(); vec.push_back(hsv); const h = new cv.Mat();
+  cv.calcHist(vec, [0,1], mask, h, [30,16], [0,180,0,256]); cv.normalize(h, h, 0, 1, cv.NORM_MINMAX);
+  [rgb,hsv,lo,hi,mask].forEach(m=>m.delete()); vec.delete();
+  return h;
+}
+async function pdiBookLoad(m){
+  const s = pdiBookSrc(m), roi = pdiBookRoi(m); if(!s || !roi) return null;
+  const c = PDI_TPL[m]; if(c && c.key===s.key+"|"+roi.join(",")) return c;
+  const {cv, orb, clahe, nomask} = pdiCvTools();
+  const img = await pdiImg(await pdiBookSrcUrl(s));
+  const tw = Math.min(PDI_BOOK.work_width/2, img.naturalWidth), th = Math.round(img.naturalHeight*tw/img.naturalWidth);
+  const cvs = document.createElement("canvas"); cvs.width = tw; cvs.height = th; cvs.getContext("2d").drawImage(img, 0, 0, tw, th);
+  const bgr = cv.imread(cvs), g0 = new cv.Mat(), gray = new cv.Mat(); cv.cvtColor(bgr, g0, cv.COLOR_RGBA2GRAY); clahe.apply(g0, gray); g0.delete();
+  const kp = new cv.KeyPointVector(), des = new cv.Mat(); orb.detectAndCompute(gray, nomask, kp, des);
+  const t = {key:s.key+"|"+roi.join(","), gray, bgr, kp, des, tw, th, roi:[Math.round(roi[0]*tw), Math.round(roi[1]*th), Math.round(roi[2]*tw), Math.round(roi[3]*th)], hist:pdiColorHist(cv, bgr)};
+  if(c){ try{ ["gray","bgr","kp","des","hist"].forEach(k=>c[k].delete()); }catch(e){} }
+  PDI_TPL[m] = t; _pdiTwin = {};
+  return t;
+}
+async function pdiBookLoadAll(){
+  const ms = pdiAllModels().filter(m=>pdiBookHas(m)), out = {};
+  for(const m of ms){ try{ const t = await pdiBookLoad(m); if(t) out[m] = t; }catch(e){ console.warn("[BUKU]", m, e.message); } }
+  return out;
+}
+
+/* ---- model kembar: sejajarkan area nama rival ke target, lalu bandingkan hanya pixel yang beda ---- */
+let _pdiTwin = {};
+function pdiZ(cv, mat, valid){   // blur 3x3 → z-score (Float32Array)
+  const b = new cv.Mat(); cv.GaussianBlur(mat, b, new cv.Size(3,3), 0); const n = b.rows*b.cols, a = new Float32Array(n), d = b.data;
+  let s = 0, s2 = 0, k = 0; for(let i=0;i<n;i++){ a[i] = d[i]; if(!valid || valid[i]){ s += a[i]; s2 += a[i]*a[i]; k++; } }
+  const mu = s/Math.max(1,k), sd = Math.sqrt(Math.max(0, s2/Math.max(1,k)-mu*mu)) + 1e-6; for(let i=0;i<n;i++) a[i] = (a[i]-mu)/sd; b.delete(); return a;
+}
+function pdiTwinAlign(cv, mT, mR, patchT, patchR){
+  const key = PDI_TPL[mT].key+"~"+PDI_TPL[mR].key; if(key in _pdiTwin) return _pdiTwin[key];
+  let res = null;
+  try{
+    const h = patchT.rows, w = patchT.cols, pad = Math.round(0.25*Math.max(h,w)), big = new cv.Mat();
+    cv.copyMakeBorder(patchT, big, pad, pad, pad, pad, cv.BORDER_REPLICATE);
+    let best = [-2, null];
+    for(let sc=0.75; sc<1.36; sc+=0.05){
+      const rs = new cv.Mat(); cv.resize(patchR, rs, new cv.Size(0,0), sc, sc, cv.INTER_LINEAR);
+      const cy0 = Math.round(rs.rows*0.15), cx0 = Math.round(rs.cols*0.10), cw = rs.cols-2*cx0, ch = rs.rows-2*cy0;
+      if(cw>0 && ch>0 && ch<big.rows && cw<big.cols){ const core = rs.roi(new cv.Rect(cx0, cy0, cw, ch)), r = new cv.Mat(); cv.matchTemplate(big, core, r, cv.TM_CCOEFF_NORMED); const mm = cv.minMaxLoc(r); if(mm.maxVal>best[0]) best = [mm.maxVal, [sc, mm.maxLoc.x, mm.maxLoc.y, cx0, cy0]]; core.delete(); r.delete(); }
+      rs.delete();
+    }
+    big.delete();
+    if(best[1] && best[0] > 0.35){
+      const [sc, lx, ly, cx0, cy0] = best[1];
+      const W = cv.matFromArray(2, 3, cv.CV_32F, [1/sc, 0, (pad-lx+cx0)/sc, 0, 1/sc, (pad-ly+cy0)/sc]);
+      try{   /* penyelarasan halus (ECC affine) seperti v51 */
+        const bt = new cv.Mat(), br = new cv.Mat(), ft = new cv.Mat(), fr = new cv.Mat(), nm = new cv.Mat();
+        cv.GaussianBlur(patchT, bt, new cv.Size(5,5), 0); cv.GaussianBlur(patchR, br, new cv.Size(5,5), 0); bt.convertTo(ft, cv.CV_32F); br.convertTo(fr, cv.CV_32F);
+        cv.findTransformECC(ft, fr, W, cv.MOTION_AFFINE, new cv.TermCriteria(cv.TermCriteria_EPS | cv.TermCriteria_COUNT, 60, 1e-4), nm, 5);
+        [bt,br,ft,fr,nm].forEach(m=>m.delete());
+      }catch(e){}
+      const al = new cv.Mat(), ones = new cv.Mat(patchR.rows, patchR.cols, cv.CV_8U, new cv.Scalar(255)), vm = new cv.Mat(), ve = new cv.Mat();
+      cv.warpAffine(patchR, al, W, new cv.Size(w,h), cv.INTER_LINEAR | cv.WARP_INVERSE_MAP);
+      cv.warpAffine(ones, vm, W, new cv.Size(w,h), cv.INTER_LINEAR | cv.WARP_INVERSE_MAP);
+      const k5 = cv.Mat.ones(5, 5, cv.CV_8U); cv.erode(vm, ve, k5);
+      const valid = new Uint8Array(w*h); let nv = 0; for(let i=0;i<w*h;i++){ if(ve.data[i]>0){ valid[i] = 1; nv++; } }
+      [W, ones, vm, ve, k5].forEach(m=>m.delete());
+      if(nv/(w*h) > 0.5) res = {al, valid}; else al.delete();
+    }
+  }catch(e){ console.warn("[BUKU] twin align", e); }
+  _pdiTwin[key] = res; return res;
+}
+function pdiTwinCheck(cv, winT, patchT, al){   // >0 = kamera lebih mirip target, <=0 = lebih mirip rival, null = identik
+  if(winT.rows!==patchT.rows || winT.cols!==patchT.cols || al.al.rows!==patchT.rows || al.al.cols!==patchT.cols) return null;
+  const v = al.valid, zt = pdiZ(cv, patchT, v), zr = pdiZ(cv, al.al, v), n = zt.length, w = patchT.cols, h = patchT.rows;
+  let m = new Uint8Array(n), cnt = 0; for(let i=0;i<n;i++){ if(v[i] && Math.abs(zt[i]-zr[i])>1.0){ m[i] = 1; cnt++; } }
+  if(cnt/n < 0.005) return null;
+  const md = new Uint8Array(n); for(let y=0;y<h;y++) for(let x=0;x<w;x++){ let on = 0; for(let dy=-1;dy<=1&&!on;dy++) for(let dx=-1;dx<=1&&!on;dx++){ const yy = y+dy, xx = x+dx; if(yy>=0&&yy<h&&xx>=0&&xx<w&&m[yy*w+xx]) on = 1; } if(on && v[y*w+x]) md[y*w+x] = 1; }
+  const zw = pdiZ(cv, winT, v); let et = 0, er = 0, k = 0;
+  for(let i=0;i<n;i++) if(md[i]){ et += Math.abs(zw[i]-zt[i]); er += Math.abs(zw[i]-zr[i]); k++; }
+  if(!k) return null; et /= k; er /= k;
+  return er - et*1.10;
+}
+
+/* ---- skor semua model untuk 1 frame kamera (versi cepat v51: luruskan sekali ke template target) ---- */
+function pdiBookScores(srcCanvas, target, tmpls){
+  const {cv, orb, bf, clahe, nomask} = pdiCvTools(), scores = {}; Object.keys(tmpls).forEach(m=>scores[m] = 0);
+  const t = tmpls[target]; if(!t || !t.des || t.des.rows<8) return {scores, inl:0};
+  const fr = cv.imread(srcCanvas), g0 = new cv.Mat(), gray = new cv.Mat(); cv.cvtColor(fr, g0, cv.COLOR_RGBA2GRAY); clahe.apply(g0, gray); g0.delete();
+  const kp = new cv.KeyPointVector(), des = new cv.Mat(), keep = [fr, gray, kp, des];
+  let inl = 0;
+  try{
+    orb.detectAndCompute(gray, nomask, kp, des);
+    if(des.rows < 8) return {scores, inl};
+    const mv = new cv.DMatchVectorVector(); keep.push(mv); bf.knnMatch(t.des, des, mv, 2);
+    const src = [], dst = [];
+    for(let i=0;i<mv.size();i++){ const p = mv.get(i); if(p.size()===2){ const a = p.get(0), b = p.get(1); if(a.distance < 0.75*b.distance){ const q = t.kp.get(a.queryIdx).pt, r = kp.get(a.trainIdx).pt; src.push(q.x, q.y); dst.push(r.x, r.y); } } }
+    if(src.length/2 < PDI_BOOK.min_inliers) return {scores, inl:src.length/2};
+    const sM = cv.matFromArray(src.length/2, 1, cv.CV_32FC2, src), dM = cv.matFromArray(dst.length/2, 1, cv.CV_32FC2, dst), mask = new cv.Mat(); keep.push(sM, dM, mask);
+    const H = cv.findHomography(sM, dM, cv.RANSAC, 5.0, mask); keep.push(H);
+    if(H.empty()) return {scores, inl:0};
+    for(let i=0;i<mask.rows;i++) if(mask.data[i]) inl++;
+    if(inl < PDI_BOOK.min_inliers) return {scores, inl};
+    const warped = new cv.Mat(); keep.push(warped);
+    cv.warpPerspective(gray, warped, H, new cv.Size(t.tw, t.th), cv.INTER_LINEAR | cv.WARP_INVERSE_MAP);
+    const [x1,y1,x2,y2] = t.roi, rw = x2-x1, rh = y2-y1, px = Math.max(4, Math.round(rw*0.08)), py = Math.max(4, Math.round(rh*0.15));
+    const sx1 = Math.max(0,x1-px), sy1 = Math.max(0,y1-py), sx2 = Math.min(t.tw,x2+px), sy2 = Math.min(t.th,y2+py);
+    const search = warped.roi(new cv.Rect(sx1, sy1, sx2-sx1, sy2-sy1)); keep.push(search);
+    const mu = new cv.Mat(), sd = new cv.Mat(); cv.meanStdDev(search, mu, sd); const sdev = sd.data64F[0]; mu.delete(); sd.delete();
+    if(sdev < 3.0) return {scores, inl};
+    let fh = null; const cw = PDI_BOOK.color_weight;
+    if(cw > 0){ const wb = new cv.Mat(); cv.warpPerspective(fr, wb, H, new cv.Size(t.tw, t.th), cv.INTER_LINEAR | cv.WARP_INVERSE_MAP); fh = pdiColorHist(cv, wb); wb.delete(); keep.push(fh); }
+    const wins = {};
+    Object.entries(tmpls).forEach(([m,tm])=>{
+      const [a1,b1,a2,b2] = tm.roi; if(a2<=a1 || b2<=b1) return;
+      const p0 = tm.gray.roi(new cv.Rect(a1, b1, a2-a1, b2-b1)), patch = new cv.Mat(); cv.resize(p0, patch, new cv.Size(rw, rh)); p0.delete();
+      if(search.rows < rh || search.cols < rw){ patch.delete(); return; }
+      const r = new cv.Mat(); cv.matchTemplate(search, patch, r, cv.TM_CCOEFF_NORMED); const mm = cv.minMaxLoc(r); r.delete();
+      let sc = Math.max(0, mm.maxVal);
+      if(fh && tm.hist){ sc = (1-cw)*sc + cw*Math.max(0, cv.compareHist(fh, tm.hist, cv.HISTCMP_CORREL)); }
+      scores[m] = sc;
+      wins[m] = {win:search.roi(new cv.Rect(mm.maxLoc.x, mm.maxLoc.y, rw, rh)), patch};
+    });
+    const wt = wins[target];
+    if(wt){
+      const ts = scores[target];
+      for(const m of Object.keys(wins).sort((a,b)=>scores[b]-scores[a])){
+        if(m===target || scores[m] < ts-PDI_BOOK.twin_gap) continue;
+        const al = pdiTwinAlign(cv, target, m, wt.patch, wins[m].patch); if(!al) continue;
+        const v = pdiTwinCheck(cv, wt.win, wt.patch, al); if(window._pdiTwinDbg) window._pdiTwinDbg.push([target, m, v]);
+        if(v!==null && v<=0){ scores[target] = Math.min(ts, scores[m]); scores[m] = Math.max(scores[m], ts); break; }
+      }
+    }
+    Object.values(wins).forEach(x=>{ x.win.delete(); x.patch.delete(); });
+  } finally { keep.forEach(m=>{ try{ m.delete(); }catch(e){} }); }
+  return {scores, inl};
+}
+
+/* ---- langkah cek buku ---- */
+const PB = {tmpls:null, loading:false, err:"", streak:0, cal:false, calBuf:[], ts:0, os:0, on:"", last:0, msg:""};
+async function pdiBookStart(){
+  PDI.step = "book"; Object.assign(PB, {streak:0, cal:false, calBuf:[], ts:0, os:0, on:"", msg:"", err:""});
+  pdiSay("buku");
+  const mode = pdiBookMode();
+  if(mode==="manual" || !PDI.cam.on){ pdiBookManualUi(mode==="manual" ? "" : "Kamera mati — cek buku manual."); return; }
+  if(!pdiBookHas(PDI.model)){ pdiBookUi(); return; }
+  pdiBookUi();
+  try{ await pdiCv(); PB.loading = true; pdiBookUi(); PB.tmpls = await pdiBookLoadAll(); PB.loading = false; if(!PB.tmpls[PDI.model]) PB.err = "Foto buku "+PDI.model+" gagal dimuat."; }
+  catch(e){ PB.loading = false; PB.err = e.message||String(e); }
+  pdiBookUi();
+}
+function pdiBookTick(cv0){
+  if(PDI.step!=="book" || !PB.tmpls || PB.loading || !PB.tmpls[PDI.model]) return;
+  const v = document.getElementById("pdiVideo"); if(!v || !v.videoWidth) return;
+  const ww = PDI_BOOK.work_width, sc = Math.min(1, ww/v.videoWidth), w = Math.round(v.videoWidth*sc), h = Math.round(v.videoHeight*sc);
+  const c = PB.cv || (PB.cv = document.createElement("canvas")); if(c.width!==w || c.height!==h){ c.width = w; c.height = h; }
+  c.getContext("2d", {willReadFrequently:true}).drawImage(v, 0, 0, w, h);
+  pdiBookJudge(pdiBookScores(c, PDI.model, PB.tmpls).scores);
+}
+function pdiBookJudge(scores){
+  const tg = PDI.model, ts = scores[tg]||0, oth = Object.entries(scores).filter(([m])=>m!==tg).sort((a,b)=>b[1]-a[1]), [on, os] = oth[0] || ["",0];
+  const thr = pdiBookThr(tg); PB.ts = ts; PB.os = os; PB.on = on;
+  if(PB.cal){
+    if(ts > 0.30) PB.calBuf.push(ts);
+    if(PB.calBuf.length >= 15){
+      const top = PB.calBuf.slice().sort((a,b)=>a-b).slice(-10), med = top[Math.floor(top.length/2)], nt = Math.round(Math.max(0.40, med*0.85)*1000)/1000;
+      PB.cal = false; PB.calBuf = []; PB.streak = 0;
+      DB.set(d=>{ d.pdiCfg = d.pdiCfg||{}; d.pdiCfg.bookThr = d.pdiCfg.bookThr||{}; d.pdiCfg.bookThr[tg] = nt; });
+      PB.msg = "✔ Kalibrasi selesai! Min skor "+nt.toFixed(2)+" — scan buku "+tg;
+    }
+    pdiBookUi(); return;
+  }
+  const ok = ts>=thr && (ts-os)>=PDI_BOOK.margin;
+  if(ok) PB.streak++; else PB.streak = ts>=thr*0.8 ? Math.max(0, PB.streak-1) : 0;
+  if(PB.streak >= PDI_BOOK.streak){ PB.msg = ""; pdiFinish("OK"); return; }
+  if(on && os>=thr && os>ts+PDI_BOOK.margin){ PB.msg = "❌ BUKU SALAH! Terbaca "+on+" — scan buku "+tg; const n = Date.now(); if(n-(PB.wrongTs||0) > 5000){ PB.wrongTs = n; pdiSay("bukusalah", tg); } }
+  else PB.msg = ts>0 ? "🔍 Mencocokkan "+tg+"… tahan stabil" : "📷 Tunjukkan sampul buku "+tg+" ke kamera";
+  pdiBookUi();
+}
+function pdiBookUi(){
+  if(PDI.step!=="book") return;
+  const tg = PDI.model, has = pdiBookHas(tg), thr = pdiBookThr(tg), pct = Math.min(100, Math.round(PB.ts/Math.max(0.01,thr)*100));
+  const g = document.getElementById("pdiGuide"); if(g){ g.textContent = PB.cal ? "📐 Kalibrasi buku "+tg+": tahan buku yang BENAR di kamera ("+PB.calBuf.length+"/15)" : (PB.msg || "📘 SCAN BUKU "+tg); g.className = "pdiGuide "+(/SALAH/.test(PB.msg)?"warn":"busy"); }
+  const col = PB.streak>=PDI_BOOK.streak ? "#16a34a" : (PB.ts>=thr ? "#f59e0b" : "#3b82f6");
+  pdiOv(`<div class="pdiCf" style="border-color:#0f766e;"><div class="pdiCfHead" style="background:#0f766e;padding:10px;"><div style="font-size:18px;font-weight:900;">📘 CEK BUKU — ${escH(tg)}</div></div>
+    <div style="padding:10px 16px;font-size:12px;">
+      ${!has ? `<div class="pdiWarn" style="background:#FEF3C7;color:#92400E;">Model ${escH(tg)} belum punya foto buku. Tunjukkan buku ke kamera lalu klik <b>📷 SIMPAN FOTO BUKU</b> (unit ini dianggap OK), atau Lewati.</div>`
+        : PB.err ? `<div class="pdiWarn">${escH(PB.err)}<br>Pakai Lewati Cek Buku atau cek manual.</div>`
+        : PB.loading || !PB.tmpls ? `<div style="padding:6px 0;">Memuat pembaca buku…</div>`
+        : `<div class="pdiBar" style="height:16px;"><i style="width:${pct}%;background:${col};"></i></div>
+           <div style="margin-top:4px;">${escH(tg)}: <b>${PB.ts.toFixed(2)}</b> (min ${thr.toFixed(2)})${PB.on?` · terdekat: ${escH(PB.on)} ${PB.os.toFixed(2)}`:""} · stabil ${PB.streak}/${PDI_BOOK.streak}</div>`}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+        ${has ? `<button type="button" class="tlscp" onclick="pdiBookCalib()">📐 Kalibrasi</button><button type="button" class="tlscp" onclick="pdiBookCapture(false)">📷 Foto Ulang Buku</button>` : `<button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="pdiBookCapture(true)">📷 SIMPAN FOTO BUKU</button>`}
+        <button type="button" class="tlscp" onclick="pdiBookSkip()">⏩ Lewati Cek Buku</button>
+        <button type="button" class="tlscp" onclick="pdiBookManualUi('')">✋ Cek manual</button>
+      </div></div></div>`, {pos:"br"});
+}
+function pdiBookManualUi(note){
+  PDI.step = "book"; PB.tmpls = PB.tmpls || null;
+  pdiOv(`<div class="pdiCf" style="border-color:#0f766e;"><div class="pdiCfHead" style="background:#0f766e;"><div style="font-size:26px;font-weight:900;">📘 CEK BUKU</div><div style="font-size:22px;font-weight:900;">${escH(PDI.model)}</div></div>
+    <div style="padding:14px 22px;font-size:14px;">${note?escH(note)+"<br>":""}Pastikan buku manual yang dimasukkan adalah buku <b>${escH(PDI.model)}</b>.</div>
+    <div style="display:flex;gap:10px;padding:0 22px 18px;"><button type="button" class="btn" style="flex:2;background:#0f766e;color:#fff;font-weight:900;padding:14px;" onclick="pdiFinish('OK')">✔ BUKU ${escH(PDI.model)} SESUAI [Enter]</button>
+    <button type="button" class="btn btn-outline" style="flex:1;" onclick="pdiBookSkip()">⏩ Lewati Cek Buku</button></div></div>`, {enter:()=>pdiFinish("OK")});
+  PDI.bookManual = true;
+}
+function pdiBookSkip(){ if(PDI.step!=="book") return; if(!confirm("Lewati pengecekan buku "+PDI.model+" untuk unit ini?\n\nStatus tercatat 'OK - BUKU SKIP'.")) return; pdiFinish("OK - BUKU SKIP"); }
+function pdiBookCalib(){ PB.cal = true; PB.calBuf = []; PB.msg = ""; pdiBookUi(); }
+
+/* ---- 📷 Simpan / Foto Ulang Buku: frame beku → ① kotak BUKU → ② kotak NAMA MODEL ---- */
+function pdiBookCapture(asOk){
+  const v = document.getElementById("pdiVideo"); if(!v || !v.videoWidth){ alert("Kamera belum menyala."); return; }
+  const fw = v.videoWidth, fh = v.videoHeight, fz = document.createElement("canvas"); fz.width = fw; fz.height = fh; fz.getContext("2d").drawImage(v, 0, 0);
+  window._pdiFz = {cv:fz, asOk, phase:0, book:null, name:null, model:PDI.model};
+  PDI.capturing = true;
+  showModal(`<h3 style="margin:0 0 4px;">📷 Foto Buku — ${escH(PDI.model)}</h3><div id="pdiFzTxt" style="font-weight:800;color:#b45309;margin-bottom:6px;">① Tarik kotak mengelilingi SELURUH BUKU</div>
+    <div style="position:relative;"><canvas id="pdiFzC" style="width:100%;touch-action:none;cursor:crosshair;border-radius:8px;background:#000;"></canvas></div>
+    <div style="display:flex;gap:6px;margin-top:8px;"><button type="button" class="tlscp" onclick="pdiFzReset()">↺ Ulang</button><button type="button" class="btn btn-primary btn-sm" style="width:auto;flex:1;" id="pdiFzSave" disabled onclick="pdiFzSave()">💾 Simpan foto buku</button><button type="button" class="tlscp" onclick="closeModal();PDI.capturing=false;">Batal</button></div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">② Kotak NAMA MODEL termasuk tulisan HEV / HYBRID kalau ada. Foto disimpan di server, dipakai semua PC PDI.</div>`);
+  setTimeout(pdiFzInit, 30);
+}
+function pdiFzInit(){
+  const z = window._pdiFz, c = document.getElementById("pdiFzC"); if(!z || !c) return;
+  c.width = z.cv.width; c.height = z.cv.height; pdiFzDraw();
+  const pos = e=>{ const r = c.getBoundingClientRect(), p = e.touches ? e.touches[0] : e; return [(p.clientX-r.left)*c.width/r.width, (p.clientY-r.top)*c.height/r.height]; };
+  let st = null;
+  const down = e=>{ e.preventDefault(); st = pos(e); }, move = e=>{ if(!st) return; e.preventDefault(); const p = pos(e); pdiFzDraw([st[0],st[1],p[0],p[1]]); }, up = e=>{ if(!st) return; const p = e.changedTouches ? pos({clientX:e.changedTouches[0].clientX, clientY:e.changedTouches[0].clientY}) : pos(e);
+    const r = [Math.min(st[0],p[0]), Math.min(st[1],p[1]), Math.max(st[0],p[0]), Math.max(st[1],p[1])]; st = null;
+    if(r[2]-r[0] < 20 || r[3]-r[1] < 12){ pdiFzDraw(); return; }
+    if(z.phase===0){ z.book = r; z.phase = 1; document.getElementById("pdiFzTxt").textContent = "② Tarik kotak di NAMA MODEL (termasuk tulisan HEV / HYBRID)"; }
+    else { const b = z.book; z.name = [Math.max(r[0],b[0]), Math.max(r[1],b[1]), Math.min(r[2],b[2]), Math.min(r[3],b[3])]; z.phase = 2; document.getElementById("pdiFzTxt").textContent = "✔ Siap disimpan"; document.getElementById("pdiFzSave").disabled = false; }
+    pdiFzDraw(); };
+  c.addEventListener("mousedown", down); c.addEventListener("mousemove", move); window.addEventListener("mouseup", up, {once:false});
+  c.addEventListener("touchstart", down, {passive:false}); c.addEventListener("touchmove", move, {passive:false}); c.addEventListener("touchend", up);
+  z.cleanup = ()=>window.removeEventListener("mouseup", up);
+}
+function pdiFzDraw(tmp){
+  const z = window._pdiFz, c = document.getElementById("pdiFzC"); if(!z || !c) return;
+  const x = c.getContext("2d"); x.drawImage(z.cv, 0, 0); x.lineWidth = Math.max(3, c.width/300);
+  [["book","#22c55e","BUKU"],["name","#f97316","NAMA MODEL"]].forEach(([k,col,l])=>{ const r = z[k]; if(r){ x.strokeStyle = col; x.strokeRect(r[0],r[1],r[2]-r[0],r[3]-r[1]); x.fillStyle = col; x.font = "bold "+Math.round(c.width/40)+"px sans-serif"; x.fillText(l, r[0]+6, r[1]+Math.round(c.width/36)); } });
+  if(tmp){ x.strokeStyle = z.phase===0 ? "#22c55e" : "#f97316"; x.setLineDash([10,6]); x.strokeRect(tmp[0],tmp[1],tmp[2]-tmp[0],tmp[3]-tmp[1]); x.setLineDash([]); }
+}
+function pdiFzReset(){ const z = window._pdiFz; if(!z) return; z.phase = 0; z.book = null; z.name = null; document.getElementById("pdiFzTxt").textContent = "① Tarik kotak mengelilingi SELURUH BUKU"; document.getElementById("pdiFzSave").disabled = true; pdiFzDraw(); }
+async function pdiFzSave(){
+  const z = window._pdiFz; if(!z || !z.book || !z.name) return;
+  const [b0,b1,b2,b3] = z.book, bw = b2-b0, bh = b3-b1, tw = Math.min(480, Math.round(bw)), th = Math.round(bh*tw/bw);
+  const o = document.createElement("canvas"); o.width = tw; o.height = th; o.getContext("2d").drawImage(z.cv, b0, b1, bw, bh, 0, 0, tw, th);
+  const url = o.toDataURL("image/jpeg", 0.9), roi = [(z.name[0]-b0)/bw, (z.name[1]-b1)/bh, (z.name[2]-b0)/bw, (z.name[3]-b1)/bh].map(v=>Math.round(Math.min(1,Math.max(0,v))*1000)/1000);
+  const m = z.model, key = "pdib_"+m.replace(/[^A-Z0-9]+/gi,"_")+"_"+Date.now().toString(36);
+  const btn = document.getElementById("pdiFzSave"); if(btn){ btn.disabled = true; btn.textContent = "Menyimpan…"; }
+  try{ if(!FBS.db) throw new Error("server belum tersambung"); await FBS.db.ref(FOTO_PATH+"/"+key).set(url); }
+  catch(e){ alert("Foto buku gagal disimpan ke server: "+(e.message||e)); if(btn){ btn.disabled = false; btn.textContent = "💾 Simpan foto buku"; } return; }
+  DB.set(d=>{ d.pdiCfg = d.pdiCfg||{}; d.pdiCfg.bookSrv = d.pdiCfg.bookSrv||{}; d.pdiCfg.bookRoi = d.pdiCfg.bookRoi||{}; d.pdiCfg.bookThr = d.pdiCfg.bookThr||{};
+    d.pdiCfg.bookSrv[m] = key; d.pdiCfg.bookRoi[m] = roi; delete d.pdiCfg.bookThr[m]; });
+  try{ z.cleanup && z.cleanup(); }catch(e){}
+  closeModal(); PDI.capturing = false; window._pdiFz = null; PB.tmpls = null; delete PDI_TPL[m];
+  pdiToast("Foto buku "+m+" tersimpan");
+  if(PDI.step==="book" && PDI.model===m){ if(z.asOk) pdiFinish("OK"); else pdiBookStart(); }
+}
+
+/* ===== Fitur lain yang disamakan dengan Toyota PDI v51 ===== */
+
+/* ---------- 🚢 Unit Batam / ⭐ Unit Prioritas (daftar unit yang menunggu PDI) ----------
+   Datanya SAMA dengan upload Unit Batam / Prioritas RADAR (d.unitCat). Paste dari Excel seperti v51,
+   atau upload file di menu Unit Batam RADAR. Unit keluar dari "menunggu" begitu berhasil di-PDI. */
+function pdiCatInfo(vin, d){ const c = lookupUnitCat(d||DB.get(), vin) || {}; const inf = Object.assign({}, c.inf||{}); if(!inf.BranchName && c.dest) inf.BranchName = c.dest; return inf; }
+function pdiWaitList(kind, d){
+  d = d || DB.get(); const cat = d.unitCat || {}, yard = pdiYardFrames(d), open = d.pdiOpen || {};
+  const done = new Set(pdiRecList().filter(pdiIsOk).map(r=>normVin(r.f)));
+  return Object.keys(cat).filter(f=>cat[f] && cat[f][kind] && !done.has(f) && !yard.has(f) && !open[f]).map(f=>Object.assign({f}, cat[f]));
+}
+let _pdiCatTab = {batam:"wait", prio:"wait"};
+function pdiCatOpen(kind){
+  const isB = kind==="batam", col = isB ? "#0891b2" : "#7c3aed", ic = isB ? "🚢" : "⭐", nm = isB ? "UNIT BATAM" : "UNIT PRIORITAS";
+  const L = pdiWaitList(kind);
+  const head = isB ? ["Frame No","TypeName","Model","Warna","Branch","DTPLOD"] : ["Frame No","Status","Keterangan"];
+  const rows = L.slice(0,500).map(x=>{ const i = x.inf||{}; const cells = isB ? [x.f, i.TypeName, i.ModelName, i.ColorName, i.BranchName||x.dest, i.DTPLOD] : [x.f, i.Status, i.Keterangan];
+    return `<tr><td><input type="checkbox" class="pdiCatSel" value="${escH(x.f)}"></td>${cells.map((v,k)=>`<td style="${k?"":"font-family:monospace;font-weight:800;"}">${escH(v||"")}</td>`).join("")}</tr>`; }).join("");
+  showModal(`<div style="background:${col};color:#fff;margin:-4px -4px 10px;padding:10px 14px;border-radius:12px;font-weight:900;font-size:16px;">${ic} ${nm}</div>
+    <div style="background:#dafbe1;color:#1a7f37;font-size:12px;padding:6px 10px;border-radius:8px;margin-bottom:8px;">ℹ Unit otomatis keluar dari daftar ini setelah berhasil di-PDI. Data ini sama dengan upload Unit ${isB?"Batam":"Prioritas"} di RADAR.</div>
+    <div style="font-size:12px;font-weight:800;color:var(--text-dim);">${isB?"Paste dari Excel: FrameNumber  TypeName  ModelName  ColorName  BranchName  DTPLOD":"Paste dari Excel: No Frame  TAB  Status  TAB  Keterangan"}</div>
+    <textarea id="pdiCatPaste" rows="4" style="width:100%;font-family:Consolas,monospace;font-size:12px;" placeholder="Salin baris dari Excel lalu tempel di sini"></textarea>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px;">
+      <button type="button" class="btn btn-sm" style="width:auto;background:#16a34a;color:#fff;" onclick="pdiCatImport('${kind}')">➕ Import</button>
+      <button type="button" class="btn btn-sm" style="width:auto;background:#dc2626;color:#fff;" onclick="pdiCatDel('${kind}')">🗑 Hapus Terpilih</button>
+      <button type="button" class="btn btn-sm" style="width:auto;background:${col};color:#fff;" onclick="pdiCatDash('${kind}')">📊 Dashboard</button>
+    </div>
+    <div style="font-weight:900;color:${col};margin-bottom:6px;">Menunggu diterima: ${L.length} unit</div>
+    <div style="max-height:50vh;overflow:auto;"><table class="pdiTb"><thead><tr><th></th>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows||`<tr><td colspan="7" style="color:var(--text-dim);">Tidak ada unit yang menunggu.</td></tr>`}</tbody></table></div>`);
+}
+function pdiCatImport(kind){
+  const raw = (document.getElementById("pdiCatPaste")||{}).value||""; if(!raw.trim()){ alert("Paste data dulu!"); return; }
+  const isB = kind==="batam", rows = [];
+  raw.split(/\r?\n/).forEach(line=>{
+    const p = line.split("\t").map(x=>String(x||"").trim()); const f = normVin(p[0]);
+    if(f.length<10 || !/[A-Z]/.test(f) || !/\d/.test(f)) return;   // baris judul / kosong dilewati
+    const inf = isB ? {TypeName:p[1]||"", ModelName:p[2]||"", ColorName:p[3]||"", BranchName:p[4]||"", DTPLOD:p[5]||""} : {Status:p[1]||"", Keterangan:p[2]||(p[1]||"")};
+    Object.keys(inf).forEach(k=>{ if(!inf[k]) delete inf[k]; else inf[k] = inf[k].slice(0,60); });
+    rows.push({f, inf});
+  });
+  if(!rows.length){ alert("Tidak ada No. Rangka yang terbaca. Kolom pertama harus No. Rangka."); return; }
+  DB.set(d=>{
+    d.unitCat = d.unitCat || {};
+    rows.forEach(r=>{ const old = d.unitCat[r.f] || {}; const e = Object.assign({}, old, {src:old.src||"pdi", by:(currentUser&&currentUser.name)||"", ts:Date.now(), inf:Object.assign({}, old.inf, r.inf)});
+      if(isB){ e.batam = true; if(r.inf.BranchName) e.dest = r.inf.BranchName; } else e.prio = true; e.batam = !!e.batam; e.prio = !!e.prio; d.unitCat[r.f] = e; });
+    Object.values(d.units||{}).forEach(u=>{ if(!u) return; const c = lookupUnitCat(d, u.frame); if(c){ if(isB) u.batam = !!c.batam; else u.prio = !!c.prio; } });
+  });
+  pdiToast(rows.length+" unit berhasil ditambahkan!"); pdiCatOpen(kind);
+}
+function pdiCatDel(kind){
+  const sel = [...document.querySelectorAll(".pdiCatSel:checked")].map(x=>x.value); if(!sel.length){ alert("Pilih unit yang ingin dihapus!"); return; }
+  if(!confirm("Hapus "+sel.length+" unit dari daftar "+(kind==="batam"?"Batam":"Prioritas")+"?\n\nTanda "+(kind==="batam"?"BATAM":"PRIORITAS")+" unit ini di RADAR juga hilang.")) return;
+  DB.set(d=>{ sel.forEach(f=>{ const e = d.unitCat && d.unitCat[f]; if(!e) return; e[kind] = false; if(!e.batam && !e.prio) delete d.unitCat[f]; }); });
+  pdiCatOpen(kind);
+}
+let _pdiMonth = {key:"", recs:null, loading:false};
+async function pdiMonthRecs(){
+  const now = new Date(), key = now.getFullYear()+"-"+(now.getMonth()+1), start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  if(_pdiMonth.key===key && _pdiMonth.recs && Date.now()-_pdiMonth.t<120000) return _pdiMonth.recs;
+  let recs = {};
+  try{ if(FBS.db && FBS.authed) recs = (await FBS.db.ref(PDI_PATH).orderByChild("ts").startAt(start).once("value")).val() || {}; }catch(e){}
+  const all = Object.assign({}, recs, pdiAll());
+  _pdiMonth = {key, t:Date.now(), recs:Object.values(all).filter(r=>r && r.f && (r.doneTs||r.ts)>=start)};
+  return _pdiMonth.recs;
+}
+async function pdiCatDash(kind, tab){
+  const t = kind==="batam" ? "B" : "P", col = kind==="batam" ? "#0891b2" : "#7c3aed", ic = kind==="batam" ? "🚢" : "⭐", nm = kind==="batam" ? "BATAM" : "PRIORITAS";
+  tab = tab || "day";
+  showModal(`<div style="padding:20px;text-align:center;">Memuat data…</div>`);
+  const all = (await pdiMonthRecs()).filter(r=>r.t===t && pdiIsOk(r)), pd = prodDayStart(Date.now());
+  const L = (tab==="day" ? all.filter(r=>prodDayStart(r.doneTs||r.ts)===pd) : all).sort((a,b)=>(b.doneTs||b.ts)-(a.doneTs||a.ts));
+  const byM = {}; L.forEach(r=>{ byM[r.m||"?"] = (byM[r.m||"?"]||0)+1; });
+  const d = DB.get(), lbl = tab==="day" ? "Diterima Hari Ini" : "Diterima Bulan Ini";
+  showModal(`<div style="background:${col};color:#fff;margin:-4px -4px 10px;padding:10px 14px;border-radius:12px;font-weight:900;font-size:16px;">${ic} DASHBOARD ${nm}</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;"><button type="button" class="tlscp" style="${tab==="day"?"background:"+col+";color:#fff;":""}" onclick="pdiCatDash('${kind}','day')">Hari Ini (${escH(mfDateStr(pd))})</button><button type="button" class="tlscp" style="${tab==="month"?"background:"+col+";color:#fff;":""}" onclick="pdiCatDash('${kind}','month')">Bulan Ini</button><button type="button" class="tlscp" onclick="pdiCatOpen('${kind}')">← Daftar</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><div style="background:${col};color:#fff;border-radius:10px;padding:10px 18px;text-align:center;"><div style="font-size:30px;font-weight:900;">${L.length}</div><div style="font-size:11px;">Total ${lbl}</div></div>
+      ${Object.entries(byM).map(([m,n])=>`<div style="background:${pdiModelColor(m,d)};color:#fff;border-radius:10px;padding:10px 14px;text-align:center;"><div style="font-size:26px;font-weight:900;">${n}</div><div style="font-size:11px;">${escH(m)}</div></div>`).join("")}</div>
+    <div style="max-height:45vh;overflow:auto;"><table class="pdiTb"><thead><tr><th>Waktu</th><th>Frame No</th><th>Model</th><th>TypeName</th><th>Warna</th><th>Branch</th></tr></thead><tbody>
+    ${L.map(r=>{ const i = r.inf||{}; return `<tr><td style="white-space:nowrap;">${escH(new Date(r.doneTs||r.ts).toLocaleDateString("id-ID",{day:"2-digit",month:"short"}))} ${holdHm(r.doneTs||r.ts)}</td><td style="font-family:monospace;font-weight:800;">${escH(r.f)}</td><td>${escH(r.m||"")}</td><td>${escH(i.TypeName||"")}</td><td>${escH(i.ColorName||"")}</td><td>${escH(i.BranchName||"")}</td></tr>`; }).join("")||`<tr><td colspan="6" style="color:var(--text-dim);">Belum ada unit diterima.</td></tr>`}</tbody></table></div>`);
+}
+
+/* ---------- 🔊 Setting Suara (per kalimat ON/OFF, teks bisa diubah, pilih suara) ---------- */
+const PDI_SAY_LABEL = {frame:"Frame No terkunci", engine:"Engine terisi", key:"No Kunci terisi", reguler:"Unit reguler", batam:"Unit Batam", prioritas:"Unit prioritas", dup:"Frame duplikat", newmodel:"Kode frame baru",
+  buku:"Masuk scan buku", bukuok:"Buku sesuai", bukusalah:"Buku salah", selesai:"Selesai (tanpa cek buku)", problem:"Unit problem tercatat", probulang:"Unit problem discan ulang", tlserr:"TLS / PAD error"};
+function pdiVoiceCfg(){ try{ return JSON.parse(localStorage.getItem("radar_pdi_voicecfg")||"{}")||{}; }catch(e){ return {}; } }
+function pdiVoiceCfgSave(c){ try{ localStorage.setItem("radar_pdi_voicecfg", JSON.stringify(c)); }catch(e){} }
+function pdiVoiceOpen(){
+  const c = pdiVoiceCfg(), ph = c.ph||{}, vs = (window.speechSynthesis ? speechSynthesis.getVoices() : []);
+  showModal(`<h3 style="margin:0 0 8px;">🔊 Setting Suara</h3>
+    <div class="field"><label>Suara</label><select id="pdiVoiceSel"><option value="">Otomatis (Bahasa Indonesia kalau ada)</option>${vs.map(v=>`<option value="${escH(v.name)}" ${c.voice===v.name?"selected":""}>${escH(v.name)} (${escH(v.lang)})</option>`).join("")}</select>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Di Microsoft Edge ada suara alami <b>Gadis</b> (perempuan) / <b>Ardi</b> (laki-laki) — butuh internet. Suara Windows (Andika) jalan tanpa internet.</div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div class="field"><label>Kecepatan</label><input id="pdiVoiceRate" type="range" min="0.6" max="1.6" step="0.05" value="${c.rate||1.05}"></div><div class="field"><label>Volume</label><input id="pdiVoiceVol" type="range" min="0.2" max="1" step="0.05" value="${c.vol||1}"></div></div>
+    <div style="max-height:45vh;overflow:auto;"><table class="pdiTb"><thead><tr><th>ON</th><th>Kapan</th><th>Kalimat ({model} = nama model)</th><th></th></tr></thead><tbody>
+    ${Object.keys(PDI_SAY).map(k=>{ const p = ph[k]||{}; return `<tr><td><input type="checkbox" class="pdiPhOn" data-k="${k}" ${p.on===false?"":"checked"}></td><td style="font-size:11px;">${escH(PDI_SAY_LABEL[k]||k)}</td><td><input type="text" class="pdiPhTx" data-k="${k}" value="${escH(p.text||PDI_SAY[k])}" style="width:100%;"></td><td><button type="button" class="tlscp" onclick="pdiVoiceTry('${k}')">▶</button></td></tr>`; }).join("")}
+    </tbody></table></div>
+    <div style="display:flex;gap:6px;margin-top:8px;"><button type="button" class="btn btn-primary" onclick="pdiVoiceSave()">💾 Simpan</button><button type="button" class="btn btn-outline" onclick="pdiVoiceCfgSave({});pdiVoiceOpen();">Kembalikan bawaan</button></div>`);
+}
+function pdiVoiceRead(){
+  const c = {voice:(document.getElementById("pdiVoiceSel")||{}).value||"", rate:+((document.getElementById("pdiVoiceRate")||{}).value||1.05), vol:+((document.getElementById("pdiVoiceVol")||{}).value||1), ph:{}};
+  document.querySelectorAll(".pdiPhTx").forEach(el=>{ const k = el.dataset.k, on = document.querySelector(`.pdiPhOn[data-k="${k}"]`); c.ph[k] = {on:!!(on && on.checked), text:el.value.trim()||PDI_SAY[k]}; });
+  return c;
+}
+function pdiVoiceTry(k){ const prev = pdiVoiceCfg(); pdiVoiceCfgSave(pdiVoiceRead()); const ph = pdiVoiceCfg().ph[k]; pdiSay(k, PDI.model||"AGYA", true); pdiVoiceCfgSave(prev); }
+function pdiVoiceSave(){ pdiVoiceCfgSave(pdiVoiceRead()); closeModal(); pdiToast("Setting suara disimpan"); }
+
+/* ---------- 🔆 Setting Kamera (kunci exposure / white balance / fokus supaya cahaya stabil) ---------- */
+const PDI_CAM_KEYS = [["exposureMode","Mode exposure"],["exposureTime","Exposure time"],["exposureCompensation","Kompensasi exposure"],["brightness","Brightness"],["contrast","Contrast"],["saturation","Saturation"],["sharpness","Sharpness"],["whiteBalanceMode","Mode white balance"],["colorTemperature","Suhu warna"],["focusMode","Mode fokus"],["focusDistance","Jarak fokus"],["zoom","Zoom"]];
+function pdiCamTrack(){ try{ return PDI.cam.stream && PDI.cam.stream.getVideoTracks()[0]; }catch(e){ return null; } }
+function pdiCamPropsAll(){ try{ return JSON.parse(localStorage.getItem("radar_pdi_camprops")||"{}")||{}; }catch(e){ return {}; } }
+function pdiCamPropsKey(){ const t = pdiCamTrack(); try{ return (t && t.getSettings().deviceId) || pdiCamDev() || "default"; }catch(e){ return "default"; } }
+async function pdiCamApplySaved(){
+  const t = pdiCamTrack(); if(!t || !t.applyConstraints) return;
+  const p = pdiCamPropsAll()[pdiCamPropsKey()]; if(!p) return;
+  const order = ["exposureMode","whiteBalanceMode","focusMode"]; const ks = Object.keys(p).sort((a,b)=>(order.includes(b)?1:0)-(order.includes(a)?1:0));
+  for(const k of ks){ try{ await t.applyConstraints({advanced:[{[k]:p[k]}]}); }catch(e){} }
+}
+async function pdiCamSet(k, v){
+  const t = pdiCamTrack(); if(!t) return;
+  if(!isNaN(+v) && typeof v!=="boolean" && !/Mode$/.test(k)) v = +v;
+  const pre = {}; if(k==="exposureTime"||k==="exposureCompensation") pre.exposureMode = "manual"; if(k==="colorTemperature") pre.whiteBalanceMode = "manual"; if(k==="focusDistance") pre.focusMode = "manual";
+  try{ for(const [a,b] of Object.entries(pre)) await t.applyConstraints({advanced:[{[a]:b}]}); await t.applyConstraints({advanced:[{[k]:v}]}); }catch(e){ pdiToast("Kamera menolak "+k+": "+(e.message||e), true); }
+  const all = pdiCamPropsAll(), key = pdiCamPropsKey(); all[key] = Object.assign({}, all[key], pre, {[k]:v}); try{ localStorage.setItem("radar_pdi_camprops", JSON.stringify(all)); }catch(e){}
+}
+function pdiCamMetric(){
+  const v = document.getElementById("pdiVideo"); if(!v || !v.videoWidth) return null;
+  const c = pdiCamMetric.c || (pdiCamMetric.c = document.createElement("canvas")); c.width = 160; c.height = 90;
+  const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(v, 0, 0, 160, 90); const d = x.getImageData(0,0,160,90).data;
+  let s = 0, g = 0, n = 0; for(let i=0;i<d.length;i+=4){ const y = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]; s += y; if(y>=250) g++; n++; }
+  return {mean:Math.round(s/n), glare:Math.round(g*1000/n)/10};
+}
+function pdiCamTuneOpen(){
+  const t = pdiCamTrack(); if(!t){ alert("Nyalakan kamera dulu."); return; }
+  const caps = t.getCapabilities ? t.getCapabilities() : {}, set = t.getSettings ? t.getSettings() : {};
+  const ctl = PDI_CAM_KEYS.filter(([k])=>caps[k]!=null).map(([k,l])=>{ const c = caps[k];
+    if(Array.isArray(c)) return `<div class="field"><label>${l}</label><select onchange="pdiCamSet('${k}',this.value)">${c.map(o=>`<option ${set[k]===o?"selected":""}>${escH(o)}</option>`).join("")}</select></div>`;
+    if(c && typeof c==="object" && c.max!=null) return `<div class="field"><label>${l} <span style="color:var(--text-dim);font-weight:400;">(${c.min}–${c.max})</span></label><input type="range" min="${c.min}" max="${c.max}" step="${c.step||1}" value="${set[k]!=null?set[k]:c.min}" onchange="pdiCamSet('${k}',this.value)"></div>`;
+    return ""; }).join("");
+  showModal(`<h3 style="margin:0 0 6px;">🔆 Setting Kamera</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Kunci exposure / white balance / fokus supaya gambar tidak naik-turun dan tidak silau. Disimpan per kamera di PC ini, otomatis dipakai setiap kamera dinyalakan.</div>
+    <div id="pdiCamMet" style="font-weight:800;margin-bottom:8px;">Terang: - · Silau: -</div>
+    ${caps.exposureTime||caps.exposureCompensation?`<button type="button" class="btn btn-primary btn-sm" style="width:auto;margin-bottom:8px;" onclick="pdiCamAutoLock(this)">🔆 Kunci Otomatis</button>`:""}
+    ${ctl || `<div class="msg err" style="font-size:12px;">Kamera / browser ini tidak memberi akses pengaturan exposure. Atur lewat aplikasi Kamera Windows, atau pakai kamera lain.</div>`}`);
+  clearInterval(window._pdiMetT); window._pdiMetT = setInterval(()=>{ const el = document.getElementById("pdiCamMet"); if(!el){ clearInterval(window._pdiMetT); return; } const m = pdiCamMetric(); if(m) el.innerHTML = `Terang rata-rata: <b>${m.mean}</b> (ideal 100–160) · Area silau: <b style="color:${m.glare>2?"var(--red)":"inherit"}">${m.glare}%</b>`; }, 500);
+}
+async function pdiCamAutoLock(btn){
+  const t = pdiCamTrack(); if(!t) return; const caps = t.getCapabilities(); if(btn){ btn.disabled = true; btn.textContent = "Mencari exposure terbaik…"; }
+  const key = caps.exposureTime ? "exposureTime" : "exposureCompensation", c = caps[key], N = 8, cand = [];
+  try{ await t.applyConstraints({advanced:[{exposureMode:"manual"}]}); }catch(e){}
+  for(let i=0;i<N;i++){ const v = c.min + (c.max-c.min)*Math.pow(i/(N-1), key==="exposureTime"?2:1); try{ await t.applyConstraints({advanced:[{[key]:v}]}); }catch(e){} await new Promise(r=>setTimeout(r,450)); const m = pdiCamMetric(); if(m) cand.push([v, m]); }
+  const best = cand.filter(([,m])=>m.glare<1.5).sort((a,b)=>Math.abs(a[1].mean-130)-Math.abs(b[1].mean-130))[0] || cand.sort((a,b)=>a[1].glare-b[1].glare)[0];
+  if(best){ await pdiCamSet(key, best[0]); if(caps.whiteBalanceMode && caps.whiteBalanceMode.includes("manual")) await pdiCamSet("whiteBalanceMode","manual"); if(caps.focusMode && caps.focusMode.includes("manual")) await pdiCamSet("focusMode","manual"); pdiToast("Kamera dikunci: terang "+best[1].mean+", silau "+best[1].glare+"%"); }
+  pdiCamTuneOpen();
+}
+
+/* ---------- 🔒 Area Scan (ROI) & 📍 Ajari Posisi Kartu Lama ---------- */
+function pdiRoi(){ try{ const r = JSON.parse(localStorage.getItem("radar_pdi_roi")||"null"); if(r && r.vin && r.ek) return r; }catch(e){} return {on:false, vin:[0.05,0.10,0.55,0.90], ek:[0.45,0.10,0.95,0.90]}; }
+function pdiRoiSave(r){ try{ localStorage.setItem("radar_pdi_roi", JSON.stringify(r)); }catch(e){} }
+function pdiInZone(q, z){ if(!q || !q.topLeft) return true; const w = PDI.cam.w||1280, h = PDI.cam.h||720, cx = (q.topLeft.x+q.topRight.x+q.bottomRight.x+q.bottomLeft.x)/4/w, cy = (q.topLeft.y+q.topRight.y+q.bottomRight.y+q.bottomLeft.y)/4/h; return cx>=z[0] && cx<=z[2] && cy>=z[1] && cy<=z[3]; }
+function pdiFreeze(){ const v = document.getElementById("pdiVideo"); if(!v || !v.videoWidth) return null; const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0); return c; }
+function pdiRoiOpen(){
+  const fz = pdiFreeze(); if(!fz){ alert("Nyalakan kamera dulu."); return; }
+  const r = pdiRoi(); window._pdiRoiE = {cv:fz, vin:r.vin.slice(), ek:r.ek.slice(), phase:0};
+  showModal(`<h3 style="margin:0 0 4px;">🔒 Area Scan</h3><div id="pdiRoiTxt" style="font-weight:800;color:#16a34a;margin-bottom:6px;">① Tarik kotak AREA FRAME NO (VIN)</div>
+    <canvas id="pdiRoiC" style="width:100%;touch-action:none;cursor:crosshair;border-radius:8px;background:#000;"></canvas>
+    <label style="display:block;margin:8px 0;font-size:13px;"><input id="pdiRoiOn" type="checkbox" ${r.on?"checked":""}> Aktifkan area scan (barcode di luar kotak tidak dibaca)</label>
+    <div style="display:flex;gap:6px;"><button type="button" class="btn btn-primary btn-sm" style="width:auto;flex:1;" onclick="pdiRoiDone()">💾 Simpan</button><button type="button" class="tlscp" onclick="closeModal()">Batal</button></div>`);
+  setTimeout(()=>{
+    const e = window._pdiRoiE, c = document.getElementById("pdiRoiC"); if(!c) return; c.width = e.cv.width; c.height = e.cv.height;
+    const draw = tmp=>{ const x = c.getContext("2d"); x.drawImage(e.cv,0,0); x.lineWidth = 4; [["vin","#22c55e","AREA VIN"],["ek","#3b82f6","AREA ENGINE & KUNCI"]].forEach(([k,col,l])=>{ const z = e[k]; x.strokeStyle = col; x.strokeRect(z[0]*c.width, z[1]*c.height, (z[2]-z[0])*c.width, (z[3]-z[1])*c.height); x.fillStyle = col; x.font = "bold 26px sans-serif"; x.fillText(l, z[0]*c.width+8, z[1]*c.height+30); }); if(tmp){ x.setLineDash([10,6]); x.strokeStyle = "#fff"; x.strokeRect(tmp[0],tmp[1],tmp[2]-tmp[0],tmp[3]-tmp[1]); x.setLineDash([]); } };
+    const pos = ev=>{ const b = c.getBoundingClientRect(), p = ev.touches ? ev.touches[0] : ev; return [(p.clientX-b.left)*c.width/b.width, (p.clientY-b.top)*c.height/b.height]; };
+    let st = null, last = null;
+    c.onmousedown = c.ontouchstart = ev=>{ ev.preventDefault(); st = pos(ev); last = st; };
+    c.onmousemove = c.ontouchmove = ev=>{ if(!st) return; ev.preventDefault(); last = pos(ev); draw([st[0],st[1],last[0],last[1]]); };
+    c.onmouseup = c.ontouchend = ev=>{ if(!st) return; const p = last; const z = [Math.min(st[0],p[0])/c.width, Math.min(st[1],p[1])/c.height, Math.max(st[0],p[0])/c.width, Math.max(st[1],p[1])/c.height].map(v=>Math.round(Math.max(0,Math.min(1,v))*1000)/1000); st = null;
+      if(z[2]-z[0] > 0.05 && z[3]-z[1] > 0.05){ if(e.phase===0){ e.vin = z; e.phase = 1; document.getElementById("pdiRoiTxt").textContent = "② Tarik kotak AREA ENGINE & KUNCI"; } else { e.ek = z; e.phase = 2; document.getElementById("pdiRoiTxt").textContent = "✔ Siap disimpan"; } } draw(); };
+    draw();
+  }, 30);
+}
+function pdiRoiDone(){ const e = window._pdiRoiE; if(!e) return; pdiRoiSave({on:document.getElementById("pdiRoiOn").checked, vin:e.vin, ek:e.ek}); closeModal(); pdiToast("Area scan disimpan"); }
+async function pdiTeachOpen(){
+  const fz = pdiFreeze(); if(!fz){ alert("Nyalakan kamera dulu, lalu tunjukkan 1 kartu DC lama (MHK) utuh ke kamera."); return; }
+  try{ await pdiZx(); }catch(e){ alert(e.message); return; }
+  const codes = await pdiDecode(fz, fz.width, fz.height), cfg = pdiCfg();
+  const vin = codes.find(c=>{ const [f,v] = pdiClassify(c.t, c.kind, cfg); return f==="vin" && pdiIsLegacy(v); });
+  if(!vin){ alert("Frame No kartu lama (MHK…) tidak terbaca di gambar. Tunjukkan seluruh kartu ke kamera lalu coba lagi."); return; }
+  const others = codes.filter(c=>c!==vin);
+  if(others.length<2){ alert("Barcode Engine dan Kunci belum terbaca bersama Frame No. Dekatkan / luruskan kartu lalu coba lagi."); return; }
+  window._pdiTeach = {fz, vin, others};
+  const x = fz.getContext("2d"); x.lineWidth = 4; x.font = "bold 28px sans-serif";
+  [vin].concat(others).forEach((c,i)=>{ const q = c.q; x.strokeStyle = i ? "#f97316" : "#22c55e"; x.beginPath(); x.moveTo(q.topLeft.x,q.topLeft.y); x.lineTo(q.topRight.x,q.topRight.y); x.lineTo(q.bottomRight.x,q.bottomRight.y); x.lineTo(q.bottomLeft.x,q.bottomLeft.y); x.closePath(); x.stroke(); x.fillStyle = x.strokeStyle; x.fillText(i ? "#"+i : "VIN", q.topLeft.x, q.topLeft.y-8); });
+  const opt = others.map((c,i)=>`<option value="${i}">#${i+1}: ${escH(c.t)}</option>`).join("");
+  showModal(`<h3 style="margin:0 0 4px;">📍 Ajari Posisi Kartu Lama</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Frame No: <b>${escH(vin.t)}</b>. Pilih barcode mana yang ENGINE dan mana yang KUNCI. Posisinya disimpan relatif ke barcode Frame No (kartu boleh digeser / miring / terbalik).</div>
+    <img src="${fz.toDataURL("image/jpeg",0.8)}" style="width:100%;border-radius:8px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;"><div class="field"><label>ENGINE NUMBER</label><select id="pdiTE">${opt}</select></div><div class="field"><label>KEY NUMBER</label><select id="pdiTK">${opt.replace('value="1"','value="1" selected')}</select></div></div>
+    <div class="field"><label>Nama layout</label><input id="pdiTN" type="text" value="DC lama ${new Date().toLocaleDateString("id-ID")}"></div>
+    <div style="display:flex;gap:6px;"><button type="button" class="btn btn-primary btn-sm" style="width:auto;flex:1;" onclick="pdiTeachSave()">💾 Simpan posisi</button><button type="button" class="tlscp" onclick="pdiTeachReset()">Kembalikan posisi bawaan</button></div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Layout tersimpan: ${pdiCfg().layouts.map(l=>escH(l.name)).join(", ")}</div>`);
+}
+function pdiTeachSave(){
+  const t = window._pdiTeach; if(!t) return; const ie = +document.getElementById("pdiTE").value, ik = +document.getElementById("pdiTK").value;
+  if(ie===ik){ alert("Engine dan Kunci harus barcode yang berbeda."); return; }
+  const g = pdiGeom(t.vin.q), ce = pdiGeom(t.others[ie].q), ck = pdiGeom(t.others[ik].q);
+  const re = pdiRel(g, [ce.cx, ce.cy])[0], rk = pdiRel(g, [ck.cx, ck.cy])[0], name = (document.getElementById("pdiTN").value||"DC lama").slice(0,40);
+  DB.set(d=>{ d.pdiCfg = d.pdiCfg||{}; const cur = pdiCfg(d).layouts; d.pdiCfg.layouts = cur.concat([{name, engine:[+re[0].toFixed(3), +re[1].toFixed(3)], key:[+rk[0].toFixed(3), +rk[1].toFixed(3)]}]); });
+  closeModal(); pdiToast("Posisi kartu lama disimpan ("+name+")");
+}
+function pdiTeachReset(){ if(!confirm("Hapus semua posisi yang diajarkan dan pakai posisi bawaan DC lama?")) return; DB.set(d=>{ d.pdiCfg = d.pdiCfg||{}; delete d.pdiCfg.layouts; }); closeModal(); pdiToast("Posisi bawaan dipakai lagi"); }
+
+/* ---------- 📊 Grafik Produksi ---------- */
+function pdiGrafikOpen(){
+  const d = DB.get(), s = pdiShiftOf(Date.now()), st = pdiShiftStats(s.pd, s.sh, pdiStation(), d), ms = Object.entries(st.byM).sort((a,b)=>b[1]-a[1]), mx = Math.max(10, ...ms.map(x=>x[1]+5));
+  const pct = st.plan ? Math.round(st.n*100/st.plan) : 0, minus = Math.max(0, st.plan-st.n), mx2 = Math.max(1, st.plan*1.2, st.n);
+  showModal(`<h3 style="margin:0 0 4px;">📊 Grafik Produksi</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">${escH(mfDateStr(s.pd))} | PIC: ${escH((currentUser&&currentUser.name)||"")} | ${escH(pdiShiftLabel(s.sh))}</div>
+    <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:14px;">
+      <div><div style="font-weight:900;margin-bottom:6px;">Unit per Model</div><div style="display:flex;align-items:flex-end;gap:8px;height:220px;border-left:1px solid var(--border);border-bottom:1px solid var(--border);padding:0 6px;">
+        ${ms.map(([m,n])=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;"><b style="font-size:13px;">${n}</b><div style="width:70%;background:${pdiModelColor(m,d)};height:${Math.round(n*100/mx)}%;border-radius:4px 4px 0 0;"></div></div>`).join("")||`<div style="color:var(--text-dim);font-size:12px;">Belum ada unit.</div>`}</div>
+        <div style="display:flex;gap:8px;padding:0 6px;">${ms.map(([m])=>`<div style="flex:1;text-align:center;font-size:10px;font-weight:700;">${escH(m)}</div>`).join("")}</div></div>
+      <div><div style="font-weight:900;margin-bottom:6px;">Actual vs Planning</div>
+        ${[["Actual",st.n,"var(--blue)"],["Planning",st.plan,"#dee2e6"]].map(([l,v,c])=>`<div style="display:flex;align-items:center;gap:8px;margin:14px 0;"><span style="width:64px;font-size:12px;">${l}</span><div style="flex:1;background:#f1f5f9;border-radius:4px;height:26px;"><div style="width:${Math.round(v*100/mx2)}%;background:${c};height:100%;border-radius:4px;"></div></div><b>${v}</b></div>`).join("")}
+        <div style="font-size:12px;color:var(--text-dim);">Progress: <b>${pct}%</b> | Minus: <b>${minus}</b> unit</div></div>
+    </div>`);
+}
+
+/* ---------- 📥 Excel format v51: Detail Scan · Summary · Per Jam (warna, gabung sel) ---------- */
+const PDI_SLOTS = {"1":["07:15~08:00","08:00~09:00","09:00~10:00","10:00~11:00","11:00~12:00","12:00~13:00","13:00~14:00","14:00~15:00","15:00~16:00","16:00~17:00","17:00~18:00","18:00~19:00","19:00~20:00"],
+  "2":["21:00~22:00","22:00~23:00","23:00~24:00","00:00~01:00","01:00~02:00","02:00~03:00","03:00~04:00","04:00~05:00","05:00~06:00","06:00~06:30"]};
+const PDI_XL_COLORS = {"CALYA":"F4B8B8","AGYA":"C8B4E8","RAIZE":"B4E8B4","AVANZA":"7FD4F4","RUSH":"FFD580","VELOZ":"FFB347"};
+function pdiSlotOf(ts, sh){
+  const t = new Date(ts), cur = t.getHours()*60+t.getMinutes(), L = PDI_SLOTS[sh];
+  for(const sl of L){ const [a,b] = sl.split("~").map(x=>{ const [h,m] = x.split(":").map(Number); return h*60+m; }); if(b===1440 ? cur>=a : (b<a ? (cur>=a||cur<b) : (cur>=a && cur<b))) return sl; }
+  return L[L.length-1];
+}
+function pdiXlsx(sheets){
+  /* writer kecil dengan warna, tebal, rata tengah, garis, gabung sel (format laporan v51) */
+  const styles = [{}], key = s=>JSON.stringify(s||{}), idx = {"{}":0};
+  const sid = s=>{ const k = key(s); if(!(k in idx)){ idx[k] = styles.length; styles.push(s||{}); } return idx[k]; };
+  const fills = ["none","gray125"], fillIdx = {}, fonts = [{}], fontIdx = {"{}":0};
+  const files = [], names = sheets.map((s,i)=>String(s.name).replace(/[\\\/\?\*\[\]:]/g,"").slice(0,31)||"Sheet"+(i+1));
+  const sheetXml = sheets.map((sh,si)=>{
+    const rows = sh.rows.map((r,ri)=>'<row r="'+(ri+1)+'"'+(sh.heights&&sh.heights[ri]?' ht="'+sh.heights[ri]+'" customHeight="1"':'')+'>'+r.map((c,ci)=>{
+      const ref = _colName(ci)+(ri+1), o = (c && typeof c==="object" && !Array.isArray(c)) ? c : {v:c}, s = sid(o.s);
+      const v = o.v; if(v===null || v===undefined || v==="") return '<c r="'+ref+'"'+(s?' s="'+s+'"':'')+'/>';
+      if(typeof v==="number") return '<c r="'+ref+'"'+(s?' s="'+s+'"':'')+'><v>'+v+'</v></c>';
+      return '<c r="'+ref+'" t="inlineStr"'+(s?' s="'+s+'"':'')+'><is><t xml:space="preserve">'+_xe(v)+'</t></is></c>'; }).join("")+'</row>').join("");
+    const cols = sh.widths ? '<cols>'+sh.widths.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join("")+'</cols>' : '';
+    const merges = (sh.merges&&sh.merges.length) ? '<mergeCells count="'+sh.merges.length+'">'+sh.merges.map(m=>'<mergeCell ref="'+m+'"/>').join("")+'</mergeCells>' : '';
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+cols+'<sheetData>'+rows+'</sheetData>'+merges+'</worksheet>';
+  });
+  const fontKey = s=>JSON.stringify({b:!!s.bold, c:s.color||"", z:s.size||11}), fontId = s=>{ const k = fontKey(s); if(!(k in fontIdx)){ fontIdx[k] = fonts.length; fonts.push({b:!!s.bold, c:s.color||"", z:s.size||11}); } return fontIdx[k]; };
+  const fillId = c=>{ if(!c) return 0; if(!(c in fillIdx)){ fillIdx[c] = fills.length; fills.push(c); } return fillIdx[c]; };
+  const xfs = styles.map(s=>({font:fontId(s), fill:fillId(s.fill), border:s.border?1:0, center:!!s.center, wrap:!!s.wrap}));
+  const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<fonts count="'+fonts.length+'">'+fonts.map((f,i)=>i===0?'<font><sz val="11"/><name val="Calibri"/></font>':'<font>'+(f.b?'<b/>':'')+'<sz val="'+f.z+'"/>'+(f.c?'<color rgb="FF'+f.c+'"/>':'')+'<name val="Calibri"/></font>').join("")+'</fonts>'+
+    '<fills count="'+fills.length+'">'+fills.map(f=>f==="none"||f==="gray125"?'<fill><patternFill patternType="'+f+'"/></fill>':'<fill><patternFill patternType="solid"><fgColor rgb="FF'+f+'"/><bgColor indexed="64"/></patternFill></fill>').join("")+'</fills>'+
+    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border></borders>'+
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+    '<cellXfs count="'+xfs.length+'">'+xfs.map(x=>'<xf numFmtId="0" fontId="'+x.font+'" fillId="'+x.fill+'" borderId="'+x.border+'" xfId="0"'+(x.font?' applyFont="1"':'')+(x.fill?' applyFill="1"':'')+(x.border?' applyBorder="1"':'')+((x.center||x.wrap)?' applyAlignment="1"><alignment'+(x.center?' horizontal="center" vertical="center"':'')+(x.wrap?' wrapText="1"':'')+'/></xf>':'/>')).join("")+'</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  files.push({name:"[Content_Types].xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+names.map((n,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("")+'</Types>'});
+  files.push({name:"_rels/.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'});
+  files.push({name:"xl/workbook.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'+names.map((n,i)=>'<sheet name="'+_xe(n)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join("")+'</sheets></workbook>'});
+  files.push({name:"xl/_rels/workbook.xml.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+names.map((n,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join("")+'<Relationship Id="rId'+(names.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'});
+  files.push({name:"xl/styles.xml", data:stylesXml});
+  sheetXml.forEach((x,i)=>files.push({name:"xl/worksheets/sheet"+(i+1)+".xml", data:x}));
+  return _zip(files);
+}
+function pdiPerJamSheet(recs, sh, d){
+  const L = PDI_SLOTS[sh], label = sh==="2" ? "NIGHT" : "DAY";
+  const ok = recs.filter(r=>pdiIsOk(r) && r.sh===sh), seen = new Set(ok.map(r=>r.m||"?"));
+  const models = [...new Set(["AGYA","CALYA","RAIZE","AVANZA"].concat([...seen]))].filter(m=>seen.has(m) || ["AGYA","CALYA","RAIZE","AVANZA"].includes(m));
+  const data = {}; models.forEach(m=>{ data[m] = {}; L.forEach(s=>data[m][s] = 0); });
+  ok.forEach(r=>{ const m = r.m||"?"; if(data[m]) data[m][pdiSlotOf(r.doneTs||r.ts, sh)]++; });
+  const H = {fill:"1F4E79", bold:true, color:"FFFFFF", center:true, border:true}, Y = {fill:"FFFF00", center:true, border:true}, C = {center:true, border:true};
+  const rows = [["SHIFT","MODEL","Time(')","M-1","1","2"].map(v=>({v, s:H}))], merges = [];
+  let row = 2; const shStart = row;
+  models.forEach(m=>{
+    const mc = PDI_XL_COLORS[m] || String(pdiModelColor(m,d)).replace("#","").toUpperCase().slice(0,6), MF = {fill:mc, bold:true, size:12, center:true, border:true}, mStart = row;
+    L.forEach(sl=>{ rows.push([{v:"", s:Y}, {v:"", s:MF}, {v:sl, s:C}, {v:"", s:C}, {v:data[m][sl], s:{center:true, border:true, bold:true}}, {v:"", s:C}]); row++; });
+    rows.push([{v:"", s:Y}, {v:"", s:MF}, {v:"TOTAL", s:{bold:true, center:true, border:true}}, {v:"", s:{border:true}}, {v:Object.values(data[m]).reduce((a,b)=>a+b,0), s:{fill:mc, bold:true, center:true, border:true}}, {v:"", s:{border:true}}]);
+    rows[mStart-1][1] = {v:m, s:MF}; merges.push("B"+mStart+":B"+row); row++;
+  });
+  if(row-1 >= shStart){ rows[shStart-1][0] = {v:label+"\nSHIFT", s:{fill:"FFFF00", bold:true, size:12, center:true, border:true, wrap:true}}; merges.push("A"+shStart+":A"+(row-1)); }
+  return {name:"Per Jam "+label, rows, merges, widths:[10,14,14,6,6,6]};
 }
 
 /* ===== Tampilan halaman PDI (PC) ===== */
@@ -12077,6 +12696,7 @@ function pdiScanKey(e, el){
 }
 function pdiMounted(){
   pdiTlsInit(); pdiArdInit(); pdiUi();
+  if(pdiBookMode()==="camera") setTimeout(()=>{ pdiCv().then(()=>pdiBookLoadAll()).then(t=>{ if(!PB.tmpls) PB.tmpls = t; }).catch(()=>{}); }, 1500);   // siapkan pembaca buku lebih dulu
   if(!PDI.cam.on && pdiCamWanted()) pdiCamStart();
   setTimeout(()=>{ const b = document.getElementById("pdiScanBox"); if(b && !document.querySelector("#pdiOv input")) b.focus(); }, 100);
 }
@@ -12097,7 +12717,7 @@ function pdiUi(){
     <div class="pdiStats">
       ${pdiChip(PDI.cam.on && !PDI.cam.err, PDI.cam.on, "📷 Kamera"+(PDI.cam.on&&PDI.cam.fps?" "+PDI.cam.fps+"fps":""), "pdiCamToggle()", "Nyalakan / matikan kamera")}
       ${pdiChip(pdiTlsReady(), !!PDI_TLS.dir, "📁 TLS "+(pdiTlsReady()?"PAD":(PDI_TLS.dir?"izinkan":"manual")), PDI_TLS.dir&&!pdiTlsReady()?"pdiTlsReperm()":"pdiTlsPick()", PDI_TLS.dir?("Folder: "+PDI_TLS.name):"Pilih folder data PAD (tls_input.json)")}
-      ${pdiChip(PDI_ARD.ok, !!PDI_ARD.port, "🔌 Pintu "+(PDI_ARD.ok?"ON":(PDI_ARD.port?"…":"OFF")), PDI_ARD.ok?"pdiDoorMenu()":"pdiArdPick()", "Sambungkan Arduino pintu")}
+      ${pdiChip(pdiArdOn(), !!PDI_ARD.port || pdiArdCfg().enabled, "🔌 Arduino "+(pdiArdOn()?"ON":(pdiArdCfg().enabled?(PDI_ARD.port?"…":"belum sambung"):"OFF")), "pdiArdSetOpen()", "⚙ Setting Arduino (pintu sticker)")}
       ${pdiChip(pdiVoiceOn(), false, pdiVoiceOn()?"🔊 Suara":"🔇 Suara", "pdiVoiceToggle()", "Suara ON/OFF")}
       <button type="button" class="pdiStat off" onclick="pdiFullscreen()" title="Layar penuh">⛶</button>
     </div>`;
@@ -12136,11 +12756,14 @@ function pdiDashHtml(d, st, s, stt){
       <div style="display:flex;align-items:flex-end;gap:10px;"><div style="flex:1;"><div style="font-size:12px;color:var(--text-dim);font-weight:700;">ACTUAL ${escH(pdiShiftLabel(s.sh)).toUpperCase()}</div>
         <div class="pdiBig">${stt.n}<span> / ${stt.plan}</span></div></div><div style="font-size:26px;font-weight:900;color:${pct>=100?"var(--green)":"var(--text)"};">${pct}%</div></div>
       <div class="pdiBar"><i style="width:${pct}%"></i></div>
-      <div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;">${models.length?models.map(([m,n])=>`<div class="pdiMRow"><i style="background:${pdiModelColor(m,d)}"></i><span>${escH(m)}</span><b>${n}</b></div>`).join(""):`<div style="font-size:12px;color:var(--text-dim);">Belum ada unit di shift ini.</div>`}</div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;">${models.length?models.map(([m,n])=>`<div class="pdiMRow" style="cursor:pointer;" title="Lihat No. Rangka ${escH(m)}" onclick="_pdiHistM='${escH(m)}';_pdiHistSh='cur';_pdiHistQ='';pdiHistOpen()"><i style="background:${pdiModelColor(m,d)}"></i><span>${escH(m)}</span><b>${n}</b></div>`).join(""):`<div style="font-size:12px;color:var(--text-dim);">Belum ada unit di shift ini.</div>`}</div>
       ${stt.prob.length||stt.skip||stt.man?`<div style="font-size:11px;color:var(--text-dim);margin-top:8px;">${stt.prob.length?`⚠ Problem ${stt.prob.length} · `:""}${stt.skip?`Buku skip ${stt.skip} · `:""}${stt.man?`Input manual ${stt.man}`:""}</div>`:""}
     </div>
     <div class="pdiBtns">
-      <button type="button" class="btn btn-outline btn-sm" onclick="pdiHistOpen()">📋 Riwayat</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pdiCatOpen('batam')">🚢 Unit Batam${(()=>{ const n = pdiWaitList("batam",d).length; return n?` <span class="pdiCount" style="background:#0891b2;">${n}</span>`:""; })()}</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pdiCatOpen('prio')">⭐ Unit Prioritas${(()=>{ const n = pdiWaitList("prio",d).length; return n?` <span class="pdiCount" style="background:#7c3aed;">${n}</span>`:""; })()}</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pdiGrafikOpen()">📊 Grafik</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="_pdiHistM='';pdiHistOpen()">📋 Riwayat</button>
       <button type="button" class="btn btn-outline btn-sm" onclick="pdiProbList()">⚠ Unit Problem${probOpen?` <span class="pdiCount" style="background:#d97706;">${probOpen}</span>`:""}</button>
       <button type="button" class="btn btn-outline btn-sm" onclick="pdiManualOpen()">📝 Input Manual</button>
       <button type="button" class="btn btn-outline btn-sm" onclick="pdiPerJamOpen()">⏱ Per Jam</button>
@@ -12153,11 +12776,7 @@ function pdiDashHtml(d, st, s, stt){
     ${pdiOpenCardHtml(d, {always:true})}`;
 }
 function pdiFullscreen(){ try{ if(document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); }catch(e){} }
-function pdiDoorMenu(){
-  showModal(`<h3 style="margin:0 0 8px;">🔌 Pintu (Arduino)</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Tersambung. Respons terakhir: <b>${escH(PDI_ARD.last||"-")}</b></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><button type="button" class="btn btn-primary" onclick="closeModal();pdiArdCmd(pdiCfg().door.up,pdiCfg().door.dur,'NAIK')">⬆ Test NAIK</button><button type="button" class="btn btn-primary" onclick="closeModal();pdiDoorClose()">⬇ TURUN</button>
-    <button type="button" class="btn btn-outline" style="grid-column:1 / -1;" onclick="closeModal();pdiArdClose()">Putuskan Arduino</button></div>`);
-}
+function pdiDoorMenu(){ pdiArdSetOpen(); }
 
 /* ===== Overlay PDI (popup di atas halaman, tidak terganggu refresh data) ===== */
 let _pdiOvKeys = null;
@@ -12185,17 +12804,19 @@ document.addEventListener("keydown", e=>{
 setInterval(()=>{ try{ if(activeTab==="pdi") pdiUi(); }catch(e){} }, 5000);
 
 /* ===== Riwayat / Unit Problem / Input Manual / Per Jam ===== */
-let _pdiHistQ = "", _pdiHistSh = "cur";
+let _pdiHistQ = "", _pdiHistSh = "cur", _pdiHistM = "";
 function pdiHistOpen(){
   const now = Date.now(), s = pdiShiftOf(now);
   let pd = s.pd, sh = s.sh; if(_pdiHistSh==="prev"){ if(sh==="2") sh = "1"; else { sh = "2"; pd = pd-86400000; } }
   let L = (_pdiHistSh==="all" ? pdiRecList() : pdiShiftRecs(pd, sh)).filter(r=>r.st!=="BATAL");
   const q = normVin(_pdiHistQ); if(q) L = pdiRecList().filter(r=>r.st!=="BATAL" && (normVin(r.f).includes(q) || normVin(r.e).includes(q) || String(r.k||"").includes(q)));
+  const msAll = [...new Set(L.map(r=>r.m||"?"))].sort(); if(_pdiHistM) L = L.filter(r=>(r.m||"?")===_pdiHistM);
   L.sort((a,b)=>(b.doneTs||b.ts)-(a.doneTs||a.ts));
   showModal(`<h3 style="margin:0 0 8px;">📋 Riwayat PDI</h3>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${[["cur","Shift ini"],["prev","Shift sebelumnya"],["all","8 hari"]].map(([k,l])=>`<button type="button" class="tlscp" style="${_pdiHistSh===k&&!q?"background:var(--gold);color:#fff;":""}" onclick="_pdiHistQ='';_pdiHistSh='${k}';pdiHistOpen()">${l}</button>`).join("")}
       <input type="text" placeholder="Cari Frame / Engine / Kunci" value="${escH(_pdiHistQ)}" style="flex:1;min-width:160px;" onkeydown="if(event.key==='Enter'){_pdiHistQ=this.value;pdiHistOpen();}"></div>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${L.length} unit</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"><button type="button" class="tlscp" style="${!_pdiHistM?"background:var(--gold);color:#fff;":""}" onclick="_pdiHistM='';pdiHistOpen()">Semua model</button>${msAll.map(m=>`<button type="button" class="tlscp" style="${_pdiHistM===m?"background:var(--gold);color:#fff;":""}" onclick="_pdiHistM='${escH(m)}';pdiHistOpen()">${escH(m)}</button>`).join("")}</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${L.length} unit${_pdiHistM?" · "+escH(_pdiHistM):""}</div>
     <div style="max-height:60vh;overflow:auto;"><table class="pdiTb"><thead><tr><th>Waktu</th><th>Frame No</th><th>Engine</th><th>Kunci</th><th>Model</th><th>Status</th><th>PIC</th></tr></thead><tbody>
     ${L.slice(0,400).map(r=>`<tr><td style="white-space:nowrap;">${escH(new Date(r.doneTs||r.ts).toLocaleDateString("id-ID",{day:"2-digit",month:"short"}))} ${holdHm(r.doneTs||r.ts)}</td><td><b style="font-family:monospace;">${escH(r.f)}</b> ${pdiTipeBadge(r.t,true)}</td><td style="font-family:monospace;">${escH(r.e||"")}</td><td>${escH(r.k||"")}</td><td>${escH(r.m||"")}</td><td>${escH(r.st||"")}${r.pb?`<div style="font-size:10px;color:#b45309;">${escH(r.pb)}</div>`:""}</td><td style="font-size:11px;">${escH(r.n||"")}</td></tr>`).join("")}
     </tbody></table></div>`);
@@ -12228,9 +12849,9 @@ function pdiManualSave(){
   if(prob){ r.pbHist = (prob.pbHist||[]).concat([{pb:prob.pb, note:prob.pbNote||"", ts:prob.ts}]); delete r.pb; delete r.pbNote; }
   pdiPut(r); pdiOpenAdd(r); closeModal(); pdiToast("Tersimpan: "+f);
 }
-function pdiPerJamRows(pd, sh, st){
-  const [a,b] = shiftWindow(pd, sh), ok = pdiShiftRecs(pd, sh, st).filter(pdiIsOk), ms = [...new Set(ok.map(r=>r.m||"?"))].sort(), rows = [];
-  for(let t=a; t<b; t+=3600000){ const L = ok.filter(r=>(r.doneTs||r.ts)>=t && (r.doneTs||r.ts)<t+3600000); rows.push([holdHm(t)+"–"+holdHm(t+3600000)].concat(ms.map(m=>L.filter(r=>(r.m||"?")===m).length)).concat([L.length])); }
+function pdiPerJamRows(pd, sh, st){   /* slot jam sama dengan laporan v51 (Day 07:15~20:00 · Night 21:00~06:30) */
+  const ok = pdiShiftRecs(pd, sh, st).filter(pdiIsOk), ms = [...new Set(ok.map(r=>r.m||"?"))].sort(), rows = [];
+  PDI_SLOTS[sh].forEach(sl=>{ const L = ok.filter(r=>pdiSlotOf(r.doneTs||r.ts, sh)===sl); rows.push([sl].concat(ms.map(m=>L.filter(r=>(r.m||"?")===m).length)).concat([L.length])); });
   return {ms, rows, tot:ok.length};
 }
 function pdiPerJamOpen(){
@@ -12250,14 +12871,20 @@ function pdiXlDownload(){
   const shs = sh==="all" ? ["1","2"] : [sh];
   const L = [].concat(...shs.map(x=>pdiShiftRecs(pd, x, st))).filter(r=>r.st!=="BATAL" && r.st!=="PROSES").sort((a,b)=>(a.doneTs||a.ts)-(b.doneTs||b.ts));
   if(!L.length){ alert("Tidak ada data PDI untuk "+ds+(sh==="all"?"":" shift "+sh)+"."); return; }
-  const tipe = t=> t==="B" ? "BATAM" : (t==="P" ? "PRIORITAS" : "REGULER");
-  const head = ["No","Tanggal","Waktu","Shift","PIC","Tim","Lokasi","Model","Frame No","Engine No","No Kunci","Tipe Unit","Status","Keterangan"];
-  const rows = L.map((r,i)=>{ const t = new Date(r.doneTs||r.ts); return [i+1, t.toLocaleDateString("id-ID"), holdHm(t.getTime()), r.sh, r.n||"", r.tim?rsShift(r.tim):"", pdiStationLabel(r.s), r.m||"", r.f, r.e||"", r.k||"", tipe(r.t), r.st, r.pb?(r.pb+(r.pbNote?" — "+r.pbNote:"")):((r.pbHist||[]).length?"Problem sebelumnya: "+r.pbHist.slice(-1)[0].pb:"")]; });
-  const sheets = [{name:"PDI", rows:[head].concat(rows)}];
-  shs.forEach(x=>{ const pj = pdiPerJamRows(pd, x, st); sheets.push({name:"Per Jam S"+x, rows:[["Jam"].concat(pj.ms).concat(["Total"])].concat(pj.rows).concat([["TOTAL"].concat(pj.ms.map((m,j)=>pj.rows.reduce((a,r)=>a+(+r[j+1]||0),0))).concat([pj.tot])])}); });
-  const sum = {}; L.filter(pdiIsOk).forEach(r=>{ sum[r.m||"?"] = (sum[r.m||"?"]||0)+1; });
-  sheets.push({name:"Ringkasan", rows:[["Model","Actual"]].concat(Object.entries(sum).sort((a,b)=>b[1]-a[1])).concat([["TOTAL", L.filter(pdiIsOk).length],["Planning", shs.reduce((a,x)=>a+pdiPlan(DB.get(), st, x),0)],["Unit Problem", L.filter(r=>r.st==="PROBLEM").length]])});
-  mfSave("PDI-"+pdiStation()+"-"+ds+(sh==="all"?"":"-S"+sh)+".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx(sheets, [5,11,7,6,18,7,7,18,20,14,8,10,16,30]));
+  /* format sama dengan laporan Excel v51: Detail Scan · Summary · Per Jam DAY/NIGHT (+ Unit Problem) */
+  const tipe = t=> t==="B" ? "BATAM" : (t==="P" ? "PRIORITAS" : "REGULER"), HB = {bold:true, fill:"1F4E79", color:"FFFFFF", center:true, border:true}, BD = {border:true};
+  const ok = L.filter(pdiIsOk);
+  const head = ["No","Waktu","PIC","Shift","Tanggal","Model","Frame No","Engine No","Kunci","Tipe Unit","Status"];
+  const det = ok.map((r,i)=>{ const t = new Date(r.doneTs||r.ts), pad = n=>String(n).padStart(2,"0"); return [i+1, t.getFullYear()+"-"+pad(t.getMonth()+1)+"-"+pad(t.getDate())+" "+pad(t.getHours())+":"+pad(t.getMinutes())+":"+pad(t.getSeconds()), r.n||"", r.sh==="2"?"NIGHT":"DAY", mfDateStr(r.pd), r.m||"", r.f, r.e||"", r.k||"", tipe(r.t), r.st].map(v=>({v, s:BD})); });
+  const sheets = [{name:"Detail Scan", rows:[head.map(v=>({v, s:HB}))].concat(det), widths:[5,20,18,8,12,20,21,15,8,11,18]}];
+  const byM = {}; ok.forEach(r=>{ byM[r.m||"?"] = (byM[r.m||"?"]||0)+1; });
+  const plan = shs.reduce((a,x)=>a+pdiPlan(DB.get(), st, x),0), tot = ok.length, sel = tot-plan;
+  const pics = [...new Set(ok.map(r=>r.n).filter(Boolean))].join(", ") || ((currentUser&&currentUser.name)||"");
+  sheets.push({name:"Summary", widths:[22,14], rows:[[{v:"Keterangan",s:HB},{v:"Nilai",s:HB}],["PIC",pics],["Shift",sh==="all"?"DAY + NIGHT":(sh==="2"?"NIGHT":"DAY")],["Tanggal",ds],["Planning",plan],["",""]].concat(Object.entries(byM).map(([m,q])=>[m,q])).concat([[{v:"TOTAL ACTUAL",s:{bold:true}},{v:tot,s:{bold:true}}],[{v:sel>=0?"PLUS":"MINUS",s:{bold:true}},{v:Math.abs(sel),s:{bold:true}}]]).map(r=>r.map(c=>(c && typeof c==="object") ? Object.assign({}, c, {s:Object.assign({border:true}, c.s)}) : {v:c, s:BD}))});
+  shs.forEach(x=>sheets.push(pdiPerJamSheet(L, x, DB.get())));
+  const pr = L.filter(r=>r.st==="PROBLEM" || (r.pbHist||[]).length);
+  if(pr.length) sheets.push({name:"Unit Problem", widths:[18,21,18,36,30,10], rows:[["Waktu","Frame No","Model","Problem","Keterangan","Status"].map(v=>({v, s:HB}))].concat(pr.map(r=>{ const open = r.st==="PROBLEM", h = open ? {pb:r.pb, note:r.pbNote} : (r.pbHist||[]).slice(-1)[0]||{}; return [new Date(r.ts).toLocaleString("id-ID"), r.f, r.m||"", h.pb||"", h.note||"", open?"OPEN":"SELESAI"].map(v=>({v, s:BD})); }))});
+  mfSave("PDI_Report_"+ds.replace(/-/g,"")+"_Shift"+(sh==="all"?"ALL":(sh==="2"?"NIGHT":"DAY"))+".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", pdiXlsx(sheets));
 }
 
 /* ===== Pengaturan PDI (role PDI & Admin) ===== */
@@ -12269,15 +12896,8 @@ function pdiCfgHtml(){
     <div class="card"><h3 style="margin:0 0 8px;">🏭 Planning ${escH(pdiStationLabel(st))}</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div class="field"><label>Shift 1 (07.00–20.00)</label><input id="pdiPD" type="number" min="0" value="${p.d==null?100:p.d}"></div><div class="field"><label>Shift 2 (20.00–07.00)</label><input id="pdiPN" type="number" min="0" value="${p.n==null?100:p.n}"></div></div></div>
     <div class="card"><h3 style="margin:0 0 8px;">📘 Cek Buku</h3>
-      <select id="pdiBook"><option value="manual" ${c.book==="manual"?"selected":""}>Operator konfirmasi buku (Enter = sesuai, bisa dilewati)</option><option value="off" ${c.book==="off"?"selected":""}>Tanpa cek buku</option></select></div>
-    <div class="card"><h3 style="margin:0 0 8px;">🔌 Pintu (Arduino)</h3>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
-        <div class="field"><label>Perintah naik</label><input id="pdiDU" type="text" value="${escH(c.door.up)}"></div>
-        <div class="field"><label>Perintah turun</label><input id="pdiDD" type="text" value="${escH(c.door.down)}"></div>
-        <div class="field"><label>Durasi (detik)</label><input id="pdiDT" type="number" min="1" value="${c.door.dur}"></div>
-        <div class="field"><label>Turun otomatis setelah (detik)</label><input id="pdiDL" type="number" min="0" value="${c.door.delay}"></div></div>
-      <label style="font-size:13px;"><input id="pdiDA" type="checkbox" ${c.door.auto?"checked":""}> Pintu turun otomatis</label>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Sketch Arduino sama dengan PDI v51 (pdi_relay.ino, 9600 baud). Perintah dikirim sebagai <code>UP:3</code> / <code>DOWN:3</code>.</div></div>
+      <select id="pdiBook"><option value="camera" ${c.book==="camera"?"selected":""}>Kamera mencocokkan sampul buku (seperti v51)</option><option value="manual" ${c.book==="manual"?"selected":""}>Operator konfirmasi buku (Enter = sesuai)</option><option value="off" ${c.book==="off"?"selected":""}>Tanpa cek buku</option></select>
+      ${pdiBookListHtml()}</div>
     <div class="card"><h3 style="margin:0 0 8px;">🔒 Pola Barcode</h3>
       <div class="field"><label>Prefix Engine No (pisahkan koma)</label><input id="pdiEng" type="text" value="${escH(c.eng.join(", "))}" style="text-transform:uppercase;"></div>
       <div class="field"><label>Toleransi posisi kartu lama (MHK)</label><input id="pdiTol" type="number" step="0.01" min="0.03" max="0.3" value="${c.tol}"></div>
@@ -12288,13 +12908,27 @@ function pdiCfgHtml(){
       <button type="button" class="tlscp" style="margin-top:6px;" onclick="document.querySelector('#pdiCMT tbody').insertAdjacentHTML('beforeend', ${escH(JSON.stringify(mrow("",{codes:[],color:"#475569"})))})">＋ Tambah model</button></div>
     <button type="button" class="btn btn-primary" onclick="pdiCfgSave()">💾 Simpan Pengaturan PDI</button>`;
 }
+function pdiBookListHtml(){
+  const d = DB.get(), bc = pdiBookCfg(d);
+  const rows = pdiAllModels(d).sort().map(m=>{ const src = pdiBookSrc(m,d), thr = bc.thr[m];
+    return `<tr><td><i class="pdiDot" style="background:${pdiModelColor(m,d)}"></i>${escH(m)}</td><td>${src ? (src.srv ? "📷 foto di server" : "bawaan v51") : `<span style="color:#b45309;">belum ada — ambil saat scan buku pertama</span>`}</td><td>${thr?(+thr).toFixed(2):"0.55"}</td><td>${src&&src.srv&&PDI_BOOK_FILES[m]?`<button type="button" class="tlscp" onclick="pdiBookRevert('${escH(m)}')">pakai bawaan</button>`:""}${thr?`<button type="button" class="tlscp" onclick="pdiBookThrReset('${escH(m)}')">reset kalibrasi</button>`:""}</td></tr>`; }).join("");
+  return `<div style="overflow-x:auto;margin-top:8px;"><table class="pdiTb"><thead><tr><th>Model</th><th>Foto buku</th><th>Min skor</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Model tanpa foto: saat scan buku pertama klik <b>📷 SIMPAN FOTO BUKU</b>. Foto bawaan bisa diganti lewat <b>📷 Foto Ulang Buku</b> saat scan buku (disarankan sekali per model agar sesuai kamera & cahaya di line).</div>`;
+}
+function pdiBookRevert(m){ if(!confirm("Pakai lagi foto buku bawaan untuk "+m+"?")) return; DB.set(d=>{ const c = d.pdiCfg = d.pdiCfg||{}; if(c.bookSrv) delete c.bookSrv[m]; if(c.bookRoi) delete c.bookRoi[m]; if(c.bookThr) delete c.bookThr[m]; }); delete PDI_TPL[m]; PB.tmpls = null; pdiCfgOpen(); }
+function pdiBookThrReset(m){ DB.set(d=>{ const c = d.pdiCfg = d.pdiCfg||{}; if(c.bookThr) delete c.bookThr[m]; }); pdiCfgOpen(); }
 function pdiCfgLocalHtml(){
   return `<div class="card"><h3 style="margin:0 0 8px;">💻 Pengaturan PC ini</h3>
     <div class="field"><label>Lokasi</label><select id="pdiSt" onchange="try{localStorage.setItem('radar_pdi_station',this.value)}catch(e){};pdiUi();">${PDI_STATIONS.map(s=>`<option value="${s.k}" ${pdiStation()===s.k?"selected":""}>${s.label}</option>`).join("")}</select></div>
     <div class="field"><label>Kamera</label><select id="pdiCamSel" onchange="try{localStorage.setItem('radar_pdi_cam',this.value)}catch(e){};pdiCamStop();pdiCamStart();"><option value="">Kamera bawaan / pertama</option></select></div>
     <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiLight()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_light',this.checked?'1':'0')}catch(e){}"> Mode ringan (PC lama: kamera dibaca lebih jarang)</label>
     <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiVoiceOn()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_voice',this.checked?'1':'0')}catch(e){};pdiUi();"> Suara</label>
-    <button type="button" class="tlscp" onclick="pdiSay('frame');setTimeout(()=>pdiSay('batam'),900)">▶ Test suara</button>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;"><button type="button" class="tlscp" onclick="pdiSay('frame',null,true);setTimeout(()=>pdiSay('batam',null,true),900)">▶ Test suara</button><button type="button" class="tlscp" onclick="pdiVoiceOpen()">🔊 Setting Suara</button>
+      <button type="button" class="tlscp" onclick="pdiCamTuneOpen()">🔆 Setting Kamera</button><button type="button" class="tlscp" onclick="pdiRoiOpen()">🔒 Area Scan</button><button type="button" class="tlscp" onclick="pdiTeachOpen()">📍 Ajari Posisi Kartu Lama</button></div>
+    <h4 style="margin:12px 0 6px;">🔌 Arduino (pintu sticker)</h4>
+    <div style="font-size:12px;">${pdiArdOn()?"🟢 Tersambung: <b>"+escH(PDI_ARD.info)+"</b>":(pdiArdCfg().enabled?"🟡 Aktif, port belum tersambung":"🔴 Nonaktif")}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;"><button type="button" class="tlscp" style="background:#6e40c9;color:#fff;" onclick="pdiArdSetOpen()">⚙ Setting Arduino</button><button type="button" class="tlscp" onclick="pdiDoorBtn('up')">Pintu NAIK ⬆</button><button type="button" class="tlscp" onclick="pdiDoorBtn('down')">Pintu TURUN ⬇</button></div>
+    <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiRotOn()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_rot',this.checked?'1':'0')}catch(e){}"> Baca barcode miring di semua sudut</label>
     <div style="font-size:11px;color:var(--text-dim);margin:6px 0;">Suara memakai suara Windows. Untuk logat Indonesia: Settings → Time & Language → Speech → Add voices → Indonesian.</div>
     <h4 style="margin:12px 0 6px;">📁 Folder TLS (PAD)</h4>
     <div style="font-size:12px;">${PDI_TLS.dir?`Tersambung: <b>${escH(PDI_TLS.name)}</b> (${pdiTlsReady()?"diizinkan":"perlu izin"})`:"Belum tersambung — TLS diisi manual."}</div>
@@ -12329,7 +12963,6 @@ function pdiCfgSave(){
     const c = d.pdiCfg = d.pdiCfg || {};
     c.plan = c.plan || {}; c.plan[st] = {d:num("pdiPD",100), n:num("pdiPN",100)};
     c.book = document.getElementById("pdiBook").value;
-    c.door = {up:document.getElementById("pdiDU").value.trim()||"UP", down:document.getElementById("pdiDD").value.trim()||"DOWN", dur:num("pdiDT",3)||3, delay:num("pdiDL",5), auto:document.getElementById("pdiDA").checked};
     c.eng = eng.length ? eng : PDI_ENG_DEF.slice();
     c.tol = Math.min(0.3, Math.max(0.03, +document.getElementById("pdiTol").value||0.12));
     c.models = models; c.del = del;
@@ -12345,6 +12978,7 @@ function renderAdminPdi(){
       <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">Buat akun operator dengan role <b>PDI</b> di menu User. Operator membuka RADAR di PC PDI (Chrome / Edge), login, lalu menu <b>Scan PDI</b> terbuka.</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="tlscp" onclick="pdiHistOpen()">📋 Riwayat</button><button type="button" class="tlscp" onclick="pdiProbList()">⚠ Unit Problem</button><button type="button" class="tlscp" onclick="pdiXlOpen()">📥 Excel</button></div></div>
     ${pdiOpenCardHtml(d, {always:true})}
+    <div class="card"><h3 style="margin:0 0 6px;">📘 Foto buku bawaan</h3><div style="font-size:12px;color:var(--text-dim);">12 foto sampul buku dari PDI v51 (<code>buku-agya.jpg</code>, <code>buku-calya.jpg</code>, … ) di-upload ke repo <b>radar</b>, sejajar dengan index.html. Model tanpa foto (mis. AVANZA, RUSH, VELOZ) difoto langsung di line lewat <b>📷 SIMPAN FOTO BUKU</b> dan tersimpan di server.</div></div>
     <div class="card"><h3 style="margin:0 0 6px;">🔐 Aturan Firebase (sekali saja)</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Firebase console → Realtime Database → <b>Rules</b>. Tambahkan blok ini di dalam <code>"rules": { … }</code>, sejajar dengan <code>"radar_track"</code>, lalu <b>Publish</b>.</div>
       <pre style="background:#0F172A;color:#E2E8F0;padding:10px;border-radius:8px;font-size:12px;overflow:auto;">${escH(PDI_RULES_SNIPPET)}</pre><button type="button" class="tlscp" onclick="tlsCopy(PDI_RULES_SNIPPET,this)">Salin</button></div>
     ${pdiCfgHtml()}`;
@@ -12364,6 +12998,486 @@ function pdiSharedRole(force){
   }catch(e){}
 }
 setTimeout(()=>pdiSharedRole(), 9000); setInterval(()=>pdiSharedRole(), 30000);
+
+/* ===== PDI ARDUINO — pintu sticker lewat Web Serial (Chrome / Edge di PC) =====
+   Tampilan & isi "⚙ Pengaturan Arduino" disamakan dengan Toyota PDI v51.
+   Pengaturan disimpan per PC (seperti arduino_config.json di v51). Sketch: pdi_relay.ino (sama persis). */
+const PDI_ARD_DEF = {enabled:false, baud:9600, delay_connect:1.5, open_command:"UP", close_command:"DOWN", open_duration:3,
+  auto_close:true, auto_close_delay:5, pin_relay_up:8, pin_relay_down:9, pin_limit_up:2, pin_limit_down:3,
+  operation_mode:"limit", limit_active_low:true, beep_on_open:true, show_popup:true};
+const PDI_ARD = {port:null, ok:false, err:"", last:"", waiters:[], q:Promise.resolve(), reading:false, reader:null, baud:0, info:""};
+function pdiArdWanted(){ try{ return localStorage.getItem("radar_pdi_ard")==="1"; }catch(e){ return false; } }
+function pdiArdCfg(){
+  let c = null; try{ c = JSON.parse(localStorage.getItem("radar_pdi_ardcfg")||"null"); }catch(e){}
+  if(!c || typeof c!=="object"){   // pertama kali: ambil dari pengaturan pintu versi sebelumnya
+    let o = {}; try{ o = (pdiCfg().door)||{}; }catch(e){}
+    c = {enabled:pdiArdWanted(), open_command:o.up, close_command:o.down, open_duration:o.dur, auto_close:o.auto, auto_close_delay:o.delay};
+    Object.keys(c).forEach(k=>{ if(c[k]==null || c[k]==="") delete c[k]; });
+  }
+  return Object.assign({}, PDI_ARD_DEF, c);
+}
+function pdiArdCfgSave(c){ try{ localStorage.setItem("radar_pdi_ardcfg", JSON.stringify(c)); localStorage.setItem("radar_pdi_ard", c.enabled?"1":"0"); }catch(e){} }
+function pdiArdOn(){ return !!(PDI_ARD.ok && pdiArdCfg().enabled); }
+function pdiArdPortName(p){
+  try{ const i = p.getInfo ? p.getInfo() : {}; if(!i || i.usbVendorId==null) return "Port serial";
+    const h = n=>("000"+(n||0).toString(16).toUpperCase()).slice(-4);
+    const v = {0x2341:"Arduino", 0x2A03:"Arduino", 0x1A86:"CH340", 0x0403:"FTDI", 0x10C4:"CP210x"}[i.usbVendorId] || "USB";
+    return v+" (VID "+h(i.usbVendorId)+" / PID "+h(i.usbProductId)+")";
+  }catch(e){ return "Port serial"; }
+}
+async function pdiArdInit(){
+  if(!navigator.serial || PDI_ARD.ok || PDI_ARD.port || !pdiArdCfg().enabled) return;
+  try{ const ps = await navigator.serial.getPorts(); if(ps.length) await pdiArdOpen(ps[0]); }catch(e){}
+}
+async function pdiArdPick(){
+  if(!navigator.serial){ alert("Browser ini belum bisa menyambung Arduino.\nPakai Google Chrome atau Microsoft Edge di PC PDI."); return false; }
+  let p; try{ p = await navigator.serial.requestPort(); }
+  catch(e){ if(e && e.name!=="NotFoundError") alert("Gagal menyambung Arduino: "+(e.message||e)); return false; }
+  if(PDI_ARD.port && PDI_ARD.port!==p) await pdiArdClose(true);
+  const c = pdiArdCfg(); c.enabled = true; pdiArdCfgSave(c);
+  await pdiArdOpen(p); return PDI_ARD.ok;
+}
+async function pdiArdOpen(p){
+  const c = pdiArdCfg();
+  try{ await p.open({baudRate:+c.baud||9600}); }
+  catch(e){ if(!/already open/i.test(String(e&&e.message||""))){ PDI_ARD.err = "Port Arduino tidak bisa dibuka ("+(e.message||e)+"). Tutup aplikasi lain yang memakai port COM ini (mis. PDI v51 / Arduino IDE)."; pdiArdUiRefresh(); return; } }
+  PDI_ARD.port = p; PDI_ARD.err = ""; PDI_ARD.baud = +c.baud||9600; PDI_ARD.info = pdiArdPortName(p); pdiArdUiRefresh();
+  pdiArdReadLoop(p);
+  await new Promise(r=>setTimeout(r, Math.max(0.5, +c.delay_connect||1.5)*1000));   // Arduino restart saat port dibuka: tunggu siap
+  if(PDI_ARD.port===p){ PDI_ARD.ok = true; pdiArdUiRefresh(); }
+}
+async function pdiArdReadLoop(p){
+  if(PDI_ARD.reading) return; PDI_ARD.reading = true;
+  let buf = "";
+  try{
+    while(p.readable && PDI_ARD.port===p){
+      const rd = p.readable.getReader(); PDI_ARD.reader = rd;
+      try{
+        for(;;){ const {value, done} = await rd.read(); if(done) break;
+          buf += new TextDecoder().decode(value);
+          let i; while((i = buf.indexOf("\n")) >= 0){ const l = buf.slice(0,i).trim(); buf = buf.slice(i+1); if(l){ PDI_ARD.last = l; PDI_ARD.waiters.slice().forEach(f=>{ try{ f(l); }catch(e){} }); } } }
+      } catch(e){ break; } finally { try{ rd.releaseLock(); }catch(e){} PDI_ARD.reader = null; }
+    }
+  } finally { PDI_ARD.reading = false; if(PDI_ARD.port===p){ PDI_ARD.ok = false; } pdiArdUiRefresh(); }
+}
+/* keep=true: hanya lepas port (mis. ganti port / ganti baud), status Aktif tetap */
+async function pdiArdClose(keep){
+  if(!keep){ const c = pdiArdCfg(); c.enabled = false; pdiArdCfgSave(c); }
+  const p = PDI_ARD.port; PDI_ARD.ok = false; PDI_ARD.port = null;
+  try{ if(PDI_ARD.reader) await PDI_ARD.reader.cancel(); }catch(e){}
+  for(let i=0; i<20 && PDI_ARD.reading; i++) await new Promise(r=>setTimeout(r,25));
+  try{ if(p) await p.close(); }catch(e){}
+  pdiArdUiRefresh();
+}
+if(navigator.serial){ try{ navigator.serial.addEventListener("disconnect", e=>{ if(e && e.target && PDI_ARD.port && e.target!==PDI_ARD.port) return; PDI_ARD.ok = false; PDI_ARD.port = null; PDI_ARD.err = "Kabel Arduino terlepas."; pdiArdUiRefresh(); }); }catch(e){} }
+function pdiArdUiRefresh(){ try{ pdiUi(); }catch(e){} try{ pdiArdSetConnUi(); }catch(e){} }
+/* Tunggu satu baris balasan Arduino yang cocok */
+function pdiArdWait(test, ms){
+  return new Promise(res=>{ let done = false; const fn = l=>{ if(!done && test(l)){ done = true; clearTimeout(to); PDI_ARD.waiters = PDI_ARD.waiters.filter(x=>x!==fn); res(l); } };
+    const to = setTimeout(()=>{ done = true; PDI_ARD.waiters = PDI_ARD.waiters.filter(x=>x!==fn); res(""); }, ms); PDI_ARD.waiters.push(fn); });
+}
+async function pdiArdWrite(txt){ const w = PDI_ARD.port.writable.getWriter(); try{ await w.write(new TextEncoder().encode(txt)); } finally { w.releaseLock(); } }
+const PDI_ARD_FINAL = ["LIMIT_UP_HIT","LIMIT_DOWN_HIT","TIMEOUT","STOPPED","LIMIT_TIMEOUT_SAFETY"];
+/* Kirim UP:<detik> / DOWN:<detik>, tunggu respons FINAL (satu perintah dalam satu waktu, seperti v51) */
+function pdiArdCmd(cmd, dur, label, onLine){
+  PDI_ARD.q = PDI_ARD.q.then(()=>new Promise(async res=>{
+    if(!PDI_ARD.ok || !PDI_ARD.port){ res("OFF"); return; }
+    let done = false;
+    const fn = l=>{ if(onLine){ try{ onLine(l); }catch(e){} } if(PDI_ARD_FINAL.includes(l)) fin(l); };
+    const to = setTimeout(()=>fin("NO_RESPONSE"), Math.max((+dur||3)+5, 35)*1000);
+    function fin(r){
+      if(done) return; done = true; clearTimeout(to); PDI_ARD.waiters = PDI_ARD.waiters.filter(x=>x!==fn);
+      if(r==="LIMIT_TIMEOUT_SAFETY") alert("⚠ Limit Switch Tidak Terdeteksi\n\nMotor "+label+" sudah berjalan "+dur+" detik\ntapi limit switch tidak terpicu.\n\nKemungkinan penyebab:\n• Kabel limit switch lepas/putus\n• Pin limit switch salah (cek Setting Arduino)\n• Limit switch rusak\n\nMotor sudah STOP otomatis (safety). Cek kabel dulu.");
+      if(r==="ERR") alert("Arduino "+label+" Error\n\nGagal kirim "+cmd+"!\nError: "+PDI_ARD.err+"\n\nCek:\n• Kabel USB Arduino terpasang\n• Port yang dipilih benar (⚙ Setting Arduino)\n• Sketch pdi_relay.ino sudah diupload\n• Baud rate sketch sama dengan setting ("+pdiArdCfg().baud+")");
+      if(r==="NO_RESPONSE") pdiToast("Arduino "+label+": tidak ada jawaban — cek kabel USB / sketch pdi_relay.ino", true);
+      res(r);
+    }
+    PDI_ARD.waiters.push(fn);
+    try{ await pdiArdWrite(cmd+":"+dur+"\n"); }
+    catch(e){ PDI_ARD.err = String(e && e.message || e); fin("ERR"); }
+  }));
+  return PDI_ARD.q;
+}
+let _pdiAudio = null;
+function pdiBeep(freq, ms){ try{ _pdiAudio = _pdiAudio || new (window.AudioContext||window.webkitAudioContext)(); const o = _pdiAudio.createOscillator(), g = _pdiAudio.createGain(); o.frequency.value = freq||1000; g.gain.value = 0.15; o.connect(g); g.connect(_pdiAudio.destination); o.start(); o.stop(_pdiAudio.currentTime + (ms||200)/1000); }catch(e){} }
+/* Dipanggil saat buku OK: NAIK, lalu (kalau Auto Turun) TURUN setelah jeda — jeda dihitung SETELAH pintu selesai naik */
+function pdiDoorOpen(){
+  const c = pdiArdCfg(); if(!c.enabled || !PDI_ARD.ok) return;
+  pdiArdCmd(c.open_command||"UP", c.open_duration, "NAIK").then(r=>{ if(c.auto_close && r!=="OFF") setTimeout(()=>pdiDoorClose(), (+c.auto_close_delay||0)*1000); });
+  if(c.beep_on_open) pdiBeep(1000, 200);
+}
+function pdiDoorClose(){ const c = pdiArdCfg(); if(!c.enabled || !PDI_ARD.ok) return; return pdiArdCmd(c.close_command||"DOWN", c.open_duration, "TURUN"); }
+function pdiDoorBtn(dir){
+  const c = pdiArdCfg();
+  if(!c.enabled || !PDI_ARD.ok){ pdiToast("Arduino belum tersambung — buka ⚙ Setting Arduino", true); return; }
+  if(dir==="up") pdiArdCmd(c.open_command||"UP", c.open_duration, "NAIK"); else pdiDoorClose();
+}
+
+/* ---------- ⚙ PENGATURAN ARDUINO (tampilan sama dengan v51) ---------- */
+function pdiArdSetOpen(){
+  const c = pdiArdCfg();
+  const sec = (ic, t)=>`<div class="pdiAS-sec">${ic}  ${escH(t)}</div>`;
+  const row = (lab, w, hint)=>`<div class="pdiAS-row"><label>${escH(lab)}</label><div class="pdiAS-w">${w}</div>${hint?`<span class="pdiAS-hint">${escH(hint)}</span>`:""}</div>`;
+  const inp = (id, v, w)=>`<input id="${id}" type="text" value="${escH(String(v))}" style="width:${w||8}ch;">`;
+  const chk = (id, v, t)=>`<label class="pdiAS-chk"><input id="${id}" type="checkbox" ${v?"checked":""}> ${escH(t)}</label>`;
+  const pu = c.pin_relay_up, pd = c.pin_relay_down, lu = c.pin_limit_up, ld = c.pin_limit_down, pad = n=>String(n).padEnd(2," ");
+  showModal(`<div class="pdiAS">
+    <div class="pdiAS-hdr"><b>⚙  PENGATURAN ARDUINO</b><span id="pdiASst">${c.enabled?"🟢 AKTIF":"🔴 NONAKTIF"}</span></div>
+    <div class="pdiAS-body">
+      ${sec("📡","KONEKSI SERIAL")}
+      ${row("Status Arduino", chk("pdiAS_en", c.enabled, "Aktifkan Arduino"))}
+      ${row("Port USB", `<span id="pdiASport"></span>`, "")}
+      ${row("Baud Rate", `<select id="pdiAS_baud">${["9600","19200","38400","57600","115200"].map(b=>`<option ${String(c.baud)===b?"selected":""}>${b}</option>`).join("")}</select>`, "default: 9600")}
+      ${row("Delay Koneksi (s)", inp("pdiAS_dly", c.delay_connect, 5), "tunggu Arduino reset")}
+      ${sec("📍","PIN ARDUINO")}
+      ${row("Pin Relay NAIK", inp("pdiAS_pu", pu, 4), "default: 8 (ke IN1 relay)")}
+      ${row("Pin Relay TURUN", inp("pdiAS_pd", pd, 4), "default: 9 (ke IN2 relay)")}
+      ${row("Pin Limit ATAS", inp("pdiAS_lu", lu, 4), "default: 2 (limit switch atas)")}
+      ${row("Pin Limit BAWAH", inp("pdiAS_ld", ld, 4), "default: 3 (limit switch bawah)")}
+      ${sec("🎚","MODE OPERASI — PILIH SALAH SATU")}
+      <div class="pdiAS-mode dur"><label><input type="radio" name="pdiAS_mode" value="durasi" ${c.operation_mode==="durasi"?"checked":""}> ⏱  MODE DURASI — Stop berdasar timer (limit switch dimatikan)</label>
+        <div>Motor jalan sesuai 'Durasi Max' di bawah, lalu STOP.<br>Limit switch DIABAIKAN, walaupun kabelnya terpasang.<br>Pakai ini kalau: limit switch belum dipasang, atau pintu fixed travel.</div></div>
+      <div class="pdiAS-mode lim"><label><input type="radio" name="pdiAS_mode" value="limit" ${c.operation_mode!=="durasi"?"checked":""}> 🔒  MODE LIMIT — Stop saat limit tertekan (durasi dimatikan)</label>
+        <div>Motor jalan terus sampai limit switch tertekan → relay mati otomatis.<br>Timer durasi DIABAIKAN — motor stop persis pas mentok.<br>Pakai ini kalau: limit switch sudah dipasang &amp; teruji bagus.</div></div>
+      <div class="pdiAS-warn">⚠  PERHATIAN — MODE LIMIT:  Pastikan limit switch terpasang &amp; teruji.<br>Kalau limit rusak/lepas saat MODE LIMIT, motor akan jalan terus tanpa stop.<br>Pakai MODE DURASI dulu kalau belum yakin limit switch sudah benar.</div>
+      ${row("Limit Active LOW", chk("pdiAS_low", c.limit_active_low, "Pakai INPUT_PULLUP (umum)"))}
+      <div class="pdiAS-note">Mode, pin &amp; baud tertanam di sketch — setelah diubah, <b>Simpan Sketch</b> lalu upload ulang ke Arduino.</div>
+      ${sec("🚪","PERINTAH PINTU & DURASI")}
+      ${row("Perintah NAIK", inp("pdiAS_up", c.open_command, 10), "kirim ke Arduino: 'UP'")}
+      ${row("Perintah TURUN", inp("pdiAS_dn", c.close_command, 10), "kirim ke Arduino: 'DOWN'")}
+      ${row("Durasi Max (detik)", inp("pdiAS_dur", c.open_duration, 5), "cuma kepake di MODE DURASI")}
+      ${row("Auto Turun", chk("pdiAS_auto", c.auto_close, "Otomatis turun setelah naik"))}
+      ${row("Delay Auto Turun (s)", inp("pdiAS_adl", c.auto_close_delay, 5), "jeda sebelum auto-turun")}
+      ${sec("🔔","NOTIFIKASI")}
+      ${row("Bunyi saat buka", chk("pdiAS_beep", c.beep_on_open, "Beep PC saat pintu naik"))}
+      ${row("Popup konfirmasi", chk("pdiAS_pop", c.show_popup, "Tampilkan pesan di layar"))}
+      ${sec("📖","PANDUAN PEMASANGAN (untuk Anak Baru)")}
+      <pre class="pdiAS-guide">WIRING DIAGRAM:
+
+  ARDUINO UNO              MODUL RELAY 2-CH
+  ┌──────────┐             ┌──────────────┐
+  │  Pin ${pad(pu)}  │────────────>│ IN1 (NAIK)   │
+  │  Pin ${pad(pd)}  │────────────>│ IN2 (TURUN)  │
+  │   5V     │────────────>│ VCC          │
+  │   GND    │────────────>│ GND          │
+  └──────────┘             └──────────────┘
+
+  LIMIT SWITCH (NC, satu sisi ke GND):
+  ┌──────────┐
+  │  Pin ${pad(lu)}  │──── LIMIT ATAS  ──── GND
+  │  Pin ${pad(ld)}  │──── LIMIT BAWAH ──── GND
+  └──────────┘
+
+  RELAY KE MOTOR/PINTU:
+  • Relay 1 (NAIK):  COM ke + motor, NO ke + power
+  • Relay 2 (TURUN): COM ke - motor, NO ke + power
+  • Atau pakai H-bridge MOSFET kalau motor DC besar</pre>
+      <div class="pdiAS-tips">💡 TIPS BUAT ANAK BARU:<br>1. Pakai modul relay 2-channel 5V (umum dijual di toko elektronik)<br>2. Limit switch tipe NC (Normally Closed) lebih aman — kabel putus = stop<br>3. Pin 2 &amp; 3 dipilih karena support interrupt (kalau mau upgrade ke interrupt mode)<br>4. Jangan colok motor langsung ke Arduino — pakai relay/MOSFET!<br>5. Test dulu pakai LED sebelum colok ke pintu beneran<br>6. Kalau pintu gak gerak: cek port di Device Manager, baud rate harus sama<br>7. Tutup aplikasi PDI v51 / Arduino IDE dulu — satu port COM cuma bisa dipakai satu aplikasi</div>
+      <pre class="pdiAS-bhv">📊 KAPAN MOTOR STOP — TABEL PERILAKU:
+
+                        │  MODE DURASI     │  MODE LIMIT
+  ──────────────────────┼──────────────────┼─────────────────
+  Limit ATAS tertekan   │  ✗ diabaikan     │  ✓ STOP instant
+  Limit BAWAH tertekan  │  ✗ diabaikan     │  ✓ STOP instant
+  Durasi max habis      │  ✓ STOP          │  ✗ diabaikan
+  Perintah STOP serial  │  ✓ STOP          │  ✓ STOP
+
+  MODE DURASI:  Motor stop persis di detik ke-N (sesuai timer).
+                Limit gak ngaruh, walaupun terpasang.
+
+  MODE LIMIT:   Motor stop persis pas mentok (sesuai limit).
+                Durasi gak ngaruh, motor jalan sampai limit kena.</pre>
+      ${sec("💻","SKETCH ARDUINO (upload ke board)")}
+      <div class="pdiAS-hint" style="margin:4px 22px;">Cara pakai: klik 'Simpan Sketch' → file .ino tersimpan → buka di Arduino IDE → Upload</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 22px;"><button type="button" class="pdiAS-b" style="background:#7c3aed;" onclick="pdiArdSketchSave()">💾  Simpan Sketch (pdi_relay.ino)</button><button type="button" class="pdiAS-b" style="background:#2D3748;" onclick="pdiArdSketchCopy(this)">📋  Copy ke Clipboard</button></div>
+      <div class="pdiAS-hint" style="margin:4px 22px 14px;color:#fbd38d;font-style:italic;">Sketch akan otomatis disesuaikan dengan PIN dan BAUD yang lo set di atas.</div>
+    </div>
+    <div class="pdiAS-foot">
+      <div class="pdiAS-btns">
+        <button type="button" class="pdiAS-b" style="background:#1f6feb;" onclick="pdiArdSetTest()">🔌 Test Koneksi</button>
+        <button type="button" class="pdiAS-b" style="background:#b45309;" onclick="pdiArdSetMove('up')">⬆ Test Naik</button>
+        <button type="button" class="pdiAS-b" style="background:#7c2d12;" onclick="pdiArdSetMove('down')">⬇ Test Turun</button>
+        <button type="button" class="pdiAS-b" style="background:#2D3748;color:#c9d1d9;font-weight:600;margin-left:14px;" onclick="closeModal()">✖ Batal</button>
+        <button type="button" class="pdiAS-b" style="background:#1a7f37;padding:8px 18px;" onclick="pdiArdSetSave()">💾 Simpan</button>
+      </div>
+      <div id="pdiASmsg" class="pdiAS-msg"></div>
+    </div></div>`);
+  const m = document.querySelector("#modalRoot .modal"); if(m) m.classList.add("pdiASm");
+  const en = document.getElementById("pdiAS_en"); if(en) en.onchange = pdiArdSetConnUi;
+  pdiArdSetConnUi();
+}
+function pdiArdSetConnUi(){
+  const el = document.getElementById("pdiASport"); if(!el) return;
+  const sup = !!navigator.serial;
+  el.innerHTML = !sup ? `<span style="color:#f85149;">Browser ini tidak bisa — pakai Chrome / Edge di PC</span>`
+    : PDI_ARD.ok ? `<span style="color:#3fb950;">🟢 ${escH(PDI_ARD.info||"Tersambung")} · ${PDI_ARD.baud} baud</span> <button type="button" class="pdiAS-s" onclick="pdiArdSetPick()">Ganti</button> <button type="button" class="pdiAS-s" onclick="pdiArdClose(true)">Lepas</button>`
+    : PDI_ARD.port ? `<span style="color:#e3b341;">⏳ Menyambung…</span>`
+    : `<span style="color:#8b949e;">Belum dipilih</span> <button type="button" class="pdiAS-s" style="background:#1f6feb;color:#fff;" onclick="pdiArdSetPick()">🔌 Pilih Port USB</button>`;
+  if(!el.dataset.h){ el.dataset.h = 1; el.parentElement.insertAdjacentHTML("afterend", `<span class="pdiAS-hint">di daftar Chrome pilih mis. "USB-SERIAL CH340 (COM3)"</span>`); }
+  const st = document.getElementById("pdiASst"); const en = document.getElementById("pdiAS_en");
+  if(st && en) st.textContent = en.checked ? (PDI_ARD.ok ? "🟢 AKTIF" : "🟡 AKTIF — port belum tersambung") : "🔴 NONAKTIF";
+}
+function pdiArdSetMsg(t, col){ const el = document.getElementById("pdiASmsg"); if(el){ el.textContent = t; el.style.color = col||"#3fb950"; } }
+function pdiArdSetRead(){
+  const g = id=>document.getElementById(id), v = id=>String((g(id)||{}).value||"").trim();
+  const int = (id, d)=>{ const n = parseInt(parseFloat(v(id)),10); return isNaN(n) ? d : n; };
+  const flt = (id, d)=>{ const n = parseFloat(v(id)); return isNaN(n) ? d : n; };
+  const mode = (document.querySelector('input[name="pdiAS_mode"]:checked')||{}).value || "limit";
+  return {
+    enabled: !!(g("pdiAS_en")||{}).checked, baud: int("pdiAS_baud", 9600), delay_connect: Math.max(0.5, flt("pdiAS_dly", 1.5)),
+    open_command: v("pdiAS_up")||"UP", close_command: v("pdiAS_dn")||"DOWN", open_duration: Math.max(1, int("pdiAS_dur", 3)),
+    auto_close: !!(g("pdiAS_auto")||{}).checked, auto_close_delay: Math.max(0, int("pdiAS_adl", 5)),
+    pin_relay_up: int("pdiAS_pu", 8), pin_relay_down: int("pdiAS_pd", 9), pin_limit_up: int("pdiAS_lu", 2), pin_limit_down: int("pdiAS_ld", 3),
+    operation_mode: mode==="durasi" ? "durasi" : "limit", limit_active_low: !!(g("pdiAS_low")||{}).checked,
+    beep_on_open: !!(g("pdiAS_beep")||{}).checked, show_popup: !!(g("pdiAS_pop")||{}).checked};
+}
+async function pdiArdSetPick(){
+  const en = document.getElementById("pdiAS_en"); if(en) en.checked = true;
+  const f = pdiArdSetRead(), c = pdiArdCfg(); c.baud = f.baud; c.delay_connect = f.delay_connect; c.enabled = true; pdiArdCfgSave(c);
+  pdiArdSetMsg("⏳ Mencoba koneksi...", "#e3b341");
+  const ok = await pdiArdPick();
+  pdiArdSetMsg(ok ? "✅ Port tersambung: "+PDI_ARD.info : (PDI_ARD.err ? "❌ "+PDI_ARD.err : "Port belum dipilih."), ok ? "#3fb950" : "#f85149");
+}
+async function pdiArdSetTest(){
+  if(!PDI_ARD.ok){ await pdiArdSetPick(); if(!PDI_ARD.ok) return; }
+  pdiArdSetMsg("⏳ Mencoba koneksi...", "#e3b341");
+  const w = pdiArdWait(l=>l==="PONG" || l.startsWith("PDI_READY"), 3000);
+  try{ await pdiArdWrite("PING\n"); }catch(e){ pdiArdSetMsg("❌ Gagal konek: "+(e.message||e)+"\nCek kabel USB & pastikan port tidak dipakai aplikasi lain", "#f85149"); return; }
+  const r = await w;
+  if(r) pdiArdSetMsg("✅ Arduino terdeteksi! "+PDI_ARD.info+" · Respons: '"+r+"'", "#3fb950");
+  else pdiArdSetMsg("⚠ Terhubung, tapi tidak ada respons PONG"+(PDI_ARD.last?" (terakhir: '"+PDI_ARD.last+"')":"")+" — cek sketch pdi_relay.ino & baud rate", "#e3b341");
+}
+async function pdiArdSetMove(dir){
+  const f = pdiArdSetRead(), cmd = dir==="up" ? f.open_command : f.close_command, lab = dir==="up" ? "NAIK" : "TURUN";
+  if(!PDI_ARD.ok){ await pdiArdSetPick(); if(!PDI_ARD.ok) return; }
+  pdiArdSetMsg("⏳ Mengirim perintah "+lab+"...", "#e3b341");
+  const r = await pdiArdCmd(cmd, f.open_duration, lab, l=>{ if(/_START/.test(l)) pdiArdSetMsg("⏳ Motor "+lab+" jalan… respons: '"+l+"'", "#e3b341"); });
+  if(PDI_ARD_FINAL.includes(r)) pdiArdSetMsg("✅ Perintah "+lab+" selesai! Respons: '"+r+"'", r==="LIMIT_TIMEOUT_SAFETY" ? "#e3b341" : "#3fb950");
+  else pdiArdSetMsg("❌ Gagal "+lab+": "+(r==="OFF" ? "Arduino belum tersambung" : r==="ERR" ? PDI_ARD.err : "tidak ada respons dari Arduino"), "#f85149");
+}
+async function pdiArdSetSave(){
+  const n = pdiArdSetRead(), old = pdiArdCfg();
+  pdiArdCfgSave(n); closeModal();
+  if(!n.enabled && PDI_ARD.port) await pdiArdClose(true);
+  else if(n.enabled && PDI_ARD.port && (n.baud!==PDI_ARD.baud)){ const p = PDI_ARD.port; await pdiArdClose(true); await pdiArdOpen(p); }
+  else if(n.enabled && !PDI_ARD.port) pdiArdInit();
+  pdiUi();
+  const port = PDI_ARD.ok ? PDI_ARD.info : (n.enabled ? "belum tersambung — klik 🔌 Pilih Port USB" : "-");
+  alert("✅ Pengaturan disimpan!\n\nStatus : "+(n.enabled?"AKTIF 🟢":"NONAKTIF 🔴")+"\nPort   : "+port+"\nBaud   : "+n.baud+"\nDurasi : "+n.open_duration+" detik\nPerintah: "+n.open_command
+    + ((old.operation_mode!==n.operation_mode || old.pin_relay_up!==n.pin_relay_up || old.pin_relay_down!==n.pin_relay_down || old.pin_limit_up!==n.pin_limit_up || old.pin_limit_down!==n.pin_limit_down || old.limit_active_low!==n.limit_active_low || old.baud!==n.baud) ? "\n\n⚠ Mode / pin / baud berubah → Simpan Sketch & upload ulang ke Arduino." : ""));
+}
+function pdiArdSketchText(){
+  const c = pdiArdSetRead();
+  return pdiArdSketch({mode_name:c.operation_mode.toUpperCase(), pin_up:c.pin_relay_up, pin_down:c.pin_relay_down, pin_lim_up:c.pin_limit_up, pin_lim_down:c.pin_limit_down,
+    mode_is_limit:String(c.operation_mode==="limit"), limit_low:String(!!c.limit_active_low), baud:c.baud});
+}
+function pdiArdSketchSave(){
+  try{ mfSave("pdi_relay.ino", "text/plain", new TextEncoder().encode(pdiArdSketchText()));
+    pdiArdSetMsg("✅ Sketch tersimpan (pdi_relay.ino di folder Download)\nBuka di Arduino IDE → Tools > Board > Arduino UNO → Upload", "#3fb950"); }
+  catch(e){ pdiArdSetMsg("❌ Gagal simpan: "+(e.message||e), "#f85149"); }
+}
+function pdiArdSketchCopy(btn){ tlsCopy(pdiArdSketchText(), btn); pdiArdSetMsg("✅ Sketch tercopy ke clipboard. Paste (Ctrl+V) di Arduino IDE.", "#3fb950"); }
+function pdiArdSketch(S){ return `/*
+ * Toyota PDI System v51 - Arduino Relay Pintu Naik/Turun
+ * Author: Khairul Huda (KH)
+ *
+ * MODE OPERASI (auto-set dari app): ${S.mode_name}
+ *
+ *   MODE LIMIT:
+ *     Motor jalan terus sampai limit switch tertekan → relay mati.
+ *     Timer durasi DIABAIKAN. Motor stop persis pas mentok.
+ *     Pakai kalau limit switch sudah dipasang & teruji.
+ *
+ *   MODE DURASI:
+ *     Motor jalan sesuai timer detik, lalu STOP otomatis.
+ *     Limit switch DIABAIKAN, walaupun terpasang.
+ *     Pakai kalau limit belum dipasang / pintu fixed travel.
+ *
+ * Wiring (default pin, bisa diubah di Pengaturan Arduino di app):
+ *
+ *   ── RELAY (modul 2-channel 5V aktif-LOW) ──────────────────────
+ *   Pin ${S.pin_up}   → IN1 modul relay  (NAIK / UP)
+ *   Pin ${S.pin_down}   → IN2 modul relay  (TURUN / DOWN)
+ *   5V      → VCC modul relay
+ *   GND     → GND modul relay
+ *
+ *   ── LIMIT SWITCH (tipe NC — Normally Closed) ──────────────────
+ *   Pin ${S.pin_lim_up}   → Kabel A limit switch ATAS   — Kabel B ke GND
+ *   Pin ${S.pin_lim_down}   → Kabel A limit switch BAWAH  — Kabel B ke GND
+ *   GND     → Kabel B kedua limit switch (bisa share GND)
+ *
+ *   ── CATATAN PENTING INISIALISASI KABEL ───────────────────────
+ *   • Relay aktif-LOW: IN1/IN2 HIGH = relay OFF, LOW = relay ON
+ *   • Sketch ini set pin HIGH dulu SEBELUM pinMode(OUTPUT)
+ *     → cegah relay nyala sesaat saat Arduino power-on
+ *   • Limit switch NC: pin ke GND via switch. Putus = LOW (trigger)
+ *   • Pakai INPUT_PULLUP — tidak perlu resistor eksternal
+ *   • Pastikan GND Arduino, GND relay, GND limit switch TERHUBUNG
+ *
+ * Protocol Serial:
+ *   PING       → balas "PONG"
+ *   UP         → relay naik
+ *   DOWN       → relay turun
+ *   UP:<sec>   → naik (mode DURASI: timer = sec | mode LIMIT: sec diabaikan)
+ *   DOWN:<sec> → turun
+ *   STOP       → matikan semua relay
+ *
+ * Respons saat stop:
+ *   LIMIT_UP_HIT   → mentok atas (mode LIMIT)
+ *   LIMIT_DOWN_HIT → mentok bawah (mode LIMIT)
+ *   TIMEOUT        → durasi habis (mode DURASI)
+ *   STOPPED        → di-stop manual via perintah STOP
+ */
+
+const int PIN_RELAY_UP   = ${S.pin_up};
+const int PIN_RELAY_DOWN = ${S.pin_down};
+const int PIN_LIMIT_UP   = ${S.pin_lim_up};
+const int PIN_LIMIT_DOWN = ${S.pin_lim_down};
+
+// ==== MODE OPERASI (auto-set dari app) ====
+// true  = MODE LIMIT  (pakai limit switch, durasi diabaikan)
+// false = MODE DURASI (pakai timer, limit diabaikan)
+const bool MODE_LIMIT = ${S.mode_is_limit};
+
+const bool LIMIT_ACTIVE_LOW = ${S.limit_low};   // true = INPUT_PULLUP, switch ke GND
+
+// Relay module aktif LOW (umum untuk modul 2-relay)
+const bool RELAY_ACTIVE_LOW = true;
+
+unsigned long moveStartMs = 0;
+unsigned long moveTimeoutMs = 0;
+int direction = 0;   // 0=stop, 1=up, -1=down
+
+void relayUp(bool on)   { digitalWrite(PIN_RELAY_UP,   on ^ RELAY_ACTIVE_LOW); }
+void relayDown(bool on) { digitalWrite(PIN_RELAY_DOWN, on ^ RELAY_ACTIVE_LOW); }
+
+// Waktu debounce limit switch (ms) — naikan kalau switch masih noise
+#define DEBOUNCE_MS 20
+
+bool limitTriggered(int pin) {
+  // Baca dua kali dengan jeda untuk filter noise/bouncing
+  int v1 = digitalRead(pin);
+  delay(DEBOUNCE_MS);
+  int v2 = digitalRead(pin);
+  if (v1 != v2) return false;   // noise — abaikan
+  return LIMIT_ACTIVE_LOW ? (v2 == LOW) : (v2 == HIGH);
+}
+
+void stopAll() {
+  relayUp(false);
+  relayDown(false);
+  direction = 0;
+}
+
+void setup() {
+  Serial.begin(${S.baud});
+
+  // ── INIT RELAY (aktif-LOW): set HIGH dulu SEBELUM OUTPUT ──
+  // Kalau tidak → pin default LOW saat power-on → relay aktif sesaat!
+  if (RELAY_ACTIVE_LOW) {
+    digitalWrite(PIN_RELAY_UP,   HIGH);   // pastikan relay OFF sebelum jadi output
+    digitalWrite(PIN_RELAY_DOWN, HIGH);
+  }
+  pinMode(PIN_RELAY_UP,   OUTPUT);
+  pinMode(PIN_RELAY_DOWN, OUTPUT);
+
+  // ── Limit switch pins ──────────────────────────────────────
+  if (MODE_LIMIT) {
+    pinMode(PIN_LIMIT_UP,   LIMIT_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
+    pinMode(PIN_LIMIT_DOWN, LIMIT_ACTIVE_LOW ? INPUT_PULLUP : INPUT);
+  }
+
+  stopAll();   // double-check relay benar-benar mati
+  delay(300);  // beri waktu relay settle sebelum mulai komunikasi
+  Serial.print("PDI_READY:MODE_");
+  Serial.println(MODE_LIMIT ? "LIMIT" : "DURASI");
+}
+
+// Safety timeout (detik) — backup kalau limit switch rusak/lepas di MODE LIMIT
+#define LIMIT_SAFETY_SEC 30
+
+void loop() {
+  // ─── Cek perintah serial dari PC ───
+  if (Serial.available()) {
+    String line = Serial.readStringUntil('\\n');
+    line.trim();
+    line.toUpperCase();
+
+    if (line == "PING") {
+      Serial.println("PONG");
+    }
+    else if (line == "STOP") {
+      stopAll();
+      Serial.println("STOPPED");
+    }
+    else if (line.startsWith("UP")) {
+      // UP atau UP:<detik> — mode LIMIT pakai safety timeout 30s
+      int sec = MODE_LIMIT ? LIMIT_SAFETY_SEC : 10;
+      int colon = line.indexOf(':');
+      if (colon > 0) {
+        int p = line.substring(colon+1).toInt();
+        if (p > 0) sec = p;
+      }
+      relayDown(false);
+      relayUp(true);
+      direction = 1;
+      moveStartMs   = millis();
+      moveTimeoutMs = (unsigned long)sec * 1000UL;
+      Serial.print("UP_START:"); Serial.println(sec);
+    }
+    else if (line.startsWith("DOWN")) {
+      int sec = MODE_LIMIT ? LIMIT_SAFETY_SEC : 10;
+      int colon = line.indexOf(':');
+      if (colon > 0) {
+        int p = line.substring(colon+1).toInt();
+        if (p > 0) sec = p;
+      }
+      relayUp(false);
+      relayDown(true);
+      direction = -1;
+      moveStartMs   = millis();
+      moveTimeoutMs = (unsigned long)sec * 1000UL;
+      Serial.print("DOWN_START:"); Serial.println(sec);
+    }
+    else if (line == "STATUS") {
+      Serial.print("STATUS:");
+      Serial.print(direction == 0 ? "IDLE" : (direction == 1 ? "MOVING_UP" : "MOVING_DOWN"));
+      Serial.print(":MODE_");
+      Serial.println(MODE_LIMIT ? "LIMIT" : "DURASI");
+    }
+  }
+
+  // ─── Cek kondisi stop saat motor lagi jalan ───
+  if (direction != 0) {
+
+    // Safety timeout SELALU aktif di kedua mode
+    if (millis() - moveStartMs > moveTimeoutMs) {
+      stopAll();
+      if (MODE_LIMIT) {
+        // Limit switch tidak tertekan dalam waktu aman → warning ke PC
+        Serial.println("LIMIT_TIMEOUT_SAFETY");
+      } else {
+        Serial.println("TIMEOUT");
+      }
+      return;
+    }
+
+    if (MODE_LIMIT) {
+      // === MODE LIMIT: motor stop saat limit switch tertekan ===
+      if (direction == 1 && limitTriggered(PIN_LIMIT_UP)) {
+        stopAll();
+        Serial.println("LIMIT_UP_HIT");
+      }
+      else if (direction == -1 && limitTriggered(PIN_LIMIT_DOWN)) {
+        stopAll();
+        Serial.println("LIMIT_DOWN_HIT");
+      }
+    }
+    // MODE DURASI: safety timeout di atas sudah handle
+  }
+}
+`; }
+/* ===== END PDI ===== */
 
 </script>
 </body>
