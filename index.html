@@ -751,6 +751,11 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .pdiTabAct>span{flex:1 1 auto;min-width:0;}
 .pdiFld.wait{border-color:#f59e0b;background:#FFFBEB;}
 .pdiFld.wait input::placeholder{color:#b45309;font-weight:800;opacity:1;font-size:.62em;letter-spacing:0;font-family:system-ui,sans-serif;}
+.pdiKpSw{display:inline-flex;margin-left:8px;border:1px solid rgba(255,255,255,.35);border-radius:8px;overflow:hidden;vertical-align:middle;}
+.pdiKpSw button{background:transparent;color:rgba(255,255,255,.75);border:0;padding:4px 10px;font-weight:800;font-size:13px;font-family:inherit;cursor:pointer;line-height:1.2;}
+.pdiKpSw button small{font-weight:600;font-size:10px;opacity:.8;}
+.pdiKpSw button+button{border-left:1px solid rgba(255,255,255,.35);}
+.pdiKpSw button.on{background:#fbbf24;color:#1e2a3b;}
 /* ===== END PDI CSS ===== */
 </style>
 <style>
@@ -1188,7 +1193,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="07 Nov 2026 03.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="07 Nov 2026 03.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -12960,6 +12965,16 @@ function pdiMounted(){
 }
 function pdiCamWanted(){ try{ return localStorage.getItem("radar_pdi_camoff")!=="1"; }catch(e){ return true; } }
 function pdiCamToggle(){ if(PDI.cam.on){ pdiCamStop(); try{ localStorage.setItem("radar_pdi_camoff","1"); }catch(e){} } else { try{ localStorage.setItem("radar_pdi_camoff","0"); }catch(e){} pdiCamStart(); } pdiUi(); }
+/* Ganti mode KP 1 (kartu DC) / KP 2 (layar tablet TAM PDI) — disimpan per PC */
+function pdiStationSet(k){
+  if(k===pdiStation()) return;
+  if(PDI.step!=="scan"){ alert("Selesaikan atau batalkan dulu unit yang sedang diproses, lalu ganti mode."); return; }
+  try{ localStorage.setItem("radar_pdi_station", k); }catch(e){}
+  try{ pdiTabReset(); }catch(e){}
+  PDI.guide = ""; pdiResetUnit();
+  pdiToast(k==="KP2" ? "Mode KP 2 — kamera membaca layar tablet TAM PDI" : "Mode KP 1 — scan kartu DC");
+  pdiUi();
+}
 function pdiChip(ok, warn, label, onclick, title){
   const cls = ok ? "on" : (warn ? "warn" : "off");
   return `<button type="button" class="pdiStat ${cls}" onclick="${onclick}" title="${escH(title||"")}">${label}</button>`;
@@ -12970,7 +12985,7 @@ function pdiUi(){
   const now = Date.now(); if(now-_pdiUiT < 60){ clearTimeout(window._pdiUiTo); window._pdiUiTo = setTimeout(pdiUi, 70); return; } _pdiUiT = now;
   const d = DB.get(), st = pdiStation(), s = pdiShiftOf(now), stt = pdiShiftStats(s.pd, s.sh, st, d);
   const top = document.getElementById("pdiTop");
-  if(top) top.innerHTML = `<div class="pdiTitle">🔍 PDI <b>${escH(pdiStationLabel(st))}</b></div>
+  if(top) top.innerHTML = `<div class="pdiTitle">🔍 PDI <span class="pdiKpSw">${PDI_STATIONS.map(x=>`<button type="button" class="${x.k===st?"on":""}" onclick="pdiStationSet('${x.k}')" title="${x.src==="tablet"?"Baca layar tablet TAM PDI":"Scan kartu DC"}">${escH(x.label)} <small>${x.src==="tablet"?"tablet":"kartu DC"}</small></button>`).join("")}</span></div>
     <div class="pdiWho">${escH((currentUser&&currentUser.name)||"")} · ${escH(pdiShiftLabel(s.sh))}${currentUser&&currentUser.shift?" · "+rsShift(currentUser.shift):""}</div>
     <div class="pdiStats">
       ${pdiChip(PDI.cam.on && !PDI.cam.err, PDI.cam.on, "📷 Kamera"+(PDI.cam.on&&PDI.cam.fps?" "+PDI.cam.fps+"fps":""), "pdiCamToggle()", "Nyalakan / matikan kamera")}
