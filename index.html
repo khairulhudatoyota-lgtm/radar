@@ -1179,7 +1179,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="06 Nov 2026 22.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="06 Nov 2026 22.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1346,6 +1346,9 @@ const ROLES = [
   {key:"viewer",      label:"Pengamat", icon:"👁", desc:"Lihat semua menu, tidak bisa mengubah data"},
   {key:"pdi",         label:"PDI", icon:"🔍", desc:"Scan unit PDI & input TLS (PC)"},
 ];
+/* Urutan di menu "Pilih menu tujuan" */
+const ROLE_ORDER = ["admin","leader","pdi","dispatcher","delivery","koordinator","cc","viewer"];
+function roleSort(arr){ const ix = r=>{ const i = ROLE_ORDER.indexOf(r); return i<0 ? 99 : i; }; return (arr||[]).slice().sort((a,b)=>ix(a)-ix(b)); }
 const TABS_BY_ROLE = {
   pdi:         [{key:"pdi", label:"Scan PDI"}, {key:"display", label:"Display"}],
   dispatcher:  [{key:"dispatcher", label:"Scan Unit"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
@@ -1830,7 +1833,7 @@ async function doLogin(){
   pwUpgrade(ok, p);
   if(ok.length===1){ loginGo(ok[0], [ok[0].role]); return; }
   // satu username terdaftar untuk beberapa peran: pengguna memilih menu tujuan
-  const roles = [...new Set(ok.map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]);
+  const roles = roleSort([...new Set(ok.map(x=>x.role))].filter(r=>TABS_BY_ROLE[r]));
   msgEl.innerHTML = `<div class="rolesectitle" style="margin:6px 0 8px;">Pilih menu tujuan</div><div class="rolegrid">` +
     roles.map(r=>{ const o = ROLES.find(x=>x.key===r) || {label:r, icon:"•", desc:""};
       return `<button class="rolebtn" type="button" onclick="loginPickRole('${r}')"><span class="ic">${o.icon}</span><span class="rtext"><b>${o.label.toUpperCase()}</b><span>${o.desc}</span></span></button>`; }).join("") + `</div><button type="button" class="logoutBtn" style="width:100%;margin-top:12px;padding:12px;font-size:14px;" onclick="loginCancel()">⎋ Keluar</button>`;
@@ -1843,7 +1846,7 @@ function loginCancel(){
 function backToRoleMenu(){
   if(!currentUser || !currentUser.roles || currentUser.roles.length<2) return;
   showModal(`<h3 style="margin:0 0 4px;">Pilih menu tujuan</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Kamu masuk sebagai <b>${currentUser.name}</b>. Pindah menu tanpa login ulang.</div><div class="rolegrid">`+
-    currentUser.roles.map(r=>{ const o=ROLES.find(x=>x.key===r)||{label:r,icon:"•",desc:""};
+    roleSort(currentUser.roles).map(r=>{ const o=ROLES.find(x=>x.key===r)||{label:r,icon:"•",desc:""};
       return `<button class="rolebtn" type="button" onclick="switchToRole('${r}')"><span class="ic">${o.icon}</span><span class="rtext"><b>${o.label.toUpperCase()}</b><span>${o.desc}${r===currentUser.role?" · (sedang dibuka)":""}</span></span></button>`; }).join("")+`</div>`);
 }
 function switchToRole(r){
