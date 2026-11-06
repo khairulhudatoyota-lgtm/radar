@@ -1126,6 +1126,8 @@ function fbPush(k, pre, fn, T, seed, retried){
     try{ if(window._fbAck) window._fbAck(k,err,committed); }catch(e){}
   }, true);
 }
+/* Kartu "Sudah PDI, belum masuk stall": modul PDI ada di blok script terpisah — jangan sampai error menghentikan RADAR */
+function pdiCardSafe(){ try{ return typeof pdiOpenCardHtml==="function" ? pdiOpenCardHtml() : ""; }catch(e){ console.warn("kartu PDI", e); return ""; } }
 function fbStart(){
   if(typeof firebase === "undefined" || !/^https?:/.test(location.protocol)){ fbState("off"); return; }
   try{
@@ -1177,7 +1179,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="06 Nov 2026 21.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="06 Nov 2026 22.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2006,16 +2008,17 @@ function renderInner(){
   });
   const vp = document.getElementById("viewport");
   vp.className = "view v-"+activeTab;
-  if(activeTab==="dispatcher"){ setVP(vp, pdiOpenCardHtml()+renderDispatcher()); if(_vpChanged && vinDraft) setTimeout(()=>{ if(document.getElementById("vinInput")) onVinInput(); },0); }
+  if(activeTab==="dispatcher"){ setVP(vp, pdiCardSafe()+renderDispatcher()); if(_vpChanged && vinDraft) setTimeout(()=>{ if(document.getElementById("vinInput")) onVinInput(); },0); }
   else if(activeTab==="orderstall") setVP(vp, renderOrderStall());
-  else if(activeTab==="delivery") setVP(vp, chgReqHtml()+schedReqHtml()+pdiOpenCardHtml()+renderDelivery());
-  else if(activeTab==="koordinator") setVP(vp, chgReqHtml()+schedReqHtml()+pdiOpenCardHtml()+renderKoordinator());
+  else if(activeTab==="delivery") setVP(vp, chgReqHtml()+schedReqHtml()+pdiCardSafe()+renderDelivery());
+  else if(activeTab==="koordinator") setVP(vp, chgReqHtml()+schedReqHtml()+pdiCardSafe()+renderKoordinator());
   else if(activeTab==="defect"){ setVP(vp, renderDefectReport()); if(_vpChanged) setTimeout(init3DCarDiagram, 0); }
   else if(activeTab==="confirmdefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccplan") setVP(vp, renderCCPlan());
   else if(activeTab==="batam") setVP(vp, renderBatamPage());
   else if(activeTab==="prio") setVP(vp, renderPrioPage());
-  else if(activeTab==="dashboard") setVP(vp, pdiOpenCardHtml()+renderLeaderDashboard());
+  else if(activeTab==="dashboard") setVP(vp, pdiCardSafe()+renderLeaderDashboard());
+  else if(activeTab==="pdi" && typeof renderPdiPage!=="function"){ setVP(vp, `<div class="card" style="text-align:center;">Memuat PDI…</div>`); setTimeout(()=>{ try{ render(); }catch(e){} }, 300); }
   else if(activeTab==="pdi"){ if(!document.getElementById("pdiRoot")){ setVP(vp, renderPdiPage()); setTimeout(pdiMounted,0); } else { _vpChanged=false; pdiUi(); } }
   else if(activeTab==="speedlog") setVP(vp, renderSpeedLog());
   else if(activeTab==="dccp") setVP(vp, chgReqHtml()+schedReqHtml()+renderDccpUpload());
@@ -11427,15 +11430,17 @@ function renderDisplay(){
 initRoleGrid();
 try{ const lu=document.getElementById("loginUser"); if(lu && !lu.value) lu.value=lastUser(); const lp=document.getElementById("loginPass"); if(lp && !lp.value && rememberOn()) lp.value=lastPass(); }catch(e){}
 try{ const rb=document.getElementById("loginRemember"); if(rb) rb.checked=rememberOn(); }catch(e){}
-{ const _d = DB.load(); syncUnitLog(_d); DB.save(_d); } // pastikan seed ada + migrasi log unit
+try{ const _d = DB.load(); syncUnitLog(_d); DB.save(_d); }catch(e){ console.error("boot data", e); } // pastikan seed ada + migrasi log unit
 const existingSession = getSession();
 if(existingSession){
   if(!existingSession.ts){ existingSession.ts=Date.now(); try{ localStorage.setItem(SESS_KEY, JSON.stringify(existingSession)); }catch(e){} }   // sesi lama: mulai hitung dari sekarang
   currentUser = existingSession;
-  enterApp();
+  /* dibuka setelah semua blok script (termasuk modul PDI) selesai dimuat; error tampilan tidak boleh menghentikan sambungan server */
+  const _bootEnter = ()=>{ try{ enterApp(); }catch(e){ console.error("enterApp", e); setTimeout(()=>{ try{ render(); }catch(_){} }, 500); } };
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", _bootEnter, {once:true}); else _bootEnter();
 }
 let _lastRaw = null, _lastMinute = -1;
-if(loginShift) setLoginShift(loginShift);
+try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
 setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueResort(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); whyCheck(); chgCheck(); naikStallCheck(); }catch(e){} }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
