@@ -1184,7 +1184,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="07 Nov 2026 02.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="07 Nov 2026 03.00";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -13112,7 +13112,7 @@ function pdiCfgLocalHtml(){
     <h4 style="margin:12px 0 6px;">📁 Folder RADAR PDI</h4>
     <div style="font-size:12px;">${PDI_TLS.dir?`Tersambung: <b>${escH(PDI_TLS.name)}</b> (${pdiTlsReady()?"diizinkan":"perlu izin"})`:"Belum tersambung — TLS diisi manual."}</div>
     <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;"><button type="button" class="tlscp" onclick="closeModal();pdiTlsPick()">Pilih folder</button>${PDI_TLS.dir?`<button type="button" class="tlscp" onclick="pdiTlsForget();closeModal();">Lepas folder</button>`:""}</div>
-    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Buat / pilih folder baru, mis. <code>D:\\RADAR PDI</code> — RADAR menaruh <b>tls_input.json</b> di sini dan membaca <b>tls_done.txt</b> dari Power Automate. Jalankan script <b>PAD_trigger_radar.ahk</b> yang ada di folder itu (script ikut memberi tahu Power Automate lokasi folder ini).</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Buat / pilih folder baru, mis. <code>D:\\RADAR PDI</code> — RADAR menaruh <b>tls_input.json</b> di sini dan membaca <b>tls_done.txt</b> dari Power Automate. Jalankan script <b>PAD_trigger_radar.ahk</b> yang ada di folder itu — script menjalankan flow Power Automate <b>RADAR_PDI_TLS</b> (flow lama PDI_Auto_TLS tidak dipakai/diubah).</div>
     <button type="button" class="tlscp" style="margin-top:8px;background:#1e2a3b;color:#fff;" onclick="closeModal();pdiKitOpen()">📦 Paket PC PDI (file AHK + flow Power Automate)</button>
   </div>`;
 }
@@ -13662,10 +13662,10 @@ void loop() {
 const PDI_KIT_FLOW = "pdikit_padflow";           // di node radar_foto (dibaca saat dibutuhkan saja)
 let _pdiKitFlow = null;                           // {txt, ts, by, name}
 function pdiKitOpt(){
-  let o = {}; try{ o = JSON.parse(localStorage.getItem("radar_pdi_kitopt")||"{}")||{}; }catch(e){}
-  return Object.assign({mode:"hotkey", flow:"PDI_Auto_TLS", title:"Toyota Logistic"}, o);
+  let o = {}; try{ o = JSON.parse(localStorage.getItem("radar_pdi_kitopt2")||"{}")||{}; }catch(e){}
+  return Object.assign({mode:"flow", flow:"RADAR_PDI_TLS", title:"Toyota Logistic"}, o);
 }
-function pdiKitOptSave(o){ try{ localStorage.setItem("radar_pdi_kitopt", JSON.stringify(o)); }catch(e){} }
+function pdiKitOptSave(o){ try{ localStorage.setItem("radar_pdi_kitopt2", JSON.stringify(o)); }catch(e){} }
 /* Script AHK (AutoHotkey v1.1). Hanya karakter ASCII supaya aman dibaca AHK v1 tanpa BOM. */
 function pdiAhkText(o){
   o = Object.assign(pdiKitOpt(), o||{});
@@ -13684,8 +13684,9 @@ function pdiAhkText(o){
 ";",
 ";  Folder RADAR PDI (tempat tukar data RADAR <-> Power Automate) = folder tempat file AHK ini",
 ";  disimpan, mis. D:\\RADAR PDI. Tidak terikat folder aplikasi lama.",
-";  Script ini juga menulis lokasi folder itu ke C:\\Users\\Public\\toyota_pdi_path.txt",
-";  (file yang dibaca flow Power Automate untuk mencari tls_input.json / tls_done.txt).",
+";  Lokasi folder itu ditulis ke C:\\Users\\Public\\radar_pdi_path.txt (boleh dibaca flow RADAR_PDI_TLS).",
+";  Flow lama (PDI_Auto_TLS), folder lama dan toyota_pdi_path.txt milik PDI v51 TIDAK diubah,",
+";  jadi aplikasi lama tetap jalan. Script ini boleh jalan bersama PAD_trigger_v51.ahk karena foldernya beda.",
 ";  Simpan file ini DI DALAM Folder RADAR PDI yang dipilih di RADAR (tombol Pasang di RADAR sudah",
 ";  otomatis menaruhnya di sana).",
 ";",
@@ -13700,16 +13701,16 @@ function pdiAhkText(o){
 "TLS_TITLE   := \""+q(o.title)+"\"",
 "RADAR_TITLE := \"RADAR\"",
 "; Cara menjalankan Power Automate:",
-";   hotkey = aktifkan jendela Power Automate lalu tekan Ctrl+Shift+P (sama seperti PC lama)",
-";   flow   = jalankan flow berdasarkan nama (PAD.Console.Host.exe -flowname / ms-powerautomate:)",
-"RUN_MODE    := \""+(o.mode==="flow"?"flow":"hotkey")+"\"",
-"FLOW_NAME   := \""+q(o.flow||"PDI_Auto_TLS")+"\"",
+";   flow   = jalankan flow RADAR berdasarkan nama (PAD.Console.Host.exe -flowname / ms-powerautomate:)",
+";   hotkey = aktifkan jendela Power Automate lalu tekan Ctrl+Shift+P (itu flow LAMA - hanya kalau sengaja)",
+"RUN_MODE    := \""+(o.mode==="hotkey"?"hotkey":"flow")+"\"",
+"FLOW_NAME   := \""+q(o.flow||"RADAR_PDI_TLS")+"\"",
 "",
 "DATA_DIR  := A_ScriptDir",
 "TLS_FILE  := DATA_DIR . \"\\tls_input.json\"",
 "DONE_FILE := DATA_DIR . \"\\tls_done.txt\"",
 "EnvGet, PUB, PUBLIC",
-"INFO_FILE := PUB . \"\\toyota_pdi_path.txt\"",
+"INFO_FILE := PUB . \"\\radar_pdi_path.txt\"",
 "",
 "lastModified := \"\"",
 "lastDoneTime := 0",
@@ -13732,8 +13733,7 @@ function pdiAhkText(o){
 "SetTimer, CheckDone, 1000",
 "return",
 "",
-"; Tulis lokasi Folder RADAR PDI ke toyota_pdi_path.txt (dibaca flow Power Automate).",
-"; Kalau isinya masih alamat folder lama, otomatis diganti ke folder ini.",
+"; Tulis lokasi Folder RADAR PDI ke radar_pdi_path.txt (khusus RADAR; toyota_pdi_path.txt milik v51 tidak disentuh).",
 "LoadPaths:",
 "    want := DATA_DIR . \"`n\" . TLS_FILE . \"`n\" . DONE_FILE . \"`n\"",
 "    cur := \"\"",
@@ -13743,7 +13743,7 @@ function pdiAhkText(o){
 "        FileDelete, %INFO_FILE%",
 "        FileAppend, %want%, %INFO_FILE%",
 "        if (cur != \"\")",
-"            TrayTip, RADAR PDI, Lokasi folder untuk Power Automate diganti ke: %DATA_DIR%, 4",
+"            TrayTip, RADAR PDI, Lokasi Folder RADAR PDI: %DATA_DIR%, 4",
 "    }",
 "return",
 "",
@@ -13859,12 +13859,12 @@ async function pdiKitAhkInstall(btn){
 function pdiKitAhkDownload(){ pdiKitReadOpt(); mfSave("PAD_trigger_radar.ahk", "text/plain", new TextEncoder().encode(pdiAhkText())); }
 function pdiKitReadOpt(){
   const g = id=>document.getElementById(id); if(!g("pdiKitMode")) return;
-  const o = {mode:g("pdiKitMode").value, flow:(g("pdiKitFlow").value||"").trim()||"PDI_Auto_TLS", title:(g("pdiKitTitle").value||"").trim()||"Toyota Logistic"};
+  const o = {mode:g("pdiKitMode").value, flow:(g("pdiKitFlow").value||"").trim()||"RADAR_PDI_TLS", title:(g("pdiKitTitle").value||"").trim()||"Toyota Logistic"};
   pdiKitOptSave(o); return o;
 }
 /* ----- Paket lengkap: semua file pendukung PC PDI dalam satu folder ----- */
 function pdiKitFiles(){
-  const o = pdiKitOpt(), flowName = (_pdiKitFlow && _pdiKitFlow.name) || o.flow || "PDI_Auto_TLS";
+  const o = pdiKitOpt(), flowName = (_pdiKitFlow && _pdiKitFlow.name) || o.flow || "RADAR_PDI_TLS";
   const url = location.origin + location.pathname.replace(/index\.html$/,"");
   const F = [];
   F.push({name:"PAD_trigger_radar.ahk", data:pdiAhkText()});
@@ -13896,11 +13896,12 @@ _pdiKitFlow ? "  "+flowName+"_flow.txt ...... isi flow Power Automate (untuk di-
 " 3. Klik tombol 'Folder RADAR PDI' (ikon folder) di atas -> pilih folder di langkah 1 -> Izinkan",
 "    (kalau ada pilihan 'izinkan setiap kunjungan', pilih itu).",
 " 4. Klik 2x PAD_trigger_radar.ahk -> muncul ikon H di taskbar.",
-"    Klik kanan ikon H -> centang 'Jalan otomatis saat Windows nyala'. Matikan PAD_trigger_v51.ahk kalau ada.",
+"    Klik kanan ikon H -> centang 'Jalan otomatis saat Windows nyala'. PAD_trigger_v51.ahk boleh tetap jalan (folder beda).",
 " 5. Power Automate -> + New flow -> nama '"+flowName+"' -> buka "+flowName+"_flow.txt di Notepad",
 "    -> Ctrl+A, Ctrl+C -> di editor flow klik area aksi -> Ctrl+V -> Save.",
-"    Script AHK menulis lokasi folder ini ke C:\\Users\\Public\\toyota_pdi_path.txt. Kalau flow membaca alamat file",
-"    langsung (bukan dari toyota_pdi_path.txt), ganti alamatnya ke D:\\RADAR PDI\\tls_input.json dan tls_done.txt.",
+"    Di flow ini alamat file harus D:\\RADAR PDI\\tls_input.json dan D:\\RADAR PDI\\tls_done.txt",
+"    (atau dibaca dari C:\\Users\\Public\\radar_pdi_path.txt yang ditulis script AHK).",
+"    Flow lama PDI_Auto_TLS dan aplikasi PDI v51 tidak diubah - tetap bisa dipakai.",
 " 6. Login TLS di browser dengan akun TLS PDI (bukan akun Delivery).",
 " 7. Di RADAR > Pengaturan: pilih kamera, Setting Arduino (Pilih Port USB > Test Koneksi), Setting Suara.",
 " 8. Coba 1 unit: scan > LANJUT INPUT TLS > RADAR mengecil, popup kecil muncul, Power Automate mengisi TLS",
@@ -13940,12 +13941,12 @@ async function pdiKitFlowLoad(){
 function pdiKitFlowStatus(){
   const el = document.getElementById("pdiKitFlowSt"); if(!el) return;
   const f = _pdiKitFlow;
-  el.innerHTML = f ? `✔ Tersimpan: <b>${escH(f.name||"PDI_Auto_TLS")}</b> · ${(f.txt.length/1024).toFixed(1)} KB · ${escH(new Date(f.ts).toLocaleString("id-ID"))} · ${escH(f.by||"")}`
+  el.innerHTML = f ? `✔ Tersimpan: <b>${escH(f.name||"RADAR_PDI_TLS")}</b> · ${(f.txt.length/1024).toFixed(1)} KB · ${escH(new Date(f.ts).toLocaleString("id-ID"))} · ${escH(f.by||"")}`
     : (FBS.db ? "Belum ada flow tersimpan — simpan dulu dari PC lama (langkah A)." : "Server belum tersambung.");
   ["pdiKitCp","pdiKitDl"].forEach(id=>{ const b = document.getElementById(id); if(b) b.disabled = !f; });
 }
 function pdiKitFlowCopy(btn){ if(_pdiKitFlow) tlsCopy(_pdiKitFlow.txt, btn); }
-function pdiKitFlowDownload(){ if(_pdiKitFlow) mfSave((_pdiKitFlow.name||"PDI_Auto_TLS")+"_flow.txt", "text/plain", new TextEncoder().encode(_pdiKitFlow.txt)); }
+function pdiKitFlowDownload(){ if(_pdiKitFlow) mfSave((_pdiKitFlow.name||"RADAR_PDI_TLS")+"_flow.txt", "text/plain", new TextEncoder().encode(_pdiKitFlow.txt)); }
 function pdiKitFlowEdit(){
   const box = document.getElementById("pdiKitEd"); if(!box) return;
   box.style.display = box.style.display==="none" ? "" : "none";
@@ -13953,7 +13954,7 @@ function pdiKitFlowEdit(){
 }
 async function pdiKitFlowSave(){
   const t = (document.getElementById("pdiKitTxt")||{}).value||"";
-  const name = ((document.getElementById("pdiKitFlow")||{}).value||"").trim() || "PDI_Auto_TLS";
+  const name = ((document.getElementById("pdiKitFlow")||{}).value||"").trim() || "RADAR_PDI_TLS";
   if(t.trim().length < 20){ alert("Tempel (Ctrl+V) dulu isi flow yang di-copy dari editor Power Automate."); return; }
   if(t.length > 900000){ alert("Isi flow terlalu besar (maks ±900 KB)."); return; }
   if(!FBS.db){ alert("Server belum tersambung. Coba lagi saat status Online."); return; }
@@ -13971,8 +13972,12 @@ function pdiKitOpen(){
       <div style="font-size:12.5px;line-height:1.5;">Isi: script AutoHotkey (siap klik 2×), flow Power Automate, sketch Arduino, shortcut RADAR, dan <b>PANDUAN_PC_PDI.txt</b>. Tersimpan langsung di Folder RADAR PDI PC ini (${pdiTlsReady()?`<b style="color:var(--green,#16a34a);">${escH(PDI_TLS.name)}</b>`:`<b style="color:var(--red,#dc2626);">folder belum dipilih</b>`}), atau diunduh sebagai .zip.</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="tlscp" style="background:#1a7f37;color:#fff;" onclick="pdiKitAllInstall(this)">📦 Simpan paket lengkap ke Folder RADAR PDI</button><button type="button" class="tlscp" onclick="pdiKitAllZip(this)">⬇ Unduh paket (.zip)</button></div>
       <div style="font-size:11.5px;color:var(--text-dim);margin-top:6px;">Yang harus sudah ada di PC: Chrome/Edge, <b>AutoHotkey v1.1</b>, dan <b>Power Automate</b> + ekstensi browsernya. Flow-nya ditempel (Ctrl+V) sekali di Power Automate.</div></div>
-    <div class="card"><h3 style="margin:0 0 6px;">A. PC lama — simpan flow Power Automate ke RADAR (sekali saja)</h3>
-      <div style="font-size:12.5px;line-height:1.55;">Buka <b>Power Automate</b> → klik ✏ Edit pada flow <b>${escH(o.flow)}</b> → klik salah satu aksi di tengah → <b>Ctrl+A</b> → <b>Ctrl+C</b> → kembali ke sini → <b>📥 Simpan flow</b> → <b>Ctrl+V</b> → Simpan.</div>
+    <div class="card"><h3 style="margin:0 0 6px;">A. PC lama — buat flow baru khusus RADAR (flow lama tetap)</h3>
+      <div style="font-size:12.5px;line-height:1.6;">
+        1. Power Automate → di flow lama <b>PDI_Auto_TLS</b> klik <b>⋯ → Save as</b> (atau buka editornya → File → Save as) → nama <b class="pdiKitFlowNm2">${escH(o.flow)}</b>.<br>
+        2. Buka flow baru itu → ganti alamat file ke <code>D:\\RADAR PDI\\tls_input.json</code> dan <code>D:\\RADAR PDI\\tls_done.txt</code> (atau baca dari <code>C:\\Users\\Public\\radar_pdi_path.txt</code>) → Save.<br>
+        3. Di flow baru klik salah satu aksi → <b>Ctrl+A</b> → <b>Ctrl+C</b> → kembali ke sini → <b>📥 Simpan flow</b> → <b>Ctrl+V</b> → Simpan.<br>
+        <span style="color:var(--text-dim);">Flow lama <b>PDI_Auto_TLS</b>, folder lama dan aplikasi PDI v51 tidak diubah — tetap bisa dipakai sampai RADAR siap.</span></div>
       <div id="pdiKitFlowSt" style="font-size:12px;margin:8px 0;">Memuat…</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="tlscp" onclick="pdiKitFlowEdit()">📥 Simpan / ganti flow</button></div>
       <div id="pdiKitEd" style="display:none;margin-top:8px;"><textarea id="pdiKitTxt" rows="7" style="width:100%;font-family:monospace;font-size:11px;" placeholder="Tempel di sini (Ctrl+V) aksi flow yang di-copy dari editor Power Automate"></textarea>
@@ -13981,16 +13986,16 @@ function pdiKitOpen(){
       ${st(1,"Install AutoHotkey v1.1", `Unduh dari <b>autohotkey.com</b> → pilih <b>v1.1</b> (bukan v2) → install.`)}
       ${st(2,"Siapkan Folder RADAR PDI", `Buat folder baru, mis. <code>D:\\RADAR PDI</code> (tidak perlu folder aplikasi lama). Di RADAR klik <b>📁 Folder RADAR PDI</b> → pilih folder itu (bisa juga klik <i>New folder</i> di jendela pilih folder) → Izinkan. RADAR langsung menawarkan menyimpan semua file pendukung ke folder itu. Sekarang: ${pdiTlsReady()?`<b style="color:var(--green,#16a34a);">tersambung (${escH(PDI_TLS.name)})</b>`:`<b style="color:var(--red,#dc2626);">belum tersambung</b>`}`)}
       ${st(3,"Pasang script AHK", `<div class="pdiKitG">
-          <label>Jalankan PAD</label><select id="pdiKitMode"><option value="hotkey" ${o.mode!=="flow"?"selected":""}>Ctrl+Shift+P ke jendela Power Automate (sama seperti PC lama)</option><option value="flow" ${o.mode==="flow"?"selected":""}>Langsung berdasarkan nama flow</option></select>
+          <label>Jalankan PAD</label><select id="pdiKitMode"><option value="flow" ${o.mode!=="hotkey"?"selected":""}>Jalankan flow RADAR berdasarkan nama (disarankan)</option><option value="hotkey" ${o.mode==="hotkey"?"selected":""}>Ctrl+Shift+P (menjalankan flow LAMA)</option></select>
           <label>Nama flow</label><input id="pdiKitFlow" type="text" value="${escH(o.flow)}">
           <label>Judul jendela TLS</label><input id="pdiKitTitle" type="text" value="${escH(o.title)}"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="tlscp" style="background:#1a7f37;color:#fff;" onclick="pdiKitAhkInstall(this)">💾 Pasang AHK ke Folder RADAR PDI</button><button type="button" class="tlscp" onclick="pdiKitAhkDownload()">⬇ Unduh file AHK</button></div>
-        <div style="font-size:11.5px;color:var(--text-dim);margin-top:4px;">Lalu buka Folder RADAR PDI → klik 2× <b>PAD_trigger_radar.ahk</b> (muncul ikon H di taskbar). Klik kanan ikon H → centang <b>Jalan otomatis saat Windows nyala</b>. Matikan PAD_trigger_v51.ahk kalau ada.</div>`)}
-      ${st(4,"Pasang flow Power Automate", `Buka Power Automate → <b>+ New flow</b> → nama <b id="pdiKitFlowNm">${escH(o.flow)}</b> → di editor klik area aksi → <b>Ctrl+V</b> → <b>Save</b>. Script AHK otomatis menulis lokasi folder baru ke <code>C:\\Users\\Public\\toyota_pdi_path.txt</code>; kalau flow membaca alamat file <b>langsung</b>, ganti alamatnya ke <code>…\\RADAR PDI\\tls_input.json</code> dan <code>tls_done.txt</code> sekali saja. Kalau flow mengisi TLS lewat Chrome/Edge, pasang juga ekstensi Power Automate di browser itu.
+        <div style="font-size:11.5px;color:var(--text-dim);margin-top:4px;">Lalu buka Folder RADAR PDI → klik 2× <b>PAD_trigger_radar.ahk</b> (muncul ikon H di taskbar). Klik kanan ikon H → centang <b>Jalan otomatis saat Windows nyala</b>. PAD_trigger_v51.ahk boleh tetap jalan (foldernya beda).</div>`)}
+      ${st(4,"Pasang flow Power Automate", `Buka Power Automate → <b>+ New flow</b> → nama <b id="pdiKitFlowNm">${escH(o.flow)}</b> → di editor klik area aksi → <b>Ctrl+V</b> → <b>Save</b>. Flow ini sudah memakai alamat <code>D:\\RADAR PDI</code> (dari langkah A). Kalau folder di PC ini beda, ganti alamat file di flow sekali saja. Kalau flow mengisi TLS lewat Chrome/Edge, pasang juga ekstensi Power Automate di browser itu.
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><button type="button" class="tlscp" id="pdiKitCp" disabled onclick="pdiKitFlowCopy(this)">📋 Salin flow</button><button type="button" class="tlscp" id="pdiKitDl" disabled onclick="pdiKitFlowDownload()">⬇ Unduh flow (.txt)</button></div>`)}
       ${st(5,"Coba 1 unit", `Scan 1 unit → LANJUT INPUT TLS → RADAR mengecil, popup kecil muncul, Power Automate mengisi TLS → RADAR muncul lagi ke cek buku.`)}
     </div>`);
-  const fl = document.getElementById("pdiKitFlow"); if(fl) fl.oninput = ()=>{ const n = document.getElementById("pdiKitFlowNm"); if(n) n.textContent = fl.value||"PDI_Auto_TLS"; };
+  const fl = document.getElementById("pdiKitFlow"); if(fl) fl.oninput = ()=>{ const n = document.getElementById("pdiKitFlowNm"); if(n) n.textContent = fl.value||"RADAR_PDI_TLS"; document.querySelectorAll(".pdiKitFlowNm2").forEach(x=>x.textContent = fl.value||"RADAR_PDI_TLS"); };
   ["pdiKitMode","pdiKitFlow","pdiKitTitle"].forEach(id=>{ const el = document.getElementById(id); if(el) el.addEventListener("change", pdiKitReadOpt); });
   pdiKitFlowLoad().then(pdiKitFlowStatus);
 }
