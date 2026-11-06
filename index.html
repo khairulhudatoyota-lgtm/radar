@@ -744,6 +744,9 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .pdiAS-msg{font-size:11px;color:#3fb950;white-space:pre-line;padding:6px 6px 0;min-height:16px;text-align:left;}
 .pdiDelB{border:1px solid var(--border);background:var(--panel);border-radius:6px;padding:2px 6px;font-size:13px;cursor:pointer;line-height:1.2;}
 .pdiDelB:hover{border-color:var(--red,#dc2626);background:#fdeaea;}
+.pdiCamBox.rot180 video{transform:rotate(180deg);}
+.pdiKitG{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 8px;align-items:center;margin:6px 0 8px;font-size:12px;}
+.pdiKitG select,.pdiKitG input{width:100%;min-width:0;box-sizing:border-box;margin:0;}
 /* ===== END PDI CSS ===== */
 </style>
 <style>
@@ -1181,7 +1184,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="06 Nov 2026 23.05";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="07 Nov 2026 02.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4911,7 +4914,7 @@ function _zip(files){
   const enc=new TextEncoder(), parts=[], cen=[]; let off=0;
   const u16=n=>[n&255,(n>>>8)&255], u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
   files.forEach(f=>{
-    const nm=enc.encode(f.name), d=enc.encode(f.data), crc=_crc32(d);
+    const nm=enc.encode(f.name), d=(f.data instanceof Uint8Array)?f.data:enc.encode(f.data), crc=_crc32(d);
     const lh=[0x50,0x4b,3,4,...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(d.length),...u32(d.length),...u16(nm.length),...u16(0)];
     parts.push(new Uint8Array(lh),nm,d);
     cen.push({nm,crc,len:d.length,off});
@@ -11711,6 +11714,7 @@ function pdiResetUnit(say){
   Object.assign(PDI, {step:"scan", vin:"", eng:"", key:"", keySrc:"", seen:{}, card:new Set(), guide:"", marks:[], view:[], model:"", tipe:"R", info:null, dup:false, prob:null, rec:null, tlsStart:0, tlsErr:"", bookManual:false, capturing:false});
   try{ Object.assign(PB, {streak:0, cal:false, calBuf:[], ts:0, os:0, on:"", msg:"", err:""}); }catch(e){}
   if(PDI.tlsPoll){ clearInterval(PDI.tlsPoll); PDI.tlsPoll = null; }
+  try{ pdiTlsPipClose(); }catch(e){}
   pdiOvClose(); pdiUi();
 }
 /* Proses semua barcode di 1 frame kamera. codes = [{t, kind:"QR"|"1D", q:{topLeft..}}] */
@@ -11874,7 +11878,7 @@ function pdiModelPick(m){
 }
 
 /* ===== TLS lewat PAD: RADAR menulis tls_input.json, PAD mengisi TLS lalu menulis tls_done.txt (OK|VIN) =====
-   Folder yang sama dengan aplikasi PDI v50/v51 (mis. D:\Khairul\Toyota_PDI_v50\Toyota_PDI_v50\data), dipilih sekali per PC. */
+   "Folder RADAR PDI" (mis. D:\RADAR PDI), dipilih sekali per PC; RADAR mengingatnya. */
 const PDI_TLS = {dir:null, perm:"", name:""};
 function pdiIdb(){ return new Promise((res,rej)=>{ try{ const r = indexedDB.open("radar_pdi_fs",1); r.onupgradeneeded = ()=>r.result.createObjectStore("h"); r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); }catch(e){ rej(e); } }); }
 async function pdiIdbGet(k){ try{ const db = await pdiIdb(); return await new Promise(res=>{ const t = db.transaction("h").objectStore("h").get(k); t.onsuccess = ()=>res(t.result||null); t.onerror = ()=>res(null); }); }catch(e){ return null; } }
@@ -11884,11 +11888,20 @@ async function pdiTlsInit(){
   pdiUi();
 }
 async function pdiTlsPick(){
-  if(!window.showDirectoryPicker){ alert("Browser ini belum bisa menyambung folder TLS.\nPakai Google Chrome atau Microsoft Edge versi baru di PC PDI."); return; }
+  if(!window.showDirectoryPicker){ alert("Browser ini belum bisa menyambung Folder RADAR PDI.\nPakai Google Chrome atau Microsoft Edge versi baru di PC PDI."); return; }
   try{
     const h = await window.showDirectoryPicker({id:"pdiTls", mode:"readwrite"});
     PDI_TLS.dir = h; PDI_TLS.name = h.name; PDI_TLS.perm = await h.requestPermission({mode:"readwrite"});
     await pdiIdbSet("tlsdir", h);
+    pdiUi();
+    /* folder baru (belum ada file pendukung RADAR) → tawarkan simpan paket lengkap ke sini */
+    if(PDI_TLS.perm==="granted"){
+      let isi = false; try{ await h.getFileHandle("radar_pdi_folder.txt"); isi = true; }catch(e){}
+      if(!isi && confirm("Folder \""+h.name+"\" dipakai sebagai Folder RADAR PDI.\n\nSimpan file pendukung ke folder ini sekarang?\n• PAD_trigger_radar.ahk (klik 2x untuk menjalankan)\n• flow Power Automate, sketch Arduino, PANDUAN_PC_PDI.txt")){
+        try{ await pdiKitFlowLoad(); }catch(e){}
+        await pdiKitAllInstall(null);
+      }
+    }
   }catch(e){ if(e && e.name!=="AbortError") alert("Gagal memilih folder: "+(e.message||e)); }
   pdiUi();
 }
@@ -11906,9 +11919,10 @@ async function pdiTlsReadDone(){ try{ const fh = await PDI_TLS.dir.getFileHandle
 let _pdiTlsTimer = null;
 async function pdiTlsStart(){
   PDI.step = "tls"; PDI.tlsStart = Date.now(); PDI.tlsErr = ""; PDI.tlsMode = pdiTlsReady() ? "pad" : "manual";
+  pdiTlsPipOpen();            // popup kecil selalu di atas (seperti v51) — harus dipanggil langsung dari klik / Enter
   pdiTlsUi();
   if(_pdiTlsTimer) clearInterval(_pdiTlsTimer);
-  _pdiTlsTimer = setInterval(()=>{ if(PDI.step!=="tls"){ clearInterval(_pdiTlsTimer); _pdiTlsTimer = null; return; } const el = document.getElementById("pdiTlsTime"); if(el) el.textContent = pdiAgeSec(Date.now()-PDI.tlsStart); }, 1000);
+  _pdiTlsTimer = setInterval(()=>{ if(PDI.step!=="tls"){ clearInterval(_pdiTlsTimer); _pdiTlsTimer = null; return; } const t = pdiAgeSec(Date.now()-PDI.tlsStart); const el = document.getElementById("pdiTlsTime"); if(el) el.textContent = t; try{ const p = _pdiPip && _pdiPip.document.getElementById("t"); if(p) p.textContent = t; }catch(e){} }, 1000);
   if(PDI.tlsMode==="pad"){
     try{ await pdiTlsWrite(PDI.vin, PDI.eng, PDI.key); }
     catch(e){ PDI.tlsMode = "manual"; PDI.tlsErr = "Gagal menulis tls_input.json ("+(e.message||e)+"). Isi TLS manual, lalu klik TLS SELESAI."; pdiTlsUi(); return; }
@@ -11927,14 +11941,70 @@ async function pdiTlsPollTick(){
     else if(t){ const e = "PAD: "+t.slice(0,200); if(e!==PDI.tlsErr){ PDI.tlsErr = e; pdiSay("tlserr"); pdiTlsUi(); } }
   } finally { _pdiPollBusy = false; }
 }
+/* ===== Popup kecil TLS (sama dengan v51): melayang di atas TLS walau RADAR di-minimize =====
+   Pakai Document Picture-in-Picture (Chrome / Edge 116+). Browser lain: hanya panel di dalam RADAR. */
+let _pdiPip = null, _pdiPipBatal = 0;
+function pdiPipOn(){ try{ return localStorage.getItem("radar_pdi_pip")!=="0"; }catch(e){ return true; } }
+const PDI_PIP_CSS = `html,body{margin:0;height:100%;}body{font-family:"Segoe UI",system-ui,sans-serif;background:#1E2A3B;color:#fff;text-align:center;user-select:none;overflow:hidden;}
+body.man{background:#7c2d12;} .bar{height:6px;background:#0F1923;} body.man .bar{background:#451a03;}
+.ic{font-size:30px;margin-top:12px;line-height:1.1;} .tt{font-size:17px;font-weight:800;margin-top:4px;letter-spacing:.2px;}
+.id{font-size:11px;color:#93c5fd;margin-top:8px;} body.man .id{color:#fbd38d;} .id span{cursor:pointer;border-bottom:1px dotted currentColor;} .id span:hover{color:#fff;}
+.st{font-size:13px;font-weight:700;color:#fde68a;margin-top:12px;} body.man .st{color:#fef3c7;} .st.err{color:#fca5a5;}
+.hn{font-size:11px;color:#93c5fd;margin-top:6px;} body.man .hn{color:#fbd38d;}
+.bt{display:flex;gap:14px;margin:16px 20px 0;} .bt button{flex:1;padding:12px 6px;border-radius:2px;color:#fff;font:700 12.5px "Segoe UI",sans-serif;cursor:pointer;}
+.go{background:#0f4620;border:1px solid #1a7f37;} .go:hover{background:#145d28;} .no{background:#5a1a1a;border:1px solid #cf222e;} .no:hover,.no.sure{background:#7a2020;}
+.ft{font-size:10px;color:#94a3b8;margin-top:12px;} body.man .ft2{color:#fbd38d;} .ft2{font-size:10px;color:#94a3b8;margin-top:10px;}`;
+async function pdiTlsPipOpen(){
+  if(_pdiPip || !pdiPipOn() || !window.documentPictureInPicture) return;
+  try{
+    const w = await documentPictureInPicture.requestWindow({width:500, height:340});
+    if(PDI.step!=="tls"){ try{ w.close(); }catch(e){} return; }
+    _pdiPip = w; _pdiPipBatal = 0;
+    w.document.title = "RADAR PDI — TLS";
+    const st = w.document.createElement("style"); st.textContent = PDI_PIP_CSS; w.document.head.appendChild(st);
+    w.addEventListener("pagehide", ()=>{ if(_pdiPip===w) _pdiPip = null; });
+    pdiTlsPipRender();
+  }catch(e){ console.warn("popup TLS", e); }
+}
+function pdiTlsPipClose(){ const w = _pdiPip; _pdiPip = null; try{ if(w) w.close(); }catch(e){} }
+function pdiTlsPipRender(){
+  const w = _pdiPip; if(!w) return;
+  if(PDI.step!=="tls"){ pdiTlsPipClose(); return; }
+  const d = w.document, pad = PDI.tlsMode==="pad", s = pdiShiftOf(PDI.tlsStart||Date.now());
+  d.body.className = pad ? "pad" : "man";
+  d.body.innerHTML = `<div class="bar"></div><div class="ic">${pad?"🌐":"💻"}</div>
+    <div class="tt">${pad?"MENGIRIM DATA KE TLS...":"MODE MANUAL — ISI TLS"}</div>
+    <div class="id">Frame: <span data-c="${escH(PDI.vin)}">${escH(PDI.vin)}</span>  |  Engine: <span data-c="${escH(PDI.eng)}">${escH(PDI.eng)}</span>  |  Kunci: <span data-c="${escH(PDI.key)}">${escH(PDI.key)}</span></div>
+    ${PDI.tlsErr ? `<div class="st err">⚠ ${escH(PDI.tlsErr.slice(0,90))}</div><div class="hn">Isi TLS manual, lalu klik Skip — kalau TLS menolak: Batal, lalu UNIT PROBLEM</div>`
+      : pad ? `<div class="st">⏳  PAD sedang mengisi TLS...  <span id="t">${pdiAgeSec(Date.now()-PDI.tlsStart)}</span></div><div class="hn">Tunggu sampai selesai — atau isi manual lalu klik  Skip</div>`
+      : `<div class="st">✍  Isi TLS (Frame, Engine, Kunci) lalu klik  LANJUT SEKARANG  <span id="t">${pdiAgeSec(Date.now()-PDI.tlsStart)}</span></div><div class="hn">Klik Frame / Engine / Kunci di atas untuk menyalin</div>`}
+    <div class="bt"><button type="button" class="go" id="go">${pad?"⏩  Skip TLS, lanjut scan buku":"⏩  LANJUT SEKARANG"}</button><button type="button" class="no" id="no">✖  Batal, scan ulang</button></div>
+    <div class="ft2">${pad?"Tekan Skip jika PAD tidak jalan  |  Batal untuk scan ulang":"Tekan LANJUT setelah TLS terisi  |  Batal untuk scan ulang"}</div>
+    <div class="ft">PIC: ${escH((currentUser&&currentUser.name)||"")}  |  Shift: ${escH(pdiShiftLabel(s.sh))}  |  Model: ${escH(PDI.model||"-")}</div>`;
+  d.getElementById("go").onclick = ()=>pdiTlsPipGo();
+  d.getElementById("no").onclick = (e)=>{
+    const b = e.currentTarget;
+    if(Date.now()-_pdiPipBatal > 4000){ _pdiPipBatal = Date.now(); b.classList.add("sure"); b.textContent = "Klik lagi = BATAL unit ini"; setTimeout(()=>{ try{ if(Date.now()-_pdiPipBatal>=3900){ b.classList.remove("sure"); b.textContent = "✖  Batal, scan ulang"; } }catch(_){} }, 4000); return; }
+    pdiTlsPipClose(); try{ window.focus(); }catch(_){} pdiTlsBack("BATAL"); pdiTlsCancel(true);
+  };
+  d.querySelectorAll("span[data-c]").forEach(sp=>{ sp.onclick = ()=>{ const t = sp.dataset.c; const ok = ()=>{ const o = sp.textContent; sp.textContent = "✔ tersalin"; setTimeout(()=>{ sp.textContent = o; }, 900); };
+    try{ w.navigator.clipboard.writeText(t).then(ok).catch(()=>{ const ta = d.createElement("textarea"); ta.value = t; d.body.appendChild(ta); ta.select(); try{ d.execCommand("copy"); ok(); }catch(_){} ta.remove(); }); }catch(_){} }; });
+}
+/* Skip / Lanjut dari popup: lanjut cek buku + minta AHK memunculkan lagi jendela RADAR */
+function pdiTlsPipGo(){ pdiTlsPipClose(); try{ window.focus(); }catch(e){} pdiTlsBack("SKIP"); pdiTlsDone(); }
+async function pdiTlsBack(what){
+  const vin = PDI.vin; if(!pdiTlsReady()) return;
+  try{ const fh = await PDI_TLS.dir.getFileHandle("tls_done.txt", {create:true}), w = await fh.createWritable(); await w.write(what+"|"+vin); await w.close(); }catch(e){}
+}
 function pdiTlsUi(){
   if(PDI.step!=="tls") return;
+  pdiTlsPipRender();
   const pad = PDI.tlsMode==="pad";
   pdiOv(`<div class="pdiCf pdiTlsBox" style="border-color:#1d4ed8;">
     <div class="pdiCfHead" style="background:#1d4ed8;"><div style="font-size:20px;font-weight:900;">⏳ ${pad?"PAD MENGISI TLS…":"ISI TLS PDI COMPLETION"}</div><div style="font-family:monospace;font-size:16px;">${escH(PDI.vin)}</div></div>
     <div style="padding:12px 20px;font-size:13px;">
       <div class="pdiCfRow"><span>ENGINE</span><b>${escH(PDI.eng)}</b></div><div class="pdiCfRow"><span>KUNCI</span><b>${escH(PDI.key)}</b></div>
-      <div style="margin:10px 0;">${pad?`Menunggu PAD selesai (<b>tls_done.txt</b>). Lanjut sendiri begitu PAD menulis OK.`:`Folder TLS belum tersambung, jadi isi Frame, Engine, Kunci di TLS sendiri, lalu klik <b>TLS SELESAI</b>.`} Lama menunggu: <b id="pdiTlsTime">0:00</b></div>
+      <div style="margin:10px 0;">${pad?`Menunggu PAD selesai (<b>tls_done.txt</b>). Lanjut sendiri begitu PAD menulis OK.`:`Folder RADAR PDI belum tersambung, jadi isi Frame, Engine, Kunci di TLS sendiri, lalu klik <b>TLS SELESAI</b>.`} Lama menunggu: <b id="pdiTlsTime">0:00</b></div>
       ${PDI.tlsErr?`<div class="pdiWarn" style="margin:0 0 10px;">⚠ ${escH(PDI.tlsErr)}<br>Isi TLS manual (refresh TLS dulu kalau perlu), lalu klik TLS SELESAI. Kalau TLS menolak, klik UNIT PROBLEM.</div>`:""}
       ${PDI.dup?`<div class="pdiWarn" style="margin:0 0 10px;">Unit duplikat — tidak dihitung lagi.</div>`:""}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -11944,12 +12014,14 @@ function pdiTlsUi(){
       </div>
     </div></div>`, {pos:"br"});
 }
-function pdiTlsCancel(){
-  if(!confirm("Batalkan unit "+PDI.vin+"?\n\nUnit tidak dicatat. Pastikan TLS untuk unit ini tidak jadi disimpan.")) return;
+function pdiTlsCancel(force){
+  pdiTlsPipClose();
+  if(!force && !confirm("Batalkan unit "+PDI.vin+"?\n\nUnit tidak dicatat. Pastikan TLS untuk unit ini tidak jadi disimpan.")) return;
   if(PDI.rec){ if(PDI.prob) pdiPut(Object.assign({}, PDI.prob)); else { PDI.rec.st = "BATAL"; PDI.rec.doneTs = Date.now(); pdiPut(PDI.rec); } }
   pdiResetUnit();
 }
 function pdiTlsDone(){
+  pdiTlsPipClose();
   if(PDI.step!=="tls") return;
   if(PDI.tlsPoll){ clearInterval(PDI.tlsPoll); PDI.tlsPoll = null; }
   PDI.tlsDoneTs = Date.now();
@@ -12023,33 +12095,61 @@ const PDI_ZX_SRC = "https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/read
 const PDI_ZX_WASM = "https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm";
 const PDI_ZX_OPTS = {formats:["QRCode","MicroQRCode","DataMatrix","Code128","Code39","Code93","ITF","EAN13","EAN8","UPCA","Codabar"], tryHarder:true, tryRotate:true, tryInvert:false, tryDownscale:true, maxNumberOfSymbols:12, textMode:"Plain"};
 let _pdiZxP = null;
+/* Sumber pustaka: 1) file di repo RADAR sendiri (pdi-zxing.js / .wasm) — jalan walau internet kantor memblokir CDN, 2) jsDelivr, 3) unpkg */
+const PDI_ZX_SRCS = [["pdi-zxing.js","pdi-zxing.wasm"], [PDI_ZX_SRC, PDI_ZX_WASM], ["https://unpkg.com/zxing-wasm@3.1.4/dist/iife/reader/index.js","https://unpkg.com/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm"]];
+function pdiLoadScript(url, ms){
+  return new Promise((ok,no)=>{ const s = document.createElement("script"); let t = setTimeout(()=>{ t = null; s.remove(); no(new Error("timeout")); }, ms||60000);
+    s.src = url; s.async = true; s.onload = ()=>{ if(t){ clearTimeout(t); ok(); } }; s.onerror = ()=>{ if(t){ clearTimeout(t); s.remove(); no(new Error("gagal")); } }; document.head.appendChild(s); });
+}
 function pdiZx(){
   if(window.ZXingWASM && window._pdiZxReady) return Promise.resolve(window.ZXingWASM);
   if(_pdiZxP) return _pdiZxP;
-  _pdiZxP = new Promise((res,rej)=>{
-    const go = ()=>{ try{ ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith(".wasm") ? (window.PDI_ZX_WASM_URL||PDI_ZX_WASM) : pre+p}, fireImmediately:true}); }catch(e){} window._pdiZxReady = true; res(window.ZXingWASM); };
-    if(window.ZXingWASM){ go(); return; }
-    const s = document.createElement("script"); s.src = window.PDI_ZX_SRC_URL || PDI_ZX_SRC;
-    s.onload = go; s.onerror = ()=>{ _pdiZxP = null; rej(new Error("Pembaca barcode gagal dimuat. Cek internet PC.")); };
-    document.head.appendChild(s);
-  });
+  _pdiZxP = (async()=>{
+    const list = window.PDI_ZX_SRC_URL ? [[window.PDI_ZX_SRC_URL, window.PDI_ZX_WASM_URL||PDI_ZX_WASM]] : PDI_ZX_SRCS;
+    for(const [js, wasm] of list){
+      try{
+        if(!window.ZXingWASM) await pdiLoadScript(js, 30000);
+        /* fireImmediately → langsung unduh .wasm; promise gagal kalau .wasm tidak bisa diambil → coba sumber berikutnya */
+        const mod = ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith(".wasm") ? wasm : pre+p}, fireImmediately:true});
+        if(mod && mod.then) await Promise.race([mod, new Promise((_,no)=>setTimeout(()=>no(new Error("timeout")), 30000))]);
+        window._pdiZxReady = true; window._pdiZxFrom = wasm; return window.ZXingWASM;
+      }catch(e){ console.warn("pembaca barcode gagal dari", js, wasm, e); }
+    }
+    _pdiZxP = null;
+    throw new Error("Pembaca barcode gagal dimuat — internet PC tidak bisa membuka CDN. Upload file pdi-zxing.js & pdi-zxing.wasm ke repo radar (sejajar index.html).");
+  })();
   return _pdiZxP;
 }
 function pdiKind(fmt){ return /QR|DataMatrix|Aztec|PDF417|MaxiCode/i.test(String(fmt||"")) ? "QR" : "1D"; }
 function pdiCamDev(){ try{ return localStorage.getItem("radar_pdi_cam")||""; }catch(e){ return ""; } }
 async function pdiCamStart(){
-  if(PDI.cam.on) return;
+  if(PDI.cam.on || PDI.cam.starting) return;
   PDI.cam.err = "";
-  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ PDI.cam.err = "Browser tidak mengizinkan kamera (buka RADAR lewat https di Chrome/Edge)."; pdiUi(); return; }
-  try{
-    const dev = pdiCamDev();
-    const st = await navigator.mediaDevices.getUserMedia({audio:false, video: dev ? {deviceId:{exact:dev}, width:{ideal:1280}, height:{ideal:720}} : {width:{ideal:1280}, height:{ideal:720}}});
-    const v = document.getElementById("pdiVideo"); if(!v){ st.getTracks().forEach(t=>t.stop()); return; }
-    v.srcObject = st; await v.play().catch(()=>{});
-    PDI.cam.stream = st; PDI.cam.on = true; pdiUi(); pdiCamApplySaved();
-    pdiZx().catch(e=>{ PDI.cam.err = e.message; pdiUi(); });
-    pdiCamLoop();
-  }catch(e){ PDI.cam.err = (e && e.name==="NotAllowedError") ? "Izin kamera ditolak. Klik ikon gembok di address bar → Kamera → Izinkan, lalu klik Nyalakan Kamera." : (e && e.name==="NotFoundError" ? "Kamera tidak ditemukan. Colok kamera USB lalu klik Nyalakan Kamera." : "Kamera gagal: "+(e.message||e)); pdiUi(); }
+  if(!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ PDI.cam.err = "Browser tidak mengizinkan kamera. Buka RADAR lewat alamat https://khairulhudatoyota-lgtm.github.io/radar/ di Google Chrome / Microsoft Edge."; pdiUi(); return; }
+  PDI.cam.starting = true; pdiUi();
+  const want = (dev)=>({audio:false, video: dev ? {deviceId:{exact:dev}, width:{ideal:1280}, height:{ideal:720}} : {width:{ideal:1280}, height:{ideal:720}}});
+  let st = null, dev = pdiCamDev(), err = null;
+  try{ st = await navigator.mediaDevices.getUserMedia(want(dev)); }
+  catch(e){
+    err = e;
+    /* kamera yang dipilih dulu sudah tidak ada (dicabut / ganti port USB): pakai kamera bawaan */
+    if(dev && e && /Overconstrained|NotFound/.test(e.name||"")){ try{ st = await navigator.mediaDevices.getUserMedia(want("")); err = null; try{ localStorage.removeItem("radar_pdi_cam"); }catch(_){} pdiToast("Kamera yang dipilih tidak ditemukan — memakai kamera bawaan", true); }catch(e2){ err = e2; } }
+  }
+  PDI.cam.starting = false;
+  if(err || !st){ PDI.cam.err = pdiCamErrText(err); console.warn("kamera", err); pdiUi(); return; }
+  const v = document.getElementById("pdiVideo"); if(!v){ st.getTracks().forEach(t=>t.stop()); pdiUi(); return; }
+  v.srcObject = st; await v.play().catch(()=>{});
+  PDI.cam.stream = st; PDI.cam.on = true; pdiUi(); pdiCamApplySaved();
+  try{ st.getVideoTracks()[0].addEventListener("ended", ()=>{ if(PDI.cam.stream===st){ pdiCamStop(); PDI.cam.err = "Kamera terputus (kabel USB lepas / dipakai aplikasi lain). Colok lagi lalu klik Nyalakan Kamera."; pdiUi(); } }); }catch(e){}
+  pdiZx().then(()=>{ if(/Pembaca barcode/.test(PDI.cam.err||"")){ PDI.cam.err = ""; pdiUi(); } }).catch(e=>{ PDI.cam.err = e.message; pdiUi(); });
+  pdiCamLoop();
+}
+function pdiCamErrText(e){
+  const n = (e && e.name) || "", m = (e && e.message) || String(e||"");
+  if(/NotAllowed|Permission|Security/.test(n)) return "Izin kamera ditolak. Klik ikon 🔒 / kamera di kiri alamat web → Kamera → Izinkan, lalu klik Nyalakan Kamera. Kalau tetap ditolak: Windows Settings → Privacy → Camera → izinkan aplikasi desktop memakai kamera.";
+  if(/NotReadable|TrackStart|Abort/.test(n)) return "Kamera sedang dipakai aplikasi lain (mis. PDI v51, aplikasi Kamera Windows, Zoom/Teams). Tutup aplikasi itu, lalu klik Nyalakan Kamera.";
+  if(/NotFound|DevicesNotFound|Overconstrained/.test(n)) return "Kamera tidak ditemukan. Pastikan kamera USB tercolok (cek di Device Manager), lalu klik Nyalakan Kamera.";
+  return "Kamera gagal: "+n+(m?" — "+m:"");
 }
 function pdiCamStop(){ try{ if(PDI.cam.stream) PDI.cam.stream.getTracks().forEach(t=>t.stop()); }catch(e){} PDI.cam.stream = null; PDI.cam.on = false; }
 /* Barcode garis yang miring (> ±15°) tidak terbaca pembaca biasa. Seperti v51: tiap frame juga dicoba diputar
@@ -12082,6 +12182,7 @@ async function pdiCamLoop(){
   if(!PDI.cam.on) return;
   const v = document.getElementById("pdiVideo");
   if(!v || activeTab!=="pdi"){ pdiCamStop(); return; }
+  { const box = document.getElementById("pdiCamBox"), r = PDI.step==="book" && pdiBookRot(); if(box && box.classList.contains("rot180")!==r) box.classList.toggle("rot180", r); }
   if(PDI.step==="book" && !PDI.bookManual && !PDI.capturing && v.readyState>=2 && v.videoWidth && !PDI.cam.busy && window._pdiCvReady){
     PDI.cam.busy = true; try{ pdiBookTick(); }catch(e){ PB.err = "Cek buku error: "+(e.message||e); try{ pdiBookUi(); }catch(e2){} } PDI.cam.busy = false;
     const c = document.getElementById("pdiMarks"); if(c){ const x = c.getContext("2d"); x.clearRect(0,0,c.width,c.height); }
@@ -12132,9 +12233,10 @@ function pdiCv(){
       if(!(c && c.Mat)){ await new Promise((ok,no)=>{ const t0 = Date.now(); try{ if(c) c.onRuntimeInitialized = ok; }catch(e){} const iv = setInterval(()=>{ const z = window.cv; if(z && z.Mat){ clearInterval(iv); ok(); } else if(Date.now()-t0 > 60000){ clearInterval(iv); no(new Error("OpenCV tidak siap")); } }, 200); }); }
       window._pdiCvReady = true; res(true); }catch(e){ _pdiCvP = null; rej(e); } };
     if(window.cv && window.cv.Mat){ done(); return; }
-    const s = document.createElement("script"); s.src = window.PDI_CV_SRC_URL || PDI_CV_SRC; s.async = true;
-    s.onload = done; s.onerror = ()=>{ _pdiCvP = null; rej(new Error("Pembaca buku (OpenCV) gagal dimuat. Cek internet PC.")); };
-    document.head.appendChild(s);
+    /* 1) file di repo RADAR (pdi-opencv.js), 2) jsDelivr, 3) unpkg */
+    const list = window.PDI_CV_SRC_URL ? [window.PDI_CV_SRC_URL] : ["pdi-opencv.js", PDI_CV_SRC, "https://unpkg.com/@techstark/opencv-js@4.12.0-release.1/dist/opencv.js"];
+    (async()=>{ for(const u of list){ try{ await pdiLoadScript(u, 120000); window._pdiCvFrom = u; done(); return; }catch(e){ console.warn("OpenCV gagal dari", u, e); } }
+      _pdiCvP = null; rej(new Error("Pembaca buku (OpenCV) gagal dimuat — internet PC tidak bisa membuka CDN. Upload file pdi-opencv.js ke repo radar (sejajar index.html).")); })();
   });
   return _pdiCvP;
 }
@@ -12308,12 +12410,18 @@ async function pdiBookStart(){
   catch(e){ PB.loading = false; PB.err = e.message||String(e); }
   pdiBookUi();
 }
+/* Seperti v51: saat cek buku gambar kamera diputar 180° (buku diletakkan terbalik dari arah kamera) */
+function pdiBookRot(){ try{ return localStorage.getItem("radar_pdi_bookrot")!=="0"; }catch(e){ return true; } }
+function pdiDrawCam(ctx, v, w, h, rot){
+  if(rot){ ctx.save(); ctx.translate(w, h); ctx.rotate(Math.PI); ctx.drawImage(v, 0, 0, w, h); ctx.restore(); }
+  else ctx.drawImage(v, 0, 0, w, h);
+}
 function pdiBookTick(cv0){
   if(PDI.step!=="book" || !PB.tmpls || PB.loading || !PB.tmpls[PDI.model]) return;
   const v = document.getElementById("pdiVideo"); if(!v || !v.videoWidth) return;
   const ww = PDI_BOOK.work_width, sc = Math.min(1, ww/v.videoWidth), w = Math.round(v.videoWidth*sc), h = Math.round(v.videoHeight*sc);
   const c = PB.cv || (PB.cv = document.createElement("canvas")); if(c.width!==w || c.height!==h){ c.width = w; c.height = h; }
-  c.getContext("2d", {willReadFrequently:true}).drawImage(v, 0, 0, w, h);
+  pdiDrawCam(c.getContext("2d", {willReadFrequently:true}), v, w, h, pdiBookRot());
   pdiBookJudge(pdiBookScores(c, PDI.model, PB.tmpls).scores);
 }
 function pdiBookJudge(scores){
@@ -12368,7 +12476,7 @@ function pdiBookCalib(){ PB.cal = true; PB.calBuf = []; PB.msg = ""; pdiBookUi()
 /* ---- 📷 Simpan / Foto Ulang Buku: frame beku → ① kotak BUKU → ② kotak NAMA MODEL ---- */
 function pdiBookCapture(asOk){
   const v = document.getElementById("pdiVideo"); if(!v || !v.videoWidth){ alert("Kamera belum menyala."); return; }
-  const fw = v.videoWidth, fh = v.videoHeight, fz = document.createElement("canvas"); fz.width = fw; fz.height = fh; fz.getContext("2d").drawImage(v, 0, 0);
+  const fw = v.videoWidth, fh = v.videoHeight, fz = document.createElement("canvas"); fz.width = fw; fz.height = fh; pdiDrawCam(fz.getContext("2d"), v, fw, fh, pdiBookRot());
   window._pdiFz = {cv:fz, asOk, phase:0, book:null, name:null, model:PDI.model};
   PDI.capturing = true;
   showModal(`<h3 style="margin:0 0 4px;">📷 Foto Buku — ${escH(PDI.model)}</h3><div id="pdiFzTxt" style="font-weight:800;color:#b45309;margin-bottom:6px;">① Tarik kotak mengelilingi SELURUH BUKU</div>
@@ -12749,7 +12857,7 @@ function pdiUi(){
     <div class="pdiWho">${escH((currentUser&&currentUser.name)||"")} · ${escH(pdiShiftLabel(s.sh))}${currentUser&&currentUser.shift?" · "+rsShift(currentUser.shift):""}</div>
     <div class="pdiStats">
       ${pdiChip(PDI.cam.on && !PDI.cam.err, PDI.cam.on, "📷 Kamera"+(PDI.cam.on&&PDI.cam.fps?" "+PDI.cam.fps+"fps":""), "pdiCamToggle()", "Nyalakan / matikan kamera")}
-      ${pdiChip(pdiTlsReady(), !!PDI_TLS.dir, "📁 TLS "+(pdiTlsReady()?"PAD":(PDI_TLS.dir?"izinkan":"manual")), PDI_TLS.dir&&!pdiTlsReady()?"pdiTlsReperm()":"pdiTlsPick()", PDI_TLS.dir?("Folder: "+PDI_TLS.name):"Pilih folder data PAD (tls_input.json)")}
+      ${pdiChip(pdiTlsReady(), !!PDI_TLS.dir, "📁 Folder RADAR PDI"+(pdiTlsReady()?" ✔":(PDI_TLS.dir?": izinkan":": belum")), PDI_TLS.dir&&!pdiTlsReady()?"pdiTlsReperm()":"pdiTlsPick()", PDI_TLS.dir?("Folder RADAR PDI: "+PDI_TLS.name):"Pilih Folder RADAR PDI (tempat tukar data dengan Power Automate)")}
       ${pdiChip(pdiArdOn(), !!PDI_ARD.port || pdiArdCfg().enabled, "🔌 Arduino "+(pdiArdOn()?"ON":(pdiArdCfg().enabled?(PDI_ARD.port?"…":"belum sambung"):"OFF")), "pdiArdSetOpen()", "⚙ Setting Arduino (pintu sticker)")}
       ${pdiChip(pdiVoiceOn(), false, pdiVoiceOn()?"🔊 Suara":"🔇 Suara", "pdiVoiceToggle()", "Suara ON/OFF")}
       <button type="button" class="pdiStat off" onclick="pdiFullscreen()" title="Layar penuh">⛶</button>
@@ -12759,10 +12867,10 @@ function pdiUi(){
     if(PDI_ERR) msgs.push(PDI_ERR + (ob?` (${ob} data menunggu)`:""));
     if(PDI.cam.err) msgs.push("📷 "+PDI.cam.err);
     if(PDI_ARD.err) msgs.push("🔌 "+PDI_ARD.err);
-    if(PDI_TLS.dir && PDI_TLS.perm!=="granted") msgs.push(`📁 Folder TLS perlu diizinkan lagi setelah browser dibuka ulang. <button type="button" class="tlscp" onclick="pdiTlsReperm()">Izinkan</button>`);
+    if(PDI_TLS.dir && PDI_TLS.perm!=="granted") msgs.push(`📁 Folder RADAR PDI perlu diizinkan lagi setelah browser dibuka ulang. <button type="button" class="tlscp" onclick="pdiTlsReperm()">Izinkan</button>`);
     er.innerHTML = msgs.length ? `<div class="msg err" style="margin:0 0 8px;font-size:12px;">${msgs.join("<br>")}</div>` : ""; }
   const cm = document.getElementById("pdiCamMsg");
-  if(cm) cm.innerHTML = PDI.cam.on ? (window._pdiZxReady ? "" : "Memuat pembaca barcode…") : `<div><div style="font-size:42px;">📷</div><div style="font-weight:800;margin:6px 0;">Kamera mati</div><button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="pdiCamToggle()">Nyalakan Kamera</button><div style="font-size:11px;margin-top:8px;opacity:.8;">Tanpa kamera tetap bisa pakai scanner tembak / ketik di kotak bawah.</div></div>`;
+  if(cm) cm.innerHTML = PDI.cam.on ? (window._pdiZxReady ? "" : "Memuat pembaca barcode…") : PDI.cam.starting ? `<div><div style="font-size:42px;">📷</div><div style="font-weight:800;margin:6px 0;">Menyalakan kamera…</div><div style="font-size:12px;opacity:.85;">Kalau Chrome bertanya izin kamera, pilih <b>Izinkan / Allow</b>.</div></div>` : `<div><div style="font-size:42px;">📷</div><div style="font-weight:800;margin:6px 0;">${PDI.cam.err?"Kamera belum tersambung":"Kamera mati"}</div>${PDI.cam.err?`<div style="font-size:12px;max-width:440px;margin:0 auto 8px;color:#fde68a;">${escH(PDI.cam.err)}</div>`:""}<button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="pdiCamToggle()">Nyalakan Kamera</button> <button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="pdiCfgOpen()">Pilih kamera</button><div style="font-size:11px;margin-top:8px;opacity:.8;">Tanpa kamera tetap bisa pakai scanner tembak / ketik di kotak bawah.</div></div>`;
   pdiFieldsUi();
   const r = document.getElementById("pdiRight"); if(r) r.innerHTML = pdiDashHtml(d, st, s, stt);
 }
@@ -12997,12 +13105,15 @@ function pdiCfgLocalHtml(){
     <h4 style="margin:12px 0 6px;">🔌 Arduino (pintu sticker)</h4>
     <div style="font-size:12px;">${pdiArdOn()?"🟢 Tersambung: <b>"+escH(PDI_ARD.info)+"</b>":(pdiArdCfg().enabled?"🟡 Aktif, port belum tersambung":"🔴 Nonaktif")}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;"><button type="button" class="tlscp" style="background:#6e40c9;color:#fff;" onclick="pdiArdSetOpen()">⚙ Setting Arduino</button><button type="button" class="tlscp" onclick="pdiDoorBtn('up')">Pintu NAIK ⬆</button><button type="button" class="tlscp" onclick="pdiDoorBtn('down')">Pintu TURUN ⬇</button></div>
+    <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiPipOn()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_pip',this.checked?'1':'0')}catch(e){}"> Popup kecil di atas TLS saat input TLS (seperti v51)${window.documentPictureInPicture?"":" — <i>tidak didukung browser ini, pakai Chrome / Edge terbaru</i>"}</label>
+    <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiBookRot()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_bookrot',this.checked?'1':'0')}catch(e){}"> Putar gambar kamera 180° saat cek buku (seperti v51)</label>
     <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiRotOn()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_rot',this.checked?'1':'0')}catch(e){}"> Baca barcode miring di semua sudut</label>
     <div style="font-size:11px;color:var(--text-dim);margin:6px 0;">Suara memakai suara Windows. Untuk logat Indonesia: Settings → Time & Language → Speech → Add voices → Indonesian.</div>
-    <h4 style="margin:12px 0 6px;">📁 Folder TLS (PAD)</h4>
+    <h4 style="margin:12px 0 6px;">📁 Folder RADAR PDI</h4>
     <div style="font-size:12px;">${PDI_TLS.dir?`Tersambung: <b>${escH(PDI_TLS.name)}</b> (${pdiTlsReady()?"diizinkan":"perlu izin"})`:"Belum tersambung — TLS diisi manual."}</div>
     <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;"><button type="button" class="tlscp" onclick="closeModal();pdiTlsPick()">Pilih folder</button>${PDI_TLS.dir?`<button type="button" class="tlscp" onclick="pdiTlsForget();closeModal();">Lepas folder</button>`:""}</div>
-    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Pilih folder <b>data</b> yang dipakai PAD (berisi tls_input.json / tls_done.txt), mis. <code>D:\\Khairul\\Toyota_PDI_v50\\Toyota_PDI_v50\\data</code>. Jalankan juga script AHK <b>PAD_trigger_radar.ahk</b>.</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Buat / pilih folder baru, mis. <code>D:\\RADAR PDI</code> — RADAR menaruh <b>tls_input.json</b> di sini dan membaca <b>tls_done.txt</b> dari Power Automate. Jalankan script <b>PAD_trigger_radar.ahk</b> yang ada di folder itu (script ikut memberi tahu Power Automate lokasi folder ini).</div>
+    <button type="button" class="tlscp" style="margin-top:8px;background:#1e2a3b;color:#fff;" onclick="closeModal();pdiKitOpen()">📦 Paket PC PDI (file AHK + flow Power Automate)</button>
   </div>`;
 }
 async function pdiCamList(){
@@ -13335,8 +13446,8 @@ async function pdiArdSetSave(){
   alert("✅ Pengaturan disimpan!\n\nStatus : "+(n.enabled?"AKTIF 🟢":"NONAKTIF 🔴")+"\nPort   : "+port+"\nBaud   : "+n.baud+"\nDurasi : "+n.open_duration+" detik\nPerintah: "+n.open_command
     + ((old.operation_mode!==n.operation_mode || old.pin_relay_up!==n.pin_relay_up || old.pin_relay_down!==n.pin_relay_down || old.pin_limit_up!==n.pin_limit_up || old.pin_limit_down!==n.pin_limit_down || old.limit_active_low!==n.limit_active_low || old.baud!==n.baud) ? "\n\n⚠ Mode / pin / baud berubah → Simpan Sketch & upload ulang ke Arduino." : ""));
 }
-function pdiArdSketchText(){
-  const c = pdiArdSetRead();
+function pdiArdSketchText(cfg){
+  const c = cfg || pdiArdSetRead();
   return pdiArdSketch({mode_name:c.operation_mode.toUpperCase(), pin_up:c.pin_relay_up, pin_down:c.pin_relay_down, pin_lim_up:c.pin_limit_up, pin_lim_down:c.pin_limit_down,
     mode_is_limit:String(c.operation_mode==="limit"), limit_low:String(!!c.limit_active_low), baud:c.baud});
 }
@@ -13546,6 +13657,343 @@ void loop() {
   }
 }
 `; }
+
+/* ===== PDI KIT — paket PC PDI baru: file AHK + flow Power Automate tersimpan di RADAR ===== */
+const PDI_KIT_FLOW = "pdikit_padflow";           // di node radar_foto (dibaca saat dibutuhkan saja)
+let _pdiKitFlow = null;                           // {txt, ts, by, name}
+function pdiKitOpt(){
+  let o = {}; try{ o = JSON.parse(localStorage.getItem("radar_pdi_kitopt")||"{}")||{}; }catch(e){}
+  return Object.assign({mode:"hotkey", flow:"PDI_Auto_TLS", title:"Toyota Logistic"}, o);
+}
+function pdiKitOptSave(o){ try{ localStorage.setItem("radar_pdi_kitopt", JSON.stringify(o)); }catch(e){} }
+/* Script AHK (AutoHotkey v1.1). Hanya karakter ASCII supaya aman dibaca AHK v1 tanpa BOM. */
+function pdiAhkText(o){
+  o = Object.assign(pdiKitOpt(), o||{});
+  const q = s=>String(s||"").replace(/[^\x20-\x7E]/g,"").replace(/"/g,"").replace(/%/g,"").trim();
+  const L = [
+"; ============================================================",
+";  PAD_trigger_radar.ahk  -  RADAR PDI KP 1  (AutoHotkey v1.1)",
+";  Dibuat dari RADAR > Scan PDI > Pengaturan > Paket PC PDI  ("+q(RADAR_BUILD)+")",
+";",
+";  Cara kerja (sama seperti v51):",
+";   1. RADAR menulis tls_input.json -> jendela RADAR di-minimize, popup kecil RADAR",
+";      (Skip / Batal) tetap di atas, TLS dimunculkan, lalu Power Automate dijalankan.",
+";   2. Power Automate mengisi TLS lalu menulis tls_done.txt (OK|frame atau ERROR|pesan).",
+";      Klik Skip / Batal di popup juga menulis tls_done.txt.",
+";   3. Script ini memunculkan lagi jendela RADAR -> RADAR lanjut cek buku sendiri.",
+";",
+";  Folder RADAR PDI (tempat tukar data RADAR <-> Power Automate) = folder tempat file AHK ini",
+";  disimpan, mis. D:\\RADAR PDI. Tidak terikat folder aplikasi lama.",
+";  Script ini juga menulis lokasi folder itu ke C:\\Users\\Public\\toyota_pdi_path.txt",
+";  (file yang dibaca flow Power Automate untuk mencari tls_input.json / tls_done.txt).",
+";  Simpan file ini DI DALAM Folder RADAR PDI yang dipilih di RADAR (tombol Pasang di RADAR sudah",
+";  otomatis menaruhnya di sana).",
+";",
+";  PENTING: jangan jalankan bersamaan dengan PAD_trigger_v51.ahk.",
+";  Klik kanan ikon H di taskbar -> Exit untuk mematikan salah satunya.",
+"; ============================================================",
+"#Persistent",
+"#SingleInstance Force",
+"SetTitleMatchMode, 2",
+"",
+"; Sebagian judul jendela TLS (lihat tulisan jendela TLS di taskbar)",
+"TLS_TITLE   := \""+q(o.title)+"\"",
+"RADAR_TITLE := \"RADAR\"",
+"; Cara menjalankan Power Automate:",
+";   hotkey = aktifkan jendela Power Automate lalu tekan Ctrl+Shift+P (sama seperti PC lama)",
+";   flow   = jalankan flow berdasarkan nama (PAD.Console.Host.exe -flowname / ms-powerautomate:)",
+"RUN_MODE    := \""+(o.mode==="flow"?"flow":"hotkey")+"\"",
+"FLOW_NAME   := \""+q(o.flow||"PDI_Auto_TLS")+"\"",
+"",
+"DATA_DIR  := A_ScriptDir",
+"TLS_FILE  := DATA_DIR . \"\\tls_input.json\"",
+"DONE_FILE := DATA_DIR . \"\\tls_done.txt\"",
+"EnvGet, PUB, PUBLIC",
+"INFO_FILE := PUB . \"\\toyota_pdi_path.txt\"",
+"",
+"lastModified := \"\"",
+"lastDoneTime := 0",
+"cooldown := false",
+"",
+"Menu, Tray, Tip, RADAR PDI - pemicu Power Automate",
+"Menu, Tray, Add",
+"Menu, Tray, Add, Jalan otomatis saat Windows nyala, ToggleStartup",
+"LNK := A_Startup . \"\\RADAR PDI AHK.lnk\"",
+"if FileExist(LNK)",
+"    Menu, Tray, Check, Jalan otomatis saat Windows nyala",
+"",
+"Gosub, LoadPaths",
+"if (!FileExist(TLS_FILE) && !FileExist(DATA_DIR . \"\\radar_pdi_folder.txt\"))",
+"    TrayTip, RADAR PDI, Folder ini belum terlihat sebagai Folder RADAR PDI: %DATA_DIR%, 8",
+"else",
+"    TrayTip, RADAR PDI, Siap. Folder RADAR PDI: %DATA_DIR%, 4",
+"SetTimer, LoadPaths, 10000",
+"SetTimer, CheckFile, 300",
+"SetTimer, CheckDone, 1000",
+"return",
+"",
+"; Tulis lokasi Folder RADAR PDI ke toyota_pdi_path.txt (dibaca flow Power Automate).",
+"; Kalau isinya masih alamat folder lama, otomatis diganti ke folder ini.",
+"LoadPaths:",
+"    want := DATA_DIR . \"`n\" . TLS_FILE . \"`n\" . DONE_FILE . \"`n\"",
+"    cur := \"\"",
+"    FileRead, cur, %INFO_FILE%",
+"    cur := StrReplace(cur, \"`r\")",
+"    if (cur != want) {",
+"        FileDelete, %INFO_FILE%",
+"        FileAppend, %want%, %INFO_FILE%",
+"        if (cur != \"\")",
+"            TrayTip, RADAR PDI, Lokasi folder untuk Power Automate diganti ke: %DATA_DIR%, 4",
+"    }",
+"return",
+"",
+"RadarWin() {",
+"    global RADAR_TITLE",
+"    if WinExist(RADAR_TITLE . \" ahk_exe chrome.exe\")",
+"        return WinExist(RADAR_TITLE . \" ahk_exe chrome.exe\")",
+"    if WinExist(RADAR_TITLE . \" ahk_exe msedge.exe\")",
+"        return WinExist(RADAR_TITLE . \" ahk_exe msedge.exe\")",
+"    return 0",
+"}",
+"",
+"; --- tls_input.json berubah -> minimize RADAR, munculkan TLS, jalankan Power Automate ---",
+"CheckFile:",
+"    if (cooldown)",
+"        return",
+"    if (!FileExist(TLS_FILE))",
+"        return",
+"    FileGetTime, currentModified, %TLS_FILE%",
+"    if (currentModified != lastModified && lastModified != \"\") {",
+"        lastModified := currentModified",
+"        cooldown := true",
+"        FileDelete, %DONE_FILE%",
+"        Sleep, 100",
+"        hR := RadarWin()",
+"        if (hR)",
+"            WinMinimize, ahk_id %hR%",
+"        Sleep, 150",
+"        if (TLS_TITLE != \"\" && WinExist(TLS_TITLE)) {",
+"            WinActivate",
+"            WinWaitActive, %TLS_TITLE%,, 1",
+"        }",
+"        Sleep, 200",
+"        Gosub, RunPad",
+"        SetTimer, ResetCooldown, -90000",
+"    } else {",
+"        lastModified := currentModified",
+"    }",
+"return",
+"",
+"RunPad:",
+"    if (RUN_MODE = \"flow\") {",
+"        exe1 := \"C:\\Program Files (x86)\\Power Automate Desktop\\PAD.Console.Host.exe\"",
+"        exe2 := \"C:\\Program Files\\Power Automate Desktop\\PAD.Console.Host.exe\"",
+"        try {",
+"            if FileExist(exe1)",
+"                Run, \"%exe1%\" -flowname \"%FLOW_NAME%\"",
+"            else if FileExist(exe2)",
+"                Run, \"%exe2%\" -flowname \"%FLOW_NAME%\"",
+"            else",
+"                Run, ms-powerautomate:/console/flow/run?workflowName=%FLOW_NAME%",
+"        } catch e {",
+"            TrayTip, RADAR PDI, Power Automate gagal dijalankan - isi TLS manual lalu klik Skip, 6",
+"        }",
+"        return",
+"    }",
+"    if (WinExist(\"Power Automate\")) {",
+"        WinActivate, Power Automate",
+"        WinWaitActive, Power Automate,, 1",
+"        Sleep, 150",
+"        Send, ^+p",
+"        Sleep, 300",
+"        WinMinimize, Power Automate",
+"    } else {",
+"        TrayTip, RADAR PDI, Jendela Power Automate tidak terbuka - isi TLS manual lalu klik Skip, 6",
+"    }",
+"return",
+"",
+"; --- tls_done.txt (Power Automate selesai / Skip / Batal) -> munculkan lagi jendela RADAR ---",
+"CheckDone:",
+"    if (!FileExist(DONE_FILE))",
+"        return",
+"    FileGetTime, doneModified, %DONE_FILE%",
+"    if (doneModified = lastDoneTime)",
+"        return",
+"    lastDoneTime := doneModified",
+"    Sleep, 800",
+"    hR := RadarWin()",
+"    if (hR) {",
+"        WinRestore, ahk_id %hR%",
+"        WinActivate, ahk_id %hR%",
+"    }",
+"    cooldown := false",
+"return",
+"",
+"ResetCooldown:",
+"    cooldown := false",
+"return",
+"",
+"ToggleStartup:",
+"    if (FileExist(LNK)) {",
+"        FileDelete, %LNK%",
+"        Menu, Tray, Uncheck, Jalan otomatis saat Windows nyala",
+"    } else {",
+"        FileCreateShortcut, %A_AhkPath%, %LNK%, %A_ScriptDir%, \"%A_ScriptFullPath%\"",
+"        Menu, Tray, Check, Jalan otomatis saat Windows nyala",
+"    }",
+"return",
+""];
+  return L.join("\r\n");
+}
+async function pdiKitAhkInstall(btn){
+  pdiKitReadOpt();
+  if(!pdiTlsReady()){ alert("Sambungkan dulu Folder RADAR PDI (tombol 📁 Folder RADAR PDI), lalu klik Pasang lagi."); return; }
+  try{
+    const put = async (n, t)=>{ const fh = await PDI_TLS.dir.getFileHandle(n, {create:true}), w = await fh.createWritable(); await w.write(t); await w.close(); };
+    await put("PAD_trigger_radar.ahk", pdiAhkText());
+    await put("radar_pdi_folder.txt", "Folder RADAR PDI - tempat tukar data RADAR dan Power Automate\r\n"+new Date().toISOString()+"\r\n");
+    if(btn){ btn.textContent = "✔ Terpasang di folder "+PDI_TLS.name; btn.classList.add("ok"); }
+    pdiToast("PAD_trigger_radar.ahk tersimpan di folder "+PDI_TLS.name+" — buka folder itu, klik 2x file-nya");
+  }catch(e){ alert("Gagal menyimpan file AHK ke Folder RADAR PDI: "+(e.message||e)+"\n\nPakai tombol Unduh, lalu pindahkan file ke Folder RADAR PDI."); }
+}
+function pdiKitAhkDownload(){ pdiKitReadOpt(); mfSave("PAD_trigger_radar.ahk", "text/plain", new TextEncoder().encode(pdiAhkText())); }
+function pdiKitReadOpt(){
+  const g = id=>document.getElementById(id); if(!g("pdiKitMode")) return;
+  const o = {mode:g("pdiKitMode").value, flow:(g("pdiKitFlow").value||"").trim()||"PDI_Auto_TLS", title:(g("pdiKitTitle").value||"").trim()||"Toyota Logistic"};
+  pdiKitOptSave(o); return o;
+}
+/* ----- Paket lengkap: semua file pendukung PC PDI dalam satu folder ----- */
+function pdiKitFiles(){
+  const o = pdiKitOpt(), flowName = (_pdiKitFlow && _pdiKitFlow.name) || o.flow || "PDI_Auto_TLS";
+  const url = location.origin + location.pathname.replace(/index\.html$/,"");
+  const F = [];
+  F.push({name:"PAD_trigger_radar.ahk", data:pdiAhkText()});
+  if(_pdiKitFlow) F.push({name:flowName+"_flow.txt", data:_pdiKitFlow.txt});
+  F.push({name:"arduino/pdi_relay/pdi_relay.ino", data:pdiArdSketchText(pdiArdCfg())});
+  F.push({name:"Buka RADAR.url", data:"[InternetShortcut]\r\nURL="+url+"\r\n"});
+  F.push({name:"radar_pdi_folder.txt", data:"Folder RADAR PDI - tempat tukar data RADAR dan Power Automate (jangan dihapus)\r\n"+new Date().toISOString()+"\r\n"});
+  const L = [
+"PANDUAN PASANG PC PDI - RADAR   ("+RADAR_BUILD+")",
+"==================================================",
+"",
+"Isi paket ini:",
+"  PAD_trigger_radar.ahk ............ script AutoHotkey (pemicu Power Automate)",
+_pdiKitFlow ? "  "+flowName+"_flow.txt ...... isi flow Power Automate (untuk di-paste)" : "  (flow Power Automate BELUM disimpan di RADAR - simpan dulu dari PC lama: Paket PC PDI > langkah A)",
+"  arduino\\pdi_relay\\pdi_relay.ino ... sketch Arduino pintu sticker (sesuai Setting Arduino PC ini)",
+"  Buka RADAR.url ................... shortcut membuka RADAR",
+"  radar_pdi_folder.txt ............. penanda Folder RADAR PDI (jangan dihapus)",
+"",
+"Yang TIDAK bisa ikut di paket (install sendiri):",
+"  - Google Chrome atau Microsoft Edge versi terbaru",
+"  - AutoHotkey v1.1 (biasanya sudah terinstall di PC PDI; kalau belum: autohotkey.com, pilih v1.1)",
+"  - Power Automate (bawaan Windows 11 / Microsoft Store) + login akun",
+"  - Ekstensi Power Automate di Chrome/Edge (kalau flow mengisi TLS lewat browser)",
+"  - Arduino IDE (hanya kalau sketch Arduino mau di-upload ulang)",
+"",
+"Langkah:",
+" 1. Buat folder baru D:\\RADAR PDI lalu taruh isi paket di sana (tidak terikat folder aplikasi lama).",
+" 2. Buka RADAR (klik 2x 'Buka RADAR.url') di Chrome/Edge -> login akun PDI -> Scan PDI.",
+" 3. Klik tombol 'Folder RADAR PDI' (ikon folder) di atas -> pilih folder di langkah 1 -> Izinkan",
+"    (kalau ada pilihan 'izinkan setiap kunjungan', pilih itu).",
+" 4. Klik 2x PAD_trigger_radar.ahk -> muncul ikon H di taskbar.",
+"    Klik kanan ikon H -> centang 'Jalan otomatis saat Windows nyala'. Matikan PAD_trigger_v51.ahk kalau ada.",
+" 5. Power Automate -> + New flow -> nama '"+flowName+"' -> buka "+flowName+"_flow.txt di Notepad",
+"    -> Ctrl+A, Ctrl+C -> di editor flow klik area aksi -> Ctrl+V -> Save.",
+"    Script AHK menulis lokasi folder ini ke C:\\Users\\Public\\toyota_pdi_path.txt. Kalau flow membaca alamat file",
+"    langsung (bukan dari toyota_pdi_path.txt), ganti alamatnya ke D:\\RADAR PDI\\tls_input.json dan tls_done.txt.",
+" 6. Login TLS di browser dengan akun TLS PDI (bukan akun Delivery).",
+" 7. Di RADAR > Pengaturan: pilih kamera, Setting Arduino (Pilih Port USB > Test Koneksi), Setting Suara.",
+" 8. Coba 1 unit: scan > LANJUT INPUT TLS > RADAR mengecil, popup kecil muncul, Power Automate mengisi TLS",
+"    > RADAR muncul lagi ke cek buku.",
+""];
+  F.push({name:"PANDUAN_PC_PDI.txt", data:L.join("\r\n")});
+  return F;
+}
+async function pdiKitAllInstall(btn){
+  pdiKitReadOpt();
+  if(!pdiTlsReady()){ alert("Sambungkan dulu Folder RADAR PDI (tombol 📁 Folder RADAR PDI), lalu klik lagi."); return; }
+  if(btn){ btn.disabled = true; btn.textContent = "⏳ Menyimpan…"; }
+  const gagal = [];
+  for(const f of pdiKitFiles()){
+    try{
+      const parts = f.name.split("/"); let dir = PDI_TLS.dir;
+      for(const p of parts.slice(0,-1)) dir = await dir.getDirectoryHandle(p, {create:true});
+      const fh = await dir.getFileHandle(parts[parts.length-1], {create:true}), w = await fh.createWritable(); await w.write(f.data); await w.close();
+    }catch(e){ gagal.push(f.name+" ("+(e.message||e.name||e)+")"); }
+  }
+  if(btn){ btn.disabled = false; btn.textContent = gagal.length ? "⚠ Sebagian gagal" : "✔ Paket tersimpan di folder "+PDI_TLS.name; if(!gagal.length) btn.classList.add("ok"); }
+  if(gagal.length) alert("Sebagian file tidak bisa disimpan langsung ke folder:\n• "+gagal.join("\n• ")+"\n\nPakai tombol ⬇ Unduh paket (.zip), lalu ekstrak ke Folder RADAR PDI.");
+  else pdiToast("Paket lengkap tersimpan di folder "+PDI_TLS.name+" — buka PANDUAN_PC_PDI.txt");
+}
+async function pdiKitAllZip(btn){
+  pdiKitReadOpt();
+  if(btn){ btn.disabled = true; btn.textContent = "⏳ Menyiapkan…"; }
+  mfSave("RADAR PDI.zip", "application/zip", _zip(pdiKitFiles()));
+  if(btn){ btn.disabled = false; btn.textContent = "⬇ Unduh paket (.zip)"; }
+}
+/* ----- Flow Power Automate (teks aksi yang di-copy dari editor PAD) ----- */
+async function pdiKitFlowLoad(){
+  if(!FBS.db) return null;
+  try{ const v = (await FBS.db.ref(FOTO_PATH+"/"+PDI_KIT_FLOW).once("value")).val(); _pdiKitFlow = v && v.txt ? v : null; }catch(e){ _pdiKitFlow = null; }
+  return _pdiKitFlow;
+}
+function pdiKitFlowStatus(){
+  const el = document.getElementById("pdiKitFlowSt"); if(!el) return;
+  const f = _pdiKitFlow;
+  el.innerHTML = f ? `✔ Tersimpan: <b>${escH(f.name||"PDI_Auto_TLS")}</b> · ${(f.txt.length/1024).toFixed(1)} KB · ${escH(new Date(f.ts).toLocaleString("id-ID"))} · ${escH(f.by||"")}`
+    : (FBS.db ? "Belum ada flow tersimpan — simpan dulu dari PC lama (langkah A)." : "Server belum tersambung.");
+  ["pdiKitCp","pdiKitDl"].forEach(id=>{ const b = document.getElementById(id); if(b) b.disabled = !f; });
+}
+function pdiKitFlowCopy(btn){ if(_pdiKitFlow) tlsCopy(_pdiKitFlow.txt, btn); }
+function pdiKitFlowDownload(){ if(_pdiKitFlow) mfSave((_pdiKitFlow.name||"PDI_Auto_TLS")+"_flow.txt", "text/plain", new TextEncoder().encode(_pdiKitFlow.txt)); }
+function pdiKitFlowEdit(){
+  const box = document.getElementById("pdiKitEd"); if(!box) return;
+  box.style.display = box.style.display==="none" ? "" : "none";
+  if(box.style.display===""){ const t = document.getElementById("pdiKitTxt"); if(t){ t.value = ""; t.focus(); } }
+}
+async function pdiKitFlowSave(){
+  const t = (document.getElementById("pdiKitTxt")||{}).value||"";
+  const name = ((document.getElementById("pdiKitFlow")||{}).value||"").trim() || "PDI_Auto_TLS";
+  if(t.trim().length < 20){ alert("Tempel (Ctrl+V) dulu isi flow yang di-copy dari editor Power Automate."); return; }
+  if(t.length > 900000){ alert("Isi flow terlalu besar (maks ±900 KB)."); return; }
+  if(!FBS.db){ alert("Server belum tersambung. Coba lagi saat status Online."); return; }
+  if(_pdiKitFlow && !confirm("Ganti flow yang sudah tersimpan ("+new Date(_pdiKitFlow.ts).toLocaleString("id-ID")+")?")) return;
+  const v = {txt:t, ts:Date.now(), by:(currentUser&&currentUser.name)||"", name};
+  try{ await FBS.db.ref(FOTO_PATH+"/"+PDI_KIT_FLOW).set(v); _pdiKitFlow = v; pdiKitFlowStatus(); pdiKitFlowEdit(); pdiToast("Flow Power Automate tersimpan di RADAR"); }
+  catch(e){ alert("Gagal menyimpan: "+(e.message||e)); }
+}
+function pdiKitOpen(){
+  const o = pdiKitOpt();
+  const st = (n, t, body)=>`<div style="display:flex;gap:10px;margin:12px 0;"><div style="flex:0 0 26px;height:26px;border-radius:50%;background:var(--navy,#1e2a3b);color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:13px;">${n}</div><div style="flex:1;min-width:0;"><div style="font-weight:800;margin-bottom:3px;">${t}</div><div style="font-size:12.5px;line-height:1.5;">${body}</div></div></div>`;
+  showModal(`<h2 style="margin:0 0 4px;">📦 Paket PC PDI</h2>
+    <div style="font-size:12px;color:var(--text-dim);">Semua yang dibutuhkan PC PDI selain RADAR: script AutoHotkey + flow Power Automate. Simpan sekali dari PC lama, pasang di PC baru tinggal klik.</div>
+    <div class="card" style="margin-top:12px;border:2px solid #1a7f37;"><h3 style="margin:0 0 6px;">📦 Paket lengkap — sekali klik</h3>
+      <div style="font-size:12.5px;line-height:1.5;">Isi: script AutoHotkey (siap klik 2×), flow Power Automate, sketch Arduino, shortcut RADAR, dan <b>PANDUAN_PC_PDI.txt</b>. Tersimpan langsung di Folder RADAR PDI PC ini (${pdiTlsReady()?`<b style="color:var(--green,#16a34a);">${escH(PDI_TLS.name)}</b>`:`<b style="color:var(--red,#dc2626);">folder belum dipilih</b>`}), atau diunduh sebagai .zip.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="tlscp" style="background:#1a7f37;color:#fff;" onclick="pdiKitAllInstall(this)">📦 Simpan paket lengkap ke Folder RADAR PDI</button><button type="button" class="tlscp" onclick="pdiKitAllZip(this)">⬇ Unduh paket (.zip)</button></div>
+      <div style="font-size:11.5px;color:var(--text-dim);margin-top:6px;">Yang harus sudah ada di PC: Chrome/Edge, <b>AutoHotkey v1.1</b>, dan <b>Power Automate</b> + ekstensi browsernya. Flow-nya ditempel (Ctrl+V) sekali di Power Automate.</div></div>
+    <div class="card"><h3 style="margin:0 0 6px;">A. PC lama — simpan flow Power Automate ke RADAR (sekali saja)</h3>
+      <div style="font-size:12.5px;line-height:1.55;">Buka <b>Power Automate</b> → klik ✏ Edit pada flow <b>${escH(o.flow)}</b> → klik salah satu aksi di tengah → <b>Ctrl+A</b> → <b>Ctrl+C</b> → kembali ke sini → <b>📥 Simpan flow</b> → <b>Ctrl+V</b> → Simpan.</div>
+      <div id="pdiKitFlowSt" style="font-size:12px;margin:8px 0;">Memuat…</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="tlscp" onclick="pdiKitFlowEdit()">📥 Simpan / ganti flow</button></div>
+      <div id="pdiKitEd" style="display:none;margin-top:8px;"><textarea id="pdiKitTxt" rows="7" style="width:100%;font-family:monospace;font-size:11px;" placeholder="Tempel di sini (Ctrl+V) aksi flow yang di-copy dari editor Power Automate"></textarea>
+        <button type="button" class="btn btn-primary btn-sm" style="width:auto;margin-top:6px;" onclick="pdiKitFlowSave()">💾 Simpan flow ke RADAR</button></div></div>
+    <div class="card"><h3 style="margin:0 0 6px;">B. PC baru — pasang</h3>
+      ${st(1,"Install AutoHotkey v1.1", `Unduh dari <b>autohotkey.com</b> → pilih <b>v1.1</b> (bukan v2) → install.`)}
+      ${st(2,"Siapkan Folder RADAR PDI", `Buat folder baru, mis. <code>D:\\RADAR PDI</code> (tidak perlu folder aplikasi lama). Di RADAR klik <b>📁 Folder RADAR PDI</b> → pilih folder itu (bisa juga klik <i>New folder</i> di jendela pilih folder) → Izinkan. RADAR langsung menawarkan menyimpan semua file pendukung ke folder itu. Sekarang: ${pdiTlsReady()?`<b style="color:var(--green,#16a34a);">tersambung (${escH(PDI_TLS.name)})</b>`:`<b style="color:var(--red,#dc2626);">belum tersambung</b>`}`)}
+      ${st(3,"Pasang script AHK", `<div class="pdiKitG">
+          <label>Jalankan PAD</label><select id="pdiKitMode"><option value="hotkey" ${o.mode!=="flow"?"selected":""}>Ctrl+Shift+P ke jendela Power Automate (sama seperti PC lama)</option><option value="flow" ${o.mode==="flow"?"selected":""}>Langsung berdasarkan nama flow</option></select>
+          <label>Nama flow</label><input id="pdiKitFlow" type="text" value="${escH(o.flow)}">
+          <label>Judul jendela TLS</label><input id="pdiKitTitle" type="text" value="${escH(o.title)}"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="tlscp" style="background:#1a7f37;color:#fff;" onclick="pdiKitAhkInstall(this)">💾 Pasang AHK ke Folder RADAR PDI</button><button type="button" class="tlscp" onclick="pdiKitAhkDownload()">⬇ Unduh file AHK</button></div>
+        <div style="font-size:11.5px;color:var(--text-dim);margin-top:4px;">Lalu buka Folder RADAR PDI → klik 2× <b>PAD_trigger_radar.ahk</b> (muncul ikon H di taskbar). Klik kanan ikon H → centang <b>Jalan otomatis saat Windows nyala</b>. Matikan PAD_trigger_v51.ahk kalau ada.</div>`)}
+      ${st(4,"Pasang flow Power Automate", `Buka Power Automate → <b>+ New flow</b> → nama <b id="pdiKitFlowNm">${escH(o.flow)}</b> → di editor klik area aksi → <b>Ctrl+V</b> → <b>Save</b>. Script AHK otomatis menulis lokasi folder baru ke <code>C:\\Users\\Public\\toyota_pdi_path.txt</code>; kalau flow membaca alamat file <b>langsung</b>, ganti alamatnya ke <code>…\\RADAR PDI\\tls_input.json</code> dan <code>tls_done.txt</code> sekali saja. Kalau flow mengisi TLS lewat Chrome/Edge, pasang juga ekstensi Power Automate di browser itu.
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;"><button type="button" class="tlscp" id="pdiKitCp" disabled onclick="pdiKitFlowCopy(this)">📋 Salin flow</button><button type="button" class="tlscp" id="pdiKitDl" disabled onclick="pdiKitFlowDownload()">⬇ Unduh flow (.txt)</button></div>`)}
+      ${st(5,"Coba 1 unit", `Scan 1 unit → LANJUT INPUT TLS → RADAR mengecil, popup kecil muncul, Power Automate mengisi TLS → RADAR muncul lagi ke cek buku.`)}
+    </div>`);
+  const fl = document.getElementById("pdiKitFlow"); if(fl) fl.oninput = ()=>{ const n = document.getElementById("pdiKitFlowNm"); if(n) n.textContent = fl.value||"PDI_Auto_TLS"; };
+  ["pdiKitMode","pdiKitFlow","pdiKitTitle"].forEach(id=>{ const el = document.getElementById(id); if(el) el.addEventListener("change", pdiKitReadOpt); });
+  pdiKitFlowLoad().then(pdiKitFlowStatus);
+}
 /* ===== END PDI ===== */
 
 </script>
