@@ -756,6 +756,7 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .pdiKpSw button small{font-weight:600;font-size:10px;opacity:.8;}
 .pdiKpSw button+button{border-left:1px solid rgba(255,255,255,.35);}
 .pdiKpSw button.on{background:#fbbf24;color:#1e2a3b;}
+.pdiKitList{font-size:12.5px;line-height:1.75;}
 /* ===== END PDI CSS ===== */
 </style>
 <style>
@@ -1193,7 +1194,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="07 Nov 2026 03.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="07 Nov 2026 04.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -14052,7 +14053,7 @@ async function pdiKitAllInstall(btn){
   if(!pdiTlsReady()){ alert("Sambungkan dulu Folder RADAR PDI (tombol 📁 Folder RADAR PDI), lalu klik lagi."); return; }
   if(btn){ btn.disabled = true; btn.textContent = "⏳ Menyimpan…"; }
   const gagal = [];
-  for(const f of pdiKitFiles()){
+  for(const f of pdiKitFiles().filter(x=>!/\.url$/i.test(x.name))){   // file shortcut (.url) ditolak Chrome kalau disimpan langsung → hanya ikut di .zip
     try{
       const parts = f.name.split("/"); let dir = PDI_TLS.dir;
       for(const p of parts.slice(0,-1)) dir = await dir.getDirectoryHandle(p, {create:true});
@@ -14081,6 +14082,9 @@ function pdiKitFlowStatus(){
   el.innerHTML = f ? `✔ Tersimpan: <b>${escH(f.name||"RADAR_PDI_TLS")}</b> · ${(f.txt.length/1024).toFixed(1)} KB · ${escH(new Date(f.ts).toLocaleString("id-ID"))} · ${escH(f.by||"")}`
     : (FBS.db ? "Belum ada flow tersimpan — simpan dulu dari PC lama (langkah A)." : "Server belum tersambung.");
   ["pdiKitCp","pdiKitDl"].forEach(id=>{ const b = document.getElementById(id); if(b) b.disabled = !f; });
+  const li = document.getElementById("pdiKitFlowLi");
+  if(li) li.innerHTML = f ? `✔ <b>${escH((f.name||"RADAR_PDI_TLS")+"_flow.txt")}</b> — flow Power Automate (disimpan ${escH(new Date(f.ts).toLocaleDateString("id-ID"))})`
+    : `<span style="color:var(--red,#dc2626);">✖ <b>Flow Power Automate belum ada</b> — RADAR tidak bisa mengambilnya sendiri dari Power Automate. Simpan dulu sekali di <b>langkah A</b> di bawah, setelah itu otomatis ikut di paket / .zip.</span>`;
 }
 function pdiKitFlowCopy(btn){ if(_pdiKitFlow) tlsCopy(_pdiKitFlow.txt, btn); }
 function pdiKitFlowDownload(){ if(_pdiKitFlow) mfSave((_pdiKitFlow.name||"RADAR_PDI_TLS")+"_flow.txt", "text/plain", new TextEncoder().encode(_pdiKitFlow.txt)); }
@@ -14105,10 +14109,16 @@ function pdiKitOpen(){
   const st = (n, t, body)=>`<div style="display:flex;gap:10px;margin:12px 0;"><div style="flex:0 0 26px;height:26px;border-radius:50%;background:var(--navy,#1e2a3b);color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center;font-size:13px;">${n}</div><div style="flex:1;min-width:0;"><div style="font-weight:800;margin-bottom:3px;">${t}</div><div style="font-size:12.5px;line-height:1.5;">${body}</div></div></div>`;
   showModal(`<h2 style="margin:0 0 4px;">📦 Paket PC PDI</h2>
     <div style="font-size:12px;color:var(--text-dim);">Semua yang dibutuhkan PC PDI selain RADAR: script AutoHotkey + flow Power Automate. Simpan sekali dari PC lama, pasang di PC baru tinggal klik.</div>
-    <div class="card" style="margin-top:12px;border:2px solid #1a7f37;"><h3 style="margin:0 0 6px;">📦 Paket lengkap — sekali klik</h3>
-      <div style="font-size:12.5px;line-height:1.5;">Isi: script AutoHotkey (siap klik 2×), flow Power Automate, sketch Arduino, shortcut RADAR, dan <b>PANDUAN_PC_PDI.txt</b>. Tersimpan langsung di Folder RADAR PDI PC ini (${pdiTlsReady()?`<b style="color:var(--green,#16a34a);">${escH(PDI_TLS.name)}</b>`:`<b style="color:var(--red,#dc2626);">folder belum dipilih</b>`}), atau diunduh sebagai .zip.</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="tlscp" style="background:#1a7f37;color:#fff;" onclick="pdiKitAllInstall(this)">📦 Simpan paket lengkap ke Folder RADAR PDI</button><button type="button" class="tlscp" onclick="pdiKitAllZip(this)">⬇ Unduh paket (.zip)</button></div>
-      <div style="font-size:11.5px;color:var(--text-dim);margin-top:6px;">Yang harus sudah ada di PC: Chrome/Edge, <b>AutoHotkey v1.1</b>, dan <b>Power Automate</b> + ekstensi browsernya. Flow-nya ditempel (Ctrl+V) sekali di Power Automate.</div></div>
+    <div class="card" style="margin-top:12px;border:2px solid #1a7f37;"><h3 style="margin:0 0 6px;">📦 Isi paket</h3>
+      <div class="pdiKitList">
+        <div>✔ <b>PAD_trigger_radar.ahk</b> — script AutoHotkey (klik 2× untuk menjalankan)</div>
+        <div id="pdiKitFlowLi">⏳ flow Power Automate — memeriksa…</div>
+        <div>✔ <b>arduino\\pdi_relay\\pdi_relay.ino</b> — sketch Arduino pintu</div>
+        <div>✔ <b>PANDUAN_PC_PDI.txt</b> + <b>Buka RADAR.url</b></div>
+      </div>
+      <div style="font-size:12px;margin:8px 0 4px;">Isinya sama, pilih cara ambilnya:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="tlscp" style="background:#1a7f37;color:#fff;" onclick="pdiKitAllInstall(this)">💾 Simpan ke Folder RADAR PDI (PC ini)</button><button type="button" class="tlscp" onclick="pdiKitAllZip(this)">⬇ Unduh .zip (untuk PC lain)</button></div>
+      <div style="font-size:11.5px;color:var(--text-dim);margin-top:6px;">Folder RADAR PDI PC ini: ${pdiTlsReady()?`<b style="color:var(--green,#16a34a);">${escH(PDI_TLS.name)}</b>`:`<b style="color:var(--red,#dc2626);">belum dipilih</b> (klik 📁 Folder RADAR PDI di atas layar PDI)`}. Yang harus sudah ada di PC: Chrome/Edge, AutoHotkey v1.1, Power Automate.</div></div>
     <div class="card"><h3 style="margin:0 0 6px;">A. PC lama — buat flow baru khusus RADAR (flow lama tetap)</h3>
       <div style="font-size:12.5px;line-height:1.6;">
         1. Power Automate → di flow lama <b>PDI_Auto_TLS</b> klik <b>⋯ → Save as</b> (atau buka editornya → File → Save as) → nama <b class="pdiKitFlowNm2">${escH(o.flow)}</b>.<br>
