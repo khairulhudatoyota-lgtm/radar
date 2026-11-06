@@ -657,6 +657,55 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .ugroup[open]>summary{border-bottom:1px solid var(--border);}
 .unitrow.compact{padding:6px 10px; margin:6px; border-radius:8px;}
 .unitrow.compact .info b{font-size:13px;}
+/* ===== PDI ===== */
+.view.v-pdi{max-width:none !important;}
+.pdiRoot{display:flex;flex-direction:column;gap:8px;}
+.pdiTop{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--gold);color:#fff;border-radius:14px;padding:10px 14px;}
+.pdiTitle{font-size:18px;font-weight:900;letter-spacing:.3px;}
+.pdiWho{font-size:12px;opacity:.85;flex:1;min-width:160px;}
+.pdiStats{display:flex;gap:6px;flex-wrap:wrap;}
+.pdiStat{border:0;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:800;cursor:pointer;background:#334155;color:#fff;}
+.pdiStat.on{background:#16a34a;} .pdiStat.warn{background:#d97706;} .pdiStat.off{background:#475569;}
+.pdiMain{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:10px;align-items:start;}
+@media (max-width:900px){ .pdiMain{grid-template-columns:1fr;} }
+.pdiLeft{display:flex;flex-direction:column;gap:8px;min-width:0;}
+.pdiGuide{background:#0F172A;color:#FDE68A;font-size:20px;font-weight:900;border-radius:12px;padding:12px 16px;text-align:center;}
+.pdiGuide.warn{background:#7c2d12;color:#fff;} .pdiGuide.busy{background:#1d4ed8;color:#fff;}
+.pdiCamBox{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:16/9;width:100%;}
+.pdiCamBox video,.pdiCamBox canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;}
+.pdiCamMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;font-size:13px;pointer-events:none;}
+.pdiCamMsg button{pointer-events:auto;}
+.pdiFields{display:grid;grid-template-columns:1.4fr 1fr 0.7fr auto;gap:8px;}
+.pdiFld{background:var(--panel);border:2px solid var(--border);border-radius:10px;padding:6px 10px;}
+.pdiFld.ok{border-color:#16a34a;background:#F0FDF4;}
+.pdiFld label{display:block;font-size:10px;font-weight:900;color:var(--text-dim);}
+.pdiFld input{width:100%;border:0;background:transparent;font-family:Consolas,monospace;font-size:18px;font-weight:900;padding:2px 0;text-transform:uppercase;outline:none;}
+.pdiReset{border:0;border-radius:10px;background:#2d3748;color:#fff;font-size:22px;font-weight:900;padding:0 14px;cursor:pointer;}
+.pdiScanIn{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px dashed var(--border);border-radius:10px;padding:6px 10px;}
+.pdiScanIn input{flex:1;border:0;outline:none;background:transparent;font-size:14px;}
+.pdiView{font-size:11px;line-height:1.6;color:var(--text);min-height:10px;}
+.pdiK{display:inline-block;min-width:22px;background:#e2e8f0;border-radius:4px;padding:0 4px;font-size:10px;font-weight:800;text-align:center;}
+.pdiRight{display:flex;flex-direction:column;gap:8px;min-width:0;}
+.pdiDash .pdiBig{font-size:46px;font-weight:900;line-height:1;} .pdiDash .pdiBig span{font-size:20px;color:var(--text-dim);}
+.pdiBar{height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin-top:8px;} .pdiBar i{display:block;height:100%;background:#16a34a;}
+.pdiMRow{display:flex;align-items:center;gap:8px;font-size:13px;} .pdiMRow i{width:12px;height:12px;border-radius:3px;display:inline-block;} .pdiMRow span{flex:1;} .pdiMRow b{font-size:15px;}
+.pdiBtns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;} .pdiBtns .btn{width:100%;margin:0;}
+.pdiTb{width:100%;border-collapse:collapse;font-size:12px;} .pdiTb th{text-align:left;font-size:11px;color:var(--text-dim);border-bottom:1px solid var(--border);padding:4px 6px;} .pdiTb td{border-bottom:1px solid var(--border);padding:4px 6px;vertical-align:top;}
+.pdiTag{display:inline-block;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800;}
+.pdiChip{display:inline-flex;align-items:center;gap:6px;background:#F1F5F9;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;} .pdiChip i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+.pdiDot{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px;}
+.pdiCount{display:inline-block;background:var(--gold);color:#fff;border-radius:999px;padding:0 9px;font-size:13px;margin-left:4px;}
+.pdiOpenCard{grid-column:1 / -1;}
+.pdiOpenCard h3{font-size:15px;}
+.pdiOv{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;}
+.pdiOv.br{background:transparent;pointer-events:none;align-items:flex-end;justify-content:flex-end;} .pdiOv.br .pdiOvIn{pointer-events:auto;max-width:460px;}
+.pdiOvIn{width:100%;max-width:640px;}
+.pdiCf{background:var(--panel);border:4px solid #276749;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);}
+.pdiCfHead{color:#fff;text-align:center;padding:14px;}
+.pdiCfRow{display:flex;align-items:center;gap:10px;background:#F8FAFC;border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin:6px 0;} .pdiCfRow span{width:110px;font-size:11px;font-weight:900;color:var(--text-dim);} .pdiCfRow b{font-family:Consolas,monospace;}
+.pdiWarn{background:var(--red-bg);color:var(--red);font-weight:800;font-size:13px;padding:8px 14px;text-align:center;}
+.pdiRadio{display:block;padding:6px 0;font-size:14px;cursor:pointer;}
+.pdiToast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0F172A;color:#fff;padding:10px 18px;border-radius:12px;font-size:14px;font-weight:700;z-index:9500;display:none;box-shadow:0 8px 24px rgba(0,0,0,.3);} .pdiToast.warn{background:#b91c1c;}
 </style>
 <style>
 .credit{margin:18px auto 0;text-align:center;line-height:1;user-select:none;}
@@ -1091,7 +1140,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="06 Nov 2026 07.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="06 Nov 2026 15.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1256,8 +1305,10 @@ const ROLES = [
   {key:"leader",      label:"Leader", icon:"👔", desc:"Lihat & konfirmasi data defect"},
   {key:"admin",       label:"Admin", icon:"🔐", desc:"Sistem & konfigurasi data"},
   {key:"viewer",      label:"Pengamat", icon:"👁", desc:"Lihat semua menu, tidak bisa mengubah data"},
+  {key:"pdi",         label:"PDI", icon:"🔍", desc:"Scan unit PDI & input TLS (PC)"},
 ];
 const TABS_BY_ROLE = {
+  pdi:         [{key:"pdi", label:"Scan PDI"}, {key:"display", label:"Display"}],
   dispatcher:  [{key:"dispatcher", label:"Scan Unit"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   cc:          [{key:"orderstall", label:"Order Stall"}, {key:"ccmap", label:"Peta & Chat"}, {key:"display", label:"Display"}],
   delivery:    [{key:"delivery", label:"Delivery"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
@@ -1808,6 +1859,7 @@ function doLogout(){
   spdStop(); spdCloseOverlay();
   geoStop();
   stopScanner();
+  try{ pdiCamStop(); pdiOvClose(); }catch(e){}
   disposeCar3D();
   if(autoWatchId){ navigator.geolocation.clearWatch(autoWatchId); autoWatchId=null; }
   stopAutoAbsen(true);
@@ -1879,6 +1931,7 @@ function enterApp(forceTab){
 function switchTab(t){
   if(currentUser && TABS_BY_ROLE[currentUser.role] && !TABS_BY_ROLE[currentUser.role].some(x=>x.key===t)) return;   // menu di luar otoritas role ditolak
   if(activeTab==="defect" && t!=="defect"){ disposeCar3D(); }
+  if(activeTab==="pdi" && t!=="pdi"){ try{ pdiCamStop(); pdiOvClose(); }catch(e){} }
   activeTab = t; deliverySelUnits=[]; deliverySelCC=null; pickedSlot=null; stopScanner(); render();
 }
 
@@ -1915,16 +1968,17 @@ function renderInner(){
   });
   const vp = document.getElementById("viewport");
   vp.className = "view v-"+activeTab;
-  if(activeTab==="dispatcher"){ setVP(vp, renderDispatcher()); if(_vpChanged && vinDraft) setTimeout(()=>{ if(document.getElementById("vinInput")) onVinInput(); },0); }
+  if(activeTab==="dispatcher"){ setVP(vp, pdiOpenCardHtml()+renderDispatcher()); if(_vpChanged && vinDraft) setTimeout(()=>{ if(document.getElementById("vinInput")) onVinInput(); },0); }
   else if(activeTab==="orderstall") setVP(vp, renderOrderStall());
-  else if(activeTab==="delivery") setVP(vp, chgReqHtml()+schedReqHtml()+renderDelivery());
-  else if(activeTab==="koordinator") setVP(vp, chgReqHtml()+schedReqHtml()+renderKoordinator());
+  else if(activeTab==="delivery") setVP(vp, chgReqHtml()+schedReqHtml()+pdiOpenCardHtml()+renderDelivery());
+  else if(activeTab==="koordinator") setVP(vp, chgReqHtml()+schedReqHtml()+pdiOpenCardHtml()+renderKoordinator());
   else if(activeTab==="defect"){ setVP(vp, renderDefectReport()); if(_vpChanged) setTimeout(init3DCarDiagram, 0); }
   else if(activeTab==="confirmdefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccplan") setVP(vp, renderCCPlan());
   else if(activeTab==="batam") setVP(vp, renderBatamPage());
   else if(activeTab==="prio") setVP(vp, renderPrioPage());
-  else if(activeTab==="dashboard") setVP(vp, renderLeaderDashboard());
+  else if(activeTab==="dashboard") setVP(vp, pdiOpenCardHtml()+renderLeaderDashboard());
+  else if(activeTab==="pdi"){ if(!document.getElementById("pdiRoot")){ setVP(vp, renderPdiPage()); setTimeout(pdiMounted,0); } else { _vpChanged=false; pdiUi(); } }
   else if(activeTab==="speedlog") setVP(vp, renderSpeedLog());
   else if(activeTab==="dccp") setVP(vp, chgReqHtml()+schedReqHtml()+renderDccpUpload());
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
@@ -5306,7 +5360,7 @@ window.addEventListener("online",()=>setTimeout(()=>{ try{ gsTick(); }catch(e){}
    PENDAFTARAN AKUN MANDIRI — user daftar sendiri (password buatan sendiri, tersimpan hash),
    Admin menyetujui / menolak. Driver CC: Admin wajib isi Kode Driver saat menyetujui.
 ====================================================================== */
-const REG_ROLES=["dispatcher","cc","delivery","koordinator","leader","viewer"];
+const REG_ROLES=["dispatcher","cc","delivery","koordinator","leader","viewer","pdi"];
 const REG_KEEP_MS=7*24*3600*1000;
 function regList(d){ return xlArr((d||DB.get()).regs); }
 function regPending(d){ return regList(d).filter(r=>r.status==="pending").sort((a,b)=>a.ts-b.ts); }
@@ -7235,6 +7289,7 @@ function renderDccpUpload(){
 const RETAIN_MS = 26*3600*1000;   // lama simpan data unit terkirim (jam)
 function syncUnitLog(d){
   try{ dfSync(d); }catch(e){}
+  try{ pdiOpenSync(d); }catch(e){}
   d.unitLog = d.unitLog || [];
   const log = d.unitLog, now = Date.now();
   if(!d.migAvanzaBY){ d.migAvanzaBY = true; const a = d.models && d.models.AVANZA; if(a && Array.isArray(a.vin_codes) && !a.vin_codes.includes("BY")) a.vin_codes.push("BY"); }   // Avanza baru (W100RE) berkode BY
@@ -8978,10 +9033,12 @@ function renderAdmin(){
       <button class="tabbtn ${adminTab==='xl'?'active':''}" onclick="adminTab='xl';render()">📗 Excel</button>
       <button class="tabbtn ${adminTab==='gs'?'active':''}" onclick="adminTab='gs';render()">📊 Google Sheets</button>
       <button class="tabbtn ${adminTab==='dccp'?'active':''}" onclick="adminTab='dccp';render()">📋 DCCP</button>
+      <button class="tabbtn ${adminTab==='pdi'?'active':''}" onclick="adminTab='pdi';render()">🔍 PDI</button>
       <button class="tabbtn ${adminTab==='data'?'active':''}" onclick="adminTab='data';render()">🗄 Data</button>
     </div>`;
 
   if(adminTab==="sig") return tabsHtml + renderAdminSig();
+  if(adminTab==="pdi") return tabsHtml + renderAdminPdi();
   if(adminTab==="tls") return tabsHtml + renderAdminTls();
   if(adminTab==="xl") return tabsHtml + renderAdminXl();
   if(adminTab==="gs") return tabsHtml + renderAdminGs();
@@ -11323,6 +11380,975 @@ setInterval(()=>{
 }, 3000);
 </script>
 <script>if("serviceWorker" in navigator && /^https?:/.test(location.protocol)){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));}try{ var _ac=document.getElementById("appCtl"); if(_ac && window.AndroidTLS && AndroidTLS.exitApp) _ac.style.display="flex"; var _mb=document.getElementById("minBtn"); if(_mb && window.AndroidTLS && AndroidTLS.minimizeApp) _mb.style.display=""; }catch(e){}
+</script>
+<script>
+/* ======================================================================
+   PDI — Pre Delivery Inspection (KP 1)   [modul RADAR]
+   Alur (sama seperti Toyota PDI v51):
+     ① scan Frame No (kartu DC) → ② Engine & No Kunci → popup Reguler/Batam/Prioritas
+     → TLS PDI Completion diisi PAD (lewat tls_input.json / tls_done.txt) → cek buku → pintu Arduino.
+   Data:
+     radar_pdi/<id>  = riwayat PDI per unit (node terpisah, hanya dimuat role PDI / Admin / Leader)
+     d.pdiOpen       = unit SUDAH PDI tapi BELUM masuk stall (kecil, ikut data utama, terlihat semua role)
+                       → hilang otomatis begitu No. Rangka diparkir di stall / Luar Stall atau masuk ILS
+     d.pdiCfg        = planning, prefix engine, kode model kartu baru, pintu, cek buku
+====================================================================== */
+const PDI_PATH = "radar_pdi";
+const PDI_STATIONS = [{k:"KP1", label:"KP 1"}];          // KP 2 menyusul (cara input berbeda)
+const PDI_ENG_DEF = ["1GD","2GD","2NR","2TR","2XM","M20A"];
+const PDI_MODELS_DEF = {   /* kartu DC baru: model dari 7 digit awal Frame No (sama seperti v51) */
+  "BZ4X":                {codes:["MHFACDE"], color:"#0f766e"},
+  "FORTUNER":            {codes:["MHFAA8G","MHFAX8G","MHFBA3F","MHFJB8G"], color:"#1e3a8a"},
+  "INNOVA REBORN":       {codes:["MHFJB8E"], color:"#7c3aed"},
+  "INNOVA ZENIX":        {codes:["MHFAAAA"], color:"#be123c"},
+  "INNOVA ZENIX HYBRID": {codes:["MHFABAA","MHFABBA"], color:"#9d174d"},
+  "VELOZ HYBRID":        {codes:["MHFA71B","MHFAB1B"], color:"#c2410c"},
+  "YARIS CROSS":         {codes:["MHFAA8A"], color:"#0369a1"},
+  "YARIS CROSS HYBRID":  {codes:["MHFAB8B"], color:"#0e7490"},
+  "YARIS HATCHBACK":     {codes:["MHFK23F"], color:"#4d7c0f"},
+};
+const PDI_LEGACY_LAYOUT = [{name:"DC lama (bawaan)", engine:[-1.009, 0.289], key:[-1.034, -0.021]}];
+const PDI_VIN_RE = /MH[A-HJ-NPR-Z0-9]{15}/;
+const PDI_KEEP_DAYS = 35;          // riwayat PDI disimpan di server
+const PDI_OPEN_KEEP_MS = 7*86400000; // unit belum masuk stall lebih dari 7 hari dibuang dari daftar
+const PDI_PROBLEMS = ["No Frame tidak bisa diinput di TLS","No Engine tidak bisa diinput / tidak terdaftar","No Kunci tidak bisa diinput","Sistem TLS error / tidak bisa diakses","Lainnya"];
+
+function pdiCfg(d){
+  d = d || DB.get(); const c = d.pdiCfg || {};
+  const models = {};
+  Object.entries(PDI_MODELS_DEF).forEach(([m,x])=>{ if(!(c.del||[]).includes(m)) models[m] = {codes:x.codes.slice(), color:x.color}; });
+  Object.entries(c.models||{}).forEach(([m,x])=>{ if(x) models[m] = {codes:(x.codes||[]).slice(), color:x.color||(models[m]&&models[m].color)||"#475569"}; });
+  return {
+    plan: c.plan || {},
+    eng: (Array.isArray(c.eng) && c.eng.length) ? c.eng : PDI_ENG_DEF,
+    models,
+    door: Object.assign({auto:true, delay:5, dur:3, up:"UP", down:"DOWN"}, c.door||{}),
+    book: c.book || "manual",          // manual = operator konfirmasi buku · off = tanpa cek buku
+    tol: +c.tol || 0.12,
+    layouts: (Array.isArray(c.layouts) && c.layouts.length) ? c.layouts : PDI_LEGACY_LAYOUT,
+  };
+}
+function pdiPlan(d, st, sh){ const p = (pdiCfg(d).plan[st||"KP1"]) || {}; const v = sh==="2" ? p.n : p.d; return (v==null||v==="") ? 100 : (+v||0); }
+function pdiModelColor(m, d){ d = d || DB.get(); return (d.models && d.models[m] && d.models[m].color) || ((pdiCfg(d).models[m]||{}).color) || "#475569"; }
+function pdiAllModels(d){ d = d || DB.get(); return [...new Set(Object.keys(d.models||{}).concat(Object.keys(pdiCfg(d).models)))]; }
+/* Model dari Frame No: 1) prefix terpanjang kartu baru (mis. MHFAB8B)  2) kartu lama MHK: kode karakter ke-7 & 8 (Model Unit RADAR) */
+function pdiDetectModel(vin, d){
+  d = d || DB.get(); vin = normVin(vin); let best = "", bl = 0;
+  Object.entries(pdiCfg(d).models).forEach(([m,x])=>{ (x.codes||[]).forEach(p=>{ p = String(p||"").toUpperCase().trim(); if(p.length>2 && vin.startsWith(p) && p.length>bl){ best = m; bl = p.length; } }); });
+  if(best) return best;
+  if(/^MHK/.test(vin)){ const k = vin.substring(6,8); for(const [m,c] of Object.entries(d.models||{})){ if((c.vin_codes||[]).map(x=>String(x).toUpperCase()).includes(k)) return m; } }
+  return "";
+}
+function pdiIsLegacy(vin){ return /^MHK/.test(normVin(vin)); }
+
+/* ===== Daftar "Sudah PDI, belum masuk stall" (d.pdiOpen) ===== */
+function pdiYardFrames(d){
+  const s = new Set();
+  Object.values(d.units||{}).forEach(u=>{ if(u && u.frame) s.add(normVin(u.frame)); });
+  (d.ils||[]).forEach(b=>{ (b && b.units || []).forEach(u=>{ if(u && u.frame) s.add(normVin(u.frame)); }); });
+  return s;
+}
+/* dipanggil di setiap perubahan data (syncUnitLog): unit yang sudah diparkir / masuk ILS langsung keluar dari daftar */
+function pdiOpenSync(d){
+  const o = d.pdiOpen; if(!o || typeof o!=="object") return;
+  const ks = Object.keys(o); if(!ks.length) return;
+  const yard = pdiYardFrames(d), now = Date.now();
+  ks.forEach(f=>{ const x = o[f]; if(!x || yard.has(normVin(f)) || now-(x.ts||0) > PDI_OPEN_KEEP_MS) delete o[f]; });
+}
+function pdiOpenList(d){
+  d = d || DB.get(); const o = d.pdiOpen || {};
+  return Object.keys(o).map(f=>Object.assign({f}, o[f])).filter(x=>x && x.ts).sort((a,b)=>a.ts-b.ts);
+}
+function pdiAgeTxt(ms){ const m = Math.max(0, Math.round(ms/60000)); return m<60 ? m+" mnt" : Math.floor(m/60)+" j "+(m%60)+" mnt"; }
+function pdiTipeBadge(t, small){
+  const fs = small ? "10px" : "11px";
+  if(t==="B") return `<span class="pdiTag" style="background:#E8833A;font-size:${fs};">BATAM</span>`;
+  if(t==="P") return `<span class="pdiTag" style="background:#F5B800;color:#3a2a00;font-size:${fs};">PRIORITAS</span>`;
+  return "";
+}
+let _pdiOpenExp = (function(){ try{ return localStorage.getItem("radar_pdiopen_exp")==="1"; }catch(e){ return false; } })();
+function pdiOpenToggle(){ _pdiOpenExp = !_pdiOpenExp; try{ localStorage.setItem("radar_pdiopen_exp", _pdiOpenExp?"1":"0"); }catch(e){} render(); }
+function pdiOpenCardHtml(data, opts){
+  opts = opts || {}; data = data || DB.get();
+  const L = pdiOpenList(data);
+  if(!L.length && !opts.always) return "";
+  const byM = {}; L.forEach(x=>{ byM[x.m||"?"] = (byM[x.m||"?"]||0)+1; });
+  const nB = L.filter(x=>x.t==="B").length, now = Date.now();
+  const canDel = currentUser && ["admin","delivery","pdi"].includes(currentUser.role);
+  const sum = Object.entries(byM).sort((a,b)=>b[1]-a[1]).map(([m,n])=>`<span class="pdiChip"><i style="background:${pdiModelColor(m,data)}"></i>${escH(m)} = <b>${n}</b></span>`).join("");
+  const rows = L.map(x=>`<tr><td><b style="font-family:monospace;">${escH(x.f)}</b> ${pdiTipeBadge(x.t,true)}</td><td><i class="pdiDot" style="background:${pdiModelColor(x.m,data)}"></i>${escH(x.m||"-")}</td><td>${holdHm(x.ts)}</td><td style="${now-x.ts>2*3600000?"color:var(--red);font-weight:800;":""}">${pdiAgeTxt(now-x.ts)}</td><td style="font-size:11px;color:var(--text-dim);">${escH((PDI_STATIONS.find(s=>s.k===x.s)||{label:x.s||""}).label)} · ${escH(x.n||"")}</td>${canDel?`<td><button type="button" class="tlscp" title="Hapus dari daftar" onclick="pdiOpenDel('${escH(x.f)}')">🗑</button></td>`:""}</tr>`).join("");
+  return `<div class="card pdiOpenCard">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;" onclick="pdiOpenToggle()">
+      <h3 style="margin:0;flex:1;min-width:180px;">🔍 Sudah PDI, belum masuk stall <span class="pdiCount">${L.length}</span>${nB?` <span class="pdiTag" style="background:#E8833A;">BATAM ${nB}</span>`:""}</h3>
+      <span style="font-size:12px;color:var(--text-dim);">${_pdiOpenExp?"▲ tutup":"▼ lihat No. Rangka"}</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${sum||`<span style="font-size:12px;color:var(--text-dim);">Tidak ada unit. Semua unit yang sudah PDI sudah masuk stall.</span>`}</div>
+    ${_pdiOpenExp && L.length ? `<div style="overflow-x:auto;margin-top:10px;"><table class="pdiTb"><thead><tr><th>No. Rangka</th><th>Model</th><th>PDI</th><th>Menunggu</th><th>Lokasi · PIC</th>${canDel?"<th></th>":""}</tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Unit otomatis hilang dari daftar begitu No. Rangka diparkir di stall / Luar Stall atau masuk ILS. Merah = menunggu lebih dari 2 jam.</div>` : ""}
+  </div>`;
+}
+function pdiOpenDel(f){
+  if(!currentUser || !["admin","delivery","pdi"].includes(currentUser.role)) return;
+  if(!confirm("Hapus "+f+" dari daftar 'Sudah PDI, belum masuk stall'?\n\nPakai ini hanya kalau unit tidak akan masuk stall EKY (mis. dialihkan).")) return;
+  DB.set(d=>{ if(d.pdiOpen) delete d.pdiOpen[f]; });
+}
+
+/* ===== Riwayat PDI di server (radar_pdi) + antrean lokal kalau sinyal / izin bermasalah ===== */
+let PDI_REC = {}, PDI_ERR = "", _pdiAtt = false, _pdiSending = {};
+const PDI_OUTBOX = "radar_pdi_outbox";
+function pdiNeedRec(){ return !!(currentUser && ["pdi","admin","leader"].includes(currentUser.role)); }
+function pdiOutbox(){ try{ return JSON.parse(localStorage.getItem(PDI_OUTBOX)||"{}") || {}; }catch(e){ return {}; } }
+function pdiOutboxSave(o){ try{ localStorage.setItem(PDI_OUTBOX, JSON.stringify(o)); }catch(e){} }
+function pdiAll(){ const o = Object.assign({}, PDI_REC); Object.values(pdiOutbox()).forEach(r=>{ if(r && r.id && (!o[r.id] || (o[r.id].up||0) <= (r.up||0))) o[r.id] = r; }); return o; }
+function pdiRecList(){ return Object.values(pdiAll()).filter(r=>r && r.id && r.f); }
+function pdiPut(rec){
+  rec.up = Date.now();
+  const o = pdiOutbox(); o[rec.id] = rec; pdiOutboxSave(o);
+  pdiFlush(); try{ pdiUi(); }catch(e){}
+}
+function pdiFlush(){
+  if(!FBS.db || !FBS.authed) return;
+  Object.values(pdiOutbox()).forEach(r=>{
+    if(!r || !r.id || _pdiSending[r.id]===r.up) return;
+    _pdiSending[r.id] = r.up;
+    let p; try{ p = FBS.db.ref(PDI_PATH+"/"+r.id).set(JSON.parse(JSON.stringify(r))); }catch(e){ delete _pdiSending[r.id]; PDI_ERR = "Data PDI gagal dikirim: "+(e.message||e); return; }
+    p.then(()=>{
+      delete _pdiSending[r.id]; PDI_REC[r.id] = r;
+      const o2 = pdiOutbox(); if(o2[r.id] && (o2[r.id].up||0) <= (r.up||0)){ delete o2[r.id]; pdiOutboxSave(o2); }
+      if(PDI_ERR && !Object.keys(pdiOutbox()).length){ PDI_ERR = ""; } try{ pdiUi(); }catch(e){}
+    }).catch(e=>{
+      delete _pdiSending[r.id];
+      PDI_ERR = fbDenied(e) ? "Data PDI belum bisa dikirim ke server: aturan Firebase belum memuat node radar_pdi (minta Admin menambahkan). Data aman tersimpan di PC ini dan dikirim otomatis nanti." : "Data PDI menunggu sinyal (tersimpan di PC ini).";
+      try{ pdiUi(); }catch(e2){}
+    });
+  });
+}
+function pdiAttach(){
+  if(_pdiAtt || !FBS.db || !FBS.authed || !pdiNeedRec()) return;
+  _pdiAtt = true;
+  FBS.db.ref(PDI_PATH).orderByChild("ts").startAt(Date.now()-8*86400000).on("value", snap=>{
+    PDI_REC = snap.val() || {}; if(PDI_ERR && /radar_pdi/.test(PDI_ERR) && !Object.keys(pdiOutbox()).length) PDI_ERR = "";
+    try{ pdiUi(); }catch(e){} if(["pdiDash"].includes(activeTab)) fbRender();
+  }, err=>{
+    _pdiAtt = false;
+    PDI_ERR = fbDenied(err) ? "Riwayat PDI belum bisa dibaca: aturan Firebase belum memuat node radar_pdi. Minta Admin menambahkan (lihat Admin → PDI)." : "Riwayat PDI terputus dari server.";
+    try{ pdiUi(); }catch(e){}
+  });
+}
+/* riwayat lebih dari 35 hari dihapus (dijalankan PC PDI) */
+let _pdiPruneTs = 0;
+function pdiPrune(){
+  const now = Date.now(); if(now-_pdiPruneTs < 3600000 || !FBS.db || !FBS.authed || !currentUser || currentUser.role!=="pdi") return; _pdiPruneTs = now;
+  FBS.db.ref(PDI_PATH).orderByChild("ts").endAt(now-PDI_KEEP_DAYS*86400000).limitToFirst(200).once("value").then(s=>{ const v = s.val()||{}; Object.keys(v).forEach(k=>FBS.db.ref(PDI_PATH+"/"+k).remove().catch(()=>{})); }).catch(()=>{});
+}
+setInterval(()=>{ try{ pdiAttach(); pdiFlush(); pdiPrune(); }catch(e){} }, 4000);
+
+/* ===== Hitungan shift ===== */
+function pdiShiftOf(ts){ const pd = prodDayStart(ts); return {pd, sh: ts < pd+(SHIFT2_START_H-SHIFT_START_H)*3600000 ? "1" : "2"}; }
+function pdiIsOk(r){ return r && /^OK/.test(r.st||""); }
+function pdiShiftRecs(pd, sh, st){ return pdiRecList().filter(r=>r.pd===pd && r.sh===sh && (!st || (r.s||"KP1")===st)); }
+function pdiShiftStats(pd, sh, st, d){
+  d = d || DB.get(); const L = pdiShiftRecs(pd, sh, st), ok = L.filter(pdiIsOk), byM = {};
+  ok.forEach(r=>{ byM[r.m||"?"] = (byM[r.m||"?"]||0)+1; });
+  return {ok, all:L, byM, n:ok.length, plan:pdiPlan(d, st, sh), prob:L.filter(r=>r.st==="PROBLEM"), skip:ok.filter(r=>r.st==="OK - BUKU SKIP").length, man:ok.filter(r=>r.st==="OK - INPUT MANUAL").length};
+}
+function pdiShiftLabel(sh){ return sh==="2" ? "Shift 2 (20.00–07.00)" : "Shift 1 (07.00–20.00)"; }
+
+/* ===== Pembaca barcode (aturan sama dengan Toyota PDI v51) ===== */
+function pdiClassify(text, kind, cfg, legacy){
+  const t = String(text||"").toUpperCase().replace(/\s+/g," ").trim();
+  if(!t) return [null,"kosong"];
+  const m = t.replace(/ /g,"").match(PDI_VIN_RE);
+  if(m) return ["vin", m[0]];
+  if(/^[0-9]{5}$/.test(t)) return ["key", t];                       // No Kunci: persis 5 angka (QR / barcode)
+  const c = t.replace(/ /g,"");
+  if(legacy){ return (c.length>=7 && c.length<=12 && !c.startsWith("MH")) ? ["engine", t] : [null,"pola"]; }   // kartu lama (v50)
+  const pre = (cfg.eng||PDI_ENG_DEF).map(p=>String(p).toUpperCase().replace(/ /g,"")).filter(Boolean).sort((a,b)=>b.length-a.length).find(p=>c.startsWith(p));
+  if(pre!=null && (c.slice(pre.length).match(/[0-9]/g)||[]).length>=5 && c.length>=7 && c.length<=20 && /^[A-Z0-9 \-]+$/.test(t)){
+    if(kind!=="1D") return [null,"tipe"];                           // engine hanya barcode garis
+    return ["engine", t];
+  }
+  return [null,"pola"];
+}
+/* geometri barcode dari 4 titik sudut zxing: pusat, arah sumbu panjang, panjang, rasio */
+function pdiGeom(q){
+  const P = [q.topLeft, q.topRight, q.bottomRight, q.bottomLeft];
+  const cx = (P[0].x+P[1].x+P[2].x+P[3].x)/4, cy = (P[0].y+P[1].y+P[2].y+P[3].y)/4;
+  const ax = (P[1].x-P[0].x)+(P[2].x-P[3].x), ay = (P[1].y-P[0].y)+(P[2].y-P[3].y);
+  const bx = (P[3].x-P[0].x)+(P[2].x-P[1].x), by = (P[3].y-P[0].y)+(P[2].y-P[1].y);
+  let La = Math.hypot(ax,ay)/2, Lb = Math.hypot(bx,by)/2, ux, uy, L, S;
+  if(La >= Lb){ ux = ax/(2*La||1); uy = ay/(2*La||1); L = La; S = Lb; } else { ux = bx/(2*Lb||1); uy = by/(2*Lb||1); L = Lb; S = La; }
+  return {cx, cy, ux, uy, L:Math.max(L,1), aspect:L/Math.max(S,1)};
+}
+function pdiRel(g, pt){
+  const dx = pt[0]-g.cx, dy = pt[1]-g.cy, out = [];
+  const dirs = [[g.ux,g.uy],[-g.ux,-g.uy]]; if(g.aspect < 1.4) dirs.push([-g.uy,g.ux],[g.uy,-g.ux]);
+  dirs.forEach(([vx,vy])=>{ const nx = -vy, ny = vx; out.push([(dx*vx+dy*vy)/g.L, (dx*nx+dy*ny)/g.L]); });
+  return out;
+}
+function pdiLayDist(g, pt, layouts, field){
+  const v = pdiRel(g, pt); let best = null;
+  (layouts||[]).forEach(l=>{ const t = l[field]; if(!t) return; const dd = Math.min(...v.map(([x,y])=>Math.hypot(x-t[0], y-t[1]))); if(best===null || dd<best) best = dd; });
+  return best;
+}
+
+/* State scan satu unit */
+const PDI = {
+  step:"scan", vin:"", eng:"", key:"", keySrc:"", seen:{}, card:new Set(), guide:"", marks:[], view:[],
+  model:"", tipe:"R", info:null, dup:false, prob:null, rec:null, tlsStart:0, tlsErr:"", tlsPoll:null, busy:false,
+  cam:{stream:null, on:false, err:"", w:0, h:0, last:0, fps:0, dev:""},
+};
+function pdiResetUnit(say){
+  Object.assign(PDI, {step:"scan", vin:"", eng:"", key:"", keySrc:"", seen:{}, card:new Set(), guide:"", marks:[], view:[], model:"", tipe:"R", info:null, dup:false, prob:null, rec:null, tlsStart:0, tlsErr:""});
+  if(PDI.tlsPoll){ clearInterval(PDI.tlsPoll); PDI.tlsPoll = null; }
+  pdiOvClose(); pdiUi();
+}
+/* Proses semua barcode di 1 frame kamera. codes = [{t, kind:"QR"|"1D", q:{topLeft..}}] */
+function pdiProcessCodes(codes){
+  if(PDI.step!=="scan") return;
+  const cfg = pdiCfg(), minF = 2;
+  let vinIn = null;
+  codes.forEach(c=>{ const [f,v] = pdiClassify(c.t, c.kind, cfg); if(f==="vin" && !vinIn) vinIn = v; });
+  const refVin = vinIn || PDI.vin, legacy = pdiIsLegacy(refVin);
+  if(!legacy){   // angka 5 digit di dalam QR / teks panjang kartu DC (Body No dll.) bukan No Kunci
+    codes.forEach(c=>{ const tu = String(c.t||"").toUpperCase().replace(/\s+/g," ").trim(); if(tu.replace(/ /g,"").length>12 && pdiClassify(c.t,c.kind,cfg)[0]!=="engine"){ (tu.match(/(?<![0-9])[0-9]{5}(?![0-9])/g)||[]).forEach(x=>PDI.card.add(x)); } });
+  }
+  const present = new Set(), bump = k=>{ present.add(k); PDI.seen[k] = (PDI.seen[k]||0)+1; return PDI.seen[k]; };
+  if(vinIn){
+    const n = bump("vin|"+vinIn);
+    if(n>=minF && vinIn!==PDI.vin){ PDI.vin = vinIn; PDI.eng = ""; PDI.key = ""; PDI.keySrc = ""; pdiSay("frame"); }
+  }
+  const vinOk = PDI_VIN_RE.test(PDI.vin) && PDI.vin.length===17;
+  const lay = legacy ? cfg.layouts : null, tol = cfg.tol;
+  let vg = null;
+  if(lay){ const vc = codes.find(c=>{ const [f,v] = pdiClassify(c.t,c.kind,cfg); return f==="vin" && v===(PDI.vin||v); }); if(vc) vg = pdiGeom(vc.q); }
+  const layBest = {};
+  if(lay && vg){ codes.forEach((c,i)=>{ const [f] = pdiClassify(c.t,c.kind,cfg,true); if(f==="engine"||f==="key"){ const g = pdiGeom(c.q), dd = pdiLayDist(vg,[g.cx,g.cy],lay,f); if(dd!==null && dd<=tol && (!layBest[f] || dd<layBest[f][0])) layBest[f] = [dd,i]; } }); }
+  const marks = [], view = [], keyC = [], engC = []; let keyWait = false;
+  codes.forEach((c,i)=>{
+    const t = String(c.t||"").toUpperCase().replace(/\s+/g," ").trim(), [f,v] = pdiClassify(c.t, c.kind, cfg, legacy);
+    const mk = (col,lab,why)=>{ marks.push({q:c.q, col, lab}); view.push([c.kind, t, why]); };
+    if(f==="vin"){ mk("#22c55e","VIN","VIN ✔"); return; }
+    if(PDI.card.has(t)){ mk("#9ca3af","kartu","diabaikan: kode kartu DC"); return; }
+    if(!f){ mk("#9ca3af","x", v==="tipe"?"diabaikan: tipe barcode":"diabaikan: pola tidak cocok"); return; }
+    if(!vinOk){ mk("#eab308","scan VIN dulu", f.toUpperCase()+" — tunggu Frame No"); return; }
+    if(lay){
+      if(!vg){ mk("#eab308","tunjukkan seluruh kartu", f.toUpperCase()+" — Frame No harus ikut terlihat"); return; }
+      if(!layBest[f] || layBest[f][1]!==i){ mk("#9ca3af","posisi salah","diabaikan: bukan posisi "+f.toUpperCase()); return; }
+      const n = bump(f+"|"+v);
+      if(n>=minF && PDI[f==="engine"?"eng":"key"]!==v){ PDI[f==="engine"?"eng":"key"] = v; pdiSay(f==="engine"?"engine":"key"); }
+      mk(f==="engine"?"#3b82f6":"#f97316", f==="engine"?"ENGINE":"KUNCI", (f==="engine"?"ENGINE":"KUNCI")+" ✔"); return;
+    }
+    if(f==="key"){
+      if(PDI.card.has(v)){ mk("#9ca3af","kartu","diabaikan: kode kartu DC"); return; }
+      if(c.kind==="1D" && vinIn){ mk("#eab308","jauhkan kartu DC","KUNCI garis — tunggu kartu DC dijauhkan"); keyWait = true; return; }
+      keyC.push([v,c.kind,c,t]); return;
+    }
+    if(f==="engine"){ engC.push([v,c.kind,c,t]); return; }
+  });
+  let engConf = null, keyConf = null;
+  if(engC.length){
+    const vals = [...new Set(engC.map(x=>x[0]))];
+    if(vals.length>1){ engConf = vals; engC.forEach(x=>{ marks.push({q:x[2].q,col:"#eab308",lab:"2 engine?"}); view.push([x[1],x[3],"ENGINE — lebih dari 1 terbaca"]); }); }
+    else { const n = bump("engine|"+vals[0]); if(n>=minF && PDI.eng!==vals[0]){ PDI.eng = vals[0]; pdiSay("engine"); } engC.forEach(x=>{ marks.push({q:x[2].q,col:"#3b82f6",lab:"ENGINE"}); view.push([x[1],x[3],"ENGINE ✔"]); }); }
+  }
+  if(keyC.length){
+    const qr = new Set(keyC.filter(x=>x[1]==="QR").map(x=>x[0])), pool = qr.size ? keyC.filter(x=>x[1]==="QR") : keyC, vals = [...new Set(pool.map(x=>x[0]))];
+    if(vals.length>1){ keyConf = vals; keyC.forEach(x=>{ marks.push({q:x[2].q,col:"#eab308",lab:"2 kunci?"}); view.push([x[1],x[3],"KUNCI — lebih dari 1 terbaca"]); }); }
+    else {
+      const v = vals[0], src = qr.has(v) ? "QR" : "1D", n = bump("key|"+v+"|"+src), need = minF + (src==="1D" ? 4 : 0);
+      if(n>=need && PDI.key!==v && (!PDI.key || src==="QR" || PDI.keySrc!=="QR")){ PDI.key = v; PDI.keySrc = src; pdiSay("key"); }
+      else if(n>=need && PDI.key===v && src==="QR") PDI.keySrc = "QR";
+      keyC.forEach(x=>{ marks.push({q:x[2].q, col:x[0]===v?"#f97316":"#9ca3af", lab:x[0]===v?"KUNCI ("+x[1]+")":"x"}); view.push([x[1],x[3],x[0]===v?"KUNCI ✔ ("+x[1]+")":"diabaikan: QR kunci diutamakan"]); });
+    }
+  }
+  Object.keys(PDI.seen).forEach(k=>{ if(!present.has(k)) delete PDI.seen[k]; });
+  PDI.marks = marks; PDI.view = view;
+  let g = "";
+  if(engConf) g = "⚠ 2 ENGINE TERBACA ("+engConf.join(" / ")+") — tutup / jauhkan salah satu";
+  else if(keyConf) g = "⚠ 2 NO KUNCI TERBACA ("+keyConf.join(" / ")+") — jauhkan salah satu";
+  else if(!vinOk) g = "① SCAN FRAME NO kartu DC";
+  else if(!PDI.eng || !PDI.key){ g = "② SCAN "+[!PDI.eng?"ENGINE":"", !PDI.key?"KUNCI":""].filter(Boolean).join(" & "); if(lay && !vg) g += " — tunjukkan SELURUH kartu (Frame No ikut terlihat)"; if(keyWait && !PDI.key) g += " — jauhkan kartu DC"; }
+  PDI.guide = g;
+  pdiFieldsUi();
+  if(vinOk && PDI.eng && PDI.key) pdiUnitReady();
+}
+/* input dari scanner tembak / ketik: satu kotak, isi otomatis dikenali (Frame / Engine / Kunci) */
+function pdiManualScan(txt){
+  txt = String(txt||"").trim(); if(!txt || PDI.step!=="scan") return;
+  const cfg = pdiCfg(), legacy = pdiIsLegacy(PDI.vin);
+  let [f,v] = pdiClassify(txt, "1D", cfg, legacy);
+  if(!f){ const r2 = pdiClassify(txt, "QR", cfg, legacy); f = r2[0]; v = r2[1]; }
+  if(!f){ pdiToast("Tidak dikenali: "+txt+" (bukan Frame No / Engine / No Kunci)", true); return; }
+  if(f==="vin"){ if(v!==PDI.vin){ PDI.vin = v; PDI.eng = ""; PDI.key = ""; PDI.card = new Set(); pdiSay("frame"); } }
+  else if(!PDI.vin){ pdiToast("Scan Frame No dulu", true); return; }
+  else if(f==="engine"){ PDI.eng = v; pdiSay("engine"); }
+  else { PDI.key = v; PDI.keySrc = "manual"; pdiSay("key"); }
+  pdiFieldsUi();
+  if(PDI.vin && PDI.eng && PDI.key) pdiUnitReady();
+}
+function pdiFieldEdit(fld, val){
+  if(PDI.step!=="scan") return;
+  val = normVin(val);
+  if(fld==="vin"){ const m = val.match(PDI_VIN_RE); if(!m){ pdiToast("Frame No harus 17 karakter (MH…)", true); pdiFieldsUi(); return; } if(m[0]!==PDI.vin){ PDI.vin = m[0]; PDI.eng = ""; PDI.key = ""; PDI.card = new Set(); } }
+  else if(fld==="eng"){ PDI.eng = val; }
+  else if(fld==="key"){ if(!/^[0-9]{5}$/.test(val)){ pdiToast("No Kunci = 5 angka", true); pdiFieldsUi(); return; } PDI.key = val; PDI.keySrc = "manual"; }
+  pdiFieldsUi();
+  if(PDI.vin && PDI.eng && PDI.key) pdiUnitReady();
+}
+
+/* ===== Unit lengkap → model → konfirmasi ===== */
+function pdiUnitReady(){
+  if(PDI.step!=="scan") return;
+  const d = DB.get(), m = pdiDetectModel(PDI.vin, d);
+  if(!m){ PDI.step = "model"; pdiSay("newmodel"); pdiModelAsk(); return; }
+  PDI.model = m; pdiConfirm();
+}
+function pdiTipeOf(vin, d){ const c = lookupUnitCat(d||DB.get(), vin); return c && c.batam ? "B" : (c && c.prio ? "P" : "R"); }
+function pdiLastOk(f){ return pdiRecList().filter(r=>r.f===f && pdiIsOk(r)).sort((a,b)=>(b.ts||0)-(a.ts||0))[0] || null; }
+function pdiOpenProblem(f){ return pdiRecList().filter(r=>r.f===f && r.st==="PROBLEM").sort((a,b)=>(b.ts||0)-(a.ts||0))[0] || null; }
+function pdiConfirm(){
+  const d = DB.get();
+  PDI.step = "confirm"; PDI.tipe = pdiTipeOf(PDI.vin, d); PDI.info = null;
+  try{ const p = ppbjOf(d, PDI.vin); if(p) PDI.info = "PPBJ "+(ppbjInfoTxt(p)||""); }catch(e){}
+  const last = pdiLastOk(PDI.vin); PDI.dup = !!last; PDI.prob = pdiOpenProblem(PDI.vin);
+  if(PDI.dup) pdiSay("dup"); else if(PDI.prob) pdiSay("probulang"); else pdiSay(PDI.tipe==="B"?"batam":(PDI.tipe==="P"?"prioritas":"reguler"));
+  const col = PDI.tipe==="B" ? "#0891b2" : (PDI.tipe==="P" ? "#7c3aed" : "#276749"), ic = PDI.tipe==="B" ? "🚢" : (PDI.tipe==="P" ? "⭐" : "🚗"), nm = PDI.tipe==="B" ? "BATAM" : (PDI.tipe==="P" ? "PRIORITAS" : "REGULER");
+  const row = (l,v,big)=>`<div class="pdiCfRow"><span>${l}</span><b style="${big?"font-size:22px;":"font-size:14px;"}">${escH(v||"-")}</b></div>`;
+  pdiOv(`<div class="pdiCf" style="border-color:${col};">
+    <div class="pdiCfHead" style="background:${col};"><div style="font-size:28px;font-weight:900;">${ic} UNIT ${nm}</div><div style="font-weight:800;opacity:.9;">${escH(PDI.model)}</div></div>
+    ${PDI.dup?`<div class="pdiWarn">⚠ FRAME NO SUDAH DI-PDI — ${escH(holdHm(last.ts))} ${escH(new Date(last.ts).toLocaleDateString("id-ID"))} (${escH(last.n||"")})<br>Unit ini tidak dihitung lagi. Enter = batal.</div>`:""}
+    ${PDI.prob?`<div class="pdiWarn" style="background:#FEF3C7;color:#92400E;">⚠ UNIT PROBLEM sebelumnya: ${escH(PDI.prob.pb||"")}${PDI.prob.pbNote?" — "+escH(PDI.prob.pbNote):""}<br>Kalau sudah diperbaiki IT, lanjutkan seperti biasa. Data lama berubah jadi OK.</div>`:""}
+    <div style="padding:14px 22px;">${row("FRAME NO",PDI.vin,true)}${row("ENGINE NO",PDI.eng,true)}${row("NO KUNCI",PDI.key,true)}${PDI.info?row("KETERANGAN",PDI.info):""}</div>
+    <div style="display:flex;gap:10px;padding:0 22px 18px;">
+      <button type="button" class="btn" style="flex:1;background:${col};color:#fff;font-weight:900;padding:14px;" onclick="pdiConfirmOk()">${PDI.dup?"✔ KIRIM ULANG KE TLS":"✔ LANJUT INPUT TLS [Enter]"}</button>
+      <button type="button" class="btn" style="flex:1;background:#2d3748;color:#fff;font-weight:900;padding:14px;" onclick="pdiCancel()">✖ BATAL / SCAN ULANG [Esc]</button>
+    </div></div>`, {enter: PDI.dup ? pdiCancel : pdiConfirmOk, esc: pdiCancel});
+}
+function pdiCancel(){ pdiResetUnit(); }
+function pdiConfirmOk(){
+  if(PDI.step!=="confirm") return;
+  const now = Date.now(), s = pdiShiftOf(now), st = pdiStation();
+  if(!PDI.dup){
+    const base = PDI.prob ? Object.assign({}, PDI.prob) : {id: "P"+now.toString(36)+Math.random().toString(36).slice(2,6)};
+    PDI.rec = Object.assign(base, {f:PDI.vin, e:PDI.eng, k:PDI.key, m:PDI.model, t:PDI.tipe, s:st, u:currentUser.username, n:currentUser.name, tim:currentUser.shift||"", ts:now, pd:s.pd, sh:s.sh, st:"PROSES"});
+    if(PDI.prob){ PDI.rec.pbHist = (PDI.prob.pbHist||[]).concat([{pb:PDI.prob.pb, note:PDI.prob.pbNote||"", ts:PDI.prob.ts}]); delete PDI.rec.pb; delete PDI.rec.pbNote; }
+    pdiPut(PDI.rec);
+  } else PDI.rec = null;
+  pdiTlsStart();
+}
+
+/* ===== Popup kode Frame baru ===== */
+function pdiModelAsk(){
+  const d = DB.get(), pfx = PDI.vin.slice(0,7), legacy = pdiIsLegacy(PDI.vin);
+  const ms = pdiAllModels(d).sort();
+  pdiOv(`<div class="pdiCf" style="border-color:#d97706;"><div class="pdiCfHead" style="background:#d97706;"><div style="font-size:22px;font-weight:900;">🆕 KODE FRAME NO BELUM TERDAFTAR</div><div>${escH(PDI.vin)}</div></div>
+    <div style="padding:14px 22px;font-size:13px;">${legacy?`Kartu lama: kode model <b style="font-family:monospace;font-size:16px;">${escH(PDI.vin.substring(6,8))}</b> (karakter ke-7 & 8). Kode ini juga dipakai Model Unit RADAR.`:`Kode 7 digit awal: <b style="font-family:monospace;font-size:16px;">${escH(pfx)}</b>`}<br>Pilih model sekali saja, berikutnya dikenali otomatis.
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0;">${ms.map(m=>`<button type="button" class="pdiChip" style="cursor:pointer;" onclick="pdiModelPick('${escH(m)}')"><i style="background:${pdiModelColor(m,d)}"></i>${escH(m)}</button>`).join("")}</div>
+      <div style="display:flex;gap:6px;"><input id="pdiNewModel" type="text" placeholder="atau ketik nama model baru" style="flex:1;text-transform:uppercase;"><button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="pdiModelPick(document.getElementById('pdiNewModel').value)">Simpan</button></div>
+    </div><div style="padding:0 22px 18px;"><button type="button" class="btn btn-outline" onclick="pdiCancel()">✖ Batal, scan ulang</button></div></div>`, {esc: pdiCancel});
+}
+function pdiModelPick(m){
+  m = String(m||"").toUpperCase().trim(); if(!m){ pdiToast("Isi nama model", true); return; }
+  const legacy = pdiIsLegacy(PDI.vin), code = legacy ? PDI.vin.substring(6,8) : PDI.vin.slice(0,7);
+  DB.set(d=>{
+    if(legacy){ d.models = d.models || {}; const x = d.models[m] || {vin_codes:[], color:(pdiCfg(d).models[m]||{}).color || "#475569"}; if(!(x.vin_codes||[]).includes(code)) x.vin_codes = (x.vin_codes||[]).concat([code]); d.models[m] = x; }
+    else { d.pdiCfg = d.pdiCfg || {}; d.pdiCfg.models = d.pdiCfg.models || {}; const cur = pdiCfg(d).models[m] || {codes:[], color:"#475569"}; const x = {codes:cur.codes.slice(), color:cur.color}; if(!x.codes.includes(code)) x.codes.push(code); d.pdiCfg.models[m] = x; d.pdiCfg.del = (d.pdiCfg.del||[]).filter(z=>z!==m); }
+  });
+  PDI.model = m; PDI.step = "scan"; pdiConfirm();
+}
+
+/* ===== TLS lewat PAD: RADAR menulis tls_input.json, PAD mengisi TLS lalu menulis tls_done.txt (OK|VIN) =====
+   Folder yang sama dengan aplikasi PDI v50/v51 (mis. D:\Khairul\Toyota_PDI_v50\Toyota_PDI_v50\data), dipilih sekali per PC. */
+const PDI_TLS = {dir:null, perm:"", name:""};
+function pdiIdb(){ return new Promise((res,rej)=>{ try{ const r = indexedDB.open("radar_pdi_fs",1); r.onupgradeneeded = ()=>r.result.createObjectStore("h"); r.onsuccess = ()=>res(r.result); r.onerror = ()=>rej(r.error); }catch(e){ rej(e); } }); }
+async function pdiIdbGet(k){ try{ const db = await pdiIdb(); return await new Promise(res=>{ const t = db.transaction("h").objectStore("h").get(k); t.onsuccess = ()=>res(t.result||null); t.onerror = ()=>res(null); }); }catch(e){ return null; } }
+async function pdiIdbSet(k,v){ try{ const db = await pdiIdb(); return await new Promise(res=>{ const t = db.transaction("h","readwrite").objectStore("h").put(v,k); t.onsuccess = ()=>res(true); t.onerror = ()=>res(false); }); }catch(e){ return false; } }
+async function pdiTlsInit(){
+  try{ const h = await pdiIdbGet("tlsdir"); if(h){ PDI_TLS.dir = h; PDI_TLS.name = h.name; PDI_TLS.perm = await h.queryPermission({mode:"readwrite"}); } }catch(e){}
+  pdiUi();
+}
+async function pdiTlsPick(){
+  if(!window.showDirectoryPicker){ alert("Browser ini belum bisa menyambung folder TLS.\nPakai Google Chrome atau Microsoft Edge versi baru di PC PDI."); return; }
+  try{
+    const h = await window.showDirectoryPicker({id:"pdiTls", mode:"readwrite"});
+    PDI_TLS.dir = h; PDI_TLS.name = h.name; PDI_TLS.perm = await h.requestPermission({mode:"readwrite"});
+    await pdiIdbSet("tlsdir", h);
+  }catch(e){ if(e && e.name!=="AbortError") alert("Gagal memilih folder: "+(e.message||e)); }
+  pdiUi();
+}
+async function pdiTlsReperm(){ if(!PDI_TLS.dir) return pdiTlsPick(); try{ PDI_TLS.perm = await PDI_TLS.dir.requestPermission({mode:"readwrite"}); }catch(e){} pdiUi(); }
+function pdiTlsForget(){ PDI_TLS.dir = null; PDI_TLS.perm = ""; PDI_TLS.name = ""; pdiIdbSet("tlsdir", null); pdiUi(); }
+function pdiTlsReady(){ return !!(PDI_TLS.dir && PDI_TLS.perm==="granted"); }
+async function pdiTlsWrite(vin, eng, key){
+  const dir = PDI_TLS.dir;
+  try{ await dir.removeEntry("tls_done.txt"); }catch(e){}
+  const fh = await dir.getFileHandle("tls_input.json", {create:true}), w = await fh.createWritable();
+  await w.write(JSON.stringify({vin, engine:eng, key, timestamp:new Date().toISOString(), status:"pending"}, null, 2));
+  await w.close();
+}
+async function pdiTlsReadDone(){ try{ const fh = await PDI_TLS.dir.getFileHandle("tls_done.txt"); return (await (await fh.getFile()).text()).trim(); }catch(e){ return null; } }
+let _pdiTlsTimer = null;
+async function pdiTlsStart(){
+  PDI.step = "tls"; PDI.tlsStart = Date.now(); PDI.tlsErr = ""; PDI.tlsMode = pdiTlsReady() ? "pad" : "manual";
+  pdiTlsUi();
+  if(_pdiTlsTimer) clearInterval(_pdiTlsTimer);
+  _pdiTlsTimer = setInterval(()=>{ if(PDI.step!=="tls"){ clearInterval(_pdiTlsTimer); _pdiTlsTimer = null; return; } const el = document.getElementById("pdiTlsTime"); if(el) el.textContent = pdiAgeSec(Date.now()-PDI.tlsStart); }, 1000);
+  if(PDI.tlsMode==="pad"){
+    try{ await pdiTlsWrite(PDI.vin, PDI.eng, PDI.key); }
+    catch(e){ PDI.tlsMode = "manual"; PDI.tlsErr = "Gagal menulis tls_input.json ("+(e.message||e)+"). Isi TLS manual, lalu klik TLS SELESAI."; pdiTlsUi(); return; }
+    if(PDI.tlsPoll) clearInterval(PDI.tlsPoll);
+    PDI.tlsPoll = setInterval(pdiTlsPollTick, 700);
+  }
+}
+function pdiAgeSec(ms){ const s = Math.max(0, Math.floor(ms/1000)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+let _pdiPollBusy = false;
+async function pdiTlsPollTick(){
+  if(PDI.step!=="tls"){ clearInterval(PDI.tlsPoll); PDI.tlsPoll = null; return; }
+  if(_pdiPollBusy) return; _pdiPollBusy = true;
+  try{
+    const t = await pdiTlsReadDone(); if(t==null || PDI.step!=="tls") return;
+    if(/^OK/i.test(t)){ const v = (t.split("|")[1]||"").trim().toUpperCase(); if(!v || v===PDI.vin) pdiTlsDone(); }
+    else if(t){ const e = "PAD: "+t.slice(0,200); if(e!==PDI.tlsErr){ PDI.tlsErr = e; pdiSay("tlserr"); pdiTlsUi(); } }
+  } finally { _pdiPollBusy = false; }
+}
+function pdiTlsUi(){
+  if(PDI.step!=="tls") return;
+  const pad = PDI.tlsMode==="pad";
+  pdiOv(`<div class="pdiCf pdiTlsBox" style="border-color:#1d4ed8;">
+    <div class="pdiCfHead" style="background:#1d4ed8;"><div style="font-size:20px;font-weight:900;">⏳ ${pad?"PAD MENGISI TLS…":"ISI TLS PDI COMPLETION"}</div><div style="font-family:monospace;font-size:16px;">${escH(PDI.vin)}</div></div>
+    <div style="padding:12px 20px;font-size:13px;">
+      <div class="pdiCfRow"><span>ENGINE</span><b>${escH(PDI.eng)}</b></div><div class="pdiCfRow"><span>KUNCI</span><b>${escH(PDI.key)}</b></div>
+      <div style="margin:10px 0;">${pad?`Menunggu PAD selesai (<b>tls_done.txt</b>). Lanjut sendiri begitu PAD menulis OK.`:`Folder TLS belum tersambung, jadi isi Frame, Engine, Kunci di TLS sendiri, lalu klik <b>TLS SELESAI</b>.`} Lama menunggu: <b id="pdiTlsTime">0:00</b></div>
+      ${PDI.tlsErr?`<div class="pdiWarn" style="margin:0 0 10px;">⚠ ${escH(PDI.tlsErr)}<br>Isi TLS manual (refresh TLS dulu kalau perlu), lalu klik TLS SELESAI. Kalau TLS menolak, klik UNIT PROBLEM.</div>`:""}
+      ${PDI.dup?`<div class="pdiWarn" style="margin:0 0 10px;">Unit duplikat — tidak dihitung lagi.</div>`:""}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button type="button" class="btn" style="background:#16a34a;color:#fff;font-weight:900;padding:12px;" onclick="pdiTlsDone()">✔ TLS SELESAI</button>
+        <button type="button" class="btn" style="background:#d97706;color:#fff;font-weight:900;padding:12px;" onclick="pdiProblemOpen()">⚠ UNIT PROBLEM</button>
+        <button type="button" class="btn btn-outline" style="grid-column:1 / -1;" onclick="pdiTlsCancel()">✖ Batal, scan ulang (unit tidak dicatat)</button>
+      </div>
+    </div></div>`, {pos:"br"});
+}
+function pdiTlsCancel(){
+  if(!confirm("Batalkan unit "+PDI.vin+"?\n\nUnit tidak dicatat. Pastikan TLS untuk unit ini tidak jadi disimpan.")) return;
+  if(PDI.rec){ if(PDI.prob) pdiPut(Object.assign({}, PDI.prob)); else { PDI.rec.st = "BATAL"; PDI.rec.doneTs = Date.now(); pdiPut(PDI.rec); } }
+  pdiResetUnit();
+}
+function pdiTlsDone(){
+  if(PDI.step!=="tls") return;
+  if(PDI.tlsPoll){ clearInterval(PDI.tlsPoll); PDI.tlsPoll = null; }
+  PDI.tlsDoneTs = Date.now();
+  if(pdiCfg().book==="off"){ pdiFinish("OK"); return; }
+  PDI.step = "book"; pdiSay("buku");
+  pdiOv(`<div class="pdiCf" style="border-color:#0f766e;"><div class="pdiCfHead" style="background:#0f766e;"><div style="font-size:26px;font-weight:900;">📘 CEK BUKU</div><div style="font-size:22px;font-weight:900;">${escH(PDI.model)}</div></div>
+    <div style="padding:14px 22px;font-size:14px;">Pastikan buku manual yang dimasukkan adalah buku <b>${escH(PDI.model)}</b>.</div>
+    <div style="display:flex;gap:10px;padding:0 22px 18px;"><button type="button" class="btn" style="flex:2;background:#0f766e;color:#fff;font-weight:900;padding:14px;" onclick="pdiFinish('OK')">✔ BUKU ${escH(PDI.model)} SESUAI [Enter]</button>
+    <button type="button" class="btn btn-outline" style="flex:1;" onclick="pdiFinish('OK - BUKU SKIP')">⏩ Lewati Cek Buku</button></div></div>`, {enter:()=>pdiFinish("OK")});
+}
+function pdiFinish(st){
+  if(PDI.step!=="book" && PDI.step!=="tls") return;
+  const now = Date.now();
+  if(PDI.rec){ PDI.rec.st = st; PDI.rec.doneTs = now; PDI.rec.tlsTs = PDI.tlsDoneTs||now; pdiPut(PDI.rec); pdiOpenAdd(PDI.rec); }
+  else { const last = pdiLastOk(PDI.vin); if(last) pdiOpenAdd(Object.assign({}, last, {doneTs:now})); }
+  PDI.step = "done";
+  pdiSay(st==="OK" && pdiCfg().book!=="off" ? "bukuok" : "selesai");
+  pdiDoorOpen();
+  const s = pdiShiftOf(now), stt = pdiShiftStats(s.pd, s.sh, pdiStation());
+  pdiOv(`<div class="pdiCf" style="border-color:#16a34a;"><div class="pdiCfHead" style="background:#16a34a;padding:22px;"><div style="font-size:40px;">✔</div><div style="font-size:20px;font-weight:900;">${escH(PDI.model)} ${PDI.dup?"(duplikat, tidak dihitung)":"TERCATAT"}</div>
+    <div style="font-size:13px;opacity:.9;margin-top:4px;">Total shift: ${stt.n} / ${stt.plan} · ${PDI_ARD.ok?"🔓 Pintu dibuka":"Arduino tidak tersambung — buka pintu manual"}</div></div></div>`);
+  setTimeout(()=>{ if(PDI.step==="done") pdiResetUnit(); }, 1500);
+}
+function pdiOpenAdd(r){ if(!r || !r.f) return; DB.set(d=>{ d.pdiOpen = d.pdiOpen || {}; d.pdiOpen[r.f] = {m:r.m||"", t:r.t||"R", ts:r.doneTs||r.ts||Date.now(), s:r.s||"KP1", n:r.n||"", id:r.id||""}; }); }
+
+/* ===== Unit Problem (TLS menolak) ===== */
+function pdiProblemOpen(){
+  pdiOv(`<div class="pdiCf" style="border-color:#d97706;"><div class="pdiCfHead" style="background:#d97706;"><div style="font-size:20px;font-weight:900;">⚠ UNIT PROBLEM</div><div style="font-family:monospace;">${escH(PDI.vin)}</div></div>
+    <div style="padding:14px 22px;font-size:13px;">
+      ${PDI_PROBLEMS.map((p,i)=>`<label class="pdiRadio"><input type="radio" name="pdiPb" value="${i}" ${i===0?"checked":""}> ${escH(p)}</label>`).join("")}
+      <input id="pdiPbNote" type="text" placeholder="Keterangan (opsional)" style="width:100%;margin-top:8px;">
+      <div style="font-size:12px;color:var(--text-dim);margin-top:8px;">Unit tidak lanjut ke cek buku, pintu tidak dibuka, tidak dihitung actual. Setelah IT memperbaiki, scan ulang unit yang sama.</div>
+    </div>
+    <div style="display:flex;gap:10px;padding:0 22px 18px;"><button type="button" class="btn" style="flex:2;background:#d97706;color:#fff;font-weight:900;padding:12px;" onclick="pdiProblemSave()">SIMPAN UNIT PROBLEM</button><button type="button" class="btn btn-outline" style="flex:1;" onclick="pdiTlsUi()">Kembali</button></div></div>`, {esc: pdiTlsUi});
+}
+function pdiProblemSave(){
+  const sel = document.querySelector('input[name="pdiPb"]:checked'), pb = PDI_PROBLEMS[sel ? +sel.value : 0], note = ((document.getElementById("pdiPbNote")||{}).value||"").trim();
+  const now = Date.now(), s = pdiShiftOf(now);
+  const r = PDI.rec || {id:"P"+now.toString(36)+Math.random().toString(36).slice(2,6), f:PDI.vin, e:PDI.eng, k:PDI.key, m:PDI.model, t:PDI.tipe, s:pdiStation(), u:currentUser.username, n:currentUser.name, tim:currentUser.shift||"", ts:now, pd:s.pd, sh:s.sh};
+  r.st = "PROBLEM"; r.pb = pb; r.pbNote = note; r.doneTs = now;
+  pdiPut(r); pdiSay("problem");
+  if(PDI.tlsPoll){ clearInterval(PDI.tlsPoll); PDI.tlsPoll = null; }
+  pdiToast("Unit problem tercatat: "+PDI.vin);
+  pdiResetUnit();
+}
+
+/* ===== Pintu (Arduino lewat Web Serial — Chrome / Edge di PC) ===== */
+const PDI_ARD = {port:null, ok:false, err:"", last:"", waiters:[], q:Promise.resolve(), reading:false};
+function pdiArdWanted(){ try{ return localStorage.getItem("radar_pdi_ard")==="1"; }catch(e){ return false; } }
+async function pdiArdInit(){
+  if(!navigator.serial || PDI_ARD.ok || !pdiArdWanted()) return;
+  try{ const ps = await navigator.serial.getPorts(); if(ps.length) await pdiArdOpen(ps[0]); }catch(e){}
+}
+async function pdiArdPick(){
+  if(!navigator.serial){ alert("Browser ini belum bisa menyambung Arduino.\nPakai Google Chrome atau Microsoft Edge di PC PDI."); return; }
+  try{ const p = await navigator.serial.requestPort(); try{ localStorage.setItem("radar_pdi_ard","1"); }catch(e){} await pdiArdOpen(p); }
+  catch(e){ if(e && e.name!=="NotFoundError") alert("Gagal menyambung Arduino: "+(e.message||e)); }
+}
+async function pdiArdOpen(p){
+  try{ await p.open({baudRate:9600}); }catch(e){ if(!/already open/i.test(String(e&&e.message||""))){ PDI_ARD.err = "Port Arduino tidak bisa dibuka ("+(e.message||e)+"). Tutup aplikasi lain yang memakai port COM ini (mis. PDI v51 / Arduino IDE)."; pdiUi(); return; } }
+  PDI_ARD.port = p; PDI_ARD.err = ""; pdiUi();
+  pdiArdReadLoop(p);
+  await new Promise(r=>setTimeout(r, 2000));   // Arduino restart saat port dibuka: tunggu siap
+  PDI_ARD.ok = true; pdiUi();
+}
+async function pdiArdReadLoop(p){
+  if(PDI_ARD.reading) return; PDI_ARD.reading = true;
+  let buf = "";
+  try{
+    while(p.readable){
+      const rd = p.readable.getReader();
+      try{
+        for(;;){ const {value, done} = await rd.read(); if(done) break;
+          buf += new TextDecoder().decode(value);
+          let i; while((i = buf.indexOf("\n")) >= 0){ const l = buf.slice(0,i).trim(); buf = buf.slice(i+1); if(l){ PDI_ARD.last = l; PDI_ARD.waiters.slice().forEach(f=>{ try{ f(l); }catch(e){} }); } } }
+      } catch(e){ break; } finally { try{ rd.releaseLock(); }catch(e){} }
+    }
+  } finally { PDI_ARD.reading = false; PDI_ARD.ok = false; pdiUi(); }
+}
+async function pdiArdClose(){ try{ localStorage.setItem("radar_pdi_ard","0"); }catch(e){} const p = PDI_ARD.port; PDI_ARD.ok = false; PDI_ARD.port = null; try{ if(p) await p.close(); }catch(e){} pdiUi(); }
+if(navigator.serial){ try{ navigator.serial.addEventListener("disconnect", ()=>{ PDI_ARD.ok = false; PDI_ARD.port = null; PDI_ARD.err = "Kabel Arduino terlepas."; try{ pdiUi(); }catch(e){} }); }catch(e){} }
+const PDI_ARD_FINAL = ["LIMIT_UP_HIT","LIMIT_DOWN_HIT","TIMEOUT","STOPPED","LIMIT_TIMEOUT_SAFETY"];
+function pdiArdCmd(cmd, dur, label){
+  PDI_ARD.q = PDI_ARD.q.then(()=>new Promise(async res=>{
+    if(!PDI_ARD.ok || !PDI_ARD.port){ res("OFF"); return; }
+    let done = false;
+    const fn = l=>{ if(PDI_ARD_FINAL.includes(l)) fin(l); };
+    const to = setTimeout(()=>fin("NO_RESPONSE"), Math.max(dur+5, 35)*1000);
+    function fin(r){
+      if(done) return; done = true; clearTimeout(to); PDI_ARD.waiters = PDI_ARD.waiters.filter(x=>x!==fn);
+      if(r==="LIMIT_TIMEOUT_SAFETY") alert("⚠ Limit switch tidak terdeteksi ("+label+").\nMotor sudah berhenti otomatis. Cek kabel / pin limit switch.");
+      if(r==="NO_RESPONSE" || r==="ERR") pdiToast("Arduino "+label+": tidak ada jawaban — cek kabel USB / sketch pdi_relay.ino", true);
+      res(r);
+    }
+    PDI_ARD.waiters.push(fn);
+    try{ const w = PDI_ARD.port.writable.getWriter(); await w.write(new TextEncoder().encode(cmd+":"+dur+"\n")); w.releaseLock(); }
+    catch(e){ PDI_ARD.err = "Gagal kirim ke Arduino: "+(e.message||e); fin("ERR"); }
+  }));
+  return PDI_ARD.q;
+}
+function pdiDoorOpen(){
+  if(!PDI_ARD.ok) return;
+  const c = pdiCfg().door;
+  pdiArdCmd(c.up, c.dur, "NAIK").then(r=>{ if(c.auto && r!=="OFF") setTimeout(()=>pdiArdCmd(c.down, c.dur, "TURUN"), (+c.delay||5)*1000); });
+}
+function pdiDoorClose(){ const c = pdiCfg().door; pdiArdCmd(c.down, c.dur, "TURUN"); }
+
+/* ===== Suara (Text-to-Speech bawaan Windows / Chrome, offline) ===== */
+const PDI_SAY = {frame:"Frame OK", engine:"Engine OK", key:"Kunci OK", reguler:"Unit reguler", batam:"Unit Batam", prioritas:"Unit prioritas",
+  dup:"Perhatian, frame sudah pernah discan", newmodel:"Kode frame belum terdaftar, pilih model", buku:"Silakan cek buku {model}", bukuok:"Buku {model} sesuai",
+  selesai:"Selesai", problem:"Unit problem tercatat", probulang:"Unit problem, input ulang", tlserr:"TLS error, cek layar"};
+function pdiVoiceOn(){ try{ return localStorage.getItem("radar_pdi_voice")!=="0"; }catch(e){ return true; } }
+function pdiVoiceToggle(){ try{ localStorage.setItem("radar_pdi_voice", pdiVoiceOn()?"0":"1"); }catch(e){} pdiUi(); }
+function pdiVoice(){ try{ const vs = speechSynthesis.getVoices(); return vs.find(v=>/andika/i.test(v.name)) || vs.find(v=>/^id([-_]|$)/i.test(v.lang)) || null; }catch(e){ return null; } }
+function pdiSpeak(m){ return String(m||"").replace(/\bBZ4X\b/ig,"B Z 4 X").replace(/HYBRID/ig,"Hybrid"); }
+function pdiSay(k, model){
+  if(!pdiVoiceOn() || !window.speechSynthesis) return;
+  try{
+    const t = (PDI_SAY[k]||k).replace("{model}", pdiSpeak(model||PDI.model));
+    if(["frame","engine","key"].includes(k)) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t); u.lang = "id-ID"; const v = pdiVoice(); if(v) u.voice = v; u.rate = 1.05;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ===== Kamera + pembaca barcode zxing-wasm ===== */
+const PDI_ZX_SRC = "https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js";
+const PDI_ZX_WASM = "https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/reader/zxing_reader.wasm";
+const PDI_ZX_OPTS = {formats:["QRCode","MicroQRCode","DataMatrix","Code128","Code39","Code93","ITF","EAN13","EAN8","UPCA","Codabar"], tryHarder:true, tryRotate:true, tryInvert:false, tryDownscale:true, maxNumberOfSymbols:12, textMode:"Plain"};
+let _pdiZxP = null;
+function pdiZx(){
+  if(window.ZXingWASM && window._pdiZxReady) return Promise.resolve(window.ZXingWASM);
+  if(_pdiZxP) return _pdiZxP;
+  _pdiZxP = new Promise((res,rej)=>{
+    const go = ()=>{ try{ ZXingWASM.prepareZXingModule({overrides:{locateFile:(p,pre)=>p.endsWith(".wasm") ? (window.PDI_ZX_WASM_URL||PDI_ZX_WASM) : pre+p}, fireImmediately:true}); }catch(e){} window._pdiZxReady = true; res(window.ZXingWASM); };
+    if(window.ZXingWASM){ go(); return; }
+    const s = document.createElement("script"); s.src = window.PDI_ZX_SRC_URL || PDI_ZX_SRC;
+    s.onload = go; s.onerror = ()=>{ _pdiZxP = null; rej(new Error("Pembaca barcode gagal dimuat. Cek internet PC.")); };
+    document.head.appendChild(s);
+  });
+  return _pdiZxP;
+}
+function pdiKind(fmt){ return /QR|DataMatrix|Aztec|PDF417|MaxiCode/i.test(String(fmt||"")) ? "QR" : "1D"; }
+function pdiCamDev(){ try{ return localStorage.getItem("radar_pdi_cam")||""; }catch(e){ return ""; } }
+async function pdiCamStart(){
+  if(PDI.cam.on) return;
+  PDI.cam.err = "";
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ PDI.cam.err = "Browser tidak mengizinkan kamera (buka RADAR lewat https di Chrome/Edge)."; pdiUi(); return; }
+  try{
+    const dev = pdiCamDev();
+    const st = await navigator.mediaDevices.getUserMedia({audio:false, video: dev ? {deviceId:{exact:dev}, width:{ideal:1280}, height:{ideal:720}} : {width:{ideal:1280}, height:{ideal:720}}});
+    const v = document.getElementById("pdiVideo"); if(!v){ st.getTracks().forEach(t=>t.stop()); return; }
+    v.srcObject = st; await v.play().catch(()=>{});
+    PDI.cam.stream = st; PDI.cam.on = true; pdiUi();
+    pdiZx().catch(e=>{ PDI.cam.err = e.message; pdiUi(); });
+    pdiCamLoop();
+  }catch(e){ PDI.cam.err = (e && e.name==="NotAllowedError") ? "Izin kamera ditolak. Klik ikon gembok di address bar → Kamera → Izinkan, lalu klik Nyalakan Kamera." : (e && e.name==="NotFoundError" ? "Kamera tidak ditemukan. Colok kamera USB lalu klik Nyalakan Kamera." : "Kamera gagal: "+(e.message||e)); pdiUi(); }
+}
+function pdiCamStop(){ try{ if(PDI.cam.stream) PDI.cam.stream.getTracks().forEach(t=>t.stop()); }catch(e){} PDI.cam.stream = null; PDI.cam.on = false; }
+/* Barcode garis yang miring (> ±15°) tidak terbaca pembaca biasa. Seperti v51: tiap frame juga dicoba diputar
+   satu sudut lain (bergiliran; sudut yang berhasil dipakai terus), posisi dikembalikan ke gambar asli. */
+const PDI_ROT_ANG = [30,-30,60,-60,15,-15,45,-45,75,-75];
+function pdiRotOn(){ try{ return localStorage.getItem("radar_pdi_rot")!=="0"; }catch(e){ return true; } }
+function pdiRotCanvas(src, w, h, deg){
+  const r = deg*Math.PI/180, c = Math.abs(Math.cos(r)), s = Math.abs(Math.sin(r)), W = Math.ceil(w*c+h*s), H = Math.ceil(w*s+h*c);
+  const cv = PDI.cam.rc || (PDI.cam.rc = document.createElement("canvas")); if(cv.width!==W || cv.height!==H){ cv.width = W; cv.height = H; }
+  const x = cv.getContext("2d", {willReadFrequently:true}); x.setTransform(1,0,0,1,0,0); x.fillStyle = "#fff"; x.fillRect(0,0,W,H);
+  x.translate(W/2, H/2); x.rotate(r); x.drawImage(src, -w/2, -h/2); x.setTransform(1,0,0,1,0,0);
+  return {cv, W, H, r};
+}
+function pdiUnrot(p, R, w, h){ const dx = p.x-R.W/2, dy = p.y-R.H/2, c = Math.cos(-R.r), s = Math.sin(-R.r); return {x:dx*c-dy*s+w/2, y:dx*s+dy*c+h/2}; }
+async function pdiDecode(src, w, h){
+  const zx = window.ZXingWASM, cx = src.getContext("2d", {willReadFrequently:true});
+  const conv = (res, R)=>(res||[]).filter(r=>r && r.text && r.isValid!==false).map(r=>{ let q = r.position; if(R && q){ q = {topLeft:pdiUnrot(q.topLeft,R,w,h), topRight:pdiUnrot(q.topRight,R,w,h), bottomRight:pdiUnrot(q.bottomRight,R,w,h), bottomLeft:pdiUnrot(q.bottomLeft,R,w,h)}; } return {t:r.text, kind:pdiKind(r.format), q}; });
+  const codes = conv(await zx.readBarcodes(cx.getImageData(0,0,w,h), PDI_ZX_OPTS));
+  if(pdiRotOn() && PDI.step==="scan"){
+    const ang = PDI.cam.stick || PDI_ROT_ANG[(PDI.cam.ri = ((PDI.cam.ri||0)+1)) % PDI_ROT_ANG.length];
+    const R = pdiRotCanvas(src, w, h, ang);
+    const extra = conv(await zx.readBarcodes(R.cv.getContext("2d", {willReadFrequently:true}).getImageData(0,0,R.W,R.H), PDI_ZX_OPTS), R);
+    const have = new Set(codes.map(c=>c.t)); let added = 0;
+    extra.forEach(c=>{ if(!have.has(c.t)){ codes.push(c); have.add(c.t); added++; } });
+    PDI.cam.stick = added ? ang : 0;
+  }
+  return codes;
+}
+async function pdiCamLoop(){
+  if(!PDI.cam.on) return;
+  const v = document.getElementById("pdiVideo");
+  if(!v || activeTab!=="pdi"){ pdiCamStop(); return; }
+  if(PDI.step==="scan" && v.readyState>=2 && v.videoWidth && !PDI.cam.busy && window._pdiZxReady){
+    PDI.cam.busy = true;
+    try{
+      const w = v.videoWidth, h = v.videoHeight, cv = PDI.cam.cv || (PDI.cam.cv = document.createElement("canvas"));
+      if(cv.width!==w || cv.height!==h){ cv.width = w; cv.height = h; }
+      const cx = cv.getContext("2d", {willReadFrequently:true}); cx.drawImage(v, 0, 0, w, h);
+      const codes = await pdiDecode(cv, w, h);
+      PDI.cam.w = w; PDI.cam.h = h; const n = Date.now(); PDI.cam.fps = PDI.cam.last ? Math.round(1000/Math.max(1,n-PDI.cam.last)) : 0; PDI.cam.last = n;
+      pdiProcessCodes(codes); pdiDrawMarks();
+    }catch(e){ PDI.cam.err = "Baca barcode error: "+(e.message||e); }
+    PDI.cam.busy = false;
+  }
+  setTimeout(pdiCamLoop, pdiLight() ? 150 : 40);
+}
+function pdiLight(){ try{ const v = localStorage.getItem("radar_pdi_light"); if(v!=null) return v==="1"; }catch(e){} return (navigator.hardwareConcurrency||8) <= 4; }
+function pdiDrawMarks(){
+  const c = document.getElementById("pdiMarks"); if(!c) return;
+  const w = PDI.cam.w||1280, h = PDI.cam.h||720; if(c.width!==w || c.height!==h){ c.width = w; c.height = h; }
+  const x = c.getContext("2d"); x.clearRect(0,0,w,h);
+  (PDI.marks||[]).forEach(m=>{ const q = m.q; if(!q || !q.topLeft) return; x.strokeStyle = m.col; x.lineWidth = 4; x.beginPath(); x.moveTo(q.topLeft.x,q.topLeft.y); x.lineTo(q.topRight.x,q.topRight.y); x.lineTo(q.bottomRight.x,q.bottomRight.y); x.lineTo(q.bottomLeft.x,q.bottomLeft.y); x.closePath(); x.stroke();
+    x.font = "bold 22px sans-serif"; const tw = x.measureText(m.lab).width; x.fillStyle = m.col; x.fillRect(q.topLeft.x, q.topLeft.y-28, tw+12, 26); x.fillStyle = "#fff"; x.fillText(m.lab, q.topLeft.x+6, q.topLeft.y-8); });
+}
+
+/* ===== Tampilan halaman PDI (PC) ===== */
+function pdiStation(){ try{ const v = localStorage.getItem("radar_pdi_station"); if(PDI_STATIONS.some(s=>s.k===v)) return v; }catch(e){} return "KP1"; }
+function pdiStationLabel(k){ return (PDI_STATIONS.find(s=>s.k===(k||pdiStation()))||{label:k||"KP 1"}).label; }
+function renderPdiPage(){
+  return `<div id="pdiRoot" class="pdiRoot">
+    <div class="pdiTop" id="pdiTop"></div>
+    <div id="pdiErr"></div>
+    <div class="pdiMain">
+      <div class="pdiLeft">
+        <div class="pdiGuide" id="pdiGuide">① SCAN FRAME NO kartu DC</div>
+        <div class="pdiCamBox" id="pdiCamBox"><video id="pdiVideo" muted playsinline></video><canvas id="pdiMarks"></canvas><div id="pdiCamMsg" class="pdiCamMsg"></div></div>
+        <div class="pdiFields" id="pdiFields"></div>
+        <div class="pdiScanIn"><span>🔫</span><input id="pdiScanBox" type="text" autocomplete="off" placeholder="Scanner tembak / ketik Frame No, Engine, atau No Kunci lalu Enter" onkeydown="pdiScanKey(event,this)"></div>
+        <div class="pdiView" id="pdiView"></div>
+      </div>
+      <div class="pdiRight" id="pdiRight"></div>
+    </div>
+  </div>`;
+}
+/* kotak scanner: Enter dari scanner tembak = isi kolom; tidak boleh ikut menekan tombol popup */
+function pdiScanKey(e, el){
+  if(e.key!=="Enter") return;
+  e.preventDefault();
+  const v = el.value; el.value = "";
+  if(PDI.step==="scan"){ e.stopPropagation(); pdiManualScan(v); return; }
+  if(v.trim()){ e.stopPropagation(); pdiToast("Selesaikan popup dulu (scan diabaikan: "+v.trim()+")", true); }   // hasil scan saat popup terbuka diabaikan
+}
+function pdiMounted(){
+  pdiTlsInit(); pdiArdInit(); pdiUi();
+  if(!PDI.cam.on && pdiCamWanted()) pdiCamStart();
+  setTimeout(()=>{ const b = document.getElementById("pdiScanBox"); if(b && !document.querySelector("#pdiOv input")) b.focus(); }, 100);
+}
+function pdiCamWanted(){ try{ return localStorage.getItem("radar_pdi_camoff")!=="1"; }catch(e){ return true; } }
+function pdiCamToggle(){ if(PDI.cam.on){ pdiCamStop(); try{ localStorage.setItem("radar_pdi_camoff","1"); }catch(e){} } else { try{ localStorage.setItem("radar_pdi_camoff","0"); }catch(e){} pdiCamStart(); } pdiUi(); }
+function pdiChip(ok, warn, label, onclick, title){
+  const cls = ok ? "on" : (warn ? "warn" : "off");
+  return `<button type="button" class="pdiStat ${cls}" onclick="${onclick}" title="${escH(title||"")}">${label}</button>`;
+}
+let _pdiUiT = 0;
+function pdiUi(){
+  if(activeTab!=="pdi" || !document.getElementById("pdiRoot")) return;
+  const now = Date.now(); if(now-_pdiUiT < 60){ clearTimeout(window._pdiUiTo); window._pdiUiTo = setTimeout(pdiUi, 70); return; } _pdiUiT = now;
+  const d = DB.get(), st = pdiStation(), s = pdiShiftOf(now), stt = pdiShiftStats(s.pd, s.sh, st, d);
+  const top = document.getElementById("pdiTop");
+  if(top) top.innerHTML = `<div class="pdiTitle">🔍 PDI <b>${escH(pdiStationLabel(st))}</b></div>
+    <div class="pdiWho">${escH((currentUser&&currentUser.name)||"")} · ${escH(pdiShiftLabel(s.sh))}${currentUser&&currentUser.shift?" · "+rsShift(currentUser.shift):""}</div>
+    <div class="pdiStats">
+      ${pdiChip(PDI.cam.on && !PDI.cam.err, PDI.cam.on, "📷 Kamera"+(PDI.cam.on&&PDI.cam.fps?" "+PDI.cam.fps+"fps":""), "pdiCamToggle()", "Nyalakan / matikan kamera")}
+      ${pdiChip(pdiTlsReady(), !!PDI_TLS.dir, "📁 TLS "+(pdiTlsReady()?"PAD":(PDI_TLS.dir?"izinkan":"manual")), PDI_TLS.dir&&!pdiTlsReady()?"pdiTlsReperm()":"pdiTlsPick()", PDI_TLS.dir?("Folder: "+PDI_TLS.name):"Pilih folder data PAD (tls_input.json)")}
+      ${pdiChip(PDI_ARD.ok, !!PDI_ARD.port, "🔌 Pintu "+(PDI_ARD.ok?"ON":(PDI_ARD.port?"…":"OFF")), PDI_ARD.ok?"pdiDoorMenu()":"pdiArdPick()", "Sambungkan Arduino pintu")}
+      ${pdiChip(pdiVoiceOn(), false, pdiVoiceOn()?"🔊 Suara":"🔇 Suara", "pdiVoiceToggle()", "Suara ON/OFF")}
+      <button type="button" class="pdiStat off" onclick="pdiFullscreen()" title="Layar penuh">⛶</button>
+    </div>`;
+  const er = document.getElementById("pdiErr");
+  if(er){ const ob = Object.keys(pdiOutbox()).length, msgs = [];
+    if(PDI_ERR) msgs.push(PDI_ERR + (ob?` (${ob} data menunggu)`:""));
+    if(PDI.cam.err) msgs.push("📷 "+PDI.cam.err);
+    if(PDI_ARD.err) msgs.push("🔌 "+PDI_ARD.err);
+    if(PDI_TLS.dir && PDI_TLS.perm!=="granted") msgs.push(`📁 Folder TLS perlu diizinkan lagi setelah browser dibuka ulang. <button type="button" class="tlscp" onclick="pdiTlsReperm()">Izinkan</button>`);
+    er.innerHTML = msgs.length ? `<div class="msg err" style="margin:0 0 8px;font-size:12px;">${msgs.join("<br>")}</div>` : ""; }
+  const cm = document.getElementById("pdiCamMsg");
+  if(cm) cm.innerHTML = PDI.cam.on ? (window._pdiZxReady ? "" : "Memuat pembaca barcode…") : `<div><div style="font-size:42px;">📷</div><div style="font-weight:800;margin:6px 0;">Kamera mati</div><button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="pdiCamToggle()">Nyalakan Kamera</button><div style="font-size:11px;margin-top:8px;opacity:.8;">Tanpa kamera tetap bisa pakai scanner tembak / ketik di kotak bawah.</div></div>`;
+  pdiFieldsUi();
+  const r = document.getElementById("pdiRight"); if(r) r.innerHTML = pdiDashHtml(d, st, s, stt);
+}
+function pdiFieldsUi(){
+  const g = document.getElementById("pdiGuide");
+  if(g){ const txt = PDI.step==="scan" ? (PDI.guide || "① SCAN FRAME NO kartu DC") : ({model:"🆕 Pilih model", confirm:"Konfirmasi data unit", tls:"⏳ Input TLS", book:"📘 Cek buku "+PDI.model, done:"✔ Selesai"}[PDI.step]||""); g.textContent = txt; g.className = "pdiGuide"+(/⚠/.test(txt)?" warn":(PDI.step!=="scan"?" busy":"")); }
+  const f = document.getElementById("pdiFields");
+  if(f){
+    const a = document.activeElement; if(a && a.closest && a.closest("#pdiFields")) return;   // sedang mengetik di kolom
+    const fld = (k,l,v,ok)=>`<div class="pdiFld ${v?"ok":""}"><label>${l}</label><input type="text" value="${escH(v||"")}" placeholder="${k==="vin"?"17 karakter":(k==="key"?"5 angka":"-")}" onchange="pdiFieldEdit('${k}',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();event.stopPropagation();this.blur();}"></div>`;
+    f.innerHTML = fld("vin","① FRAME NO",PDI.vin)+fld("eng","② ENGINE NO",PDI.eng)+fld("key","③ NO KUNCI",PDI.key)+
+      `<button type="button" class="pdiReset" onclick="pdiResetUnit()" title="Kosongkan (Esc)">↺</button>`;
+  }
+  const vw = document.getElementById("pdiView");
+  if(vw) vw.innerHTML = (PDI.view||[]).slice(0,8).map(([k,t,w])=>`<div><span class="pdiK">${escH(k)}</span> <b>${escH(String(t).slice(0,40))}</b> <span style="color:var(--text-dim);">${escH(w)}</span></div>`).join("");
+}
+function pdiDashHtml(d, st, s, stt){
+  const pct = stt.plan ? Math.min(100, Math.round(stt.n*100/stt.plan)) : 0;
+  const models = Object.entries(stt.byM).sort((a,b)=>b[1]-a[1]);
+  const last = stt.all.filter(r=>r.st!=="BATAL").sort((a,b)=>(b.doneTs||b.ts)-(a.doneTs||a.ts)).slice(0,8);
+  const probOpen = pdiRecList().filter(r=>r.st==="PROBLEM").length;
+  const stBadge = r=> r.st==="PROBLEM" ? `<span class="pdiTag" style="background:#d97706;">PROBLEM</span>` : (r.st==="PROSES" ? `<span class="pdiTag" style="background:#64748b;">PROSES</span>` : (r.st==="OK - BUKU SKIP" ? `<span class="pdiTag" style="background:#0f766e;">BUKU SKIP</span>` : (r.st==="OK - INPUT MANUAL" ? `<span class="pdiTag" style="background:#475569;">MANUAL</span>` : `<span class="pdiTag" style="background:#16a34a;">OK</span>`)));
+  return `<div class="card pdiDash">
+      <div style="display:flex;align-items:flex-end;gap:10px;"><div style="flex:1;"><div style="font-size:12px;color:var(--text-dim);font-weight:700;">ACTUAL ${escH(pdiShiftLabel(s.sh)).toUpperCase()}</div>
+        <div class="pdiBig">${stt.n}<span> / ${stt.plan}</span></div></div><div style="font-size:26px;font-weight:900;color:${pct>=100?"var(--green)":"var(--text)"};">${pct}%</div></div>
+      <div class="pdiBar"><i style="width:${pct}%"></i></div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;">${models.length?models.map(([m,n])=>`<div class="pdiMRow"><i style="background:${pdiModelColor(m,d)}"></i><span>${escH(m)}</span><b>${n}</b></div>`).join(""):`<div style="font-size:12px;color:var(--text-dim);">Belum ada unit di shift ini.</div>`}</div>
+      ${stt.prob.length||stt.skip||stt.man?`<div style="font-size:11px;color:var(--text-dim);margin-top:8px;">${stt.prob.length?`⚠ Problem ${stt.prob.length} · `:""}${stt.skip?`Buku skip ${stt.skip} · `:""}${stt.man?`Input manual ${stt.man}`:""}</div>`:""}
+    </div>
+    <div class="pdiBtns">
+      <button type="button" class="btn btn-outline btn-sm" onclick="pdiHistOpen()">📋 Riwayat</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pdiProbList()">⚠ Unit Problem${probOpen?` <span class="pdiCount" style="background:#d97706;">${probOpen}</span>`:""}</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pdiManualOpen()">📝 Input Manual</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pdiPerJamOpen()">⏱ Per Jam</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pdiXlOpen()">📥 Excel</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pdiCfgOpen()">⚙ Pengaturan</button>
+    </div>
+    <div class="card" style="padding:10px 12px;"><div style="font-size:12px;font-weight:800;color:var(--text-dim);margin-bottom:6px;">TERAKHIR</div>
+      ${last.length?`<table class="pdiTb"><tbody>${last.map(r=>`<tr><td>${holdHm(r.doneTs||r.ts)}</td><td><b style="font-family:monospace;">${escH(r.f)}</b> ${pdiTipeBadge(r.t,true)}</td><td>${escH(r.m||"")}</td><td>${stBadge(r)}</td></tr>`).join("")}</tbody></table>`:`<div style="font-size:12px;color:var(--text-dim);">-</div>`}
+    </div>
+    ${pdiOpenCardHtml(d, {always:true})}`;
+}
+function pdiFullscreen(){ try{ if(document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); }catch(e){} }
+function pdiDoorMenu(){
+  showModal(`<h3 style="margin:0 0 8px;">🔌 Pintu (Arduino)</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Tersambung. Respons terakhir: <b>${escH(PDI_ARD.last||"-")}</b></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><button type="button" class="btn btn-primary" onclick="closeModal();pdiArdCmd(pdiCfg().door.up,pdiCfg().door.dur,'NAIK')">⬆ Test NAIK</button><button type="button" class="btn btn-primary" onclick="closeModal();pdiDoorClose()">⬇ TURUN</button>
+    <button type="button" class="btn btn-outline" style="grid-column:1 / -1;" onclick="closeModal();pdiArdClose()">Putuskan Arduino</button></div>`);
+}
+
+/* ===== Overlay PDI (popup di atas halaman, tidak terganggu refresh data) ===== */
+let _pdiOvKeys = null;
+function pdiOv(html, opts){
+  opts = opts || {}; let el = document.getElementById("pdiOv");
+  if(!el){ el = document.createElement("div"); el.id = "pdiOv"; document.body.appendChild(el); }
+  el.className = "pdiOv"+(opts.pos==="br"?" br":"");
+  el.innerHTML = `<div class="pdiOvIn">${html}</div>`;
+  _pdiOvKeys = {enter:opts.enter||null, esc:opts.esc||null};
+  pdiFieldsUi();
+}
+function pdiOvClose(){ const el = document.getElementById("pdiOv"); if(el) el.remove(); _pdiOvKeys = null; setTimeout(()=>{ const b = document.getElementById("pdiScanBox"); if(b && activeTab==="pdi" && !document.getElementById("modalRoot").innerHTML) b.focus(); }, 30); }
+function pdiToast(msg, warn){
+  let el = document.getElementById("pdiToast"); if(!el){ el = document.createElement("div"); el.id = "pdiToast"; document.body.appendChild(el); }
+  el.className = "pdiToast"+(warn?" warn":""); el.textContent = msg; el.style.display = "block";
+  clearTimeout(window._pdiToastT); window._pdiToastT = setTimeout(()=>{ el.style.display = "none"; }, 3200);
+}
+document.addEventListener("keydown", e=>{
+  if(activeTab!=="pdi") return;
+  if(document.getElementById("modalRoot") && document.getElementById("modalRoot").innerHTML) return;
+  const inOvInput = e.target && e.target.closest && e.target.closest("#pdiOv") && /INPUT|TEXTAREA/.test(e.target.tagName) && e.target.type!=="radio";
+  if(e.key==="Enter" && _pdiOvKeys && _pdiOvKeys.enter && !inOvInput){ e.preventDefault(); const f = _pdiOvKeys.enter; f(); return; }
+  if(e.key==="Escape"){ if(_pdiOvKeys && _pdiOvKeys.esc){ e.preventDefault(); _pdiOvKeys.esc(); return; } if(PDI.step==="scan" && (PDI.vin||PDI.eng||PDI.key)){ e.preventDefault(); pdiResetUnit(); } }
+});
+setInterval(()=>{ try{ if(activeTab==="pdi") pdiUi(); }catch(e){} }, 5000);
+
+/* ===== Riwayat / Unit Problem / Input Manual / Per Jam ===== */
+let _pdiHistQ = "", _pdiHistSh = "cur";
+function pdiHistOpen(){
+  const now = Date.now(), s = pdiShiftOf(now);
+  let pd = s.pd, sh = s.sh; if(_pdiHistSh==="prev"){ if(sh==="2") sh = "1"; else { sh = "2"; pd = pd-86400000; } }
+  let L = (_pdiHistSh==="all" ? pdiRecList() : pdiShiftRecs(pd, sh)).filter(r=>r.st!=="BATAL");
+  const q = normVin(_pdiHistQ); if(q) L = pdiRecList().filter(r=>r.st!=="BATAL" && (normVin(r.f).includes(q) || normVin(r.e).includes(q) || String(r.k||"").includes(q)));
+  L.sort((a,b)=>(b.doneTs||b.ts)-(a.doneTs||a.ts));
+  showModal(`<h3 style="margin:0 0 8px;">📋 Riwayat PDI</h3>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${[["cur","Shift ini"],["prev","Shift sebelumnya"],["all","8 hari"]].map(([k,l])=>`<button type="button" class="tlscp" style="${_pdiHistSh===k&&!q?"background:var(--gold);color:#fff;":""}" onclick="_pdiHistQ='';_pdiHistSh='${k}';pdiHistOpen()">${l}</button>`).join("")}
+      <input type="text" placeholder="Cari Frame / Engine / Kunci" value="${escH(_pdiHistQ)}" style="flex:1;min-width:160px;" onkeydown="if(event.key==='Enter'){_pdiHistQ=this.value;pdiHistOpen();}"></div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${L.length} unit</div>
+    <div style="max-height:60vh;overflow:auto;"><table class="pdiTb"><thead><tr><th>Waktu</th><th>Frame No</th><th>Engine</th><th>Kunci</th><th>Model</th><th>Status</th><th>PIC</th></tr></thead><tbody>
+    ${L.slice(0,400).map(r=>`<tr><td style="white-space:nowrap;">${escH(new Date(r.doneTs||r.ts).toLocaleDateString("id-ID",{day:"2-digit",month:"short"}))} ${holdHm(r.doneTs||r.ts)}</td><td><b style="font-family:monospace;">${escH(r.f)}</b> ${pdiTipeBadge(r.t,true)}</td><td style="font-family:monospace;">${escH(r.e||"")}</td><td>${escH(r.k||"")}</td><td>${escH(r.m||"")}</td><td>${escH(r.st||"")}${r.pb?`<div style="font-size:10px;color:#b45309;">${escH(r.pb)}</div>`:""}</td><td style="font-size:11px;">${escH(r.n||"")}</td></tr>`).join("")}
+    </tbody></table></div>`);
+}
+function pdiProbList(){
+  const L = pdiRecList().filter(r=>r.st==="PROBLEM" || (r.pbHist && r.pbHist.length && pdiIsOk(r))).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  showModal(`<h3 style="margin:0 0 8px;">⚠ Unit Problem</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">OPEN = menunggu perbaikan IT. Setelah diperbaiki, scan ulang unit yang sama: status berubah jadi SELESAI dan unit dihitung.</div>
+    ${L.length?`<div style="max-height:60vh;overflow:auto;"><table class="pdiTb"><thead><tr><th>Waktu</th><th>Frame No</th><th>Model</th><th>Problem</th><th>Status</th></tr></thead><tbody>${L.map(r=>{ const open = r.st==="PROBLEM", pb = open ? r.pb : ((r.pbHist||[]).slice(-1)[0]||{}).pb; const nt = open ? r.pbNote : ((r.pbHist||[]).slice(-1)[0]||{}).note;
+      return `<tr><td style="white-space:nowrap;">${escH(new Date(r.ts).toLocaleDateString("id-ID",{day:"2-digit",month:"short"}))} ${holdHm(r.ts)}</td><td><b style="font-family:monospace;">${escH(r.f)}</b></td><td>${escH(r.m||"")}</td><td>${escH(pb||"")}${nt?`<div style="font-size:10px;color:var(--text-dim);">${escH(nt)}</div>`:""}</td><td>${open?`<span class="pdiTag" style="background:#d97706;">OPEN</span>`:`<span class="pdiTag" style="background:#16a34a;">SELESAI</span>`}</td></tr>`; }).join("")}</tbody></table></div>`:`<div style="font-size:13px;">Tidak ada unit problem.</div>`}`);
+}
+function pdiManualOpen(){
+  showModal(`<h3 style="margin:0 0 6px;">📝 Input Manual</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Untuk unit yang sudah diproses manual di TLS (mis. saat RADAR / PC mati). Tercatat <b>OK - INPUT MANUAL</b>, tanpa TLS, buku dan pintu.</div>
+    <div class="field"><label>Frame No</label><input id="pdiMF" type="text" style="text-transform:uppercase;"></div>
+    <div class="field"><label>Engine No</label><input id="pdiME" type="text" style="text-transform:uppercase;"></div>
+    <div class="field"><label>No Kunci</label><input id="pdiMK" type="text"></div>
+    <div class="field"><label>Model (kosongkan = otomatis dari Frame No)</label><select id="pdiMM"><option value="">otomatis</option>${pdiAllModels().sort().map(m=>`<option>${escH(m)}</option>`).join("")}</select></div>
+    <button type="button" class="btn btn-primary" onclick="pdiManualSave()">Simpan</button>`);
+  setTimeout(()=>{ const e = document.getElementById("pdiMF"); if(e) e.focus(); }, 50);
+}
+function pdiManualSave(){
+  const f = (normVin(document.getElementById("pdiMF").value).match(PDI_VIN_RE)||[])[0], e = normVin(document.getElementById("pdiME").value), k = String(document.getElementById("pdiMK").value||"").trim();
+  if(!f){ alert("Frame No harus 17 karakter (MH…)."); return; }
+  if(!e){ alert("Isi Engine No."); return; }
+  if(!/^[0-9]{5}$/.test(k)){ alert("No Kunci = 5 angka."); return; }
+  const m = document.getElementById("pdiMM").value || pdiDetectModel(f);
+  if(!m){ alert("Model belum dikenal dari Frame No ini. Pilih model."); return; }
+  if(pdiLastOk(f) && !confirm(f+" sudah pernah di-PDI. Tetap simpan lagi?")) return;
+  const now = Date.now(), s = pdiShiftOf(now), prob = pdiOpenProblem(f);
+  const r = Object.assign(prob ? Object.assign({}, prob) : {id:"P"+now.toString(36)+Math.random().toString(36).slice(2,6)}, {f, e, k, m, t:pdiTipeOf(f), s:pdiStation(), u:currentUser.username, n:currentUser.name, tim:currentUser.shift||"", ts:now, pd:s.pd, sh:s.sh, st:"OK - INPUT MANUAL", doneTs:now});
+  if(prob){ r.pbHist = (prob.pbHist||[]).concat([{pb:prob.pb, note:prob.pbNote||"", ts:prob.ts}]); delete r.pb; delete r.pbNote; }
+  pdiPut(r); pdiOpenAdd(r); closeModal(); pdiToast("Tersimpan: "+f);
+}
+function pdiPerJamRows(pd, sh, st){
+  const [a,b] = shiftWindow(pd, sh), ok = pdiShiftRecs(pd, sh, st).filter(pdiIsOk), ms = [...new Set(ok.map(r=>r.m||"?"))].sort(), rows = [];
+  for(let t=a; t<b; t+=3600000){ const L = ok.filter(r=>(r.doneTs||r.ts)>=t && (r.doneTs||r.ts)<t+3600000); rows.push([holdHm(t)+"–"+holdHm(t+3600000)].concat(ms.map(m=>L.filter(r=>(r.m||"?")===m).length)).concat([L.length])); }
+  return {ms, rows, tot:ok.length};
+}
+function pdiPerJamOpen(){
+  const s = pdiShiftOf(Date.now()), x = pdiPerJamRows(s.pd, s.sh, pdiStation());
+  showModal(`<h3 style="margin:0 0 8px;">⏱ Per Jam — ${escH(pdiShiftLabel(s.sh))}</h3><div style="overflow:auto;max-height:65vh;"><table class="pdiTb"><thead><tr><th>Jam</th>${x.ms.map(m=>`<th>${escH(m)}</th>`).join("")}<th>Total</th></tr></thead><tbody>${x.rows.map(r=>`<tr>${r.map((v,i)=>`<td style="${i?"text-align:center;":""}${i===r.length-1?"font-weight:800;":""}">${v||(i?"":v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div><div style="margin-top:8px;font-weight:800;">Total: ${x.tot}</div>`);
+}
+function pdiXlOpen(){
+  const s = pdiShiftOf(Date.now()), ds = mfDateStr(s.pd);
+  showModal(`<h3 style="margin:0 0 8px;">📥 Laporan Excel PDI</h3>
+    <div class="field"><label>Tanggal produksi</label><input id="pdiXD" type="date" value="${ds}"></div>
+    <div class="field"><label>Shift</label><select id="pdiXS"><option value="1" ${s.sh==="1"?"selected":""}>Shift 1 (07.00–20.00)</option><option value="2" ${s.sh==="2"?"selected":""}>Shift 2 (20.00–07.00)</option><option value="all">Semua shift (hari produksi)</option></select></div>
+    <button type="button" class="btn btn-primary" onclick="pdiXlDownload()">📥 Download</button>`);
+}
+function pdiXlDownload(){
+  const ds = document.getElementById("pdiXD").value, sh = document.getElementById("pdiXS").value;
+  const [Y,M,D] = ds.split("-").map(Number), pd = new Date(Y, M-1, D, SHIFT_START_H, 0, 0, 0).getTime(), st = pdiStation();
+  const shs = sh==="all" ? ["1","2"] : [sh];
+  const L = [].concat(...shs.map(x=>pdiShiftRecs(pd, x, st))).filter(r=>r.st!=="BATAL" && r.st!=="PROSES").sort((a,b)=>(a.doneTs||a.ts)-(b.doneTs||b.ts));
+  if(!L.length){ alert("Tidak ada data PDI untuk "+ds+(sh==="all"?"":" shift "+sh)+"."); return; }
+  const tipe = t=> t==="B" ? "BATAM" : (t==="P" ? "PRIORITAS" : "REGULER");
+  const head = ["No","Tanggal","Waktu","Shift","PIC","Tim","Lokasi","Model","Frame No","Engine No","No Kunci","Tipe Unit","Status","Keterangan"];
+  const rows = L.map((r,i)=>{ const t = new Date(r.doneTs||r.ts); return [i+1, t.toLocaleDateString("id-ID"), holdHm(t.getTime()), r.sh, r.n||"", r.tim?rsShift(r.tim):"", pdiStationLabel(r.s), r.m||"", r.f, r.e||"", r.k||"", tipe(r.t), r.st, r.pb?(r.pb+(r.pbNote?" — "+r.pbNote:"")):((r.pbHist||[]).length?"Problem sebelumnya: "+r.pbHist.slice(-1)[0].pb:"")]; });
+  const sheets = [{name:"PDI", rows:[head].concat(rows)}];
+  shs.forEach(x=>{ const pj = pdiPerJamRows(pd, x, st); sheets.push({name:"Per Jam S"+x, rows:[["Jam"].concat(pj.ms).concat(["Total"])].concat(pj.rows).concat([["TOTAL"].concat(pj.ms.map((m,j)=>pj.rows.reduce((a,r)=>a+(+r[j+1]||0),0))).concat([pj.tot])])}); });
+  const sum = {}; L.filter(pdiIsOk).forEach(r=>{ sum[r.m||"?"] = (sum[r.m||"?"]||0)+1; });
+  sheets.push({name:"Ringkasan", rows:[["Model","Actual"]].concat(Object.entries(sum).sort((a,b)=>b[1]-a[1])).concat([["TOTAL", L.filter(pdiIsOk).length],["Planning", shs.reduce((a,x)=>a+pdiPlan(DB.get(), st, x),0)],["Unit Problem", L.filter(r=>r.st==="PROBLEM").length]])});
+  mfSave("PDI-"+pdiStation()+"-"+ds+(sh==="all"?"":"-S"+sh)+".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx(sheets, [5,11,7,6,18,7,7,18,20,14,8,10,16,30]));
+}
+
+/* ===== Pengaturan PDI (role PDI & Admin) ===== */
+function pdiCanCfg(){ return !!(currentUser && ["pdi","admin"].includes(currentUser.role)); }
+function pdiCfgHtml(){
+  const d = DB.get(), c = pdiCfg(d), st = pdiStation(), p = (c.plan[st]||{});
+  const mrow = (m,x)=>`<tr data-m="${escH(m)}"><td><input type="text" class="pdiCM" value="${escH(m)}" style="width:100%;text-transform:uppercase;"></td><td><input type="text" class="pdiCC" value="${escH((x.codes||[]).join(", "))}" style="width:100%;text-transform:uppercase;font-family:monospace;"></td><td><input type="color" class="pdiCK" value="${escH(x.color||"#475569")}"></td><td><button type="button" class="tlscp" onclick="this.closest('tr').remove()">🗑</button></td></tr>`;
+  return `
+    <div class="card"><h3 style="margin:0 0 8px;">🏭 Planning ${escH(pdiStationLabel(st))}</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div class="field"><label>Shift 1 (07.00–20.00)</label><input id="pdiPD" type="number" min="0" value="${p.d==null?100:p.d}"></div><div class="field"><label>Shift 2 (20.00–07.00)</label><input id="pdiPN" type="number" min="0" value="${p.n==null?100:p.n}"></div></div></div>
+    <div class="card"><h3 style="margin:0 0 8px;">📘 Cek Buku</h3>
+      <select id="pdiBook"><option value="manual" ${c.book==="manual"?"selected":""}>Operator konfirmasi buku (Enter = sesuai, bisa dilewati)</option><option value="off" ${c.book==="off"?"selected":""}>Tanpa cek buku</option></select></div>
+    <div class="card"><h3 style="margin:0 0 8px;">🔌 Pintu (Arduino)</h3>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+        <div class="field"><label>Perintah naik</label><input id="pdiDU" type="text" value="${escH(c.door.up)}"></div>
+        <div class="field"><label>Perintah turun</label><input id="pdiDD" type="text" value="${escH(c.door.down)}"></div>
+        <div class="field"><label>Durasi (detik)</label><input id="pdiDT" type="number" min="1" value="${c.door.dur}"></div>
+        <div class="field"><label>Turun otomatis setelah (detik)</label><input id="pdiDL" type="number" min="0" value="${c.door.delay}"></div></div>
+      <label style="font-size:13px;"><input id="pdiDA" type="checkbox" ${c.door.auto?"checked":""}> Pintu turun otomatis</label>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Sketch Arduino sama dengan PDI v51 (pdi_relay.ino, 9600 baud). Perintah dikirim sebagai <code>UP:3</code> / <code>DOWN:3</code>.</div></div>
+    <div class="card"><h3 style="margin:0 0 8px;">🔒 Pola Barcode</h3>
+      <div class="field"><label>Prefix Engine No (pisahkan koma)</label><input id="pdiEng" type="text" value="${escH(c.eng.join(", "))}" style="text-transform:uppercase;"></div>
+      <div class="field"><label>Toleransi posisi kartu lama (MHK)</label><input id="pdiTol" type="number" step="0.01" min="0.03" max="0.3" value="${c.tol}"></div>
+      <div style="font-size:11px;color:var(--text-dim);">Frame No: 17 karakter MH… · No Kunci: 5 angka (QR diutamakan) · Engine: barcode garis berawalan prefix di atas + minimal 5 angka. Kartu lama: Engine & Kunci dikunci menurut posisinya terhadap barcode Frame No.</div></div>
+    <div class="card"><h3 style="margin:0 0 8px;">🚗 Model kartu DC baru (7 digit awal Frame No)</h3>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">Kartu lama (MHK) memakai kode karakter ke-7 & 8 dari menu Admin → Model Unit RADAR. Kode baru yang belum terdaftar ditanyakan otomatis saat scan.</div>
+      <div style="overflow-x:auto;"><table class="pdiTb" id="pdiCMT"><thead><tr><th style="width:34%;">Model</th><th>Kode 7 digit (koma)</th><th>Warna</th><th></th></tr></thead><tbody>${Object.entries(c.models).sort().map(([m,x])=>mrow(m,x)).join("")}</tbody></table></div>
+      <button type="button" class="tlscp" style="margin-top:6px;" onclick="document.querySelector('#pdiCMT tbody').insertAdjacentHTML('beforeend', ${escH(JSON.stringify(mrow("",{codes:[],color:"#475569"})))})">＋ Tambah model</button></div>
+    <button type="button" class="btn btn-primary" onclick="pdiCfgSave()">💾 Simpan Pengaturan PDI</button>`;
+}
+function pdiCfgLocalHtml(){
+  return `<div class="card"><h3 style="margin:0 0 8px;">💻 Pengaturan PC ini</h3>
+    <div class="field"><label>Lokasi</label><select id="pdiSt" onchange="try{localStorage.setItem('radar_pdi_station',this.value)}catch(e){};pdiUi();">${PDI_STATIONS.map(s=>`<option value="${s.k}" ${pdiStation()===s.k?"selected":""}>${s.label}</option>`).join("")}</select></div>
+    <div class="field"><label>Kamera</label><select id="pdiCamSel" onchange="try{localStorage.setItem('radar_pdi_cam',this.value)}catch(e){};pdiCamStop();pdiCamStart();"><option value="">Kamera bawaan / pertama</option></select></div>
+    <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiLight()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_light',this.checked?'1':'0')}catch(e){}"> Mode ringan (PC lama: kamera dibaca lebih jarang)</label>
+    <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiVoiceOn()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_voice',this.checked?'1':'0')}catch(e){};pdiUi();"> Suara</label>
+    <button type="button" class="tlscp" onclick="pdiSay('frame');setTimeout(()=>pdiSay('batam'),900)">▶ Test suara</button>
+    <div style="font-size:11px;color:var(--text-dim);margin:6px 0;">Suara memakai suara Windows. Untuk logat Indonesia: Settings → Time & Language → Speech → Add voices → Indonesian.</div>
+    <h4 style="margin:12px 0 6px;">📁 Folder TLS (PAD)</h4>
+    <div style="font-size:12px;">${PDI_TLS.dir?`Tersambung: <b>${escH(PDI_TLS.name)}</b> (${pdiTlsReady()?"diizinkan":"perlu izin"})`:"Belum tersambung — TLS diisi manual."}</div>
+    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;"><button type="button" class="tlscp" onclick="closeModal();pdiTlsPick()">Pilih folder</button>${PDI_TLS.dir?`<button type="button" class="tlscp" onclick="pdiTlsForget();closeModal();">Lepas folder</button>`:""}</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Pilih folder <b>data</b> yang dipakai PAD (berisi tls_input.json / tls_done.txt), mis. <code>D:\\Khairul\\Toyota_PDI_v50\\Toyota_PDI_v50\\data</code>. Jalankan juga script AHK <b>PAD_trigger_radar.ahk</b>.</div>
+  </div>`;
+}
+async function pdiCamList(){
+  try{ const sel = document.getElementById("pdiCamSel"); if(!sel || !navigator.mediaDevices) return;
+    const ds = (await navigator.mediaDevices.enumerateDevices()).filter(x=>x.kind==="videoinput"), cur = pdiCamDev();
+    sel.innerHTML = `<option value="">Kamera bawaan / pertama</option>`+ds.map((x,i)=>`<option value="${escH(x.deviceId)}" ${x.deviceId===cur?"selected":""}>${escH(x.label||("Kamera "+(i+1)))}</option>`).join("");
+  }catch(e){}
+}
+function pdiCfgOpen(){
+  showModal(`<h3 style="margin:0 0 10px;">⚙ Pengaturan PDI</h3>${pdiCfgLocalHtml()}${pdiCanCfg()?pdiCfgHtml():""}`);
+  pdiCamList();
+}
+function pdiCfgSave(){
+  if(!pdiCanCfg()) return;
+  const st = pdiStation(), num = (id,def)=>{ const v = (document.getElementById(id)||{}).value; return v===""||v==null ? def : Math.max(0, +v||0); };
+  const models = {}, seen = new Set(); let bad = "";
+  document.querySelectorAll("#pdiCMT tbody tr").forEach(tr=>{
+    const m = String(tr.querySelector(".pdiCM").value||"").toUpperCase().trim(); if(!m) return;
+    const codes = String(tr.querySelector(".pdiCC").value||"").toUpperCase().split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean);
+    codes.forEach(cd=>{ if(cd.length<4) bad = bad || ("Kode "+cd+" ("+m+") terlalu pendek. Kode kartu baru = 7 digit awal Frame No."); if(seen.has(cd)) bad = bad || ("Kode "+cd+" dipakai dua model."); seen.add(cd); });
+    models[m] = {codes, color:tr.querySelector(".pdiCK").value||"#475569"};
+  });
+  if(bad){ alert(bad); return; }
+  const del = Object.keys(PDI_MODELS_DEF).filter(m=>!models[m]);
+  const eng = String(document.getElementById("pdiEng").value||"").toUpperCase().split(/[\s,;]+/).filter(Boolean);
+  DB.set(d=>{
+    const c = d.pdiCfg = d.pdiCfg || {};
+    c.plan = c.plan || {}; c.plan[st] = {d:num("pdiPD",100), n:num("pdiPN",100)};
+    c.book = document.getElementById("pdiBook").value;
+    c.door = {up:document.getElementById("pdiDU").value.trim()||"UP", down:document.getElementById("pdiDD").value.trim()||"DOWN", dur:num("pdiDT",3)||3, delay:num("pdiDL",5), auto:document.getElementById("pdiDA").checked};
+    c.eng = eng.length ? eng : PDI_ENG_DEF.slice();
+    c.tol = Math.min(0.3, Math.max(0.03, +document.getElementById("pdiTol").value||0.12));
+    c.models = models; c.del = del;
+  });
+  closeModal(); pdiToast("Pengaturan PDI disimpan"); pdiUi();
+}
+/* Admin → PDI */
+const PDI_RULES_SNIPPET = `"radar_pdi": {\n  ".read": "auth != null",\n  ".write": "auth != null",\n  ".indexOn": ["ts"]\n}`;
+function renderAdminPdi(){
+  const d = DB.get(), now = Date.now(), s = pdiShiftOf(now), stt = pdiShiftStats(s.pd, s.sh, "KP1", d);
+  return `${PDI_ERR?`<div class="msg err" style="margin-bottom:10px;">${escH(PDI_ERR)}</div>`:""}
+    <div class="card"><h3 style="margin:0 0 6px;">🔍 PDI — ringkasan</h3><div style="font-size:13px;">${escH(pdiShiftLabel(s.sh))} KP 1: <b>${stt.n}</b> / ${stt.plan} unit · Problem: ${stt.prob.length}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">Buat akun operator dengan role <b>PDI</b> di menu User. Operator membuka RADAR di PC PDI (Chrome / Edge), login, lalu menu <b>Scan PDI</b> terbuka.</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"><button type="button" class="tlscp" onclick="pdiHistOpen()">📋 Riwayat</button><button type="button" class="tlscp" onclick="pdiProbList()">⚠ Unit Problem</button><button type="button" class="tlscp" onclick="pdiXlOpen()">📥 Excel</button></div></div>
+    ${pdiOpenCardHtml(d, {always:true})}
+    <div class="card"><h3 style="margin:0 0 6px;">🔐 Aturan Firebase (sekali saja)</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Firebase console → Realtime Database → <b>Rules</b>. Tambahkan blok ini di dalam <code>"rules": { … }</code>, sejajar dengan <code>"radar_track"</code>, lalu <b>Publish</b>.</div>
+      <pre style="background:#0F172A;color:#E2E8F0;padding:10px;border-radius:8px;font-size:12px;overflow:auto;">${escH(PDI_RULES_SNIPPET)}</pre><button type="button" class="tlscp" onclick="tlsCopy(PDI_RULES_SNIPPET,this)">Salin</button></div>
+    ${pdiCfgHtml()}`;
+}
+
 </script>
 </body>
 </html>
