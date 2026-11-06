@@ -1177,7 +1177,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="06 Nov 2026 19.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="06 Nov 2026 21.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -12902,10 +12902,14 @@ function pdiCfgHtml(){
       <div class="field"><label>Prefix Engine No (pisahkan koma)</label><input id="pdiEng" type="text" value="${escH(c.eng.join(", "))}" style="text-transform:uppercase;"></div>
       <div class="field"><label>Toleransi posisi kartu lama (MHK)</label><input id="pdiTol" type="number" step="0.01" min="0.03" max="0.3" value="${c.tol}"></div>
       <div style="font-size:11px;color:var(--text-dim);">Frame No: 17 karakter MH… · No Kunci: 5 angka (QR diutamakan) · Engine: barcode garis berawalan prefix di atas + minimal 5 angka. Kartu lama: Engine & Kunci dikunci menurut posisinya terhadap barcode Frame No.</div></div>
-    <div class="card"><h3 style="margin:0 0 8px;">🚗 Model kartu DC baru (7 digit awal Frame No)</h3>
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">Kartu lama (MHK) memakai kode karakter ke-7 & 8 dari menu Admin → Model Unit RADAR. Kode baru yang belum terdaftar ditanyakan otomatis saat scan.</div>
-      <div style="overflow-x:auto;"><table class="pdiTb" id="pdiCMT"><thead><tr><th style="width:34%;">Model</th><th>Kode 7 digit (koma)</th><th>Warna</th><th></th></tr></thead><tbody>${Object.entries(c.models).sort().map(([m,x])=>mrow(m,x)).join("")}</tbody></table></div>
-      <button type="button" class="tlscp" style="margin-top:6px;" onclick="document.querySelector('#pdiCMT tbody').insertAdjacentHTML('beforeend', ${escH(JSON.stringify(mrow("",{codes:[],color:"#475569"})))})">＋ Tambah model</button></div>
+    <div class="card"><h3 style="margin:0 0 8px;">🚗 Model ADM — Frame No MHK… (karakter ke-7 &amp; 8)</h3>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">Contoh: MHKAB1<b style="color:var(--text);">BC</b>6TJ011111 → kode <b>BC</b> → AGYA. Daftar ini sama dengan Model Unit RADAR (dipakai juga saat unit parkir di stall).</div>
+      <div style="overflow-x:auto;"><table class="pdiTb" style="min-width:320px;"><thead><tr><th>Model</th><th>Kode ke-7 &amp; 8</th></tr></thead><tbody>${Object.entries(d.models||{}).sort((a,b)=>a[0].localeCompare(b[0])).map(([m,x])=>`<tr><td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:6px;background:${escH((x&&x.color)||"#475569")};"></span><b>${escH(m)}</b></td><td style="font-family:monospace;font-weight:800;">${escH(((x&&x.vin_codes)||[]).join(", ")||"-")}</td></tr>`).join("")||`<tr><td colspan="2">Belum ada model.</td></tr>`}</tbody></table></div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Kode baru yang belum terdaftar ditanyakan otomatis saat scan, lalu tersimpan di sini. ${currentUser&&currentUser.role==="admin"?`Ubah / hapus kode: <button type="button" class="tlscp" onclick="closeModal();activeTab='admin';adminTab='models';render();">Admin → 🚗 Model Unit</button>`:"Ubah / hapus kode lewat Admin → Model Unit."}</div></div>
+    <details class="card"><summary style="cursor:pointer;font-weight:800;">🚗 Model TMMIN — kartu DC baru Frame No MHF… (7 digit awal) <span style="font-weight:400;font-size:11px;color:var(--text-dim);">bawaan v51</span></summary>
+      <div style="font-size:11px;color:var(--text-dim);margin:6px 0;">Dipakai kalau Frame No diawali kode di bawah (cocok paling panjang). Unit ADM (MHK…) tidak memakai tabel ini.</div>
+      <div style="overflow-x:auto;"><table class="pdiTb" id="pdiCMT" style="min-width:520px;"><thead><tr><th style="width:34%;">Model</th><th>Kode 7 digit (koma)</th><th>Warna</th><th></th></tr></thead><tbody>${Object.entries(c.models).sort().map(([m,x])=>mrow(m,x)).join("")}</tbody></table></div>
+      <button type="button" class="tlscp" style="margin-top:6px;" onclick="document.querySelector('#pdiCMT tbody').insertAdjacentHTML('beforeend', ${escH(JSON.stringify(mrow("",{codes:[],color:"#475569"})))})">＋ Tambah model</button></details>
     <button type="button" class="btn btn-primary" onclick="pdiCfgSave()">💾 Simpan Pengaturan PDI</button>`;
 }
 function pdiBookListHtml(){
