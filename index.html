@@ -1140,7 +1140,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="06 Nov 2026 15.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="06 Nov 2026 16.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1780,6 +1780,7 @@ async function doLogin(){
   if(!same.length){ const rm=regLoginMsg(u); msgEl.innerHTML = `<div class="msg err">${rm||"Username tidak ditemukan. Belum punya akun? Tekan <b>Daftar</b>."}</div>`; try{RSnd.err();}catch(e){} return; }
   msgEl.innerHTML = `<div class="msg">Memeriksa…</div>`;
   if(u.toLowerCase()===PW_SHARED_USER && DB.get().pwSharedReset!==PW_SHARED_RESET){ try{ await pwSharedReset(true); }catch(e){} same = (DB.get().users||[]).filter(x=>String(x.username).toLowerCase()===u.toLowerCase()); }
+  if(u.toLowerCase()===PW_SHARED_USER && DB.get().pdiShared!=="v1"){ try{ pdiSharedRole(true); }catch(e){} same = (DB.get().users||[]).filter(x=>String(x.username).toLowerCase()===u.toLowerCase()); }
   const ok = [];
   try{ for(const x of same){ if(await pwCheck(x.password, p)) ok.push(x); } }
   catch(e){ msgEl.innerHTML = `<div class="msg err">${xlEsc(e.message||e)}</div>`; return; }
@@ -12348,6 +12349,21 @@ function renderAdminPdi(){
       <pre style="background:#0F172A;color:#E2E8F0;padding:10px;border-radius:8px;font-size:12px;overflow:auto;">${escH(PDI_RULES_SNIPPET)}</pre><button type="button" class="tlscp" onclick="tlsCopy(PDI_RULES_SNIPPET,this)">Salin</button></div>
     ${pdiCfgHtml()}`;
 }
+/* Akun bersama "user" (dipakai tim untuk cek semua menu) ikut mendapat menu PDI, password sama dengan akun bersama lainnya.
+   Dijalankan sekali (tanda d.pdiShared), jadi kalau Admin menghapusnya tidak dibuat lagi. */
+function pdiSharedRole(force){
+  try{
+    if(!force && !(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed)) return;
+    if(DB.get().pdiShared==="v1") return;
+    DB.set(d=>{
+      if(d.pdiShared==="v1") return;
+      const sh = (d.users||[]).filter(x=>x && String(x.username).toLowerCase()===PW_SHARED_USER);
+      if(sh.length && !sh.some(x=>x.role==="pdi")){ const src = sh.find(x=>x.role==="admin") || sh[0]; d.users.push({username:src.username, name:"Operator PDI", password:src.password, role:"pdi"}); }
+      d.pdiShared = "v1";
+    });
+  }catch(e){}
+}
+setTimeout(()=>pdiSharedRole(), 9000); setInterval(()=>pdiSharedRole(), 30000);
 
 </script>
 </body>
