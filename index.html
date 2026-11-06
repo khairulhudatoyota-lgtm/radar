@@ -1177,7 +1177,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="06 Nov 2026 21.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="06 Nov 2026 21.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -12904,13 +12904,45 @@ function pdiCfgHtml(){
       <div style="font-size:11px;color:var(--text-dim);">Frame No: 17 karakter MH… · No Kunci: 5 angka (QR diutamakan) · Engine: barcode garis berawalan prefix di atas + minimal 5 angka. Kartu lama: Engine & Kunci dikunci menurut posisinya terhadap barcode Frame No.</div></div>
     <div class="card"><h3 style="margin:0 0 8px;">🚗 Model ADM — Frame No MHK… (karakter ke-7 &amp; 8)</h3>
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">Contoh: MHKAB1<b style="color:var(--text);">BC</b>6TJ011111 → kode <b>BC</b> → AGYA. Daftar ini sama dengan Model Unit RADAR (dipakai juga saat unit parkir di stall).</div>
-      <div style="overflow-x:auto;"><table class="pdiTb" style="min-width:320px;"><thead><tr><th>Model</th><th>Kode ke-7 &amp; 8</th></tr></thead><tbody>${Object.entries(d.models||{}).sort((a,b)=>a[0].localeCompare(b[0])).map(([m,x])=>`<tr><td><span style="display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:6px;background:${escH((x&&x.color)||"#475569")};"></span><b>${escH(m)}</b></td><td style="font-family:monospace;font-weight:800;">${escH(((x&&x.vin_codes)||[]).join(", ")||"-")}</td></tr>`).join("")||`<tr><td colspan="2">Belum ada model.</td></tr>`}</tbody></table></div>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Kode baru yang belum terdaftar ditanyakan otomatis saat scan, lalu tersimpan di sini. ${currentUser&&currentUser.role==="admin"?`Ubah / hapus kode: <button type="button" class="tlscp" onclick="closeModal();activeTab='admin';adminTab='models';render();">Admin → 🚗 Model Unit</button>`:"Ubah / hapus kode lewat Admin → Model Unit."}</div></div>
+      <div style="overflow-x:auto;"><table class="pdiTb" style="min-width:300px;"><thead><tr><th>Model</th><th>Kode ke-7 &amp; 8 (koma)</th><th>Warna</th></tr></thead><tbody id="pdiAdmTb">${pdiAdmRows(d)}</tbody></table></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+        <input id="pdiAdmN" type="text" placeholder="Nama model baru (mis. AGYA GR)" style="flex:2 1 150px;text-transform:uppercase;">
+        <input id="pdiAdmC" type="text" placeholder="Kode (mis. BC)" style="flex:1 1 90px;text-transform:uppercase;font-family:monospace;">
+        <input id="pdiAdmK" type="color" value="${escH(modelFreeColor(d))}" title="Warna model">
+        <button type="button" class="tlscp" onclick="pdiAdmAdd()">＋ Tambah model</button></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;"><input type="text" placeholder="Tes No. Frame" style="flex:1 1 200px;text-transform:uppercase;font-family:monospace;" oninput="pdiAdmTest(this.value)"><span id="pdiAdmT" style="font-size:12px;"></span></div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Kode diubah langsung di kolomnya (tersimpan otomatis). Kode yang belum terdaftar juga ditanyakan otomatis saat scan. ${currentUser&&currentUser.role==="admin"?`Hapus model: <button type="button" class="tlscp" onclick="closeModal();activeTab='admin';adminTab='models';render();">Admin → 🚗 Model Unit</button>`:"Hapus model lewat Admin → Model Unit."}</div></div>
     <details class="card"><summary style="cursor:pointer;font-weight:800;">🚗 Model TMMIN — kartu DC baru Frame No MHF… (7 digit awal) <span style="font-weight:400;font-size:11px;color:var(--text-dim);">bawaan v51</span></summary>
       <div style="font-size:11px;color:var(--text-dim);margin:6px 0;">Dipakai kalau Frame No diawali kode di bawah (cocok paling panjang). Unit ADM (MHK…) tidak memakai tabel ini.</div>
       <div style="overflow-x:auto;"><table class="pdiTb" id="pdiCMT" style="min-width:520px;"><thead><tr><th style="width:34%;">Model</th><th>Kode 7 digit (koma)</th><th>Warna</th><th></th></tr></thead><tbody>${Object.entries(c.models).sort().map(([m,x])=>mrow(m,x)).join("")}</tbody></table></div>
       <button type="button" class="tlscp" style="margin-top:6px;" onclick="document.querySelector('#pdiCMT tbody').insertAdjacentHTML('beforeend', ${escH(JSON.stringify(mrow("",{codes:[],color:"#475569"})))})">＋ Tambah model</button></details>
     <button type="button" class="btn btn-primary" onclick="pdiCfgSave()">💾 Simpan Pengaturan PDI</button>`;
+}
+/* Model ADM (MHK…) = Model Unit RADAR (d.models), kode karakter ke-7 & 8 */
+function pdiAdmRows(d){
+  d = d || DB.get();
+  return Object.entries(d.models||{}).sort((a,b)=>a[0].localeCompare(b[0])).map(([m,x])=>`<tr><td><b>${escH(m)}</b></td><td><input type="text" data-m="${escH(m)}" value="${escH(((x&&x.vin_codes)||[]).join(", "))}" style="width:100%;text-transform:uppercase;font-family:monospace;font-weight:800;" onchange="modelSaveCodes(this);pdiAdmRefresh();"></td><td><input type="color" data-m="${escH(m)}" value="${escH((x&&x.color)||"#475569")}" onchange="modelSetColor(this)"></td></tr>`).join("") || `<tr><td colspan="3">Belum ada model.</td></tr>`;
+}
+function pdiAdmRefresh(){ setTimeout(()=>{ const tb = document.getElementById("pdiAdmTb"); if(tb) tb.innerHTML = pdiAdmRows(); }, 50); }
+function pdiAdmAdd(){
+  const g = id=>String((document.getElementById(id)||{}).value||"");
+  const name = g("pdiAdmN").trim().toUpperCase().replace(/\s+/g," "), codes = modelCodesParse(g("pdiAdmC")), col = g("pdiAdmK");
+  if(!name || !codes.length){ alert("Isi nama model dan kodenya (karakter ke-7 & 8 No. Frame)."); return; }
+  if(/[.#$\/\[\]]/.test(name)){ alert("Nama model tidak boleh memakai tanda . # $ / [ ]"); return; }
+  const d0 = DB.get(), ex = (d0.models||{})[name], err = modelCodeCheck(d0, codes, name); if(err){ alert(err); return; }
+  if(ex){ const add = codes.filter(k=>!(ex.vin_codes||[]).includes(k)); if(!add.length){ alert("Model "+name+" sudah punya kode itu."); return; }
+    if(!confirm("Model "+name+" sudah ada (kode "+(ex.vin_codes||[]).join(", ")+").\n\nTambahkan kode "+add.join(", ")+" ke model ini?")) return;
+    DB.set(d=>{ const m = d.models[name]; if(m) m.vin_codes = [...new Set([...(m.vin_codes||[]), ...add])]; }); }
+  else DB.set(d=>{ d.models = d.models || {}; d.models[name] = {vin_codes:codes, color:col||modelFreeColor(d)}; });
+  ["pdiAdmN","pdiAdmC"].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ""; });
+  const k = document.getElementById("pdiAdmK"); if(k) k.value = modelFreeColor();
+  pdiAdmRefresh(); pdiToast("✔ Model "+name+" tersimpan (kode "+codes.join(", ")+")");
+}
+function pdiAdmTest(v){
+  const el = document.getElementById("pdiAdmT"); if(!el) return; const q = normVin(v);
+  if(q.length<8){ el.innerHTML = ""; return; }
+  const m = pdiDetectModel(q), k = q.substring(6,8);
+  el.innerHTML = m ? `→ <b>${escH(m)}</b>${/^MHK/.test(q)?" (kode "+escH(k)+")":""}` : `<span style="color:var(--red);">kode ${escH(/^MHK/.test(q)?k:q.slice(0,7))} belum terdaftar</span>`;
 }
 function pdiBookListHtml(){
   const d = DB.get(), bc = pdiBookCfg(d);
