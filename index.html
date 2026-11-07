@@ -273,6 +273,7 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 #ccEvOv.out{background:rgba(150,24,24,.95);} #ccEvOv.in{background:rgba(28,84,160,.95);}
 #ccEvOv .box{background:#fff;color:#16213E;border-radius:18px;padding:22px 18px;max-width:420px;width:100%;text-align:center;border-top:8px solid #D64545;max-height:92vh;overflow:auto;}
 #ccEvOv.in .box{border-top-color:#2F6FB5;}
+#ccEvOv.in.wait{background:rgba(176,96,20,.94);} #ccEvOv.in.wait .box{border-top-color:#E8833A;} #ccEvOv.in.wait .ttl,#ccEvOv.in.wait .big{color:#B45309;}
 #ccEvOv .ttl{font-size:14px;font-weight:900;letter-spacing:.06em;color:#B42318;}
 #ccEvOv.in .ttl{color:#1F5FA8;}
 #ccEvOv .big{font-size:44px;font-weight:900;color:#B42318;line-height:1.05;margin-top:6px;}
@@ -1207,7 +1208,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="07 Nov 2026 07.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="07 Nov 2026 07.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3000,12 +3001,15 @@ function doAutoRegister(dist){
                 : res.hold ? `🕒 Absen tercatat. Jadwal loading ${prof.plat} jam ${holdHm(res.due)} — belum masuk slot / waiting list. Tunggu di luar, otomatis masuk ${ccEarlyMin()} menit sebelum jadwal.`
                 : res.stall ? `✔ Absen otomatis berhasil — ${prof.plat} masuk STALL ${ccLbl(res.stall)}. Silakan masuk area.`
                 : `⏳ Absen otomatis berhasil — semua stall penuh, ${prof.plat} masuk antrian nomor ${res.queue}.`;
-  soundEv('absen');
-  if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
-  if('Notification' in window && Notification.permission==='granted'){
-    try{ new Notification('📍 Absen Otomatis Berhasil', {body: autoAbsen.msg}); }catch(e){}
+  if(res.dup){   // berhasil: bunyi & popup dari panggilan giliran (stall) atau popup absen (waiting list / Parkir Luar)
+    soundEv('absen');
+    if(navigator.vibrate) navigator.vibrate([300,150,300,150,300]);
+    if('Notification' in window && Notification.permission==='granted'){
+      try{ new Notification('📍 Absen Otomatis', {body: autoAbsen.msg}); }catch(e){}
+    }
   }
   render();
+  setTimeout(()=>{ try{ ccCallCheck(); ccEvCheck(); }catch(e){} }, 200);
 }
 function autoStatusHtml(){
   const y = DB.get().yardLocation, a = autoAbsen;
@@ -3629,6 +3633,7 @@ function registerCC(plat, lp, dist, auto, manual, src){
     const hd = ccHoldDue(d, plat);
     if(hd!=null){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }
     res = placeCC(d, item);
+    if(res && res.stall) pushCcCall(d, item, res.stall, "absen");   // langsung dapat stall: HP driver dapat perintah masuk (popup + alarm)
   });
   return res;
 }
@@ -6273,7 +6278,7 @@ function cancelILS(id){
 }
 /* ===== PANGGILAN GILIRAN PARKIR: driver waiting list yang naik ke stall → HP berbunyi sampai OK ditekan ===== */
 function ccCallsList(d){ const a=d.ccCalls; return Array.isArray(a)?a:(a&&typeof a==="object"?Object.values(a):[]); }
-function pushCcCall(d, c, stall){ const a=ccCallsList(d).slice(); a.push({id:String(Date.now())+"-"+stall, plat:c.plat, stall:stall, ts:Date.now()}); d.ccCalls=a.slice(-60); }
+function pushCcCall(d, c, stall, src){ const a=ccCallsList(d).slice(), o={id:String(Date.now())+"-"+stall, plat:c.plat, stall:stall, ts:Date.now()}; if(src) o.src=src; a.push(o); d.ccCalls=a.slice(-60); }
 let _ccCallTimer=null, _ccCallId=null;
 function ccCallClose(){
   const o=document.getElementById("ccCallOv"); if(o) o.remove();
@@ -6281,7 +6286,7 @@ function ccCallClose(){
   if(_ccCallId!==null){ _ccCallId=null; try{ if(window.AndroidTLS && AndroidTLS.alarmStop) AndroidTLS.alarmStop(); }catch(e){} }
 }
 function ccCallShow(c){
-  ccCallClose(); _ccCallId=c.id;
+  ccCallClose(); _ccCallId=c.id; try{ ccEvClose(); }catch(e){}   // perintah masuk stall menggantikan kabar lain yang masih terbuka
   const o=document.createElement("div"); o.id="ccCallOv";
   o.innerHTML=`<div class="box"><div style="font-size:13px;font-weight:800;color:#1a7f3c;letter-spacing:.08em;">🅿️ GILIRAN KAMU PARKIR</div><div class="big">STALL ${ccLbl(c.stall)}</div><div class="row" style="font-size:17px;margin-top:10px;"><b>${escH(c.plat)}</b></div><div class="row">Segera masuk ke stall ${ccLbl(c.stall)}.<br>Alarm berbunyi sampai OK ditekan.</div><button type="button" class="okbtn" onclick="ccCallOk('${escH(c.id)}')">✔ OK, saya menuju stall</button></div>`;
   document.body.appendChild(o);
@@ -6303,7 +6308,7 @@ function naikStallCheck(){
     if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer()) return;
     const d=DB.get(), now=Date.now();
     ccCallsList(d).forEach(x=>{
-      if(!x || now-x.ts>10*60000 || _naikSeen.has(x.id)) return;
+      if(!x || x.src==="absen" || now-x.ts>10*60000 || _naikSeen.has(x.id)) return;
       const cur=d.cc[x.stall]; if(!cur || normPlat(cur.plat)!==normPlat(x.plat)) return;
       _naikSeen.add(x.id);
       const txt=`CC ${x.plat}${cur.lp?" (LP "+cur.lp+")":""} dapat giliran masuk Stall CC ${ccLbl(x.stall)}. Siapkan unit dan buat ILS.`;
@@ -6355,6 +6360,13 @@ function ccEvPending(d, k){
     if(x.stall || now-(x.ts||0)>30*60000 || (where && !where.queue)){ ccEvSeenAdd(id); return; }
     if(!where) return;
     L.push({id, kind:"rel", ts:x.ts, x, where}); });
+  /* 2b. absen tercatat (otomatis / peta / manual / Spot Order) dan masuk waiting list atau Parkir Luar. Yang langsung dapat stall dipanggil giliran. */
+  { const a=(d.absenLog||[]).slice().reverse().find(a=>a && !a.dup && !a.rejected && !a.far && normPlat(a.plat)===k);
+    if(a && a.ts){ const id="abs|"+a.ts+"|"+k;
+      if(!_ccEvSeen.has(id)){
+        if(now-a.ts>30*60000 || !where || where.stall) ccEvSeenAdd(id);
+        else L.push({id, kind:"abs", ts:a.ts, x:a, where});
+      } } }
   /* 3. diizinkan masuk sebelum jadwal, belum absen */
   const perm=[]; { const e=(d.earlyOk||{})[k]; if(e && e.ts>=from) perm.push({id:"ok|"+e.ts+"|"+k, e, all:false}); }
   if(d.earlyAll && d.earlyAll.ts>=from) perm.push({id:"all|"+d.earlyAll.ts, e:d.earlyAll, all:true});
@@ -6384,6 +6396,16 @@ function ccEvHtml(ev, d){
       <div class="row">${by}</div><div class="row">Masuk ke area tunggu yard. HP berbunyi lagi saat kamu dapat giliran stall.</div>
       <button type="button" class="okbtn" onclick="ccEvOk()">✔ OK, saya menuju yard</button></div>`;
   }
+  if(ev.kind==="abs"){
+    const w=ev.where, a=ev.x, src=a.role==="peta"?(a.name||"peta"):a.manual?"absen manual"+(a.name&&a.role!=="cc"?" oleh "+a.name:""):"absen otomatis";
+    if(w.hold){ const du=ccNextDue(d,a.plat), em=ccEarlyMin(d);
+      return `<div class="box"><div class="ttl">🕒 ABSEN TERCATAT</div><div class="big" style="font-size:34px;">PARKIR LUAR</div><div class="row" style="font-size:17px;margin-top:8px;"><b>${pl}</b>${du!=null?` · jadwal ${hm(du)}`:""}</div>
+        <div class="row">Belum waktunya masuk. Tunggu di luar${du!=null?`, masuk waiting list otomatis jam <b>${hm(du-em*60000)}</b>`:""}.</div><div class="row">HP berbunyi lagi saat kamu boleh masuk.</div><div class="row dim">${escH(src)} · jam ${hm(a.ts)}</div>
+        <button type="button" class="okbtn" onclick="ccEvOk()">✔ OK, saya tunggu</button></div>`; }
+    return `<div class="box"><div class="ttl">✅ ABSEN TERCATAT · BOLEH MASUK</div><div class="big" style="font-size:34px;">WAITING LIST<br>KE-${w.queue}</div><div class="row" style="font-size:17px;margin-top:8px;"><b>${pl}</b></div>
+      <div class="row">Semua stall sedang terisi. Masuk ke area tunggu yard.</div><div class="row">HP berbunyi lagi saat kamu dapat giliran stall.</div><div class="row dim">${escH(src)} · jam ${hm(a.ts)}</div>
+      <button type="button" class="okbtn" onclick="ccEvOk()">✔ OK, saya menuju yard</button></div>`;
+  }
   const e=ev.x, du=ccNextDue(d,(getCcProfile()||{}).plat||""), y=d.yardLocation||{};
   return `<div class="box"><div class="ttl">🔓 KAMU DIIZINKAN MASUK</div><div class="big" style="font-size:30px;">SEBELUM JADWAL</div><div class="row" style="font-size:17px;margin-top:8px;"><b>${pl}</b>${du!=null?` · jadwal ${hm(du)}`:""}</div>
     <div class="row">${ev.all?"Semua CC diizinkan":"Diizinkan"} oleh <b>${escH(e.by||"Delivery")}</b> · jam ${hm(e.ts)}</div>
@@ -6392,12 +6414,13 @@ function ccEvHtml(ev, d){
 }
 function ccEvShow(ev, d){
   ccEvClose(); _ccEvId=ev.id;
-  const o=document.createElement("div"); o.id="ccEvOv"; o.className=ev.kind==="out"?"out":"in"; o.dataset.kind=ev.kind; o.innerHTML=ccEvHtml(ev,d);
+  const wait=ev.kind==="abs" && ev.where && ev.where.hold;
+  const o=document.createElement("div"); o.id="ccEvOv"; o.className=ev.kind==="out"?"out":wait?"in wait":"in"; o.dataset.kind=ev.kind; o.innerHTML=ccEvHtml(ev,d);
   document.body.appendChild(o);
   const tx=sel=>{ const e=o.querySelector(sel); return e?String(e.innerText||e.textContent||"").replace(/\s+/g," ").trim():""; };
-  const sk=ev.kind==="out"?"keluar":"izinmasuk", txt=tx(".ttl")+" — "+tx(".big")+(ev.kind==="out"?". Alasan: "+tx(".why").replace(/^Alasan\s*/i,""):"");
+  const sk=ev.kind==="out"?"keluar":ev.kind==="abs"?"absen":"izinmasuk", txt=tx(".ttl")+" — "+tx(".big")+(ev.kind==="out"?". Alasan: "+tx(".why").replace(/^Alasan\s*/i,""):"");
   soundEv(sk, txt); try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){}
-  let n=0; _ccEvTimer=setInterval(()=>{ if(!document.getElementById("ccEvOv") || ++n>6){ clearInterval(_ccEvTimer); _ccEvTimer=null; return; } soundEv(sk, txt); try{ navigator.vibrate && navigator.vibrate([400,150,400]); }catch(e){} }, 10000);
+  let n=wait?99:0; _ccEvTimer=setInterval(()=>{ if(!document.getElementById("ccEvOv") || ++n>6){ clearInterval(_ccEvTimer); _ccEvTimer=null; return; } soundEv(sk, txt); try{ navigator.vibrate && navigator.vibrate([400,150,400]); }catch(e){} }, 10000);
   try{ if(!window.AndroidTLS && 'Notification' in window && Notification.permission==='granted') new Notification(tx(".ttl"), {body:txt}); }catch(e){}
 }
 function ccEvOk(){
@@ -6412,10 +6435,13 @@ function ccEvCheck(){
   if(document.getElementById("ccCallOv")) return;   // panggilan giliran stall didahulukan
   const d=DB.get(), L=ccEvPending(d,k);
   if(!L.length){ if(_ccEvId!==null) ccEvClose(); return; }
-  if(_ccEvId!==null && L.some(e=>e.id===_ccEvId) && document.getElementById("ccEvOv")) return;
-  /* yang terbaru saja; kabar lama sejenis dianggap sudah lewat */
-  const top=L[0]; L.slice(1).forEach(e=>{ if(e.kind===top.kind || top.kind==="out") ccEvSeenAdd(e.id); });
-  ccEvShow(top, d);
+  /* yang terbaru saja; kabar yang lebih lama dianggap sudah lewat */
+  const top=L[0], w=top.where, sig=top.id+"|"+(w?(w.hold?"h":w.queue?"q":"s"):"-"), ov=document.getElementById("ccEvOv");
+  if(ov && ov.dataset.sig===sig){   // kabar yang sama: cukup perbarui nomor urut tanpa bunyi lagi
+    if(w && w.queue && ov.dataset.q!==String(w.queue)){ ov.innerHTML=ccEvHtml(top,d); ov.dataset.q=String(w.queue); }
+    return; }
+  L.slice(1).forEach(e=>ccEvSeenAdd(e.id));
+  ccEvShow(top, d); const o2=document.getElementById("ccEvOv"); if(o2){ o2.dataset.sig=sig; if(w && w.queue) o2.dataset.q=String(w.queue); }
 }
 function canKeluarkanCC(){ return !!(currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); }
 function ccOutLogHtml(data){
@@ -7077,6 +7103,18 @@ function dccpSaveEdit(){
   }
   editExecIdx(idx, rec);
   dccpEditIdx=null; render();
+  if(idx===-1){ const r=spotAbsenNow(rec.police, rec.lp); if(r && !r.dup && !r.offline && !r.far) alert("Spot Order "+rec.police+" tersimpan.\n\nCC ini sudah di dekat yard, langsung "+(r.stall?"masuk STALL "+ccLbl(r.stall)+". HP driver berbunyi (perintah masuk).":r.hold?"tercatat di Parkir Luar sampai jam "+holdHm(r.due)+".":"masuk waiting list no. "+r.queue+". HP driver mendapat kabar.")); }
+}
+/* Spot Order baru: kalau posisi CC di peta (segar ≤ 2 menit) sudah di dalam radius yard, langsung dicatat absen tanpa menunggu siklus absen peta / GPS HP. */
+function spotAbsenNow(plat, lp){
+  try{
+    const d=DB.get(), y=d.yardLocation||{}; if(y.lat==null || y.radiusKm==null) return null;
+    const k=normPlat(plat), now=Date.now();
+    const t=Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && normPlat(r.plat)===k && now-(r.ts||0)<=120000).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+    if(!t) return null;
+    const km=haversineKm(t.lat,t.lng,y.lat,y.lng); if(km>+y.radiusKm) return null;
+    return registerCC(plat, lp||t.lp||"", km, true, false, "Spot Order (posisi peta)");
+  }catch(e){ return null; }
 }
 function editExec(P){ const i=(DB.get().dccpSchedule||[]).findIndex(x=>normPlat(x.police)===normPlat(P.old)); if(i<0) return "CC "+P.old+" tidak ada di jadwal (jadwal berubah)."; editExecIdx(i, P.rec); return ""; }
 function editExecIdx(idx, rec){
@@ -11574,7 +11612,7 @@ let _lastRaw = null, _lastMinute = -1;
 try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
 /* tiap pengecekan berdiri sendiri: satu error tidak boleh menghentikan yang lain (mis. popup giliran / dikeluarkan di HP driver) */
-const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>ccCallCheck(), ()=>ccEvCheck(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck()];
+const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccCallCheck(), ()=>ccEvCheck()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
 setInterval(()=>{ _tick3.forEach(f=>{ try{ f(); }catch(e){} }); }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
