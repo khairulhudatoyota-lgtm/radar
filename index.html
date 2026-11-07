@@ -269,6 +269,19 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 #ccCallOv .big{font-size:52px;font-weight:900;color:#1a7f3c;line-height:1;margin-top:6px;}
 #ccCallOv .row{font-size:14px;margin-top:6px;}
 #ccCallOv .okbtn{margin-top:16px;width:100%;padding:16px;border:0;border-radius:12px;background:#16213E;color:#fff;font-size:17px;font-weight:800;}
+#ccEvOv{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(22,33,62,.94);}
+#ccEvOv.out{background:rgba(150,24,24,.95);} #ccEvOv.in{background:rgba(28,84,160,.95);}
+#ccEvOv .box{background:#fff;color:#16213E;border-radius:18px;padding:22px 18px;max-width:420px;width:100%;text-align:center;border-top:8px solid #D64545;max-height:92vh;overflow:auto;}
+#ccEvOv.in .box{border-top-color:#2F6FB5;}
+#ccEvOv .ttl{font-size:14px;font-weight:900;letter-spacing:.06em;color:#B42318;}
+#ccEvOv.in .ttl{color:#1F5FA8;}
+#ccEvOv .big{font-size:44px;font-weight:900;color:#B42318;line-height:1.05;margin-top:6px;}
+#ccEvOv.in .big{color:#1F5FA8;}
+#ccEvOv .row{font-size:14px;margin-top:8px;line-height:1.4;}
+#ccEvOv .row.dim{font-size:12px;color:#5B6677;margin-top:4px;}
+#ccEvOv .why{margin-top:12px;padding:10px 12px;border-radius:10px;background:#FDECEC;font-size:16px;font-weight:800;text-align:left;}
+#ccEvOv .why span{display:block;font-size:11px;font-weight:700;color:#8A3B3B;letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px;}
+#ccEvOv .okbtn{margin-top:16px;width:100%;padding:16px;border:0;border-radius:12px;background:#16213E;color:#fff;font-size:17px;font-weight:800;}
 #spdOv .okbtn{width:100%;margin-top:16px;padding:16px;border:0;border-radius:12px;background:#25D366;color:#073b1d;font-size:16px;font-weight:900;}
 .modechip{flex:1;padding:13px 8px;border-radius:12px;border:2px solid var(--border,#d5dbe5);background:var(--panel,#fff);font-weight:800;font-size:14px;color:var(--text,#16213E);cursor:pointer;}
 .modechip.on{background:var(--gold,#16213E);border-color:var(--gold,#16213E);color:#fff;}
@@ -1194,7 +1207,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="07 Nov 2026 04.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="07 Nov 2026 07.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2713,6 +2726,8 @@ function ringBg(title, body){ try{ if(appBg() && window.AndroidTLS && AndroidTLS
 const SND_EV=[
   {k:"absen",   t:"Absen berhasil",            d:"CC kamu tercatat masuk stall / waiting list / Parkir Luar", roles:["cc"], def:"beep3"},
   {k:"giliran", t:"Giliran parkir",            d:"Giliran naik ke Stall CC. Berbunyi berulang sampai OK ditekan", roles:["cc"], def:"sirene"},
+  {k:"keluar",  t:"Dikeluarkan dari stall",    d:"Delivery / Koordinator / sistem mengeluarkan CC kamu dari stall atau antrean. Popup sampai OK ditekan", roles:["cc"], def:"turun"},
+  {k:"izinmasuk",t:"Diizinkan masuk",          d:"Kamu diizinkan masuk sebelum jadwal, atau naik dari Parkir Luar ke waiting list. Popup sampai OK ditekan", roles:["cc"], def:"bel"},
   {k:"sj",      t:"Surat jalan siap",          d:"Surat jalan sudah bisa dibuka setelah Delout", roles:["cc","koordinator","delivery"], def:"chime"},
   {k:"lapor",   t:"Laporan jalan (macet/kecelakaan)", d:"Ada laporan titik di Peta CC dalam radius 25 km darimu", roles:["cc","delivery","koordinator","leader","admin"], def:"klakson"},
   {k:"chat",    t:"Chat Peta CC",              d:"Ada pesan baru di chat peta", roles:["cc","delivery","koordinator","leader","admin"], def:"bel"},
@@ -3364,7 +3379,9 @@ function holdRelease(force){   // dipanggil berkala; force = daftar plat yang di
     d.hold=keep;
     rel.sort((a,b)=>(ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts)) || ((a.ts||0)-(b.ts||0)));
     d.holdRel=(Array.isArray(d.holdRel)?d.holdRel:[]).slice(-19);
-    rel.forEach(x=>{ const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall); d.holdRel.push({id:String(Date.now())+"-"+normPlat(x.plat), plat:x.plat, lp:x.lp||"", ts:Date.now(), stall:r.stall||0, queue:r.queue||0}); });
+    rel.forEach(x=>{ const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall); const k=normPlat(x.plat), fo=f.includes(k), eo=(d.earlyOk||{})[k], ea=d.earlyAll, pd=prodDayStart(Date.now());
+      const why=fo?"force":(ccEarlyPermit(d,x.plat)?"early":"jadwal"), by=fo?((currentUser&&currentUser.name)||""):why==="early"?((eo&&eo.ts>=pd?eo.by:(ea&&ea.by))||""):"";
+      d.holdRel.push({id:String(Date.now())+"-"+k, plat:x.plat, lp:x.lp||"", ts:Date.now(), stall:r.stall||0, queue:r.queue||0, why, by}); });
   });
 }
 /* Jadwal DCCP berubah (CC Pengganti / Tukar): CC yang sudah masuk waiting list tetapi ternyata belum waktunya dikembalikan ke Parkir Luar */
@@ -6266,7 +6283,7 @@ function ccCallClose(){
 function ccCallShow(c){
   ccCallClose(); _ccCallId=c.id;
   const o=document.createElement("div"); o.id="ccCallOv";
-  o.innerHTML=`<div class="box"><div style="font-size:13px;font-weight:800;color:#1a7f3c;letter-spacing:.08em;">🅿️ GILIRAN KAMU PARKIR</div><div class="big">STALL ${ccLbl(c.stall)}</div><div class="row" style="font-size:17px;margin-top:10px;"><b>${escH(c.plat)}</b></div><div class="row">Segera masuk ke stall ${escH(c.stall)}.<br>Alarm berbunyi sampai OK ditekan.</div><button type="button" class="okbtn" onclick="ccCallOk('${escH(c.id)}')">✔ OK, saya menuju stall</button></div>`;
+  o.innerHTML=`<div class="box"><div style="font-size:13px;font-weight:800;color:#1a7f3c;letter-spacing:.08em;">🅿️ GILIRAN KAMU PARKIR</div><div class="big">STALL ${ccLbl(c.stall)}</div><div class="row" style="font-size:17px;margin-top:10px;"><b>${escH(c.plat)}</b></div><div class="row">Segera masuk ke stall ${ccLbl(c.stall)}.<br>Alarm berbunyi sampai OK ditekan.</div><button type="button" class="okbtn" onclick="ccCallOk('${escH(c.id)}')">✔ OK, saya menuju stall</button></div>`;
   document.body.appendChild(o);
   soundEv('giliran');
   _ccCallTimer=setInterval(()=>{ if(!document.getElementById("ccCallOv")){ clearInterval(_ccCallTimer); _ccCallTimer=null; return; } soundEv('giliran'); }, 2400);
@@ -6310,12 +6327,102 @@ function ccCallCheck(){
   if(!c){ if(_ccCallId!==null) ccCallClose(); return; }
   if(_ccCallId!==c.id || !document.getElementById("ccCallOv")) ccCallShow(c);
 }
+/* ===== KABAR KE HP DRIVER CC: dikeluarkan dari stall / antrean, dan diizinkan masuk.
+   Popup tampil sampai OK ditekan (bunyi diulang tiap 10 detik, maks. 1 menit). Sudah dibaca = tidak muncul lagi di HP ini.
+   Dikeluarkan: dari d.ccOutLog (Delivery / Koordinator / Sistem). Diizinkan: d.holdRel (Parkir Luar → waiting list) dan d.earlyOk / d.earlyAll (belum absen).
+   Naik ke stall tetap lewat panggilan giliran (ccCallShow). */
+let _ccEvId=null, _ccEvTimer=null, _ccEvSeen=new Set();
+try{ _ccEvSeen=new Set(JSON.parse(localStorage.getItem("apcc_ccevseen")||"[]")); }catch(e){}
+function ccEvSeenAdd(id){ if(_ccEvSeen.has(id)) return; _ccEvSeen.add(id); try{ localStorage.setItem("apcc_ccevseen", JSON.stringify([..._ccEvSeen].slice(-150))); }catch(e){} }
+function ccEvClose(){ const o=document.getElementById("ccEvOv"); if(o) o.remove(); if(_ccEvTimer){ clearInterval(_ccEvTimer); _ccEvTimer=null; } _ccEvId=null; }
+function ccEvWhere(d, k){
+  const n=Object.keys(d.cc||{}).find(n=>d.cc[n] && normPlat(d.cc[n].plat)===k); if(n) return {stall:n};
+  const qi=(d.queue||[]).findIndex(q=>q && normPlat(q.plat)===k); if(qi>=0) return {queue:qi+1, of:d.queue.length};
+  if((d.hold||[]).some(q=>q && normPlat(q.plat)===k)) return {hold:true};
+  return null;
+}
+function ccEvPending(d, k){
+  const now=Date.now(), from=prodDayStart(now), where=ccEvWhere(d,k), L=[];
+  const after=ts=>(d.absenLog||[]).some(a=>a && !a.dup && !a.rejected && normPlat(a.plat)===k && (a.ts||0)>ts) || (d.ils||[]).some(b=>b && b.outTs && normPlat(b.ccPlat)===k && b.outTs>ts);
+  /* 1. dikeluarkan: hanya kalau sekarang tidak sedang di stall / antrean dan sesudahnya belum absen lagi / Delout */
+  (d.ccOutLog||[]).forEach(x=>{ if(!x || !x.ts || normPlat(x.plat)!==k) return; const id="out|"+x.ts+"|"+k;
+    if(_ccEvSeen.has(id)) return;
+    if(where || now-x.ts>2*3600000 || x.ack || after(x.ts)){ if(where || x.ack || after(x.ts)) ccEvSeenAdd(id); return; }
+    L.push({id, kind:"out", ts:x.ts, x}); });
+  /* 2. dari Parkir Luar naik ke waiting list (yang langsung dapat stall sudah dipanggil giliran) */
+  (Array.isArray(d.holdRel)?d.holdRel:[]).forEach(x=>{ if(!x || normPlat(x.plat)!==k) return; const id="rel|"+(x.id||x.ts);
+    if(_ccEvSeen.has(id)) return;
+    if(x.stall || now-(x.ts||0)>30*60000 || (where && !where.queue)){ ccEvSeenAdd(id); return; }
+    if(!where) return;
+    L.push({id, kind:"rel", ts:x.ts, x, where}); });
+  /* 3. diizinkan masuk sebelum jadwal, belum absen */
+  const perm=[]; { const e=(d.earlyOk||{})[k]; if(e && e.ts>=from) perm.push({id:"ok|"+e.ts+"|"+k, e, all:false}); }
+  if(d.earlyAll && d.earlyAll.ts>=from) perm.push({id:"all|"+d.earlyAll.ts, e:d.earlyAll, all:true});
+  perm.forEach(p=>{ if(_ccEvSeen.has(p.id)) return;
+    if(where && where.hold) return;   // masih di Parkir Luar: sebentar lagi dilepas, kabarnya lewat no. 2 / panggilan giliran
+    if(where || now-p.e.ts>3*3600000 || ccNextDue(d,k)==null || ccNeedNvdc(d,k) || after(p.e.ts)){ ccEvSeenAdd(p.id); return; }
+    L.push({id:p.id, kind:"ok", ts:p.e.ts, x:p.e, all:p.all}); });
+  return L.sort((a,b)=>b.ts-a.ts);
+}
+function ccEvHtml(ev, d){
+  const hm=t=>holdHm(t), pl=escH(platFmt((getCcProfile()||{}).plat||ev.x.plat||""));
+  if(ev.kind==="out"){
+    const x=ev.x, sys=x.by==="Sistem", why=String(x.why||"").replace(/^otomatis:\s*/,"").replace(/\s*\((waiting list|Parkir Luar)\)$/,"");
+    const from=x.ccNum?"STALL "+ccLbl(x.ccNum):/waiting list/i.test(x.why||"")?"WAITING LIST":/Parkir Luar/i.test(x.why||"")?"PARKIR LUAR":"ANTREAN";
+    const gone=((d.ccGone||{})[normPlat(x.plat)]||0)>=x.ts-60000, kos=!!x.kosong;
+    const tip=gone?"Kamu tercatat <b>sudah berangkat ke NVDC</b>. Absen berikutnya setelah tiba di NVDC."
+      : sys?"Ikuti arahan Delivery kalau masih ada tugas."
+      : `Keluar dari ${x.ccNum?"stall":"antrean"} dan ikuti arahan ${kos?"Koordinator":"Delivery"}. Absen ulang dari HP bisa lagi ±${ccReabsenMin(d)} menit lagi; kalau perlu lebih cepat, minta Delivery mengabsenkan.`;
+    return `<div class="box"><div class="ttl">${sys?"🚪 KAMU DIKELUARKAN OTOMATIS":kos?"🅿️ STALL KAMU DIKOSONGKAN":"🚪 KAMU DIKELUARKAN"}</div><div class="big">${from}</div><div class="row" style="font-size:17px;margin-top:8px;"><b>${pl}</b></div>
+      <div class="why"><span>Alasan</span>${escH(why||"-")}</div><div class="row dim">oleh <b>${escH(x.by||"-")}</b> · jam ${hm(x.ts)}</div><div class="row">${tip}</div>
+      <button type="button" class="okbtn" onclick="ccEvOk()">✔ OK, saya mengerti</button></div>`;
+  }
+  if(ev.kind==="rel"){
+    const x=ev.x, w=ev.where, k=normPlat(x.plat), eo=(d.earlyOk||{})[k], from=prodDayStart(Date.now());
+    const by=x.why==="force"?`Dinaikkan oleh <b>${escH(x.by||"Delivery")}</b> sebelum jadwal.`:x.why==="early"||(eo&&eo.ts>=from)||(d.earlyAll&&d.earlyAll.ts>=from)?`Diizinkan masuk sebelum jadwal oleh <b>${escH(x.by||(eo&&eo.ts>=from?eo.by:(d.earlyAll||{}).by)||"Delivery")}</b>.`:"Sudah waktunya sesuai jadwal DCCP.";
+    return `<div class="box"><div class="ttl">✅ KAMU BOLEH MASUK</div><div class="big" style="font-size:34px;">WAITING LIST<br>KE-${w.queue}</div><div class="row" style="font-size:17px;margin-top:8px;"><b>${pl}</b></div>
+      <div class="row">${by}</div><div class="row">Masuk ke area tunggu yard. HP berbunyi lagi saat kamu dapat giliran stall.</div>
+      <button type="button" class="okbtn" onclick="ccEvOk()">✔ OK, saya menuju yard</button></div>`;
+  }
+  const e=ev.x, du=ccNextDue(d,(getCcProfile()||{}).plat||""), y=d.yardLocation||{};
+  return `<div class="box"><div class="ttl">🔓 KAMU DIIZINKAN MASUK</div><div class="big" style="font-size:30px;">SEBELUM JADWAL</div><div class="row" style="font-size:17px;margin-top:8px;"><b>${pl}</b>${du!=null?` · jadwal ${hm(du)}`:""}</div>
+    <div class="row">${ev.all?"Semua CC diizinkan":"Diizinkan"} oleh <b>${escH(e.by||"Delivery")}</b> · jam ${hm(e.ts)}</div>
+    <div class="row">Silakan menuju yard. Absen otomatis jalan saat HP masuk radius ${escH(y.radiusKm!=null?y.radiusKm:"-")} km, atau tekan <b>Absen Manual</b>.</div>
+    <button type="button" class="okbtn" onclick="ccEvOk()">✔ OK, saya menuju yard</button></div>`;
+}
+function ccEvShow(ev, d){
+  ccEvClose(); _ccEvId=ev.id;
+  const o=document.createElement("div"); o.id="ccEvOv"; o.className=ev.kind==="out"?"out":"in"; o.dataset.kind=ev.kind; o.innerHTML=ccEvHtml(ev,d);
+  document.body.appendChild(o);
+  const tx=sel=>{ const e=o.querySelector(sel); return e?String(e.innerText||e.textContent||"").replace(/\s+/g," ").trim():""; };
+  const sk=ev.kind==="out"?"keluar":"izinmasuk", txt=tx(".ttl")+" — "+tx(".big")+(ev.kind==="out"?". Alasan: "+tx(".why").replace(/^Alasan\s*/i,""):"");
+  soundEv(sk, txt); try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){}
+  let n=0; _ccEvTimer=setInterval(()=>{ if(!document.getElementById("ccEvOv") || ++n>6){ clearInterval(_ccEvTimer); _ccEvTimer=null; return; } soundEv(sk, txt); try{ navigator.vibrate && navigator.vibrate([400,150,400]); }catch(e){} }, 10000);
+  try{ if(!window.AndroidTLS && 'Notification' in window && Notification.permission==='granted') new Notification(tx(".ttl"), {body:txt}); }catch(e){}
+}
+function ccEvOk(){
+  const id=_ccEvId; ccEvClose(); if(!id) return; ccEvSeenAdd(id);
+  const m=/^out\|(\d+)\|(.+)$/.exec(id);
+  if(m){ try{ DB.set(d=>{ const x=(d.ccOutLog||[]).find(y=>y && y.ts===+m[1] && normPlat(y.plat)===m[2]); if(x && !x.ack){ x.ack=Date.now(); x.ackBy=(currentUser&&currentUser.name)||""; } }); }catch(e){} }
+  setTimeout(ccEvCheck, 300);
+}
+function ccEvCheck(){
+  if(!currentUser || currentUser.role!=="cc" || isViewer()){ if(_ccEvId!==null) ccEvClose(); return; }
+  const k=myCcPlatKey(); if(!k) return;
+  if(document.getElementById("ccCallOv")) return;   // panggilan giliran stall didahulukan
+  const d=DB.get(), L=ccEvPending(d,k);
+  if(!L.length){ if(_ccEvId!==null) ccEvClose(); return; }
+  if(_ccEvId!==null && L.some(e=>e.id===_ccEvId) && document.getElementById("ccEvOv")) return;
+  /* yang terbaru saja; kabar lama sejenis dianggap sudah lewat */
+  const top=L[0]; L.slice(1).forEach(e=>{ if(e.kind===top.kind || top.kind==="out") ccEvSeenAdd(e.id); });
+  ccEvShow(top, d);
+}
 function canKeluarkanCC(){ return !!(currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); }
 function ccOutLogHtml(data){
   const mid=prodMidnight(), L=(data.ccOutLog||[]).filter(x=>x.ts>=mid).slice().reverse();
   if(!L.length) return "";
   const hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-  return `<div class="card"><h3>🚪 CC Dikeluarkan (hari produksi ini)</h3>${L.map(x=>`<div class="kitem" style="margin-top:8px;"><b>${x.plat}</b> · LP ${x.lp||"-"} · Stall ${ccLbl(x.ccNum)}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${hm(x.ts)} · dipulangkan oleh <b>${x.by||"-"}</b>${x.ilsId?" · ILS dibatalkan":""}</div><div style="font-size:13px;margin-top:4px;">Alasan: ${String(x.why||"").replace(/</g,"&lt;")}</div></div>`).join("")}</div>`;
+  return `<div class="card"><h3>🚪 CC Dikeluarkan (hari produksi ini)</h3>${L.map(x=>`<div class="kitem" style="margin-top:8px;"><b>${x.plat}</b> · LP ${x.lp||"-"} · Stall ${ccLbl(x.ccNum)}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${hm(x.ts)} · ${x.kosong?"dikosongkan":"dipulangkan"} oleh <b>${x.by||"-"}</b>${x.ilsId?" · ILS dibatalkan":""} · ${x.ack?`<span style="color:#1E9E5A;font-weight:700;">✔ dibaca driver ${hm(x.ack)}</span>`:`<span style="color:#E8833A;">⏳ belum dibaca driver</span>`}</div><div style="font-size:13px;margin-top:4px;">Alasan: ${String(x.why||"").replace(/</g,"&lt;")}</div></div>`).join("")}</div>`;
 }
 function keluarkanCC(n){
   if(!canKeluarkanCC()){ alert("Hanya Delivery yang boleh memulangkan CC."); return; }
@@ -6341,8 +6448,14 @@ function keluarkanCC(n){
   render();
 }
 function ccMarkLeft(d, c){ if(c && c.plat){ d.ccLeft=d.ccLeft||{}; d.ccLeft[normPlat(c.plat)]=Date.now(); const ks=Object.keys(d.ccLeft); if(ks.length>60) ks.sort((a,b)=>d.ccLeft[a]-d.ccLeft[b]).slice(0,ks.length-60).forEach(k=>delete d.ccLeft[k]); } }
+function ccOutLogAdd(d, c, n, why, extra){   // catatan "CC dikeluarkan" (juga jadi kabar popup di HP driver)
+  if(!c || !c.plat) return; d.ccOutLog=d.ccOutLog||[];
+  d.ccOutLog.push(Object.assign({ts:Date.now(), plat:c.plat, lp:c.lp||"", ccNum:+n||0, why, by:(currentUser&&currentUser.name)||""}, extra||{}));
+  if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
+}
 function kosongkanCC(num){
   DB.set(d=>{
+    ccOutLogAdd(d, d.cc[num], num, "Stall dikosongkan"+(currentUser&&currentUser.role==="koordinator"?" Koordinator":""), {kosong:true});
     ccMarkLeft(d, d.cc[num]);
     d.cc[num] = null;
     if(d.queue.length>0){
@@ -6352,7 +6465,7 @@ function kosongkanCC(num){
   });
 }
 function toggleEmergency(num){
-  DB.set(d=>{ d.ccOpen[num] = !d.ccOpen[num]; if(!d.ccOpen[num]){ ccMarkLeft(d, d.cc[num]); d.cc[num]=null; } });
+  DB.set(d=>{ d.ccOpen[num] = !d.ccOpen[num]; if(!d.ccOpen[num]){ ccOutLogAdd(d, d.cc[num], num, "Stall darurat ditutup", {kosong:true}); ccMarkLeft(d, d.cc[num]); d.cc[num]=null; } });
 }
 
 /* ======================================================================
@@ -11460,7 +11573,9 @@ if(existingSession){
 let _lastRaw = null, _lastMinute = -1;
 try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
-setInterval(()=>{ try{ checkDraftAlerts(); checkKoordAlerts(); spdCheckIncoming(); ccCallCheck(); holdRelease(); ccQueueResort(); ccPurgeStaleCheck(); ccQueueFarPurge(); schedReqCheck(); tlsLogoutWatch(); ccQueueAdvance(); ccForceOutCheck(); whyCheck(); chgCheck(); naikStallCheck(); }catch(e){} }, 3000);
+/* tiap pengecekan berdiri sendiri: satu error tidak boleh menghentikan yang lain (mis. popup giliran / dikeluarkan di HP driver) */
+const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>ccCallCheck(), ()=>ccEvCheck(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck()];
+setInterval(()=>{ _tick3.forEach(f=>{ try{ f(); }catch(e){} }); }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
@@ -12004,11 +12119,12 @@ async function pdiTlsWrite(vin, eng, key){
 async function pdiTlsReadDone(){ try{ const fh = await PDI_TLS.dir.getFileHandle("tls_done.txt"); return (await (await fh.getFile()).text()).trim(); }catch(e){ return null; } }
 let _pdiTlsTimer = null;
 async function pdiTlsStart(){
-  PDI.step = "tls"; PDI.tlsStart = Date.now(); PDI.tlsErr = ""; PDI.tlsMode = pdiTlsReady() ? "pad" : "manual";
-  pdiTlsPipOpen();            // popup kecil selalu di atas (seperti v51) — harus dipanggil langsung dari klik / Enter
+  PDI.step = "tls"; PDI.tlsStart = Date.now(); PDI.tlsErr = ""; PDI.tlsMode = pdiTlsbReady() ? "bridge" : (pdiTlsReady() ? "pad" : "manual");
+  if(PDI.tlsMode!=="bridge") pdiTlsPipOpen();   // popup kecil selalu di atas (seperti v51) — harus dipanggil langsung dari klik / Enter
   pdiTlsUi();
   if(_pdiTlsTimer) clearInterval(_pdiTlsTimer);
   _pdiTlsTimer = setInterval(()=>{ if(PDI.step!=="tls"){ clearInterval(_pdiTlsTimer); _pdiTlsTimer = null; return; } const t = pdiAgeSec(Date.now()-PDI.tlsStart); const el = document.getElementById("pdiTlsTime"); if(el) el.textContent = t; try{ const p = _pdiPip && _pdiPip.document.getElementById("t"); if(p) p.textContent = t; }catch(e){} }, 1000);
+  if(PDI.tlsMode==="bridge"){ pdiTlsbRun(); return; }
   if(PDI.tlsMode==="pad"){
     try{ await pdiTlsWrite(PDI.vin, PDI.eng, PDI.key); }
     catch(e){ PDI.tlsMode = "manual"; PDI.tlsErr = "Gagal menulis tls_input.json ("+(e.message||e)+"). Isi TLS manual, lalu klik TLS SELESAI."; pdiTlsUi(); return; }
@@ -12085,6 +12201,24 @@ async function pdiTlsBack(what){
 function pdiTlsUi(){
   if(PDI.step!=="tls") return;
   pdiTlsPipRender();
+  if(PDI.tlsMode==="bridge"){
+    const j = PDI_TLSB.job, err = PDI.tlsErr;
+    pdiOv(`<div class="pdiCf pdiTlsBox" style="border-color:${err?"#dc2626":"#0f766e"};">
+      <div class="pdiCfHead" style="background:${err?"#dc2626":"#0f766e"};"><div style="font-size:20px;font-weight:900;">${err?"⚠ TLS GAGAL":"🌐 RADAR MENGISI TLS…"}</div><div style="font-family:monospace;font-size:16px;">${escH(PDI.vin)}</div></div>
+      <div style="padding:12px 20px;font-size:13px;">
+        <div class="pdiCfRow"><span>ENGINE</span><b>${escH(PDI.eng)}</b></div><div class="pdiCfRow"><span>KUNCI</span><b>${escH(PDI.key)}</b></div>
+        ${err?`<div class="pdiWarn" style="margin:10px 0;">${escH(err)}</div><div style="font-size:12px;margin-bottom:10px;">Perbaiki di jendela TLS lalu <b>Kirim ulang</b>, atau isi TLS manual lalu klik <b>TLS SELESAI</b>. Kalau unit ditolak TLS: <b>UNIT PROBLEM</b>.</div>`
+          :`<div style="margin:10px 0;">Langkah: <b>${escH((j&&j.step)||"mengirim")}</b> · <b id="pdiTlsTime">0:00</b><br><span style="font-size:11.5px;color:var(--text-dim);">Frame → Engine → Kunci → Simpan → Ya → OK, lalu lanjut cek buku sendiri.</span></div>`}
+        ${PDI.dup?`<div class="pdiWarn" style="margin:0 0 10px;">Unit duplikat — tidak dihitung lagi.</div>`:""}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          ${err?`<button type="button" class="btn" style="background:#0f766e;color:#fff;font-weight:900;padding:12px;" onclick="pdiTlsbRetry()">↻ Kirim ulang ke TLS</button>`:""}
+          <button type="button" class="btn" style="background:#16a34a;color:#fff;font-weight:900;padding:12px;${err?"":"grid-column:1 / -1;"}" onclick="pdiTlsDone()">✔ TLS SELESAI</button>
+          <button type="button" class="btn" style="background:#d97706;color:#fff;font-weight:900;padding:12px;" onclick="pdiProblemOpen()">⚠ UNIT PROBLEM</button>
+          <button type="button" class="btn btn-outline" onclick="pdiTlsCancel()">✖ Batal, scan ulang</button>
+        </div>
+      </div></div>`, {pos:"br"});
+    return;
+  }
   const pad = PDI.tlsMode==="pad";
   pdiOv(`<div class="pdiCf pdiTlsBox" style="border-color:#1d4ed8;">
     <div class="pdiCfHead" style="background:#1d4ed8;"><div style="font-size:20px;font-weight:900;">⏳ ${pad?"PAD MENGISI TLS…":"ISI TLS PDI COMPLETION"}</div><div style="font-family:monospace;font-size:16px;">${escH(PDI.vin)}</div></div>
@@ -12990,7 +13124,8 @@ function pdiUi(){
     <div class="pdiWho">${escH((currentUser&&currentUser.name)||"")} · ${escH(pdiShiftLabel(s.sh))}${currentUser&&currentUser.shift?" · "+rsShift(currentUser.shift):""}</div>
     <div class="pdiStats">
       ${pdiChip(PDI.cam.on && !PDI.cam.err, PDI.cam.on, "📷 Kamera"+(PDI.cam.on&&PDI.cam.fps?" "+PDI.cam.fps+"fps":""), "pdiCamToggle()", "Nyalakan / matikan kamera")}
-      ${pdiChip(pdiTlsReady(), !!PDI_TLS.dir, "📁 Folder RADAR PDI"+(pdiTlsReady()?" ✔":(PDI_TLS.dir?": izinkan":": belum")), PDI_TLS.dir&&!pdiTlsReady()?"pdiTlsReperm()":"pdiTlsPick()", PDI_TLS.dir?("Folder RADAR PDI: "+PDI_TLS.name):"Pilih Folder RADAR PDI (tempat tukar data dengan Power Automate)")}
+      ${pdiTlsbUse()?pdiChip(pdiTlsbReady(), pdiTlsbOn() || !!(PDI_TLSB.win && !PDI_TLSB.win.closed), pdiTlsbReady()?"🌐 TLS ✔":(pdiTlsbOn()?"🌐 TLS: buka PDI Completion":((PDI_TLSB.win && !PDI_TLSB.win.closed)?"🌐 TLS: klik bookmark":"🌐 Buka TLS")), "pdiTlsbOpen()", "TLS langsung dari RADAR (tanpa Power Automate)"):""}
+      ${pdiTlsbReady()?"":pdiChip(pdiTlsReady(), !!PDI_TLS.dir, "📁 Folder RADAR PDI"+(pdiTlsReady()?" ✔":(PDI_TLS.dir?": izinkan":": belum")), PDI_TLS.dir&&!pdiTlsReady()?"pdiTlsReperm()":"pdiTlsPick()", PDI_TLS.dir?("Folder RADAR PDI: "+PDI_TLS.name):"Pilih Folder RADAR PDI (tempat tukar data dengan Power Automate)")}
       ${pdiChip(pdiArdOn(), !!PDI_ARD.port || pdiArdCfg().enabled, "🔌 Arduino "+(pdiArdOn()?"ON":(pdiArdCfg().enabled?(PDI_ARD.port?"…":"belum sambung"):"OFF")), "pdiArdSetOpen()", "⚙ Setting Arduino (pintu sticker)")}
       ${pdiChip(pdiVoiceOn(), false, pdiVoiceOn()?"🔊 Suara":"🔇 Suara", "pdiVoiceToggle()", "Suara ON/OFF")}
       <button type="button" class="pdiStat off" onclick="pdiFullscreen()" title="Layar penuh">⛶</button>
@@ -13251,6 +13386,7 @@ function pdiCfgLocalHtml(){
     <div style="font-size:12px;">${PDI_TLS.dir?`Tersambung: <b>${escH(PDI_TLS.name)}</b> (${pdiTlsReady()?"diizinkan":"perlu izin"})`:"Belum tersambung — TLS diisi manual."}</div>
     <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;"><button type="button" class="tlscp" onclick="closeModal();pdiTlsPick()">Pilih folder</button>${PDI_TLS.dir?`<button type="button" class="tlscp" onclick="pdiTlsForget();closeModal();">Lepas folder</button>`:""}</div>
     <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Buat / pilih folder baru, mis. <code>D:\\RADAR PDI</code> — RADAR menaruh <b>tls_input.json</b> di sini dan membaca <b>tls_done.txt</b> dari Power Automate. Jalankan script <b>PAD_trigger_radar.ahk</b> yang ada di folder itu — script menjalankan flow Power Automate <b>RADAR_PDI_TLS</b> (flow lama PDI_Auto_TLS tidak dipakai/diubah).</div>
+    <button type="button" class="tlscp" style="margin-top:8px;background:#0f766e;color:#fff;" onclick="closeModal();pdiTlsbSetupOpen()">📡 TLS langsung dari RADAR (tanpa Power Automate)</button>
     <button type="button" class="tlscp" style="margin-top:8px;background:#1e2a3b;color:#fff;" onclick="closeModal();pdiKitOpen()">📦 Paket PC PDI (file AHK + flow Power Automate)</button>
   </div>`;
 }
@@ -14009,6 +14145,10 @@ function pdiKitFiles(){
   if(_pdiKitFlow) F.push({name:flowName+"_flow.txt", data:_pdiKitFlow.txt});
   F.push({name:"arduino/pdi_relay/pdi_relay.ino", data:pdiArdSketchText(pdiArdCfg())});
   F.push({name:"Buka RADAR.url", data:"[InternetShortcut]\r\nURL="+url+"\r\n"});
+  try{ F.push({name:"Pasang_Bookmark_RADAR_TLS.html", data:'<!doctype html><meta charset="utf-8"><title>Pasang bookmark RADAR → TLS</title><body style="font-family:Segoe UI,Arial;max-width:640px;margin:30px auto;line-height:1.6">'
+    +'<h2>📡 Bookmark RADAR → TLS</h2><p>TLS diisi langsung dari RADAR (tanpa Power Automate &amp; AutoHotkey).</p><ol><li>Tekan <b>Ctrl+Shift+B</b> supaya Bookmarks Bar muncul.</li><li><b>Seret</b> tombol di bawah ke Bookmarks Bar.</li></ol>'
+    +'<p><a href="'+pdiTlsbHref().replace(/"/g,"&quot;")+'" style="display:inline-block;background:#1e2a3b;color:#fff;padding:8px 16px;border-radius:8px;font-weight:bold;text-decoration:none">📡 RADAR → TLS</a></p>'
+    +'<h3>Pemakaian</h3><ol><li>Di RADAR (Scan PDI) klik <b>🌐 Buka TLS</b>.</li><li>Login TLS akun PDI → buka <b>PDI Completion</b>.</li><li>Klik bookmark <b>📡 RADAR → TLS</b> → panel kecil: <b>● tersambung</b>.</li><li>Scan unit di RADAR seperti biasa.</li></ol><p>Setelah TLS di-refresh / login ulang, klik bookmark lagi.</p></body>'}); }catch(e){}
   F.push({name:"radar_pdi_folder.txt", data:"Folder RADAR PDI - tempat tukar data RADAR dan Power Automate (jangan dihapus)\r\n"+new Date().toISOString()+"\r\n"});
   const L = [
 "PANDUAN PASANG PC PDI - RADAR   ("+RADAR_BUILD+")",
@@ -14019,6 +14159,7 @@ function pdiKitFiles(){
 _pdiKitFlow ? "  "+flowName+"_flow.txt ...... isi flow Power Automate (untuk di-paste)" : "  (flow Power Automate BELUM disimpan di RADAR - simpan dulu dari PC lama: Paket PC PDI > langkah A)",
 "  arduino\\pdi_relay\\pdi_relay.ino ... sketch Arduino pintu sticker (sesuai Setting Arduino PC ini)",
 "  Buka RADAR.url ................... shortcut membuka RADAR",
+"  Pasang_Bookmark_RADAR_TLS.html ... bookmark TLS langsung (tanpa Power Automate & AutoHotkey)",
 "  radar_pdi_folder.txt ............. penanda Folder RADAR PDI (jangan dihapus)",
 "",
 "Yang TIDAK bisa ikut di paket (install sendiri):",
@@ -14145,6 +14286,117 @@ function pdiKitOpen(){
   const fl = document.getElementById("pdiKitFlow"); if(fl) fl.oninput = ()=>{ const n = document.getElementById("pdiKitFlowNm"); if(n) n.textContent = fl.value||"RADAR_PDI_TLS"; document.querySelectorAll(".pdiKitFlowNm2").forEach(x=>x.textContent = fl.value||"RADAR_PDI_TLS"); };
   ["pdiKitMode","pdiKitFlow","pdiKitTitle"].forEach(id=>{ const el = document.getElementById(id); if(el) el.addEventListener("change", pdiKitReadOpt); });
   pdiKitFlowLoad().then(pdiKitFlowStatus);
+}
+
+/* ===== TLS LANGSUNG (tanpa Power Automate & AutoHotkey) =====
+   RADAR membuka TLS di jendela sendiri; bookmarklet "RADAR → TLS" yang diklik di halaman PDI Completion
+   menerima data unit dari RADAR (postMessage) lalu melakukan langkah yang sama persis dengan flow PAD
+   PDI_Auto_TLS: isi FrameNo (+Enter) → tunggu EngineNumber aktif → isi (+Enter) → tunggu KeyNumber aktif →
+   isi → klik Simpan → dialog Konfirmasi "Ya" → dialog "Printing … diproses untuk diprint" → OK. */
+const PDI_TLSB_URL_DEF = "https://tls.toyota.astra.co.id/PDICompletion";
+function pdiTlsbUrl(){ try{ return localStorage.getItem("radar_pdi_tlsurl") || PDI_TLSB_URL_DEF; }catch(e){ return PDI_TLSB_URL_DEF; } }
+function pdiTlsbOrigin(){ try{ return new URL(pdiTlsbUrl()).origin; }catch(e){ return "https://tls.toyota.astra.co.id"; } }
+function pdiTlsbUse(){ try{ return localStorage.getItem("radar_pdi_tlsb")!=="0"; }catch(e){ return true; } }
+const PDI_TLSB = {win:null, last:0, ready:false, busy:false, url:"", job:null, seq:0, _on:false};
+function pdiTlsbOn(){ return !!PDI_TLSB.win && Date.now()-PDI_TLSB.last < 7000; }
+function pdiTlsbReady(){ return pdiTlsbUse() && pdiTlsbOn() && PDI_TLSB.ready; }
+function pdiTlsbOpen(){
+  try{ if(PDI_TLSB.win && !PDI_TLSB.win.closed){ PDI_TLSB.win.focus(); if(!pdiTlsbOn()) pdiToast("Di jendela TLS: buka PDI Completion lalu klik bookmark 📡 RADAR → TLS"); return; } }catch(e){}
+  const w = window.open(pdiTlsbUrl(), "radar_tls_pdi");
+  if(!w){ alert("Chrome memblokir jendela TLS.\n\nKlik ikon pop-up yang diblokir di kanan alamat web → 'Selalu izinkan', lalu klik 🌐 Buka TLS lagi."); return; }
+  PDI_TLSB.win = w; pdiToast("TLS dibuka — login kalau diminta, lalu klik bookmark 📡 RADAR → TLS di halaman PDI Completion"); pdiUi();
+}
+window.addEventListener("message", e=>{
+  if(e.origin!==pdiTlsbOrigin()) return;
+  const m = e.data; if(!m || m.radar!=="pdi") return;
+  PDI_TLSB.win = e.source; PDI_TLSB.last = Date.now();
+  if(m.type==="hello"){ const ch = PDI_TLSB.ready!==!!m.ready || !PDI_TLSB._on; PDI_TLSB.ready = !!m.ready; PDI_TLSB.busy = !!m.busy; PDI_TLSB.url = m.url||""; if(ch){ PDI_TLSB._on = true; try{ pdiUi(); }catch(_){} } }
+  else if(m.type==="progress"){ const j = PDI_TLSB.job; if(j && m.id===j.id){ j.step = m.step; try{ pdiTlsUi(); }catch(_){} } }
+  else if(m.type==="done"){ const j = PDI_TLSB.job; if(j && m.id===j.id){ PDI_TLSB.job = null; clearTimeout(j.to); j.res(m); } }
+});
+/* RADAR yang menyapa (jendela RADAR selalu tampil, timer-nya tidak diperlambat Chrome); bookmarklet menjawab lewat pesan */
+setInterval(()=>{
+  try{ if(PDI_TLSB.win && !PDI_TLSB.win.closed) PDI_TLSB.win.postMessage({radar:"pdi", type:"ping"}, pdiTlsbOrigin()); }catch(e){}
+  const on = pdiTlsbOn(); if(on!==PDI_TLSB._on){ PDI_TLSB._on = on; try{ pdiUi(); }catch(e){} }
+}, 2000);
+function pdiTlsbSend(vin, eng, key){
+  return new Promise(res=>{
+    const id = "j"+Date.now()+"_"+(++PDI_TLSB.seq), j = {id, res, step:"mengirim"};
+    j.to = setTimeout(()=>{ if(PDI_TLSB.job===j){ PDI_TLSB.job = null; res({ok:false, msg:"TLS tidak menjawab dalam 90 detik — cek jendela TLS"}); } }, 90000);
+    PDI_TLSB.job = j;
+    try{ PDI_TLSB.win.postMessage({radar:"pdi", type:"input", id, vin, eng, key}, pdiTlsbOrigin()); }
+    catch(e){ PDI_TLSB.job = null; clearTimeout(j.to); res({ok:false, msg:"Gagal mengirim ke TLS: "+(e.message||e)}); }
+  });
+}
+async function pdiTlsbRun(){
+  if(PDI.step!=="tls" || PDI.tlsMode!=="bridge") return;
+  PDI.tlsErr = ""; pdiTlsUi();
+  const vin = PDI.vin, r = await pdiTlsbSend(PDI.vin, PDI.eng, PDI.key);
+  if(PDI.step!=="tls" || PDI.vin!==vin) return;
+  if(r.ok){ pdiTlsDone(); return; }
+  PDI.tlsErr = r.msg || "TLS menolak"; pdiSay("tlserr"); pdiTlsUi();
+}
+function pdiTlsbRetry(){ if(!pdiTlsbReady()){ alert("Jendela TLS belum tersambung.\nBuka PDI Completion di jendela TLS lalu klik bookmark 📡 RADAR → TLS."); return; } PDI.tlsMode = "bridge"; pdiTlsbRun(); }
+
+/* ---------- Bookmarklet untuk halaman TLS (dibuat dengan alamat RADAR ini) ---------- */
+function pdiTlsbCode(){
+  const R = location.origin;
+  return `(()=>{const R=${JSON.stringify(R)};if(window.__radarTls){window.__radarTls.show();return;}
+const $=s=>document.querySelector(s),vis=el=>!!el&&!!(el.offsetWidth||el.offsetHeight||el.getClientRects().length);const S={busy:false};
+const box=document.createElement("div");box.style.cssText="position:fixed;left:12px;bottom:12px;z-index:2147483647;background:#1e2a3b;color:#fff;font:12px/1.45 Segoe UI,Arial,sans-serif;padding:8px 12px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.35);max-width:360px;cursor:default";
+box.innerHTML='<b>📡 RADAR → TLS</b> <span data-s></span><div data-m style="color:#cbd5e1;margin-top:2px"></div>';document.body.appendChild(box);
+const st=(t,c)=>{const e=box.querySelector("[data-s]");e.textContent=t;e.style.color=c||"#86efac"},msg=t=>{box.querySelector("[data-m]").textContent=t};
+const linked=()=>{try{return!!window.opener&&!window.opener.closed}catch(e){return false}};
+const send=m=>{try{window.opener.postMessage(Object.assign({radar:"pdi"},m),R)}catch(e){}};
+const hello=()=>{const r=!!$('input[name="FrameNo"]');send({type:"hello",ready:r,busy:S.busy,url:location.href});if(S.busy)return;if(!linked()){st("✖ tidak tersambung","#fca5a5");msg("Tutup jendela ini, lalu buka TLS dari tombol 🌐 Buka TLS di RADAR.")}else if(!r){st("⚠ buka PDI Completion","#fde68a")}else st("● tersambung")};
+window.__radarTls={show:()=>{box.style.display="";hello()}};box.ondblclick=()=>{box.style.display="none"};
+window.addEventListener("message",e=>{if(e.origin!==R)return;const m=e.data||{};if(m.radar!=="pdi")return;if(m.type==="ping")hello();if(m.type==="input")run(m)});
+setInterval(hello,3000);hello();
+const dialogs=()=>[...document.querySelectorAll(".alertify")].filter(a=>!a.classList.contains("ajs-hidden")&&vis(a.querySelector(".ajs-dialog")));
+const dtext=a=>(((a.querySelector(".ajs-header")||{}).textContent||"").trim()+" "+((a.querySelector(".ajs-content")||{}).textContent||"").trim()).replace(/\\s+/g," ").trim();
+const notes=()=>[...document.querySelectorAll(".alertify-notifier .ajs-message")];
+const isConf=a=>/yakin data ingin disimpan/i.test(a.textContent),isPrint=a=>/diproses untuk diprint/i.test(a.textContent);
+const waitFor=(fn,ms)=>new Promise(res=>{let done=false;const fin=v=>{if(done)return;done=true;mo.disconnect();clearTimeout(t);clearInterval(iv);res(v)};const chk=()=>{let v;try{v=fn()}catch(e){}if(v)fin(v)};const mo=new MutationObserver(chk);mo.observe(document.body,{subtree:true,childList:true,attributes:true,characterData:true});const iv=setInterval(chk,250);const t=setTimeout(()=>fin(null),ms);chk()});
+const setV=(el,v,enter)=>{el.focus();el.value=v;el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}));if(enter){const k=new KeyboardEvent("keypress",{key:"Enter",code:"Enter",keyCode:13,which:13,bubbles:true});try{Object.defineProperty(k,"keyCode",{get:()=>13});Object.defineProperty(k,"which",{get:()=>13})}catch(e){}el.dispatchEvent(k)}};
+const en=s=>{const el=$(s);return el&&!el.disabled&&!el.readOnly?el:null};
+async function run(m){if(S.busy){send({type:"done",id:m.id,ok:false,msg:"TLS masih memproses unit sebelumnya"});return}
+S.busy=true;st("⏳ "+m.vin,"#fde68a");const n0=notes().length;const prog=s=>{msg(s);send({type:"progress",id:m.id,step:s})};
+const err=()=>{const d=dialogs().find(a=>!isConf(a)&&!isPrint(a));if(d)return"TLS: "+dtext(d);const n=notes().slice(n0).find(x=>/ajs-(error|warning)/.test(x.className));return n?"TLS: "+n.textContent.trim():null};
+const fail=t=>{dialogs().filter(a=>!isConf(a)).forEach(a=>{const b=a.querySelector(".ajs-button.ajs-ok")||a.querySelector(".ajs-button");if(b)b.click()});S.busy=false;st("✖ gagal","#fca5a5");msg(t);send({type:"done",id:m.id,ok:false,msg:t})};
+try{dialogs().filter(isPrint).forEach(a=>{const b=a.querySelector(".ajs-ok");if(b)b.click()});
+const f=$('input[name="FrameNo"]');if(!f)return fail("Halaman PDI Completion tidak terbuka di jendela TLS");
+prog("Isi Frame No");setV(f,m.vin,true);
+let r=await waitFor(()=>err()||en('input[name="EngineNumber"]'),15000);if(!r)return fail("Engine No belum aktif 15 detik setelah Frame diisi");if(typeof r==="string")return fail(r);
+prog("Isi Engine No");setV(r,m.eng,true);
+r=await waitFor(()=>err()||en('input[name="KeyNumber"]'),15000);if(!r)return fail("No. Kunci belum aktif 15 detik setelah Engine diisi");if(typeof r==="string")return fail(r);
+prog("Isi No. Kunci");setV(r,m.key,false);await new Promise(x=>setTimeout(x,1000));const e1=err();if(e1)return fail(e1);
+const sb=[...document.querySelectorAll("button.btn.btn-primary")].find(b=>b.innerText.trim()==="Simpan"&&!b.disabled);if(!sb)return fail("Tombol Simpan tidak ditemukan / belum aktif");
+prog("Simpan");sb.click();
+r=await waitFor(()=>dialogs().find(isConf)||err(),10000);if(!r)return fail("Konfirmasi 'Ya' tidak muncul setelah Simpan");if(typeof r==="string")return fail(r);
+const ya=[...r.querySelectorAll(".ajs-button")].find(b=>/^ya$/i.test(b.textContent.trim()));if(!ya)return fail("Tombol Ya tidak ditemukan");
+prog("Ya");ya.click();
+r=await waitFor(()=>dialogs().find(isPrint)||err(),30000);if(!r)return fail("TLS belum menampilkan 'diproses untuk diprint' dalam 30 detik — cek layar TLS");if(typeof r==="string")return fail(r);
+const ok=r.querySelector(".ajs-button.ajs-ok")||r.querySelector(".ajs-button");if(ok)ok.click();
+S.busy=false;st("✔ "+m.vin);msg("Tersimpan "+new Date().toLocaleTimeString());send({type:"done",id:m.id,ok:true})}catch(e){fail("Error: "+(e.message||e))}}})();`;
+}
+function pdiTlsbHref(){ return "javascript:"+encodeURIComponent(pdiTlsbCode()); }
+function pdiTlsbSetupOpen(){
+  showModal(`<h3 style="margin:0 0 6px;">📡 TLS langsung dari RADAR</h3>
+    <div style="font-size:12.5px;line-height:1.55;">RADAR mengisi TLS sendiri (Frame → Engine → Kunci → Simpan → Ya → OK), sama persis dengan flow Power Automate <b>PDI_Auto_TLS</b>. <b>Tidak perlu Power Automate, AutoHotkey, maupun Folder RADAR PDI.</b></div>
+    <div class="card" style="margin-top:10px;"><h4 style="margin:0 0 6px;">1. Pasang bookmark (sekali per PC)</h4>
+      <div style="font-size:12.5px;">Tekan <b>Ctrl+Shift+B</b> supaya Bookmarks Bar muncul, lalu <b>seret tombol ini</b> ke Bookmarks Bar:</div>
+      <div style="margin:8px 0;"><a href="${escH(pdiTlsbHref())}" onclick="event.preventDefault();alert('Jangan diklik di sini — seret (drag) tombol ini ke Bookmarks Bar.')" style="display:inline-block;background:#1e2a3b;color:#fff;padding:7px 14px;border-radius:8px;font-weight:800;text-decoration:none;">📡 RADAR → TLS</a></div>
+      <div style="font-size:11.5px;color:var(--text-dim);">Tidak bisa diseret? Klik <button type="button" class="tlscp" onclick="tlsCopy(pdiTlsbHref(), this)">📋 Salin kode bookmark</button> → klik kanan Bookmarks Bar → <b>Add page…</b> → Name: <b>RADAR → TLS</b>, URL: tempel → Save.</div></div>
+    <div class="card"><h4 style="margin:0 0 6px;">2. Setiap mulai kerja</h4>
+      <div style="font-size:12.5px;line-height:1.6;">a. Di RADAR klik <b>🌐 Buka TLS</b> (jendela TLS terbuka dari RADAR — wajib, supaya bisa dikirimi data).<br>
+      b. Login TLS akun PDI kalau diminta → buka <b>PDI Completion</b>.<br>
+      c. Klik bookmark <b>📡 RADAR → TLS</b> → panel kecil di TLS: <b>● tersambung</b>, dan tombol di RADAR jadi <b>🌐 TLS ✔</b>.<br>
+      d. Scan seperti biasa. Setelah konfirmasi, RADAR mengisi TLS sendiri lalu lanjut cek buku.<br>
+      <span style="color:var(--text-dim);">Setelah TLS di-refresh / login ulang, klik bookmark lagi. Kalau login TLS lewat jendela RADAR membuat sambungan putus, login dulu di tab biasa, lalu klik 🌐 Buka TLS lagi.</span></div></div>
+    <div class="card"><h4 style="margin:0 0 6px;">Pengaturan</h4>
+      <label style="font-size:13px;display:block;margin:4px 0;"><input type="checkbox" ${pdiTlsbUse()?"checked":""} onchange="try{localStorage.setItem('radar_pdi_tlsb',this.checked?'1':'0')}catch(e){};pdiUi()"> Pakai TLS langsung kalau jendela TLS tersambung (kalau tidak: Power Automate / manual seperti sebelumnya)</label>
+      <div class="field"><label>Alamat halaman PDI Completion</label><input id="pdiTlsbUrlIn" type="text" value="${escH(pdiTlsbUrl())}" onchange="try{const v=this.value.trim();if(v&&v!=='${PDI_TLSB_URL_DEF}')localStorage.setItem('radar_pdi_tlsurl',v);else localStorage.removeItem('radar_pdi_tlsurl')}catch(e){}"></div>
+      <div style="font-size:12px;">Status sekarang: ${pdiTlsbReady()?`<b style="color:var(--green,#16a34a);">● tersambung</b>`:pdiTlsbOn()?`<b style="color:#b45309;">tersambung, tapi PDI Completion belum terbuka</b>`:`<b style="color:var(--red,#dc2626);">belum tersambung</b>`}</div></div>`);
 }
 /* ===== END PDI ===== */
 
