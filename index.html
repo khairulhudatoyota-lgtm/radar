@@ -1211,7 +1211,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="11 Nov 2026 13.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="11 Nov 2026 16.00";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -6367,6 +6367,21 @@ function naikStallCheck(){
       try{ ringBg("🅿️ CC Naik ke Stall — Buat ILS", txt); }catch(e){}
       if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("🅿️ CC Naik ke Stall — Buat ILS",{body:txt}); }catch(e){} }
     });
+  }catch(e){}
+}
+/* APK v61: beri tahu layanan latar bahwa driver sedang menunggu giliran (waiting list / Parkir Luar / di stall).
+   Layanan latar lalu ikut mengecek panggilan giliran langsung dari server walau halaman ini dibekukan Android (layar mati lama). APK lama: dilewati. */
+let _ccWatchOn=null, _ccWatchAt=0, _ccWatchPl="";
+function ccWatchSync(){
+  try{
+    if(!window.AndroidTLS || !AndroidTLS.ccWatch) return;
+    const isCc=!!(currentUser && currentUser.role==="cc"), pl=isCc?myCcPlatKey():"";
+    let on=false;
+    if(pl){ const d=DB.get(), has=a=>(Array.isArray(a)?a:[]).some(x=>x && normPlat(x.plat)===pl);
+      on=has(d.queue) || has(d.hold) || Object.values(d.cc||{}).some(x=>x && normPlat(x.plat)===pl); }
+    if(on===_ccWatchOn && pl===_ccWatchPl && (!on || Date.now()-_ccWatchAt<60000)) return;
+    AndroidTLS.ccWatch(on, pl, pl?platFmt(pl):"", +CONFIG.CC_TOTAL||0);
+    _ccWatchOn=on; _ccWatchPl=pl; _ccWatchAt=Date.now();
   }catch(e){}
 }
 function ccCallCheck(){
@@ -11691,7 +11706,7 @@ let _lastRaw = null, _lastMinute = -1;
 try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
 /* tiap pengecekan berdiri sendiri: satu error tidak boleh menghentikan yang lain (mis. popup giliran / dikeluarkan di HP driver) */
-const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccCallCheck(), ()=>ccEvCheck()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
+const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
 setInterval(()=>{ _tick3.forEach(f=>{ try{ f(); }catch(e){} }); }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
