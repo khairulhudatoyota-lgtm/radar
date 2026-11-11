@@ -1201,6 +1201,7 @@ function fbAttach(){
     const wasReady = FBS.ready; FBS.ready = true; fbState(fbCurrentState());
     if(!wasReady && FBS.q.length){ const q = FBS.q; FBS.q = []; q.forEach(a=>fbPush.apply(null,a)); }
     fbRender();
+    try{ if(currentUser && (currentUser.role==="cc" || isViewer())) ccCallCheck(); }catch(e){}   // panggilan giliran langsung bunyi begitu data masuk, tidak menunggu putaran timer
   }, err=>{ console.warn("listener ditolak:", err); fbState("offline"); if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth(); }catch(e){} }, 1500); });
 }
 function fbRender(){
@@ -1210,7 +1211,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="09 Nov 2026 14.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="11 Nov 2026 13.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -6299,23 +6300,53 @@ function cancelILS(id){
 /* ===== PANGGILAN GILIRAN PARKIR: driver waiting list yang naik ke stall → HP berbunyi sampai OK ditekan ===== */
 function ccCallsList(d){ const a=d.ccCalls; return Array.isArray(a)?a:(a&&typeof a==="object"?Object.values(a):[]); }
 function pushCcCall(d, c, stall, src){ const a=ccCallsList(d).slice(), o={id:String(Date.now())+"-"+stall, plat:c.plat, stall:stall, ts:Date.now()}; if(src) o.src=src; a.push(o); d.ccCalls=a.slice(-60); }
-let _ccCallTimer=null, _ccCallId=null;
+let _ccCallTimer=null, _ccCallId=null, _ccCallNat=0, _ccCallFg=true, _ccCallWn=0;
+/* APK: dering alarm bawaan HP (jalur ALARM, volume penuh + getar), baik aplikasi terbuka, di latar, maupun layar mati.
+   Dulu alarm ini hanya dipakai kalau aplikasi sedang di latar saat dipanggil; kalau saat itu RADAR terbuka lalu layar dikunci, atau volume MEDIA HP kecil, driver tidak mendengar apa-apa. */
+function ccCallNative(c){
+  try{ if(window.AndroidTLS && AndroidTLS.alarmStart){ AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), platFmt(c.plat)+": segera masuk ke stall "+ccLbl(c.stall)+". Buka RADAR lalu tekan OK."); _ccCallNat=Date.now(); return true; } }catch(e){}
+  return false;
+}
+/* Web (Chrome, tanpa APK): new Notification() tidak jalan di Chrome Android; notifikasi harus lewat service worker. Getar diulang selama halaman di latar. */
+function ccCallWebNotify(c, close){
+  try{
+    if(window.AndroidTLS || !("serviceWorker" in navigator) || !("Notification" in window)) return;
+    if(!close && Notification.permission!=="granted") return;
+    navigator.serviceWorker.getRegistration().then(r=>{ if(!r) return;
+      if(close){ if(r.getNotifications) r.getNotifications({tag:"radar-giliran"}).then(a=>a.forEach(n=>n.close())).catch(()=>{}); return; }
+      r.showNotification("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), {body:platFmt(c.plat)+": segera masuk ke stall "+ccLbl(c.stall)+". Buka RADAR lalu tekan OK.", tag:"radar-giliran", renotify:true, requireInteraction:true, vibrate:[700,250,700,250,700,250,700], icon:"icon-192.png", badge:"icon-192.png"}).catch(()=>{});
+    }).catch(()=>{});
+    _ccCallWn=Date.now();
+  }catch(e){}
+}
 function ccCallClose(){
   const o=document.getElementById("ccCallOv"); if(o) o.remove();
   if(_ccCallTimer){ clearInterval(_ccCallTimer); _ccCallTimer=null; }
-  if(_ccCallId!==null){ _ccCallId=null; try{ if(window.AndroidTLS && AndroidTLS.alarmStop) AndroidTLS.alarmStop(); }catch(e){} }
+  if(_ccCallId!==null){ _ccCallId=null; try{ if(window.AndroidTLS && AndroidTLS.alarmStop) AndroidTLS.alarmStop(); }catch(e){} ccCallWebNotify(null, true); }
+  _ccCallNat=0; _ccCallWn=0;
 }
-function ccCallShow(c){
+function ccCallShow(c, viewer){
   ccCallClose(); _ccCallId=c.id; try{ ccEvClose(); }catch(e){}   // perintah masuk stall menggantikan kabar lain yang masih terbuka
   const o=document.createElement("div"); o.id="ccCallOv";
   o.innerHTML=`<div class="box"><div style="font-size:13px;font-weight:800;color:#1a7f3c;letter-spacing:.08em;">🅿️ GILIRAN KAMU PARKIR</div><div class="big">STALL ${ccLbl(c.stall)}</div><div class="row" style="font-size:17px;margin-top:10px;"><b>${escH(c.plat)}</b></div><div class="row">Segera masuk ke stall ${ccLbl(c.stall)}.<br>Alarm berbunyi sampai OK ditekan.</div><button type="button" class="okbtn" onclick="ccCallOk('${escH(c.id)}')">✔ OK, saya menuju stall</button></div>`;
   document.body.appendChild(o);
-  soundEv('giliran');
-  _ccCallTimer=setInterval(()=>{ if(!document.getElementById("ccCallOv")){ clearInterval(_ccCallTimer); _ccCallTimer=null; return; } soundEv('giliran'); }, 2400);
-  try{
-    if(window.AndroidTLS && AndroidTLS.alarmStart && appBg()) AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), c.plat+": segera masuk ke stall "+ccLbl(c.stall));
-    else if(!window.AndroidTLS && 'Notification' in window && Notification.permission==='granted') new Notification("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), {body:c.plat+": segera masuk ke stall "+ccLbl(c.stall)});
-  }catch(e){}
+  _ccCallFg=!appBg();
+  /* Driver: APK selalu alarm native. Pengamat: alarm native hanya kalau aplikasinya di latar (seperti sebelumnya). */
+  if(!((!viewer || !_ccCallFg) && ccCallNative(c))) soundEv('giliran');
+  try{ navigator.vibrate && navigator.vibrate([600,200,600,200,600]); }catch(e){}
+  if(!window.AndroidTLS && (document.hidden || viewer!==true)) setTimeout(()=>{ if(_ccCallId===c.id) ccCallWebNotify(c); }, 600);   // jeda: tunggu notifikasi lama selesai ditutup
+  _ccCallTimer=setInterval(()=>{
+    if(!document.getElementById("ccCallOv")){ clearInterval(_ccCallTimer); _ccCallTimer=null; return; }
+    const fg=!appBg(), back=fg && !_ccCallFg; _ccCallFg=fg;
+    if(_ccCallNat){
+      /* APK menghentikan dering saat aplikasi dibuka, dan alarm native berhenti sendiri setelah 5 menit: nyalakan lagi sampai OK ditekan */
+      if(back || Date.now()-_ccCallNat>285000) ccCallNative(c);
+      return;
+    }
+    if(viewer && !fg && ccCallNative(c)) return;
+    soundEv('giliran');
+    if(!window.AndroidTLS && document.hidden && Date.now()-_ccCallWn>15000) ccCallWebNotify(c);   // web di latar: getar + notifikasi diulang tiap 15 detik
+  }, 2400);
 }
 function ccCallOk(id){
   ccCallClose(); if(isViewer()){ _vwCallSeen.add(id); return; }
@@ -6342,15 +6373,15 @@ function ccCallCheck(){
   if(isViewer()){   // Pengamat ikut merasakan panggilan giliran parkir ke driver mana pun
     const dv=DB.get(), cv=ccCallsList(dv).filter(x=>x && !x.ack && !_vwCallSeen.has(x.id) && Date.now()-x.ts<10*60000).sort((a,b)=>b.ts-a.ts).find(x=>{ const cur=dv.cc[x.stall]; return cur && normPlat(cur.plat)===normPlat(x.plat); });
     if(!cv){ if(_ccCallId!==null) ccCallClose(); return; }
-    if(_ccCallId!==cv.id || !document.getElementById("ccCallOv")) ccCallShow(cv);
+    if(_ccCallId!==cv.id || !document.getElementById("ccCallOv")) ccCallShow(cv, true);
     return;
   }
   if(!currentUser || currentUser.role!=="cc"){ if(_ccCallId!==null) ccCallClose(); return; }
-  const d=DB.get(), pl=normPlat(getCcProfile().plat||""); if(!pl) return;
+  const d=DB.get(), pl=myCcPlatKey(); if(!pl) return;
   const c=ccCallsList(d).filter(x=>x && !x.ack && normPlat(x.plat)===pl && Date.now()-x.ts<3*3600000).sort((a,b)=>b.ts-a.ts)
     .find(x=>{ const cur=d.cc[x.stall]; return cur && normPlat(cur.plat)===pl; });
   if(!c){ if(_ccCallId!==null) ccCallClose(); return; }
-  if(_ccCallId!==c.id || !document.getElementById("ccCallOv")) ccCallShow(c);
+  if(_ccCallId!==c.id || !document.getElementById("ccCallOv")) ccCallShow(c, false);
 }
 /* ===== KABAR KE HP DRIVER CC: dikeluarkan dari stall / antrean, dan diizinkan masuk.
    Popup tampil sampai OK ditekan (bunyi diulang tiap 10 detik, maks. 1 menit). Sudah dibaca = tidak muncul lagi di HP ini.
