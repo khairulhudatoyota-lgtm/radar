@@ -1116,6 +1116,11 @@ function normalizeData(raw){
   ["queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs"].forEach(k=>{
     if(!Array.isArray(d[k])) d[k] = (d[k] && typeof d[k]==="object") ? Object.values(d[k]) : [];
   });
+  /* daftar tidak boleh berisi lubang kosong (null): bisa muncul kalau dua HP menulis baris berbeda bersamaan */
+  ["queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs","hold","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList","ccShiftPlat"].forEach(k=>{
+    const v=d[k]; if(Array.isArray(v)){ if(v.some(x=>x===null||x===undefined)) d[k]=v.filter(x=>x!==null&&x!==undefined); }
+    else if(v && typeof v==="object" && k!=="queue") d[k]=Object.values(v).filter(x=>x!==null&&x!==undefined);
+  });
   const toObj = v=>{ if(Array.isArray(v)){ const o={}; v.forEach((x,i)=>{ if(x!==null && x!==undefined) o[i]=x; }); return o; } return v || {}; };
   d.cc = toObj(d.cc); for(let i=1;i<=CONFIG.CC_TOTAL;i++){ if(d.cc[i]===undefined) d.cc[i] = null; }
   d.ccOpen = toObj(d.ccOpen);
@@ -1163,6 +1168,7 @@ function fbStart(){
   if(typeof firebase === "undefined" || !/^https?:/.test(location.protocol)){ fbState("off"); return; }
   try{
     firebase.initializeApp(FB_CONFIG);
+    try{ fbMeterBoot(); }catch(e){}
     FBS.db = firebase.database(); FBS.enabled = true; fbState("connecting");
     FBS.db.ref(".info/connected").on("value", s=>{ FBS.conn = !!s.val(); fbState(fbCurrentState()); });
     firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); trackAttach(); })
@@ -1173,6 +1179,146 @@ function fbStart(){
 }
 let _fbReP=null, _fbReT=[], _fbWarnTs=0;
 function fbPushFailWarn(){ const n=Date.now(); if(n-_fbWarnTs<60000) return; _fbWarnTs=n; try{ fbState("offline"); }catch(e){} alert("⚠ Perubahan terakhir TIDAK terkirim ke server (izin ditolak).\nTutup lalu buka lagi RADAR, cek di HP lain, dan ulangi kalau belum muncul (mis. buat ILS / Delout)."); }
+/* ===== HEMAT DATA (12 Nov 2026) =====
+   Firebase menagih setiap byte yang dikirim server ke HP. Dulu setiap perubahan menulis ulang SATU BAGIAN UTUH
+   (mis. seluruh daftar ILS / seluruh stall unit), lalu bagian utuh itu dikirim ke semua HP yang terbuka.
+   Sekarang: kalau yang berubah hanya satu isi (satu stall, satu ILS, satu baris log), hanya isi itu yang dikirim.
+   Pengaman: isi itu hanya ditimpa kalau di server masih sama dengan yang dilihat HP ini (compare-and-set).
+   Kalau sudah diubah perangkat lain, otomatis kembali ke cara lama (transaksi seluruh bagian) supaya tidak ada data hilang. */
+function fbCanon(v){
+  if(v===undefined || v===null) return null;
+  if(typeof v==="number") return isFinite(v) ? v : null;
+  if(typeof v!=="object") return v;
+  const ks = Array.isArray(v) ? v.map((_,i)=>String(i)) : Object.keys(v);
+  ks.sort(); const o={}; let n=0;
+  for(const k of ks){ const c=fbCanon(v[k]); if(c!==null){ o[k]=c; n++; } }
+  return n ? o : null;
+}
+function fbCJ(v){ return JSON.stringify(fbCanon(v)); }
+const FB_BADKEY=/[.#$\/\[\]]/;
+/* Daftar (array): isi boleh diubah per baris. Menambah baris di ujung hanya untuk log (urutan antrian/ILS tetap ditulis utuh). */
+const FB_LIST_KEYS=["queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs","hold","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList","ccShiftPlat"];
+const FB_LOG_KEYS=["absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList"];
+function fbPushSmart(k, pre, post, fn, T, seed){
+  try{
+    if(!FBS.enabled) return;
+    if(!FBS.ready || !FBS.db) return fbPush(k, pre, fn, T, seed);
+    const a=pre[k], b=post[k];
+    if(!a || !b || typeof a!=="object" || typeof b!=="object" || Array.isArray(a)!==Array.isArray(b)) return fbPush(k, pre, fn, T, seed);
+    const ks=new Set(Object.keys(a).concat(Object.keys(b))), ch=[];
+    for(const c of ks){
+      if(JSON.stringify(a[c])===JSON.stringify(b[c])) continue;
+      if(fbCJ(a[c])===fbCJ(b[c])) continue;
+      ch.push(c); if(ch.length>1) break;
+    }
+    if(!ch.length){ fbMeterW(k, "sama"); return; }   /* isinya sama persis dengan server: tidak perlu dikirim */
+    if(ch.length>1 || FB_BADKEY.test(ch[0])){ fbMeterW(k, "utuh"); return fbPush(k, pre, fn, T, seed); }
+    const c=ch[0];
+    if(Array.isArray(a)){
+      const had=a[c]!==undefined && a[c]!==null, has=b[c]!==undefined && b[c]!==null;
+      const ok = FB_LIST_KEYS.includes(k) && ((had && has && a.length===b.length) || (!had && has && FB_LOG_KEYS.includes(k) && +c===a.length && b.length===a.length+1));
+      if(!ok){ fbMeterW(k, "utuh"); return fbPush(k, pre, fn, T, seed); }
+    }
+    const expect=fbCJ(a[c]), nv=(b[c]===undefined||b[c]===null) ? null : cloneJ(b[c]);
+    fbMeterW(k, "isi");
+    FBS.db.ref(FB_ROOT+"/"+k+"/"+c).transaction(cur=>{
+      if(fbCJ(cur)!==expect) return;   /* sudah diubah perangkat lain → batal, kirim ulang dengan cara lama */
+      return nv;
+    }, (err, committed)=>{
+      if(err || !committed){ fbMeterW(k, "ulang"); fbPush(k, pre, fn, T, seed); return; }
+      try{ if(window._fbAck) window._fbAck(k, null, true); }catch(e){}
+    }, true);
+  }catch(e){ console.warn("hemat data:", k, e); fbPush(k, pre, fn, T, seed); }
+}
+/* Log berbatas (mis. 120 baris): dulu tiap baris baru menggeser semua baris → seluruh log dikirim ulang ke semua HP.
+   Sekarang dipangkas sekaligus saat sudah lewat batas + cadangan, jadi baris baru biasanya cukup dikirim satu baris. */
+function capLog(a, n){
+  a = Array.isArray(a) ? a : ((a && typeof a==="object") ? Object.values(a) : []);
+  return a.length > n + Math.max(20, Math.round(n/3)) ? a.slice(-n) : a;
+}
+/* Catatan absen yang DITOLAK dari jalur otomatis (peta / auto) cukup sekali per 10 menit per plat per alasan.
+   Dulu tiap HP mencoba tiap ±10 detik dan setiap percobaan menambah satu baris → log dikirim ulang terus ke semua HP. */
+const ABSEN_FLAGS=["stale","recent","outbound","loaded","far","driverBusy","ritHabis","nvdc"];
+function absenAdd(L, e){
+  L = Array.isArray(L) ? L : ((L && typeof L==="object") ? Object.values(L) : []);
+  try{
+    if(e && e.dup && (e.auto || e.role==="peta")){
+      const k=normPlat(e.plat), sig=ABSEN_FLAGS.filter(f=>e[f]).join(",");
+      const last=L.slice(-60).reverse().find(x=>x && x.dup && normPlat(x.plat)===k && ABSEN_FLAGS.filter(f=>x[f]).join(",")===sig);
+      if(last && Math.abs((e.ts||0)-(last.ts||0)) < 10*60000) return L;
+    }
+  }catch(err){}
+  return capLog(L.concat([e]), (e && e.dup) ? 120 : 300);   /* sama seperti sebelumnya: baris ditolak 120, absen sah 300 */
+}
+/* ===== Meter pemakaian data (Admin → Data) =====
+   Menghitung data yang DITERIMA HP ini dari Firebase, per bagian data. Semua HP menerima kurang lebih sama,
+   jadi angka ini × jumlah HP yang terbuka ≈ pemakaian di tagihan. Hanya aktif kalau dinyalakan (ringan, tapi tidak perlu terus). */
+const FBM_KEY="radar_fbmeter";
+let FBM = (()=>{ try{ return JSON.parse(localStorage.getItem(FBM_KEY)||"null"); }catch(e){ return null; } })();
+let _fbmDirty=false;
+function fbMeterOn(){ return !!(FBM && FBM.on); }
+function fbMeterSave(){ if(!_fbmDirty) return; _fbmDirty=false; try{ localStorage.setItem(FBM_KEY, JSON.stringify(FBM)); }catch(e){} }
+setInterval(fbMeterSave, 15000);
+function fbMeterPath(p){
+  p=String(p||"").replace(/^\/+/,""); const s=p.split("/");
+  if(s[0]===FB_ROOT) return s.length>1 ? FB_ROOT+"/"+s[1] : FB_ROOT+" (semua)";
+  return s[0]||"(lain)";
+}
+function fbMeterAdd(p, n){
+  n+=40;   /* +40 ≈ bingkai websocket & enkripsi */
+  const r=FBM.rows[p]||(FBM.rows[p]={n:0,b:0}); r.n++; r.b+=n; FBM.tot+=n; _fbmDirty=true;
+}
+function fbMeterLog(msg){
+  try{
+    if(!fbMeterOn() || typeof msg!=="string") return;
+    let i=msg.indexOf("handleServerMessage ");   /* data dari server: "p:0: handleServerMessage d {"p":"radar/ils/5","d":…}" */
+    if(i>=0){
+      const rest=msg.slice(i+20), sp=rest.indexOf(" "), body=rest.slice(sp+1).trim();
+      let p="(lain)"; try{ const o=JSON.parse(body); if(o && o.p!=null) p=fbMeterPath(o.p); }catch(e){}
+      fbMeterAdd(p, body.length); return;
+    }
+    i=msg.indexOf("from server: ");   /* jawaban atas permintaan HP ini (termasuk isi transaksi yang ditolak) */
+    if(i>=0) fbMeterAdd("(jawaban server)", msg.length-i-13);
+  }catch(e){}
+}
+function fbMeterW(k, how){
+  if(!fbMeterOn()) return;
+  const w=FBM.w[k]||(FBM.w[k]={}); w[how]=(w[how]||0)+1; _fbmDirty=true;
+}
+function fbMeterStart(){
+  FBM={on:true, ts:Date.now(), tot:0, rows:{}, w:{}}; _fbmDirty=true; fbMeterSave();
+  try{ firebase.database.enableLogging(fbMeterLog); }catch(e){}
+  render();
+}
+function fbMeterStop(){ if(FBM){ FBM.on=false; FBM.end=Date.now(); _fbmDirty=true; fbMeterSave(); } try{ firebase.database.enableLogging(false); }catch(e){} render(); }
+function fbMeterBoot(){ if(fbMeterOn()){ try{ firebase.database.enableLogging(fbMeterLog); }catch(e){} } }
+function fbFmtB(b){ return b>=1073741824 ? (b/1073741824).toFixed(2)+" GB" : b>=1048576 ? (b/1048576).toFixed(1)+" MB" : b>=1024 ? Math.round(b/1024)+" KB" : Math.round(b)+" B"; }
+function fbMeterCardHtml(){
+  const d=DB.get();
+  const sizes=dbKeys(d).map(k=>{ let n=0; try{ n=JSON.stringify(d[k]).length; }catch(e){} return {k, n}; }).sort((a,b)=>b.n-a.n);
+  const total=sizes.reduce((s,x)=>s+x.n,0);
+  const top=sizes.slice(0,12).map(x=>`<tr><td>${escH(x.k)}</td><td style="text-align:right;">${fbFmtB(x.n)}</td></tr>`).join("");
+  let meter="";
+  if(FBM && FBM.ts){
+    const dur=Math.max(60000, (FBM.on?Date.now():(FBM.end||Date.now()))-FBM.ts), perH=FBM.tot/dur*3600000;
+    const rows=Object.keys(FBM.rows).map(p=>Object.assign({p}, FBM.rows[p])).sort((a,b)=>b.b-a.b).slice(0,15)
+      .map(r=>`<tr><td>${escH(r.p)}</td><td style="text-align:right;">${r.n}</td><td style="text-align:right;">${fbFmtB(r.b)}</td><td style="text-align:right;">${fbFmtB(r.b/dur*3600000*24)}</td></tr>`).join("");
+    const wr=Object.keys(FBM.w).map(k=>{ const w=FBM.w[k]; return {k, isi:w.isi||0, utuh:w.utuh||0, ulang:w.ulang||0, sama:w.sama||0}; })
+      .sort((a,b)=>(b.isi+b.utuh)-(a.isi+a.utuh)).slice(0,10)
+      .map(w=>`<tr><td>${escH(w.k)}</td><td style="text-align:right;">${w.isi}</td><td style="text-align:right;">${w.utuh}</td><td style="text-align:right;">${w.ulang}</td></tr>`).join("");
+    meter=`<div style="font-size:12px;margin:8px 0;">Mulai ${new Date(FBM.ts).toLocaleString("id-ID")} · ${Math.round(dur/60000)} menit · diterima HP ini <b>${fbFmtB(FBM.tot)}</b> (≈ <b>${fbFmtB(perH*24)}/hari</b> per HP)</div>
+      <div style="overflow-x:auto;"><table style="width:100%;font-size:12px;"><tr><th style="text-align:left;">Bagian data</th><th>Kali</th><th>Diterima</th><th>≈ per hari</th></tr>${rows||`<tr><td colspan="4" style="color:var(--text-dim);">Belum ada data masuk.</td></tr>`}</table></div>
+      ${wr?`<div style="font-size:12px;font-weight:700;margin:10px 0 4px;">Ditulis HP ini</div><div style="overflow-x:auto;"><table style="width:100%;font-size:12px;"><tr><th style="text-align:left;">Bagian</th><th>Hemat (isi)</th><th>Utuh</th><th>Ulang</th></tr>${wr}</table></div>`:""}`;
+  }
+  return `<div class="card"><h3>📶 Pemakaian Data Firebase</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Jatah gratis Firebase: unduhan 10 GB per bulan untuk SEMUA HP. Meter ini mencatat data yang diterima HP ini dari server. Nyalakan ±30–60 menit saat jam sibuk, lalu kirim screenshot tabel ini.</div>
+    ${fbMeterOn()?`<button class="btn btn-outline btn-sm" style="width:auto;" onclick="fbMeterStop()">⏹ Hentikan meter</button> <button class="btn btn-outline btn-sm" style="width:auto;" onclick="render()">↻ Perbarui</button>`
+      :`<button class="btn btn-primary btn-sm" style="width:auto;" onclick="fbMeterStart()">▶ Mulai ukur</button>`}
+    ${meter}
+    <details style="margin-top:10px;"><summary style="font-size:12px;cursor:pointer;">Ukuran data utama di HP ini: <b>${fbFmtB(total)}</b> (diunduh penuh tiap RADAR dibuka)</summary>
+      <table style="width:100%;font-size:12px;margin-top:6px;">${top}</table></details>
+  </div>`;
+}
 function fbReauth(){
   if(_fbReP) return _fbReP;
   const now=Date.now(); _fbReT=_fbReT.filter(t=>now-t<60000); if(_fbReT.length>=3) return Promise.resolve(false);   /* maks 3x per menit: kalau aturan Firebase memang menolak, jangan berputar terus */
@@ -1211,7 +1357,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="12 Nov 2026 15.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="12 Nov 2026 19.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1300,7 +1446,7 @@ const DB = {
     runMut(data, mutatorFn, T, seed);
     const keys = dbKeys(data).filter(k=> JSON.stringify(data[k]) !== JSON.stringify(pre[k]));
     this.save(data);
-    keys.forEach(k=> fbPush(k, pre, mutatorFn, T, seed));
+    keys.forEach(k=> fbPushSmart(k, pre, data, mutatorFn, T, seed));
     render();
   }
 };
@@ -1535,7 +1681,7 @@ function spdTrigger(v, lat, lng, force){
   const a = {id:Date.now()+"-"+Math.floor(Math.random()*1000), ts:Date.now(), name:(currentUser&&currentUser.name)||"", username:(currentUser&&currentUser.username)||"",
     dev:spdDev(), role:(currentUser&&currentUser.role)||"", shift:(currentUser&&currentUser.shift)||"", plat:prof.plat||"", lp:prof.lp||"", unit:unit, spd:Math.round(v), limit:cfg.limit,
     lat:lat!=null?+(+lat).toFixed(6):null, lng:lng!=null?+(+lng).toFixed(6):null};
-  try{ DB.set(d=>{ d.speedAlerts = (d.speedAlerts||[]).concat([a]).slice(-100); }); }catch(e){}
+  try{ DB.set(d=>{ d.speedAlerts = capLog((d.speedAlerts||[]).concat([a]), 100); }); }catch(e){}
   spdShowOverlay(a, true);
 }
 function spdMsgText(a){
@@ -2362,7 +2508,7 @@ async function pwConfirmGo(){
 function unitOutLogAdd(d, slot, v, kind){
   const L=xlArr(d.unitOutLog).filter(x=>Date.now()-x.ts<7*24*3600*1000);
   L.push({ts:Date.now(), slot, frame:(v&&v.frame)||"", model:(v&&v.model)||"", kind, by:(currentUser&&currentUser.name)||"", user:(currentUser&&currentUser.username)||"", role:(currentUser&&currentUser.role)||""});
-  d.unitOutLog=L.slice(-300);
+  d.unitOutLog=capLog(L,300);
 }
 async function clearSlotForRepair(id){
   if(!geoGuard()) return;
@@ -3259,7 +3405,7 @@ function csSave(){
   const until=csUntil(), by=(currentUser&&currentUser.name)||"";
   DB.set(d=>{ const a=csArr(d).filter(x=>x && !pick.some(p=>normPlat(p.r.police)===normPlat(x.plat)) && x.until>Date.now());
     pick.forEach(p=>a.push({plat:platFmt(p.r.police), lp:p.r.lp||"", driver:p.r.driver||"", sisa:p.sisa, n:p.n, why, by, ts:Date.now(), until}));
-    d.csList=a.slice(-60); });
+    d.csList=capLog(a,60); });
   closeModal(); try{ holdRelease(); }catch(e){} render();
 }
 function csCancel(k){ if(!canCS()) return; if(!confirm("Batalkan status Change Shift untuk CC ini?")) return;
@@ -3306,7 +3452,7 @@ function canQueueMove(){ return !!(currentUser && ["delivery","admin"].includes(
 function ccQueueMove(plat, dir){
   if(!canQueueMove()) return; const k=normPlat(plat);
   DB.set(d=>{ const q=d.queue||[]; const i=q.findIndex(x=>x && normPlat(x.plat)===k), j=i+dir; if(i<0||j<0||j>=q.length) return;
-    const t=q[i]; q[i]=q[j]; q[j]=t; q.forEach((x,n)=>{ x.mo=n+1; }); d.queueMoveLog=(d.queueMoveLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), dir, by:(currentUser&&currentUser.name)||""}]).slice(-60); });
+    const t=q[i]; q[i]=q[j]; q[j]=t; q.forEach((x,n)=>{ x.mo=n+1; }); d.queueMoveLog=capLog((d.queueMoveLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), dir, by:(currentUser&&currentUser.name)||""}]),60); });
   try{ render(); }catch(e){}
 }
 function ccQueueAuto(){
@@ -3335,17 +3481,25 @@ function ccQueueSort(d){
 }
 /* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
 /* Susun ulang waiting list menurut aturan DCCP kalau urutannya belum sesuai (mis. CC yang absen sebelum aturan berubah). Hanya perangkat Delivery/Admin; tidak menyentuh urutan manual (📌). */
+let _qrs={last:0, mine:[], hold:0};
 function ccQueueResort(){
   try{
     if(!canQueueMove() || isViewer()) return;
+    const now=Date.now(); if(now<_qrs.hold || now-_qrs.last<20000) return;   /* paling sering 20 detik sekali per HP */
     const d0=DB.get(); if((d0.queue||[]).length<2) return;
     const c=JSON.parse(JSON.stringify(d0)); ccQueueSort(c);
-    if(c.queue.map(q=>normPlat(q.plat)).join("|")===d0.queue.map(q=>normPlat(q.plat)).join("|")) return;
+    const want=c.queue.map(q=>normPlat(q.plat)).join("|");
+    if(want===d0.queue.map(q=>normPlat(q.plat)).join("|")) return;
+    /* pengaman bolak-balik: urutan yang sama sudah ditulis HP ini < 3 menit lalu lalu diubah lagi perangkat lain → jeda 10 menit (hemat data) */
+    _qrs.mine=_qrs.mine.filter(x=>now-x.ts<180000);
+    if(_qrs.mine.some(x=>x.o===want)){ _qrs.hold=now+600000; console.warn("urutan antrian bolak-balik antar perangkat: urut otomatis HP ini dijeda 10 menit"); fbMeterW("queue","bolak-balik"); return; }
+    _qrs.last=now; _qrs.mine.push({o:want, ts:now});
     DB.set(d=>{ ccQueueSort(d); });
   }catch(e){}
 }
 function ccQueueAdvance(){
   try{
+    if(!trkLive()) return;   /* hanya HP yang menerima posisi CC realtime (Admin/Delivery/Koordinator/Display atau yang membuka peta) */
     const d0=DB.get(); if(!(d0.queue||[]).length) return;
     const order=[...CONFIG.CC_ACTIVE_DEFAULT]; CONFIG.CC_EMERGENCY.forEach(n=>{ if(d0.ccOpen&&d0.ccOpen[n]) order.push(n); });
     if(!order.some(n=>!d0.cc[n])) return;
@@ -3443,7 +3597,7 @@ const QFAR={};
 const QFAR_MIN=10;
 function ccQueueFarPurge(){
   try{
-    if(!currentUser) return;
+    if(!currentUser || !trkLive()) return;   /* butuh posisi realtime */
     const d=DB.get(), y=d.yardLocation||{}; if(y.lat==null||y.radiusKm==null) return;
     const now=Date.now(), rad=+y.radiusKm;
     /* CC di STALL yang ternyata sudah jauh dari yard (mis. absen nyangkut) dan belum punya ILS terbuka: bukan sedang loading, keluarkan dari stall */
@@ -3465,13 +3619,13 @@ function ccQueueFarPurge(){
         if(sn!==undefined && !(d2.ils||[]).some(b=>b && b.status==="open" && !b.outTs && b.ccNum==sn)){
           const cur=d2.cc[sn]; ccMarkLeft(d2,cur); d2.cc[sn]=null;
           if((d2.queue||[]).length>0){ const next=ccQueueTake(d2); if(next){ d2.cc[sn]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d2, next, sn); } }
-          d2.absenLog=(d2.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(cur.plat), lp:cur.lp||"", u:"peta", name:"Peta: CC sudah jauh ("+km.toFixed(1)+" km), keluar dari stall", role:"peta", auto:true, manual:false, dist:Math.round(km*10)/10, rejected:true}]).slice(-120);
+          d2.absenLog=absenAdd(d2.absenLog, {ts:Date.now(), plat:platFmt(cur.plat), lp:cur.lp||"", u:"peta", name:"Peta: CC sudah jauh ("+km.toFixed(1)+" km), keluar dari stall", role:"peta", auto:true, manual:false, dist:Math.round(km*10)/10, rejected:true});
           return;
         }
         const q=(d2.queue||[]).find(x=>normPlat(x.plat)===k), h=(d2.hold||[]).find(x=>normPlat(x.plat)===k), it=q||h; if(!it) return;
         d2.queue=(d2.queue||[]).filter(x=>normPlat(x.plat)!==k); d2.hold=(d2.hold||[]).filter(x=>normPlat(x.plat)!==k);
         ccMarkLeft(d2,{plat:it.plat});
-        d2.absenLog=(d2.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(it.plat), lp:it.lp||"", u:"peta", name:"Peta: CC sudah jauh ("+km.toFixed(1)+" km), keluar dari antrean", role:"peta", auto:true, manual:false, dist:Math.round(km*10)/10, rejected:true}]).slice(-300);
+        d2.absenLog=absenAdd(d2.absenLog, {ts:Date.now(), plat:platFmt(it.plat), lp:it.lp||"", u:"peta", name:"Peta: CC sudah jauh ("+km.toFixed(1)+" km), keluar dari antrean", role:"peta", auto:true, manual:false, dist:Math.round(km*10)/10, rejected:true});
       });
     });
     gone.forEach(([k])=>delete QFAR[k]);
@@ -3627,28 +3781,28 @@ function registerCC(plat, lp, dist, auto, manual, src){
   if(FBS.enabled && fbCurrentState()!=="online") return {offline:true};   /* sinyal putus: absen tidak disimpan di HP lalu dikirim belakangan dengan data lama */
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
-    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k) || (d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k)){   /* satu plat = satu data: sudah di stall / antrian / ILS aktif → semua jalur absen (otomatis, peta, manual KR/Delivery) ditolak */ res = {dup:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120); return; }
+    if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k) || (d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k)){   /* satu plat = satu data: sudah di stall / antrian / ILS aktif → semua jalur absen (otomatis, peta, manual KR/Delivery) ditolak */ res = {dup:true}; d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}); return; }
     { const lf=((d.ccLeft||{})[k])||0; const _own=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));   // Delivery/Admin boleh mengabsenkan manual kapan saja
       if(lf && (Date.now()<=lf || (!_own && Date.now()-lf < ccReabsenMin(d)*60000))){   // absen dibuat SEBELUM CC keluar (dikirim ulang sinkronisasi / perangkat lain), atau < 20 menit sesudah keluar dari HP driver: satu CC satu catatan
-        res={dup:true, stale:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true}]).slice(-120); return; } }
+        res={dup:true, stale:true}; d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true}); return; } }
     { const _o6=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));
       if(!_o6){ const la=(d.absenLog||[]).slice().reverse().find(x=>x && !x.dup && !x.rejected && !x.far && normPlat(x.plat)===k);
-        if(la && Date.now()-(la.ts||0)<20*60000 && !(((d.ccLeft||{})[k]||0)>la.ts)){ res={dup:true, recent:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, recent:true}]).slice(-120); return; } } }
+        if(la && Date.now()-(la.ts||0)<20*60000 && !(((d.ccLeft||{})[k]||0)>la.ts)){ res={dup:true, recent:true}; d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, recent:true}); return; } } }
     { const bz=ccDriverBusy(d, plat, lp); if(bz){ res={dup:true, driverBusy:bz}; return; } }   /* driver sama + LP sama sudah membawa truk lain */
     if(ccNeedNvdc(d, plat)){ res={dup:true, stale:true, outbound:true, nvdc:true}; return; }
     if(ccRitHabis(d, plat)){ res={dup:true, ritHabis:true}; return; }   /* rit terakhir sudah jalan: absen mati, hanya pantau peta */   /* sudah Delout tapi belum tiba di NVDC = masih perjalanan: SEMUA absen (otomatis, peta, manual KR/Delivery) diabaikan. Rit pertama (belum pernah Delout) tidak kena aturan ini. */
     { const _o4=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));
-      if(!_o4 && ccOutbound(d, plat)){ res={dup:true, stale:true, outbound:true}; d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true, outbound:true}]).slice(-120); return; } }
+      if(!_o4 && ccOutbound(d, plat)){ res={dup:true, stale:true, outbound:true}; d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true, outbound:true}); return; } }
     if(auto && !manual && ccLoadedNear(d, plat)){ res={dup:true, loaded:true};   /* sudah muat, masih di sekitar ADM: bukan absen. Dicatat di log paling sering 10 menit sekali */
       const lq=(d.absenLog||[]).slice().reverse().find(x=>x && x.loaded && normPlat(x.plat)===k);
-      if(!lq || Date.now()-(lq.ts||0)>10*60000) d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:true, manual:false, dist:dist!=null?Math.round(dist*10)/10:null, dup:true, loaded:true}]).slice(-120);
+      if(!lq || Date.now()-(lq.ts||0)>10*60000) d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:true, manual:false, dist:dist!=null?Math.round(dist*10)/10:null, dup:true, loaded:true});
       return; }
     { const y=d.yardLocation||{}; if(dist!=null && y.radiusKm!=null && dist > (+y.radiusKm)+0.3){ res={far:true, dist, radius:+y.radiusKm}; return; } }
     { const _own2=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); const _dn=ccDistNow(d, plat); const _y=d.yardLocation||{}; if(!_own2 && _dn!=null && _y.radiusKm!=null && _dn > (+_y.radiusKm)+0.3){ res={far:true, dist:_dn, radius:+_y.radiusKm, map:true}; return; } }   // peta (segar < 5 menit) menunjukkan CC masih jauh: absen apa pun dari HP/otomatis ditolak   // di luar radius: ditolak, apa pun jalurnya (otomatis / manual)
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
     const _sr=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k); if(_sr && _sr.lp) lp=_sr.lp;   // LP resmi dari jadwal DCCP (sama seperti absen admin)
     const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
-    if(!(d.absenLog||[]).some(x=>x && !x.dup && !x.rejected && normPlat(x.plat)===k && Date.now()-(x.ts||0)<60000)) d.absenLog=(d.absenLog||[]).concat([{ts:Date.now(), plat:item.plat, lp:item.lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dist:(dist==null?null:Math.round(dist*10)/10)}]).slice(-120);
+    if(!(d.absenLog||[]).some(x=>x && !x.dup && !x.rejected && normPlat(x.plat)===k && Date.now()-(x.ts||0)<60000)) d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:item.plat, lp:item.lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dist:(dist==null?null:Math.round(dist*10)/10)});
     const hd = ccHoldDue(d, plat);
     if(hd!=null){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }
     res = placeCC(d, item);
@@ -3716,7 +3870,7 @@ function ccGuardTick(){
       d.hold=(d.hold||[]).filter(q=>!(q && ks.has(normPlat(q.plat)) && ccGuardWhy(d,q.plat,false,q)));
       d.ccOutLog=d.ccOutLog||[];
       bad.forEach(b=>d.ccOutLog.push({ts:Date.now(), plat:b.plat, lp:b.lp, ccNum:b.n?+b.n:0, why:b.why+(b.w==="queue"?" (waiting list)":b.w==="hold"?" (Parkir Luar)":""), by:"Sistem"}));
-      if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
+      d.ccOutLog=capLog(d.ccOutLog,200);
     });
   }catch(e){}
 }
@@ -6494,7 +6648,7 @@ function ilsFixExec(id, back){
     if(back && x.undo) (x.undo.units||[]).forEach(e=>{ if(e.v && !d.units[e.slot]){ const v=Object.assign({},e.v); delete v.ilsId; d.units[e.slot]=v; nb++; } });
     d.ils.splice(i,1);
     d.manifest=(d.manifest||[]).filter(m=>m.id!==id);
-    d.ilsFixLog=(d.ilsFixLog||[]).concat([{ts:Date.now(), id, plat:x.ccPlat, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", units:(x.units||[]).length}]).slice(-100);
+    d.ilsFixLog=capLog((d.ilsFixLog||[]).concat([{ts:Date.now(), id, plat:x.ccPlat, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", units:(x.units||[]).length}]),100);
   });
   try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+id).remove(); }catch(e){}
   mfaDel(id, b.tlsTs||b.ts);
@@ -6528,7 +6682,7 @@ function cancelILS(id){
 }
 /* ===== PANGGILAN GILIRAN PARKIR: driver waiting list yang naik ke stall → HP berbunyi sampai OK ditekan ===== */
 function ccCallsList(d){ const a=d.ccCalls; return Array.isArray(a)?a:(a&&typeof a==="object"?Object.values(a):[]); }
-function pushCcCall(d, c, stall, src){ const a=ccCallsList(d).slice(), o={id:String(Date.now())+"-"+stall, plat:c.plat, stall:stall, ts:Date.now()}; if(src) o.src=src; a.push(o); d.ccCalls=a.slice(-60); }
+function pushCcCall(d, c, stall, src){ const a=ccCallsList(d).slice(), o={id:String(Date.now())+"-"+stall, plat:c.plat, stall:stall, ts:Date.now()}; if(src) o.src=src; a.push(o); d.ccCalls=capLog(a,60); }
 let _ccCallTimer=null, _ccCallId=null, _ccCallNat=0, _ccCallFg=true, _ccCallWn=0;
 /* APK: dering alarm bawaan HP (jalur ALARM, volume penuh + getar), baik aplikasi terbuka, di latar, maupun layar mati.
    Dulu alarm ini hanya dipakai kalau aplikasi sedang di latar saat dipanggil; kalau saat itu RADAR terbuka lalu layar dikunci, atau volume MEDIA HP kecil, driver tidak mendengar apa-apa. */
@@ -6769,7 +6923,7 @@ function keluarkanCC(n){
     let ilsId=null;
     if(oi>=0){ const x=d.ils[oi]; ilsId=x.id; (x.units||[]).forEach(u=>{ const un=d.units[u.slot]; if(un && un.ilsId===x.id) delete un.ilsId; }); (x.loadSnap||[]).forEach(e=>{ if(e.v && !d.units[e.slot]){ const v=Object.assign({},e.v); delete v.ilsId; d.units[e.slot]=v; } }); d.ils.splice(oi,1); }
     d.ccOutLog=d.ccOutLog||[]; d.ccOutLog.push({ts:Date.now(), plat:cur.plat, lp:cur.lp||"", ccNum:n, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", ilsId});
-    if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
+    d.ccOutLog=capLog(d.ccOutLog,200);
     ccMarkLeft(d,cur); d.cc[n]=null;
     if(d.queue.length>0){ const next=ccQueueTake(d); if(next){ d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d, next, n); } }
   });
@@ -6780,7 +6934,7 @@ function ccMarkLeft(d, c){ if(c && c.plat){ d.ccLeft=d.ccLeft||{}; d.ccLeft[norm
 function ccOutLogAdd(d, c, n, why, extra){   // catatan "CC dikeluarkan" (juga jadi kabar popup di HP driver)
   if(!c || !c.plat) return; d.ccOutLog=d.ccOutLog||[];
   d.ccOutLog.push(Object.assign({ts:Date.now(), plat:c.plat, lp:c.lp||"", ccNum:+n||0, why, by:(currentUser&&currentUser.name)||""}, extra||{}));
-  if(d.ccOutLog.length>200) d.ccOutLog=d.ccOutLog.slice(-200);
+  d.ccOutLog=capLog(d.ccOutLog,200);
 }
 function kosongkanCC(num){
   DB.set(d=>{
@@ -7634,7 +7788,7 @@ function tukarExec(aPlat, bPlat, why, by, appr){
     a.origPolice=ia.police; b.origPolice=ib.police;
     a.tukar=ia.police; b.tukar=ib.police;
     d.swapLog=d.swapLog||[]; d.swapLog.push({ts:Date.now(), a:ia.police, lpA:ia.lp||"", drA:ia.driver||"", tA:ta.join(", "), b:ib.police, lpB:ib.lp||"", drB:ib.driver||"", tB:tb.join(", "), cross:String(ia.lp||"").toUpperCase()!==String(ib.lp||"").toUpperCase(), why, by:by||((currentUser&&currentUser.name)||"")+"", appr:appr||""});
-    if(d.swapLog.length>200) d.swapLog=d.swapLog.slice(-200);
+    d.swapLog=capLog(d.swapLog,200);
     holdResync(d); ccQueueSort(d);
   });
   return err;
@@ -8665,7 +8819,7 @@ function dppCardHtml(data){
   </div>`;
 }
 
-/* ===== MDP (plan bulanan dari Lizer): satu baris per unit. DTPLOD = tanggal plan, ModelName, PDIActualDate = aktual PDI ===== */
+/* ===== MDP (plan bulanan dari Datalizer): satu baris per unit. DTPLOD = tanggal plan, ModelName, PDIActualDate = aktual PDI ===== */
 function mdpDate(v){
   if(v==null) return "";
   if(typeof v==="number" && v>30000 && v<80000){ const dt=new Date(Math.round((v-25569)*86400000)); return dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0")+"-"+String(dt.getUTCDate()).padStart(2,"0"); }
@@ -8707,7 +8861,7 @@ function mdpParse(wb, blist){
 }
 
 /* ======================================================================
-   UPLOAD MDP (plan bulanan dari Lizer) — disimpan ringkas: jumlah unit per tanggal per model (plan DTPLOD & aktual PDI)
+   UPLOAD MDP (plan bulanan dari Datalizer) — disimpan ringkas: jumlah unit per tanggal per model (plan DTPLOD & aktual PDI)
    data.mdp["YYYY-MM"] = {ym, file, ts, by, out, units, plan:{d1:{MODEL:n}}, act:{d1:{MODEL:n}}}
 ====================================================================== */
 function mdpSum(o){ let s=0; Object.values(o||{}).forEach(v=>{ s+=(+v||0); }); return s; }
@@ -8739,10 +8893,10 @@ function mdpSaveSplit(){ const r=parseFloat(((document.getElementById("mdpDayR")
 function mdpCardHtml(data){
   const M=data.mdp||{}, ks=Object.keys(M).sort().reverse();
   return `<div class="card">
-    <h3>📥 Upload MDP (plan bulanan Lizer)</h3>
-    <p style="font-size:12px;color:var(--text-dim);margin:4px 0 10px;">File MDP dari Lizer (satu baris per unit). RADAR menghitung plan per tanggal (kolom <b>DTPLOD</b>) per model, dan memisahkan unit <b>dealer Batam</b> (kolom BranchName). Dipakai di menu <b>Laporan EKY</b>: MDP per model Day/Night, Yard Stock, Daily Report.</p>
+    <h3>📥 Upload MDP (plan bulanan Datalizer)</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:4px 0 10px;">File MDP dari Datalizer (satu baris per unit). RADAR menghitung plan per tanggal (kolom <b>DTPLOD</b>) per model, dan memisahkan unit <b>dealer Batam</b> (kolom BranchName). Dipakai di menu <b>Laporan EKY</b>: MDP per model Day/Night, Yard Stock, Daily Report.</p>
     ${ks.length?ks.map(k=>{ const r=M[k], old=r.bl==null||r.bl!==mdpBatamList().join("|");
-      return `<div style="font-size:13px;padding:6px 0;border-top:1px solid var(--border);"><b>${escH(dppMonthName(k))}</b> · plan <b>${(+r.units||0).toLocaleString('id-ID')}</b> unit · Batam <b>${r.nB!=null?(+r.nB).toLocaleString('id-ID'):"–"}</b>${old?` <span style="color:#b45309;font-weight:700;">· upload ulang supaya unit Batam terpisah</span>`:""}<div style="font-size:11px;color:var(--text-dim);">${escH(r.file||"")}${r.out?" · data Lizer "+escH(r.out):""} · upload ${sjFmt(r.ts)}${r.by?" oleh "+escH(r.by):""}</div></div>`; }).join("")
+      return `<div style="font-size:13px;padding:6px 0;border-top:1px solid var(--border);"><b>${escH(dppMonthName(k))}</b> · plan <b>${(+r.units||0).toLocaleString('id-ID')}</b> unit · Batam <b>${r.nB!=null?(+r.nB).toLocaleString('id-ID'):"–"}</b>${old?` <span style="color:#b45309;font-weight:700;">· upload ulang supaya unit Batam terpisah</span>`:""}<div style="font-size:11px;color:var(--text-dim);">${escH(r.file||"")}${r.out?" · data Datalizer "+escH(r.out):""} · upload ${sjFmt(r.ts)}${r.by?" oleh "+escH(r.by):""}</div></div>`; }).join("")
       :`<div style="font-size:13px;color:var(--text-dim);padding:6px 0;border-top:1px solid var(--border);">Belum ada MDP.</div>`}
     <button class="btn btn-primary" style="margin-top:10px;" onclick="mdpUpload()">📂 Pilih file MDP</button>
     ${ks.length?`<button class="btn btn-outline" style="margin-top:8px;" onclick="mdpDownload('${ks[0]}')">⬇ Download tabel MDP (Excel)</button>`:""}
@@ -9042,7 +9196,7 @@ function mdpTableCardHtml(data, opt){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
         <h3 style="margin:0;">📋 MDP per Model · ${escH(dppMonthName(ym))}</h3>
         <button class="btn btn-primary btn-sm" style="width:auto;" onclick="mdpDownload('${ym}')">⬇ Download Excel</button></div>
-      <div style="font-size:11px;color:var(--text-dim);margin:4px 0 10px;">${escH(X.M.file||"")}${X.M.out?" · data Lizer "+escH(X.M.out):""}. Plan dari kolom DTPLOD. ${escH(mdpSplitTxt())}. Aktual = input Dispatcher.</div>
+      <div style="font-size:11px;color:var(--text-dim);margin:4px 0 10px;">${escH(X.M.file||"")}${X.M.out?" · data Datalizer "+escH(X.M.out):""}. Plan dari kolom DTPLOD. ${escH(mdpSplitTxt())}. Aktual = input Dispatcher.</div>
       ${per}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;"><b style="font-size:13px;">Harian per model · ${shTxt}</b>
         <span style="display:inline-flex;gap:10px;flex-wrap:wrap;"><span style="display:inline-flex;gap:4px;">${chip("mdpTblData",mdpTblData,"plan","Plan MDP")}${chip("mdpTblData",mdpTblData,"act","Aktual input")}</span><span style="display:inline-flex;gap:4px;">${chip("mdpTblShift",mdpTblShift,"D","Day")}${chip("mdpTblShift",mdpTblShift,"N","Night")}${chip("mdpTblShift",mdpTblShift,"T","Total")}</span></span></div>
@@ -10790,7 +10944,7 @@ function renderAdmin(){
           <td>${x.reportedBy}<br><span style="font-size:10px;color:var(--text-dim);">${new Date(x.ts).toLocaleDateString('id-ID')}</span></td>
           <td>${x.status==="confirmed" ? `<span class="badge green">Confirmed</span><br><span style="font-size:10px;color:var(--text-dim);">${x.confirmedBy||''}</span>` : `<span class="badge gold">Aktif</span>`}</td>
         </tr>`).join("");
-    return `${tabsHtml}
+    return `${tabsHtml}${fbMeterCardHtml()}
       <div class="card">
         <h3>🗄 Kelola Data</h3>
         <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Data saat ini tersimpan lokal di browser ini (localStorage). Belum sinkron ke Microsoft 365 / SharePoint.</p>
@@ -11073,13 +11227,39 @@ function trkStopHidden(k){
   try{ updateTrackUI(); }catch(e){}
 }
 function escH(t){ return String(t==null?"":t).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+/* ===== Peta CC: realtime hanya bila perlu (hemat data) =====
+   Posisi tiap CC dikirim ±12 detik sekali. Dulu SEMUA HP menerima setiap kiriman itu (±5 kali per menit per CC).
+   Sekarang realtime hanya di: tab Peta CC/Peta & Chat (role apa pun), dan HP Admin/Delivery/Koordinator/Display
+   yang menjalankan absen-peta & antrian otomatis. HP lain (Driver, Dispatcher, Leader, Pengamat, PDI) mengambil posisi tiap 2 menit
+   (5 menit kalau aplikasi di latar). */
+let _trkMode="", _trkPollT=null, _trkPollLast=0;
+const TRK_LIVE_ROLES=["admin","delivery","koordinator","display"];
+function trkWantLive(){
+  if(!currentUser) return false;
+  if(activeTab==="ccmap") return true;
+  return TRK_LIVE_ROLES.includes(currentUser.role);
+}
+function trkLive(){ return !FBS.enabled || _trkMode==="live"; }   /* mode Lokal (tanpa server): tetap jalan seperti biasa */
+function trkOnSnap(snap){ TRACK_RAW = (snap && snap.val()) || {}; try{ trkApply(); }catch(e){ TRACK = TRACK_RAW; } TRKERR = ""; try{ routeRecTick(); }catch(e){} if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); }
+function trkOnErr(err){
+  TRKERR = fbDenied(err) ? "Sambungan peta ke server terputus. Menyambung ulang…" : "Peta CC belum diizinkan oleh aturan Firebase (tambahkan node radar_track)."; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate();
+  if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth().then(ok=>{ if(!ok){ TRKERR="Peta CC terputus dari server. Tutup lalu buka lagi RADAR."; if(activeTab==="ccmap") updateTrackUI(); } }); }catch(e){} }, 1500);   /* sesi hilang: login ulang lalu pasang ulang listener peta */
+}
+function trackMode(force){
+  if(!FBS.db || !FBS.authed) return;
+  const want = trkWantLive() ? "live" : "poll";
+  if(want===_trkMode && !force) return;
+  try{ FBS.db.ref(TRK_PATH).off("value", trkOnSnap); }catch(e){}
+  clearInterval(_trkPollT); _trkPollT=null; _trkMode=want;
+  if(want==="live"){ FBS.db.ref(TRK_PATH).on("value", trkOnSnap, trkOnErr); return; }
+  const poll=()=>{ try{ if(!FBS.db || _trkMode!=="poll") return; if(document.visibilityState==="hidden" && Date.now()-_trkPollLast<300000) return;   /* aplikasi di latar: paling sering 5 menit sekali */
+    _trkPollLast=Date.now(); FBS.db.ref(TRK_PATH).once("value").then(trkOnSnap).catch(trkOnErr); }catch(e){} };
+  _trkPollT=setInterval(poll, 120000); _trkPollLast=0; poll();
+}
+setInterval(()=>{ try{ trackMode(); }catch(e){} }, 2000);
 function trackAttach(){
   try{ lapAttach(); }catch(e){}
-  try{
-    FBS.db.ref(TRK_PATH).on("value", snap=>{ TRACK_RAW = snap.val() || {}; try{ trkApply(); }catch(e){ TRACK = TRACK_RAW; } TRKERR = ""; try{ routeRecTick(); }catch(e){} if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); },
-      err=>{ TRKERR = fbDenied(err) ? "Sambungan peta ke server terputus. Menyambung ulang…" : "Peta CC belum diizinkan oleh aturan Firebase (tambahkan node radar_track)."; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate();
-        if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth().then(ok=>{ if(!ok){ TRKERR="Peta CC terputus dari server. Tutup lalu buka lagi RADAR."; if(activeTab==="ccmap") updateTrackUI(); } }); }catch(e){} }, 1500); });   /* sesi hilang: login ulang lalu pasang ulang listener peta */
-  }catch(e){}
+  try{ _trkMode=""; trackMode(true); }catch(e){}
 }
 function trkKey(plat){ return String(plat||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
 /* --- driver: bagikan posisi --- */
@@ -11284,7 +11464,7 @@ function mapAbsenWhy(d, r, km){   // alasan CC di dalam radius belum tercatat (u
 }
 function mapAbsenTick(){
   try{
-    if(!currentUser) return;   // perangkat apa pun yang sedang terbuka (semua role + Display) ikut membaca peta; cek dobel di registerCC menjamin satu catatan
+    if(!currentUser || !trkLive()) return;   /* hemat data: absen-peta dijalankan HP yang menerima posisi realtime (Admin/Delivery/Koordinator/Display atau yang membuka peta) */   // perangkat apa pun yang sedang terbuka (semua role + Display) ikut membaca peta; cek dobel di registerCC menjamin satu catatan
     const d=DB.get(), y=d.yardLocation||{}; if(y.lat==null || y.radiusKm==null || !(d.dccpSchedule||[]).length) return;
     const now=Date.now(), rad=+y.radiusKm;
     const have=new Set([...Object.values(d.cc||{}).filter(Boolean).map(c=>normPlat(c.plat)), ...(d.queue||[]).map(q=>normPlat(q.plat)), ...(d.hold||[]).map(q=>normPlat(q.plat))]);
@@ -11480,7 +11660,7 @@ function ccPlatGateSave(){
       const on=(()=>{ const u=(DB.get().users||[]).find(y=>y.username===oth.u); return (u&&u.name)||oth.u; })(), now=Date.now();
       DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===oth.u && normPlat(x.plat)===k && !x.lo) x.lo=now; }); d.forceOut=d.forceOut||{}; d.forceOut[oth.u]=now;
         if(d.takeReq) delete d.takeReq[k];
-        d.takeLog=(Array.isArray(d.takeLog)?d.takeLog:[]).concat([{ts:now, plat:platFmt(plat), from:oth.u, fromName:on, to:me, toName:(currentUser.name||me), auto:"dccp"}]).slice(-50); });
+        d.takeLog=capLog((Array.isArray(d.takeLog)?d.takeLog:[]).concat([{ts:now, plat:platFmt(plat), from:oth.u, fromName:on, to:me, toName:(currentUser.name||me), auto:"dccp"}]),50); });
       window._takeAutoMsg="Plat "+platFmt(plat)+" diambil alih otomatis dari "+on+" karena nama kamu sesuai Jadwal DCCP ("+_tk.driver+"). Akun "+on+" dikeluarkan dan posisi truk sekarang dari HP kamu.";
     }
     else if(oth){
