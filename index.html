@@ -1211,7 +1211,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="11 Nov 2026 16.00";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="12 Nov 2026 09.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3998,6 +3998,7 @@ function ccProposals(data){
   const active = ccs.filter(({n,c})=>!c.dismissed && !(data.ils||[]).some(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat)));
   const manual = {};
   active.forEach(({n,c})=>{ const want = draftStall[n]; if(!want) return;
+    if(want==="NONE"){ manual[n]={none:true}; return; }   /* MP memilih: ILS hanya dari unit luar stall yang dicentang */
     const st = stats.find(x=>String(x.stall)===String(want) && !used.has(x.stall) && okFor(x, wantBOf(n,c)));
     if(st){ used.add(st.stall); manualBy[st.stall]=n; manual[n]=st; } });
   for(const {n,c} of ccs){
@@ -4006,6 +4007,7 @@ function ccProposals(data){
     const wantB = wantBOf(n,c);
     const base = {n, plat:c.plat, lp:c.lp||"", driver:ccDriverAny(c.plat)||(row&&row.driver)||"", drvCode:resolveDrvCode(data, c.plat, c.drvCode), batam:wantB, ccTs:c.ts||0, dismissed:!!c.dismissed, waiting:!!c.waiting, manualStall:!!manual[n]};
     if(c.dismissed){ out.push({...base, ready:false, stall:null, units:[], have:0, cands:[]}); continue; }
+    if(manual[n] && manual[n].none){ out.push({...base, ready:false, stall:null, units:[], have:0, noStall:true}); continue; }
     let pick = manual[n] || null;
     if(!pick){
       const cand = stats.filter(x=>!used.has(x.stall) && okFor(x,wantB));
@@ -4019,17 +4021,45 @@ function ccProposals(data){
   out.forEach(p=>{ p.cands = stats.filter(x=>okFor(x,p.batam) && (!manualBy[x.stall] || manualBy[x.stall]===p.n)).map(x=>({stall:x.stall, n:x.n})); });
   return out;
 }
+/* ===== Unit LUAR STALL langsung masuk ILS dari Draft (centang) =====
+   Unit yang diparkir di luar stall bisa dicentang di kartu Draft CC: ILS = unit luar stall yang dicentang, dilengkapi unit dari stall terpilih
+   sampai maks. 6. Pilih "Tanpa stall" untuk ILS hanya dari unit luar stall. Cara lama (masukkan dulu ke stall lewat Dispatcher) tetap bisa. */
+let draftOff = {};             // {ccNum: [kunci unit luar stall yang dicentang]}
+let draftOffOpen = {};
+function draftOffList(data, p){ return offUnitEntries(data).filter(([k,u])=>u && !u.ilsId && !dfBlockOf(data,u.frame) && !!u.batam===!!p.batam); }
+function draftOffSel(data, p){ const ok=new Set(draftOffList(data,p).map(e=>e[0])); const s=(draftOff[p.n]||[]).filter(k=>ok.has(k)); if(s.length) draftOff[p.n]=s; else delete draftOff[p.n]; return s; }
+function draftOffTaken(n){ const t=new Set(); Object.entries(draftOff).forEach(([m,a])=>{ if(+m!==+n) (a||[]).forEach(k=>t.add(k)); }); return t; }
+function draftMixUnits(data, p){ const off=draftOffSel(data,p), st=(draftStall[p.n]==="NONE")?[]:(p.units||[]); return off.concat(st.filter(k=>!off.includes(k))).slice(0, CONFIG.MAX_LOAD_PER_CC); }
+function draftOffToggle(n, k){
+  const d=DB.get(), p=ccProposals(d).find(x=>x.n===n); if(!p) return;
+  const s=draftOffSel(d,p).slice(), i=s.indexOf(k);
+  if(i>=0) s.splice(i,1);
+  else{
+    if(draftOffTaken(n).has(k)){ alert("Unit ini sudah dicentang untuk CC lain. Hapus centangnya di kartu CC itu dulu."); return; }
+    if(s.length>=CONFIG.MAX_LOAD_PER_CC){ alert(`Maksimal ${CONFIG.MAX_LOAD_PER_CC} unit per Car Carrier.`); return; }
+    s.push(k);
+  }
+  if(s.length) draftOff[n]=s; else delete draftOff[n];
+  draftOffOpen[n]=true; render();
+}
+function draftOffClear(n){ delete draftOff[n]; render(); }
+function draftGoMix(n){
+  draftSaveDrvInput(n);
+  const d=DB.get(), p=ccProposals(d).find(x=>x.n===n); if(!p) return;
+  const units=draftMixUnits(d,p); if(!units.length){ alert("Belum ada unit yang dipilih."); return; }
+  if(createILS(n, units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); }
+}
 function draftSetDrv(n, v){ const c=DB.get().cc[n]; if(c) setDrvCode(c.plat, v, n); }
 function draftSaveDrvInput(n){ const el=document.getElementById("drvIn"+n); if(el) draftSetDrv(n, el.value); }
 function draftSetStall(n, v){ if(v) draftStall[n]=v; else delete draftStall[n]; render(); }
-function draftGo(n){ draftSaveDrvInput(n); const p = ccProposals(DB.get()).find(x=>x.n===n); if(p && p.ready && createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; render(); } }
+function draftGo(n){ draftSaveDrvInput(n); const p = ccProposals(DB.get()).find(x=>x.n===n); if(p && p.ready && createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); } }
 function draftWait(n){ DB.set(d=>{ if(d.cc[n]) d.cc[n].waiting = true; }); }
 function draftSendRest(n, noConfirm){
   draftSaveDrvInput(n);
   const p = ccProposals(DB.get()).find(x=>x.n===n);
   if(!p || !p.units.length){ alert("Tidak ada unit tersisa untuk jenis ini."); return; }
   if(!noConfirm && !confirm(`Kirim ${p.units.length} unit dari stall ${p.stall} (kurang dari ${CONFIG.SLOTS_PER_STALL}) ke CC ${p.plat}?`)) return;
-  if(createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; render(); }
+  if(createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); }
 }
 function draftDismiss(n, on){ DB.set(d=>{ if(d.cc[n]) d.cc[n].dismissed = !!on; }); }
 function draftSetType(n, t){ draftType[n] = t; render(); }
@@ -4039,16 +4069,44 @@ function draftCardsHtml(data){
   const typeSw = p=>`<div style="display:flex;gap:6px;margin:6px 0;"><span style="font-size:11px;color:var(--text-dim);align-self:center;">Muatan:</span>
       <button class="linechip ${!p.batam?'on':''}" style="padding:4px 12px;font-size:12px;" onclick="draftSetType(${p.n},'R')">Reguler</button>
       <button class="linechip ${p.batam?'on':''}" style="padding:4px 12px;font-size:12px;" onclick="draftSetType(${p.n},'B')">🟠 Batam</button></div>`;
-  const stallSel = p=>`<div style="display:flex;gap:6px;margin:6px 0;align-items:center;"><span style="font-size:11px;color:var(--text-dim);">Stall unit:</span><select onchange="draftSetStall(${p.n},this.value)" style="flex:1;max-width:260px;"><option value="">Otomatis (urut FIFO)</option>${(p.cands||[]).map(c=>`<option value="${c.stall}" ${String(draftStall[p.n])===String(c.stall)?"selected":""}>Stall ${c.stall} · ${c.n}/${CONFIG.SLOTS_PER_STALL} unit${c.n>=CONFIG.SLOTS_PER_STALL?" (penuh)":""}</option>`).join("")}</select></div>`;
+  const stallSel = p=>`<div style="display:flex;gap:6px;margin:6px 0;align-items:center;"><span style="font-size:11px;color:var(--text-dim);">Stall unit:</span><select onchange="draftSetStall(${p.n},this.value)" style="flex:1;max-width:260px;"><option value="">Otomatis (urut FIFO)</option>${(p.cands||[]).map(c=>`<option value="${c.stall}" ${String(draftStall[p.n])===String(c.stall)?"selected":""}>Stall ${c.stall} · ${c.n}/${CONFIG.SLOTS_PER_STALL} unit${c.n>=CONFIG.SLOTS_PER_STALL?" (penuh)":""}</option>`).join("")}${(draftStall[p.n]==="NONE" || draftOffList(data,p).length)?`<option value="NONE" ${draftStall[p.n]==="NONE"?"selected":""}>Tanpa stall (hanya unit luar stall)</option>`:""}</select></div>`;
+  const chipsOf = keys=>keys.map(k=>{ const u = data.units[k]; return u?`<span class="dchip" ${isOffKey(k)?'style="border-color:#E8833A;background:#FFF3E0;"':''}>${isOffKey(k)?"📍 ":""}${u.frame.slice(-6)} · ${u.model}${u.prio?" ⭐":""}</span>`:""; }).join("");
+  const offBlock = p=>{ const L=draftOffList(data,p); if(!L.length) return ""; const sel=draftOffSel(data,p), taken=draftOffTaken(p.n);
+    return `<details ${sel.length||draftOffOpen[p.n]||p.noStall?"open":""} ontoggle="draftOffOpen[${p.n}]=this.open" style="margin:8px 0 0;border:1.5px dashed #E8833A;border-radius:10px;padding:6px 10px;background:#FFFBF5;">
+      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:#C9661A;">📍 Unit luar stall ${p.batam?"Batam":"reguler"} · ${L.length} unit${sel.length?` · <span style="color:var(--green);">${sel.length} dicentang</span>`:""}</summary>
+      <div style="font-size:11px;color:var(--text-dim);margin:4px 0 6px;">Centang untuk langsung dimasukkan ke ILS CC ini (maks. ${CONFIG.MAX_LOAD_PER_CC} unit, sisanya dilengkapi dari stall terpilih). Bisa juga dimasukkan dulu ke stall lewat input Dispatcher.</div>
+      <div class="unitlist">${L.map(([k,u])=>{ const on=sel.includes(k), tk=!on && taken.has(k);
+        return `<div class="unitrow compact ${on?'checked':''}" style="${tk?'opacity:.45;':''}" onclick="${tk?`alert('Unit ini sudah dicentang untuk CC lain.')`:`draftOffToggle(${p.n},'${k}')`}"><div class="info"><b>${u.frame}</b>${unitTagsHtml(u)}<span>${escH(u.model||"")} · 📍 ${escH(u.loc||"-")}${tk?" · dicentang untuk CC lain":""}</span></div><div class="chk"></div></div>`; }).join("")}</div>
+    </details>`; };
   const drvRow = p=>`<div style="display:flex;gap:6px;margin:6px 0;align-items:center;"><span style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Kode driver TLS:</span><input id="drvIn${p.n}" type="text" value="${escH(p.drvCode||"")}" placeholder="mis. KMDCCDRV302" onchange="draftSetDrv(${p.n},this.value)" style="flex:1;min-width:0;text-transform:uppercase;padding:6px 8px;border:1px solid ${p.drvCode?"var(--border,#ccd)":"#D64545"};border-radius:8px;"></div>${p.drvCode?"":`<div style="font-size:11px;color:#D64545;margin:-2px 0 4px;">Kode driver belum diisi — TLS akan memakai nama driver (bisa tertukar).</div>`}`;
   const outBtn = p=>!canKeluarkanCC()?"":`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`;
   return `<div class="dl-draft">` + P.map(p=>{
     const who = `LP <b>${p.lp||"-"}</b> · <b>${p.plat}</b>${p.driver?` · Driver <b>${p.driver}</b>`:` · <span style="color:#c0392b;font-weight:700;">⚠ Driver belum ada di jadwal DCCP</span>`}`;
+    if(!p.dismissed && draftOffSel(data,p).length){
+      const mix=draftMixUnits(data,p), nOff=mix.filter(k=>isOffKey(k)).length, nSt=mix.length-nOff;
+      return `<div class="card" style="border:2px solid var(--green);background:#F3FBF6;">
+      <h3 style="color:var(--green);">🚚 Draft ILS — dengan unit luar stall</h3>
+      <div style="font-size:14px;line-height:1.5;">${who}<br><b style="font-size:17px;">${mix.length} unit</b>: ${nOff} dari luar stall${nSt?` + ${nSt} dari <b>Stall ${p.stall}</b>`:""}${mix.length<CONFIG.MAX_LOAD_PER_CC?` <span style="color:#C9661A;font-weight:700;">(belum ${CONFIG.MAX_LOAD_PER_CC})</span>`:""}${p.batam?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800;">BATAM</span>`:""}</div>
+      ${typeSw(p)}${stallSel(p)}${drvRow(p)}<div class="dchips">${chipsOf(mix)}</div>${offBlock(p)}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="draftGoMix(${p.n})">✔ Buat ILS (${mix.length} unit)</button>
+        <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftOffClear(${p.n})">✖ Hapus centang</button>
+        ${outBtn(p)}
+      </div></div>`;
+    }
+    if(p.noStall) return `<div class="card" style="border:2px solid #E8833A;background:#FFF8EF;">
+      <h3 style="color:#C9661A;">🚚 CC Siap Loading — Unit Luar Stall</h3>
+      <div style="font-size:14px;line-height:1.5;">${who}<br>Centang unit luar stall di bawah untuk dibuatkan ILS.</div>
+      ${typeSw(p)}${stallSel(p)}${drvRow(p)}${offBlock(p)||`<div class="msg info" style="margin-top:8px;">Tidak ada unit ${p.batam?"Batam":"reguler"} di luar stall.</div>`}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
+        ${outBtn(p)}
+      </div></div>`;
     if(p.dismissed) return `<div class="card" style="opacity:.75;"><div style="font-size:13px;">🚚 ${who} — dilewati sementara (stall-nya tidak ditahan).</div><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="draftDismiss(${p.n},false)">↺ Tampilkan lagi</button>${canKeluarkanCC()?`<button class="btn btn-outline btn-sm" style="margin:8px 0 0 8px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`:""}</div>`;
     if(p.ready) return `<div class="card" style="border:2px solid var(--green);background:#F3FBF6;">
       <h3 style="color:var(--green);">🚚 CC Siap Loading — Draft ILS</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>Siap loading unit di <b style="font-size:17px;">Stall ${p.stall}</b> · ${p.units.length} unit${p.batam?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800;">BATAM</span>`:""}</div>
-      ${typeSw(p)}${stallSel(p)}${drvRow(p)}<div class="dchips">${chips(p)}</div>
+      ${typeSw(p)}${stallSel(p)}${drvRow(p)}<div class="dchips">${chips(p)}</div>${offBlock(p)}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" style="flex:2;" onclick="draftGo(${p.n})">✔ Lanjutkan — Buat ILS</button>
         <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
@@ -4058,7 +4116,7 @@ function draftCardsHtml(data){
     if(!p.waiting) return `<div class="card" style="border:2px solid #E8833A;background:#FFF8EF;">
       <h3 style="color:#C9661A;">🚚 CC Siap Loading — Stall Belum Penuh</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>${info}</div>
-      ${typeSw(p)}${stallSel(p)}${drvRow(p)}${p.units.length?`<div class="dchips">${chips(p)}</div>`:""}
+      ${typeSw(p)}${stallSel(p)}${drvRow(p)}${p.units.length?`<div class="dchips">${chips(p)}</div>`:""}${offBlock(p)}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         ${p.units.length?`<button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="draftSendRest(${p.n},true)">✔ Tetap Buat ILS (${p.units.length} unit)</button>`:""}
         <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftWait(${p.n})">⏳ Menunggu</button>
@@ -4068,7 +4126,7 @@ function draftCardsHtml(data){
     return `<div class="card" style="border:2px dashed var(--gold-dim);">
       <h3>⏳ Menunggu Stall Penuh</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>${info} Kamu akan diberi notifikasi lagi begitu stall penuh.</div>
-      ${typeSw(p)}${stallSel(p)}${drvRow(p)}
+      ${typeSw(p)}${stallSel(p)}${drvRow(p)}${offBlock(p)}
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
         ${p.units.length?`<button class="btn btn-outline btn-sm" style="flex:1;" onclick="draftSendRest(${p.n})">Tetap buat sekarang (${p.units.length})</button>`:""}
         <button class="btn btn-outline btn-sm" style="flex:1;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
