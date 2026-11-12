@@ -1211,7 +1211,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="12 Nov 2026 09.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="12 Nov 2026 11.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3122,7 +3122,7 @@ function renderOrderStall(){
 
   return `
     ${dfCcCardHtml(data)}
-    ${sjBoxHtml("cc","Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah Delout. Terhapus otomatis 7 hari.":"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
+    ${sjBoxHtml("cc","Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah Delout. "+sjKeepTxt():"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
     ${ccMyPosHtml(data)}
     ${absenBlock}
     ${shareCardHtml()}
@@ -4541,7 +4541,8 @@ function renderKoordinator(){
 
   return `
     ${dfAckHtml(data)}${dfAlertHtml(data)}${whyKoordCardHtml(data)}${koordStatusHtml(data)}${dfLettersCardHtml(data)}
-    ${sjBoxHtml("koor","Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""), "Muncul setelah Delout. Terhapus otomatis 7 hari. Tekan Buka untuk mencari per tanggal, shift, plat no, atau no surat jalan.")}
+    ${sjBoxHtml("koor","Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""), "Muncul setelah Delout. "+sjKeepTxt()+" Tekan Buka untuk mencari per tanggal, shift, plat no, atau no surat jalan.")}
+    ${mfKoordCardHtml(data)}
     <div class="card">
       <h3>🧭 Kelola Stall Car Carrier</h3>
       <p style="font-size:12px; color:var(--text-dim);">Kosongkan stall setelah truk CC benar-benar keluar area. Antrian berikutnya otomatis masuk.</p>
@@ -4560,10 +4561,14 @@ function renderKoordinator(){
 /* ======================================================================
    SURAT JALAN — validasi (scan QR unit di TLS) → loading → Delout
    PDF asli dari TLS disimpan di Firebase path terpisah (radar_sj/<id>), bukan di data utama.
-   Surat jalan baru tampil ke CC & Koordinator setelah Delout; terhapus otomatis 7 hari.
+   Surat jalan baru tampil ke CC & Koordinator setelah Delout. Daftar di /radar 7 hari; PDF tersimpan 2 minggu
+   kalau arsip radar_manifest aktif (minggu ke-2 dicari per tanggal lewat arsip, lihat sjArc*; dihapus oleh sjPdfPurge).
 ====================================================================== */
-const SJ_PATH="radar_sj", SJ_KEEP_MS=7*24*3600*1000, DELOUT_UNDO_MS=5*60*1000;
+const SJ_PATH="radar_sj", SJ_KEEP_MS=7*24*3600*1000, DELOUT_UNDO_MS=5*60*1000, SJ_PDF_KEEP_DAYS=14;
 function sjILS(id){ return (DB.get().ils||[]).find(x=>x.id===id); }
+function sjILSAny(id){ return sjILS(id) || (typeof _sjArcMap!=="undefined" ? _sjArcMap[id] : null) || null; }   /* termasuk surat jalan lama dari arsip (hanya untuk melihat / e-SJKB) */
+function sjPdfKeepMs(){ return (typeof MFA!=="undefined" && MFA.state==="ok") ? SJ_PDF_KEEP_DAYS*86400000 : SJ_KEEP_MS; }
+function sjKeepTxt(){ return (typeof MFA!=="undefined" && MFA.state==="ok") ? "Tersimpan 2 minggu; yang lebih dari 7 hari dicari per tanggal lewat Buka." : "Terhapus otomatis 7 hari."; }
 function sjWho(){ return (currentUser&&currentUser.name)||""; }
 function sjActionsHtml(b){
   const btn=(c,t,f)=>`<button class="btn btn-sm ${c}" style="flex:1;min-width:130px;" onclick="${f}(${b.id})">${t}</button>`;
@@ -4622,6 +4627,7 @@ function delout(id){
     { const cm=Date.now()-MF_KEEP_MS; d.manifest=d.manifest.filter(m=>m.out>=cm); }
     x.undo=snap;
   });
+  try{ mfaPush([id]); }catch(e){}
   try{ mfAfterDelout(id); }catch(e){}
 }
 /* Setelah Delout (di APK, akun Delivery/Admin): buka Excel Online otomatis, baris manifest unit ini sudah disalin. Tombol Tempel manifest lalu Selesai ada di bawah layar Excel. */
@@ -4653,6 +4659,7 @@ function delOutUndo(id){
     d.manifest=(d.manifest||[]).filter(m=>m.id!==x.id);
   });
   if(!ok) alert("Tidak bisa dibatalkan: stall itu sudah berubah (CC berikutnya sudah diproses).");
+  else mfaDel(id, b.tlsTs||b.ts);
 }
 /* --- penyimpanan PDF --- */
 /* ===== BACA PDF ILS: No. SJKB + Cabang per nomor rangka (pdf.js dimuat saat dibutuhkan) ===== */
@@ -4723,6 +4730,7 @@ function sjApplyParsed(id, r){
     const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.sjkb=r.sjkb||b.sjkb||""; b.sjCab=r.cab||{}; }
     const m=(d.manifest||[]).find(x=>x.id===id); if(m){ m.sk=r.sjkb||m.sk||""; m.cb=r.cab||{}; }
   });
+  try{ const b=(DB.get().ils||[]).find(x=>x.id===id); if(b && b.status==="done") mfaPush([id]); }catch(e){}
   return true;
 }
 async function sjIndex(id,b64){ try{ return sjApplyParsed(id, await sjParsePdf(b64)); }catch(e){ return false; } }
@@ -4892,12 +4900,13 @@ function sjRows(data, pass){
   return (data.ils||[]).filter(b=>b.outTs && ((now-b.outTs<SJ_KEEP_MS && !b.batam) || (b.sj && now-b.outTs<SJ_KEEP_MS) || (b.undo && now-b.outTs<DELOUT_UNDO_MS)) && pass(b)).sort((a,b)=>b.outTs-a.outTs);
 }
 function sjRowHtml(b, now){
-  const sjCanUp=!!currentUser && currentUser.role!=="cc" && currentUser.role!=="display";   // CC tidak mengunggah; Delivery/Koordinator/Leader/Admin boleh
-  const exp=sjFmt(b.outTs+SJ_KEEP_MS), sh=String(b.shift||"").toUpperCase();
-  const _un=sjUnread(b);
+  const _sjCanUp=!!currentUser && currentUser.role!=="cc" && currentUser.role!=="display";   // CC tidak mengunggah; Delivery/Koordinator/Leader/Admin boleh
+  const arc=!!b._arc, sjCanUp=_sjCanUp && !arc;
+  const exp=sjFmt(b.outTs+sjPdfKeepMs()), sh=String(b.shift||"").toUpperCase();
+  const _un=!arc && sjUnread(b);
   return `<div class="kitem ${_un?"sjNew":""}" style="margin-top:8px;border-left:6px solid ${_un?"#E8590C":ccColor(b.ccPlat)};${_un?"background:#FFF3E6;":""}">${_un?`<span class="sjNewTag">🆕 BARU · belum dibuka</span>`:""}<b>📄 ${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")}${sh?` · <span class="badge">${sh}</span>`:""}
-      <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${b.units.length} unit · Delout ${sjFmt(b.outTs)}${b.sj?` · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>${sjCanUp?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="sjUploadPick(${b.id})">⬆ Unggah PDF validasi</button>`:""}`}${(sjCanUp && (b.sj||b.sjkb) && !b.batam)?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjUploadPick(${b.id})">⬆ Ganti PDF</button>`:""}${(b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
+      <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${b.units.length} unit · Delout ${sjFmt(b.outTs)}${arc?` · <span class="badge">arsip</span>`:""}${b.sj?` · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:arc?`<div style="font-size:12px;color:var(--text-dim);">PDF surat jalan tidak tersimpan untuk ILS ini.</div>`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>${sjCanUp?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="sjUploadPick(${b.id})">⬆ Unggah PDF validasi</button>`:""}`}${(sjCanUp && (b.sj||b.sjkb) && !b.batam)?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjUploadPick(${b.id})">⬆ Ganti PDF</button>`:""}${(!arc&&b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
 }
 /* kotak ringkas di halaman; daftar lengkap + pencarian dibuka lewat tombol */
 function sjScopePass(scope){
@@ -4914,18 +4923,41 @@ function sjBoxHtml(scope, title, hint){
 }
 let sjOv={open:false, scope:"del", q:"", date:"", shift:"", n:20};
 function sjDay(b){ const d=new Date((b.sj&&b.sj.ts)||b.outTs), p=x=>String(x).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+/* Surat jalan lama (lebih dari 7 hari): diambil dari arsip radar_manifest per tanggal Delout */
+var sjArc={day:"", rows:null, loading:false, err:""}, _sjArcMap={};
+function sjArcIls(r){
+  const U=Array.isArray(r.u)?r.u:(r.u?Object.values(r.u):[]);
+  return {id:r.id, ccPlat:r.plat||"", lp:r.lp||"", sjkb:r.sk||"", sjCab:r.cb||{}, units:U.map(u=>({frame:(u&&u[0])||"", model:(u&&u[1])||""})),
+    outTs:+r.out||0, doneTs:+r.out||0, tlsTs:+r.t||0, ts:+r.t||0, batam:!!r.bt, shift:r.sh||"", sj:r.pdf===0?null:{ts:+r.out||0, name:"surat-jalan.pdf"},
+    esjPic:r.ep||"", mp:r.mp||"", esjTs:+r.et||0, valTs:+r.vt||0, drvCode:r.dc||"", status:"done", _arc:true};
+}
+async function sjArcLoad(day){
+  if(!day || MFA.state==="denied"){ sjArc={day:"", rows:null, loading:false, err:MFA.state==="denied"?"denied":""}; return; }
+  if(sjArc.day===day && (sjArc.rows || sjArc.loading)) return;
+  sjArc={day, rows:null, loading:true, err:""};
+  const prev=mfDateStr(new Date(day+"T12:00:00").getTime()-86400000);
+  const arc=await mfaFetchDays([prev, day]);
+  if(sjArc.day!==day) return;
+  sjArc.loading=false;
+  if(!arc){ sjArc.err=MFA.state==="denied"?"denied":"err"; }
+  else { const lim=Date.now()-SJ_PDF_KEEP_DAYS*86400000; sjArc.rows=arc.filter(r=>r && r.out && +r.out>=lim && mfDateStr(+r.out)===day).map(sjArcIls); sjArc.rows.forEach(b=>{ _sjArcMap[b.id]=b; }); }
+  sjOvRender(false);
+}
 function sjFiltered(){
   const data=DB.get(), q=normPlat(sjOv.q);
-  return sjRows(data, sjScopePass(sjOv.scope)).filter(b=>{
+  let base=sjRows(data, sjScopePass(sjOv.scope));
+  if(sjOv.date && sjArc.day===sjOv.date && sjArc.rows){ const have=new Set(base.map(b=>b.id)), gone=new Set((data.ilsFixLog||[]).map(x=>x&&x.id)), pass=sjScopePass(sjOv.scope);
+    base=base.concat(sjArc.rows.filter(b=>!have.has(b.id) && !gone.has(b.id) && !(data.ils||[]).some(x=>x && x.id===b.id) && pass(b))).sort((a,b)=>b.outTs-a.outTs); }
+  return base.filter(b=>{
     if(sjOv.date && sjDay(b)!==sjOv.date) return false;
     if(sjOv.shift && String(b.shift||"").toLowerCase()!==sjOv.shift) return false;
     if(q){ const hay=normPlat(b.ccPlat)+" "+normPlat(b.sjkb||"")+" "+normPlat((b.units||[]).map(u=>u.frame).join(" "))+" "+normPlat(b.lp||""); if(hay.indexOf(q)<0) return false; }
     return true;
   });
 }
-function sjOvOpen(scope){ sjOv={open:true, scope:scope, q:"", date:"", shift:"", n:20}; sjOvRender(true); }
+function sjOvOpen(scope){ sjOv={open:true, scope:scope, q:"", date:"", shift:"", n:20}; sjArc={day:"", rows:null, loading:false, err:""}; mfaProbe(); sjOvRender(true); }
 function sjOvClose(){ sjOv.open=false; const e=document.getElementById("sjOv"); if(e) e.remove(); }
-function sjOvSet(k,v){ sjOv[k]=v; sjOv.n=20; sjOvRender(false); }
+function sjOvSet(k,v){ sjOv[k]=v; sjOv.n=20; if(k==="date") sjArcLoad(v); sjOvRender(false); }
 function sjOvMore(){ sjOv.n+=20; sjOvRender(false); }
 function sjOvRender(full){
   if(!sjOv.open) return;
@@ -4933,17 +4965,18 @@ function sjOvRender(full){
   if(!el){ el=document.createElement("div"); el.id="sjOv"; el.style.cssText="position:fixed;inset:0;z-index:150;background:var(--bg,#fff);overflow-y:auto;"; document.body.appendChild(el); full=true; }
   const L=sjFiltered(), now=Date.now(), shown=L.slice(0,sjOv.n);
   const lps=[...new Set([...(DB.get().lpList||[]), ...(DB.get().ils||[]).filter(x=>x.sj).map(x=>x.lp)].filter(Boolean))];
-  const listHtml=`<div style="font-size:12px;color:var(--text-dim);margin:8px 0 0;">${L.length} surat jalan${(sjOv.q||sjOv.date||sjOv.shift)?" cocok dengan pencarian":" (7 hari terakhir)"}</div>`+(shown.length?shown.map(b=>sjRowHtml(b,now)).join(""):`<div class="emptystate">Tidak ada surat jalan yang cocok.</div>`)+(L.length>shown.length?`<button class="btn btn-outline" style="margin-top:10px;width:100%;" onclick="sjOvMore()">Tampilkan lagi (${L.length-shown.length})</button>`:"");
+  const arcNote=!sjOv.date ? (MFA.state==="ok"?" · lebih lama (sampai 2 minggu): pilih tanggal":"") : (sjArc.loading?" · ⏳ mengambil arsip tanggal ini…":(sjArc.err==="denied"?" · arsip 1 bulan belum aktif":(sjArc.err?" · arsip gagal diambil, coba lagi":"")));
+  const listHtml=`<div style="font-size:12px;color:var(--text-dim);margin:8px 0 0;">${L.length} surat jalan${(sjOv.q||sjOv.date||sjOv.shift)?" cocok dengan pencarian":" (7 hari terakhir)"}${arcNote}</div>`+(shown.length?shown.map(b=>sjRowHtml(b,now)).join(""):`<div class="emptystate">Tidak ada surat jalan yang cocok.</div>`)+(L.length>shown.length?`<button class="btn btn-outline" style="margin-top:10px;width:100%;" onclick="sjOvMore()">Tampilkan lagi (${L.length-shown.length})</button>`:"");
   if(full){
     const shBtn=(k,l)=>`<button class="linechip ${sjOv.shift===k?'on':''}" style="padding:5px 14px;" onclick="sjOvSet('shift','${k}')">${l}</button>`;
     el.innerHTML=`<div style="position:sticky;top:0;z-index:2;background:var(--panel,#fff);border-bottom:1px solid var(--border,#ddd);padding:12px 14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">📄 ${sjOv.scope==="cc"?"Surat Jalan Saya":sjOv.scope==="koor"?"Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""):"Surat Jalan (semua LP)"}</h3><button class="btn btn-outline btn-sm" style="width:auto;" onclick="sjOvClose()">✕ Tutup</button></div>
         <input id="sjQ" type="search" placeholder="Cari plat no, no surat jalan, atau no rangka…" value="${escH(sjOv.q)}" oninput="sjOvSet('q',this.value)" style="width:100%;margin-top:10px;padding:10px 12px;border:1.5px solid var(--border,#ccc);border-radius:9px;font-size:15px;background:var(--panel3,#fff);color:var(--text);">
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
-          <input id="sjD" type="date" value="${sjOv.date}" onchange="sjOvSet('date',this.value)" style="padding:7px 10px;border:1.5px solid var(--border,#ccc);border-radius:9px;background:var(--panel3,#fff);color:var(--text);">
+          <input id="sjD" type="date" value="${sjOv.date}" min="${mfDateStr(Date.now()-SJ_PDF_KEEP_DAYS*86400000)}" onchange="sjOvSet('date',this.value)" style="padding:7px 10px;border:1.5px solid var(--border,#ccc);border-radius:9px;background:var(--panel3,#fff);color:var(--text);">
           <span id="sjShiftBtns">${shBtn("","Semua shift")}${shBtn("red","RED")}${shBtn("white","WHITE")}</span>
           ${sjOv.scope==="del"&&lps.length?`<select onchange="sjLpF=this.value;sjOvRender(false)" style="padding:7px 10px;"><option value="">Semua LP</option>${lps.map(l=>`<option value="${escH(l)}" ${lpKey(l)===lpKey(sjLpF)&&sjLpF?"selected":""}>${escH(l)}</option>`).join("")}</select>`:""}
-          <button class="btn btn-outline btn-sm" style="width:auto;" onclick="sjOv.q='';sjOv.date='';sjOv.shift='';sjOvRender(true)">Reset</button></div></div>
+          <button class="btn btn-outline btn-sm" style="width:auto;" onclick="sjOv.q='';sjOv.date='';sjOv.shift='';sjArcLoad('');sjOvRender(true)">Reset</button></div></div>
       <div id="sjOvList" style="padding:0 14px 40px;"></div>`;
   }
   const lh=document.getElementById("sjOvList"); if(lh) lh.innerHTML=listHtml;
@@ -4951,15 +4984,23 @@ function sjOvRender(full){
 }
 setInterval(()=>{ try{ if(sjOv.open){ const a=document.activeElement; if(!(a&&a.id==="sjQ")) sjOvRender(false); } }catch(e){} }, 5000);
 let sjLpF="";
-function deliverySjHtml(data){ return sjBoxHtml("del","Surat Jalan","Semua LP. Muncul setelah Delout. Terhapus otomatis 7 hari. Tekan Buka untuk mencari per tanggal, shift, plat no, atau no surat jalan."); }
+function deliverySjHtml(data){ return sjBoxHtml("del","Surat Jalan","Semua LP. Muncul setelah Delout. "+sjKeepTxt()+" Tekan Buka untuk mencari per tanggal, shift, plat no, atau no surat jalan."); }
 function canUndoDelout(){ return !!(currentUser && (currentUser.role==="koordinator"||currentUser.role==="delivery"||currentUser.role==="admin")); }
-function sjCleanup(){
+/* Lewat 7 hari: catatan PDF dilepas dari ILS (supaya data /radar tetap ringan).
+   Arsip aktif → PDF-nya TETAP disimpan (dihapus bersama arsip setelah 31 hari). Arsip belum aktif → PDF dihapus seperti dulu. Belum tahu → tunda. */
+async function sjCleanup(){
   try{
-    const d=DB.get(), now=Date.now();
+    const d=DB.get(), now=Date.now(); if(isViewer()) return;
     const old=(d.ils||[]).filter(b=>(b.sj && now-(b.outTs||b.sj.ts)>SJ_KEEP_MS) || (b.undo && b.outTs && now-b.outTs>DELOUT_UNDO_MS));
     if(!old.length) return;
-    old.forEach(b=>{ if(b.sj && now-(b.outTs||b.sj.ts)>SJ_KEEP_MS && sjCanStore()){ try{ FBS.db.ref(SJ_PATH+"/"+b.id).remove(); }catch(e){} } });
-    DB.set(dd=>{ (dd.ils||[]).forEach(b=>{ const n=Date.now(); if(b.sj && n-(b.outTs||b.sj.ts)>SJ_KEEP_MS) delete b.sj; if(b.undo && b.outTs && n-b.outTs>DELOUT_UNDO_MS) delete b.undo; }); });
+    const exp=old.filter(b=>b.sj && now-(b.outTs||b.sj.ts)>SJ_KEEP_MS), drop=new Set();
+    if(exp.length){
+      if(MFA.state==="denied"){ exp.forEach(b=>{ drop.add(b.id); if(sjCanStore()){ try{ FBS.db.ref(SJ_PATH+"/"+b.id).remove(); }catch(e){} } }); }
+      else if(MFA.state==="ok"){ await mfaPush(exp.map(b=>b.id)); const H=mfaHashes(); exp.forEach(b=>{ if(H[b.id]) drop.add(b.id); }); }   /* hanya yang sudah pasti tercatat di arsip */
+      else mfaProbe();
+    }
+    if(!drop.size && !old.some(b=>b.undo && b.outTs && now-b.outTs>DELOUT_UNDO_MS)) return;
+    DB.set(dd=>{ (dd.ils||[]).forEach(b=>{ const n=Date.now(); if(b.sj && drop.has(b.id) && n-(b.outTs||b.sj.ts)>SJ_KEEP_MS) delete b.sj; if(b.undo && b.outTs && n-b.outTs>DELOUT_UNDO_MS) delete b.undo; }); });
   }catch(e){}
 }
 setInterval(sjCleanup, 600000); setTimeout(sjCleanup, 9000);
@@ -4967,7 +5008,7 @@ function myCcPlatKey(){ try{ let k=normPlat((getCcProfile()||{}).plat||""); if(!
 
 /* ======================================================================
    MANIFEST DELIVERY OUT — unduh Excel (semua LP / per LP)
-   Dicatat saat Delout, disimpan 14 hari. Kolom Nama Cabang & No. SJKB dibiarkan kosong (diisi macro Excel dari TLS).
+   Dicatat saat Delout. Data harian ada di /radar (selama ILS masih tersimpan); salinan 1 bulan ada di arsip radar_manifest (lihat ARSIP MANIFEST). Kolom Nama Cabang & No. SJKB dibiarkan kosong (diisi macro Excel dari TLS).
 ====================================================================== */
 const MF_KEEP_MS=14*24*3600*1000;
 function mfDriver(d,plat){ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); return (r&&(r.driver||r.drvCode))||""; }
@@ -4989,7 +5030,13 @@ function mfRecords(data){
   (data.manifest||[]).forEach(m=>{ if(!m) return; const b=byId[m.id];
     if(ils.length){ if(!b || b.status!=="done") return; }
     have.add(m.id); L.push(b?Object.assign({},m,{t:b.tlsTs||b.ts||m.t, out:b.outTs||b.doneTs||m.out, lp:b.lp||m.lp, plat:b.ccPlat||m.plat, bt:!!b.batam, u:(b.units||[]).map(u=>[u.frame,u.model||""])}):m); });
-  ils.filter(b=>b && b.status==="done" && !have.has(b.id)).forEach(b=>{ L.push({id:b.id, out:b.doneTs||b.ts, t:b.tlsTs||b.ts, lp:b.lp||"", plat:b.ccPlat||"", drv:mfDriver(data,b.ccPlat), bt:!!b.batam, sk:b.sjkb||"", cb:b.sjCab||{}, u:(b.units||[]).map(u=>[u.frame,u.model||""])}); });
+  ils.filter(b=>b && b.status==="done" && !have.has(b.id)).forEach(b=>{ have.add(b.id); L.push({id:b.id, out:b.doneTs||b.ts, t:b.tlsTs||b.ts, lp:b.lp||"", plat:b.ccPlat||"", drv:mfDriver(data,b.ccPlat), bt:!!b.batam, sk:b.sjkb||"", cb:b.sjCab||{}, u:(b.units||[]).map(u=>[u.frame,u.model||""])}); });
+  /* arsip 1 bulan (diambil saat Download): ILS-nya sudah terhapus dari /radar karena umur. ILS yang dihapus lewat koreksi atau dibuka lagi (batal Delout) tidak ikut */
+  if(Array.isArray(data._mfArc)){
+    const gone=new Set((data.ilsFixLog||[]).map(x=>x&&x.id));
+    data._mfArc.forEach(r=>{ if(!r || r.id==null || have.has(r.id) || gone.has(r.id)) return; const b=byId[r.id]; if(b && b.status!=="done") return;
+      have.add(r.id); L.push(Object.assign({}, r, {cb:r.cb||{}, u:Array.isArray(r.u)?r.u:(r.u?Object.values(r.u):[])})); });
+  }
   L.forEach(m=>{ m.lp=mfLpLabel(data,m.lp); });
   return L;
 }
@@ -5059,15 +5106,21 @@ function mfSave(name, mime, bytes){
   if(window.AndroidTLS && window.AndroidTLS.saveFile){ window.AndroidTLS.saveFile(name, mime, b64); return; }
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([bytes],{type:mime})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),800);
 }
-async function downloadManifest(){
+async function downloadManifest(btn){
   const ds=(document.getElementById("mfDate")||{}).value||mfDateStr(prodDayStart());
-  const lpSel=(document.getElementById("mfLP")||{}).value||"";
+  const ko=!!(currentUser && currentUser.role==="koordinator");
+  const lpSel=ko ? (myKoordLP()?mfLpLabel(DB.get(), myKoordLP()):"") : ((document.getElementById("mfLP")||{}).value||"");   /* Koordinator hanya LP-nya sendiri */
   const shf=(document.getElementById("mfShift")||{}).value||"";
-  try{ await mfEnsureParsed(); }catch(e){}
-  const data=DB.get();
+  const bt=btn&&btn.textContent; if(btn){ btn.disabled=true; btn.textContent="⏳ Mengambil data…"; }
+  let arc=null;
+  try{
+    if(!isViewer()){ try{ await mfEnsureParsed(); }catch(e){} }
+    arc=await mfaFetch(ds);
+  } finally { if(btn){ btn.disabled=false; btn.textContent=bt; } }
+  const data=arc&&arc.length ? Object.assign({}, DB.get(), {_mfArc:arc}) : DB.get();
   const lps=lpSel? [lpSel] : [...new Set(mfRecords(data).map(m=>m.lp).filter(Boolean))].sort();
   const all=mfRows(data, ds, lpSel, shf);
-  if(!all.length){ alert("Tidak ada data manifest untuk tanggal "+ds+(shf?" shift "+shf:"")+(lpSel?" (LP "+lpSel+")":"")+". Manifest dicatat saat Delout."); return; }
+  if(!all.length){ alert("Tidak ada data manifest untuk tanggal "+ds+(shf?" shift "+shf:"")+(lpSel?" (LP "+lpSel+")":"")+". Manifest dicatat saat Delout."+(MFA.state==="denied"?"\n\nArsip 1 bulan belum aktif (aturan Firebase radar_manifest belum ada), jadi tanggal yang sudah lewat beberapa hari belum bisa diunduh.":"")); return; }
   const sheets=[];
   const add=(name,rows)=>sheets.push({name, rows:[MF_HEAD].concat(rows)});
   if(!lpSel){ add("Manifest ALL", all); lps.forEach(lp=>{ const r=mfRows(data, ds, lp, shf); if(r.length) add("LP "+lp, r); }); }
@@ -5075,6 +5128,121 @@ async function downloadManifest(){
   const out=mfXlsx(sheets,[5,20,10,12,22,7,7,28,16,6,12,7,10,30]);
   mfSave("Manifest-"+(lpSel?lpSel+"-":"ALL-")+ds+(shf?"-"+shf:"")+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",out);
   try{ const miss=mfMissing(data, ds, lpSel, shf, all); if(miss.length) alert("Perhatian: "+miss.length+" ILS yang Delout pada tanggal ini TIDAK masuk file:\n\n"+miss.slice(0,8).join("\n")+(miss.length>8?"\n… dan "+(miss.length-8)+" lainnya":"")); }catch(e){}
+}
+/* ======================================================================
+   ARSIP MANIFEST 1 BULAN — node Firebase terpisah radar_manifest/<tanggal jam TLS>/<id ILS>
+   Tidak ikut sinkron /radar (HP lain tidak ikut mengunduh), dibaca hanya saat Download.
+   Ditulis saat Delout, saat No. SJKB / Cabang terbaca dari PDF, dan disegarkan Delivery/Admin tiap 2 menit
+   (menangkap Delout dari HP yang masih versi lama). Lebih dari 31 hari dihapus otomatis.
+====================================================================== */
+const MFA_PATH="radar_manifest", MFA_KEEP_DAYS=31, MFA_HASH_KEY="radar_mfa_h";
+var MFA={state:"", err:"", ts:0, probing:false};   /* state: ok | denied | err | "" (belum dicek) */
+const MFA_RULES_SNIPPET=`"radar_manifest": {\n  ".read": "auth != null",\n  ".write": "auth != null"\n}`;
+function mfaCan(){ return !!(currentUser && !isViewer() && sjCanStore()); }
+function mfaStrHash(s){ let h=0x811c9dc5; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); } return (h>>>0).toString(36); }
+function mfaRec(data, m){
+  const b=(data.ils||[]).find(y=>y && y.id===m.id)||{};
+  const si=sjInfo(data,m), cb={}, U=(Array.isArray(m.u)?m.u:(m.u?Object.values(m.u):[])).map(u=>[String((u&&u[0])||""), String((u&&u[1])||"")]);
+  Object.keys(si.cb||{}).forEach(k=>{ if(k && !/[.#$\/\[\]]/.test(k) && si.cb[k]!=null) cb[k]=String(si.cb[k]); });
+  return {id:m.id, out:+m.out||0, t:+m.t||0, lp:String(m.lp||""), plat:String(m.plat||""), drv:String(m.drv||""), bt:!!m.bt, sk:String(si.sk||""), cb, u:U,
+    pdf:b.sj?1:0, sh:String(b.shift||""), ep:String(b.esjPic||""), mp:String(b.mp||""), et:+b.esjTs||0, vt:+b.valTs||0, dc:String(b.drvCode||"")};   /* untuk surat jalan & e-SJKB lama */
+}
+function mfaHashes(){ try{ return JSON.parse(localStorage.getItem(MFA_HASH_KEY)||"{}")||{}; }catch(e){ return {}; } }
+function mfaHashSave(H){ try{ const cut=Date.now()-(MFA_KEEP_DAYS+3)*86400000; Object.keys(H).forEach(k=>{ if(!H[k] || (H[k].o||0)<cut) delete H[k]; }); localStorage.setItem(MFA_HASH_KEY, JSON.stringify(H)); }catch(e){} }
+let _mfaBusy=false;
+async function mfaPush(ids){   /* ids: hanya ILS ini; kosong = semua manifest yang masih ada di /radar */
+  if(!mfaCan() || _mfaBusy) return;
+  if(!ids && MFA.state==="denied" && Date.now()-MFA.ts<30*60000) return;   /* aturan belum ada: jangan kirim ulang tiap 2 menit */
+  _mfaBusy=true;
+  try{
+    const data=DB.get(), H=mfaHashes(), todo=[], live=new Set((data.ils||[]).filter(b=>b && b.status==="done").map(b=>b.id));
+    mfRecords(data).forEach(m=>{ if(!m || m.id==null || !m.t || !live.has(m.id)) return; if(ids && !ids.includes(m.id)) return;
+      const r=mfaRec(data,m), h=mfaStrHash(JSON.stringify(r)), k=mfDateStr(r.t), o=H[m.id];
+      if(o && o.h===h && o.k===k) return;
+      todo.push({r,h,k,old:o&&o.k!==k?o.k:""}); });
+    for(let i=0;i<todo.length;i+=120){
+      const up={}, part=todo.slice(i,i+120);
+      part.forEach(x=>{ if(x.old) up[MFA_PATH+"/"+x.old+"/"+x.r.id]=null; up[MFA_PATH+"/"+x.k+"/"+x.r.id]=x.r; });
+      await FBS.db.ref().update(up);
+      part.forEach(x=>{ H[x.r.id]={h:x.h, k:x.k, o:x.r.out}; });
+      mfaHashSave(H);
+    }
+    if(todo.length || MFA.state!=="ok"){ const was=MFA.state; MFA.state="ok"; MFA.err=""; MFA.ts=Date.now(); if(was && was!=="ok") mfaRerender(); }
+  }catch(e){ const was=MFA.state; MFA.state=fbDenied(e)?"denied":"err"; MFA.err=String(e&&e.message||e); MFA.ts=Date.now(); if(was!==MFA.state) mfaRerender(); }
+  finally{ _mfaBusy=false; }
+}
+function mfaDel(id, t){   /* batal Delout / hapus ILS: buang dari arsip */
+  try{
+    if(!mfaCan() || id==null) return;
+    const H=mfaHashes(), up={}, ks=new Set(); if(H[id]&&H[id].k) ks.add(H[id].k);
+    if(t){ [-1,0,1].forEach(d=>ks.add(mfDateStr(t+d*86400000))); }
+    ks.forEach(k=>{ up[MFA_PATH+"/"+k+"/"+id]=null; });
+    delete H[id]; mfaHashSave(H);
+    if(Object.keys(up).length) FBS.db.ref().update(up).catch(()=>{});
+  }catch(e){}
+}
+/* Ambil arsip untuk hari produksi ds (jam TLS tanggal ds dan ds+1, karena shift Night lewat tengah malam) */
+async function mfaFetch(ds){ return mfaFetchDays([ds, mfDateStr(new Date(ds+"T12:00:00").getTime()+86400000)]); }
+async function mfaFetchDays(days){
+  if(!sjCanStore()) return null;
+  try{
+    const snaps=await Promise.race([Promise.all(days.map(k=>FBS.db.ref(MFA_PATH+"/"+k).once("value"))), new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),15000))]);
+    const out=[]; snaps.forEach(sn=>{ const v=sn.val()||{}; Object.keys(v).forEach(id=>{ const r=v[id]; if(r && typeof r==="object"){ if(r.id==null) r.id=isNaN(+id)?id:+id; out.push(r); } }); });
+    if(MFA.state!=="ok"){ MFA.state="ok"; MFA.err=""; MFA.ts=Date.now(); }
+    return out;
+  }catch(e){ if(fbDenied(e)){ MFA.state="denied"; MFA.ts=Date.now(); } MFA.err=String(e&&e.message||e); return null; }
+}
+/* Cek sekali per sesi apakah node arsip sudah diizinkan (membaca anak kosong: ringan) */
+function mfaProbe(){
+  if(MFA.state || MFA.probing || !sjCanStore()) return; MFA.probing=true;
+  FBS.db.ref(MFA_PATH+"/_cek").once("value").then(()=>{ MFA.state="ok"; }, e=>{ MFA.state=fbDenied(e)?"denied":""; MFA.err=String(e&&e.message||e); })
+    .finally(()=>{ MFA.probing=false; MFA.ts=Date.now(); if(MFA.state) mfaRerender(); });
+}
+function mfaRerender(){ try{ if(activeTab==="delivery" || activeTab==="koordinator") fbRender(); }catch(e){} }
+function mfaCleanup(){
+  if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer() || !sjCanStore() || MFA.state!=="ok") return;
+  try{ const last=+localStorage.getItem("radar_mfa_clean")||0; if(Date.now()-last<20*3600000) return; localStorage.setItem("radar_mfa_clean", String(Date.now())); }catch(e){ return; }
+  const cut=mfDateStr(Date.now()-MFA_KEEP_DAYS*86400000);   /* tanggal sebelum ini dihapus */
+  /* hari arsip yang lewat 31 hari dihapus; PDF yang mungkin masih tertinggal ikut dibersihkan */
+  FBS.db.ref(MFA_PATH).orderByKey().endBefore(cut).limitToFirst(6).once("value").then(sn=>{ const up={}; sn.forEach(c=>{ if(!(c.key<cut)) return; up[MFA_PATH+"/"+c.key]=null; const v=(c.val&&c.val())||{}; Object.keys(v).forEach(id=>{ if(id && !/[.#$\/\[\]]/.test(id)) up[SJ_PATH+"/"+id]=null; }); }); if(Object.keys(up).length) return FBS.db.ref().update(up); }).catch(()=>{});
+}
+/* PDF surat jalan umur > 14 hari dihapus: hari arsip yang sudah lewat ditandai di d.sjPdfClean (dikerjakan satu perangkat Delivery/Admin, maks 3 hari per putaran) */
+function sjPdfPurge(){
+  if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer() || !sjCanStore() || MFA.state!=="ok") return;
+  try{ const last=+localStorage.getItem("radar_sjpurge")||0; if(Date.now()-last<10*60000) return; localStorage.setItem("radar_sjpurge", String(Date.now())); }catch(e){ return; }
+  const upto=mfDateStr(Date.now()-(SJ_PDF_KEEP_DAYS+1)*86400000), done=String(DB.get().sjPdfClean||"");   /* kunci arsip = tanggal jam TLS; Delout paling lambat sehari setelahnya */
+  if(done && done>=upto) return;
+  let q=FBS.db.ref(MFA_PATH).orderByKey(); if(done) q=q.startAfter(done);
+  q.endAt(upto).limitToFirst(3).once("value").then(sn=>{
+    const up={}; let maxK="";
+    sn.forEach(c=>{ if(!(c.key<=upto)) return; maxK=c.key>maxK?c.key:maxK; const v=(c.val&&c.val())||{}; Object.keys(v).forEach(id=>{ if(id && !/[.#$\/\[\]]/.test(id)) up[SJ_PATH+"/"+id]=null; }); });
+    if(!maxK){ DB.set(d=>{ if(String(d.sjPdfClean||"")<upto) d.sjPdfClean=upto; }); return; }   /* tidak ada arsip lama lagi: tandai sampai batas */
+    return (Object.keys(up).length?FBS.db.ref().update(up):Promise.resolve()).then(()=>{ DB.set(d=>{ if(String(d.sjPdfClean||"")<maxK) d.sjPdfClean=maxK; }); });
+  }).catch(()=>{});
+}
+function mfaTick(){ try{ if(currentUser && ["delivery","admin"].includes(currentUser.role) && !isViewer()){ mfaPush(); mfaCleanup(); sjPdfPurge(); } }catch(e){} }
+setInterval(mfaTick, 120000); setTimeout(mfaTick, 20000);
+function mfaStatusHtml(forKoord){
+  if(MFA.state==="ok") return `<div style="font-size:11px;color:#1E9E5A;margin:-2px 0 8px;">✔ Arsip 1 bulan aktif</div>`;
+  if(MFA.state!=="denied") return "";
+  if(forKoord) return `<div class="msg info" style="font-size:12px;margin-bottom:8px;">Arsip 1 bulan belum aktif: minta Admin menambah aturan Firebase <b>radar_manifest</b>. Sementara itu yang bisa diunduh hanya beberapa hari terakhir.</div>`;
+  return `<div class="msg info" style="font-size:12px;margin-bottom:8px;"><b>Arsip 1 bulan belum aktif.</b> Aturan Firebase belum memuat node <b>radar_manifest</b>, jadi manifest hanya bisa diunduh selama ILS masih tersimpan (±1–7 hari).<br>Firebase console → Realtime Database → <b>Rules</b>: tambahkan blok ini di dalam <code>"rules": { … }</code>, sejajar dengan <code>"radar_track"</code>, lalu <b>Publish</b>.
+    <pre style="background:#0F172A;color:#E2E8F0;padding:8px;border-radius:8px;font-size:12px;overflow:auto;margin:6px 0;">${escH(MFA_RULES_SNIPPET)}</pre><button type="button" class="tlscp" onclick="tlsCopy(MFA_RULES_SNIPPET,this)">Salin</button></div>`;
+}
+/* Kartu Koordinator: unduh manifest LP sendiri */
+function mfKoordCardHtml(data){
+  try{
+    const today=mfDateStr(prodDayStart()), min=mfDateStr(prodDayStart()-MFA_KEEP_DAYS*86400000);
+    const lpk=myKoordLP(), lp=lpk?mfLpLabel(data,lpk):"", n=mfRows(data,today,lp).length;
+    mfaProbe();
+    return `<div class="card"><h3>📊 Download Manifest${lp?" LP "+escH(lp):""}</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Unit ${lp?"LP "+escH(lp)+" ":""}yang sudah <b>Delout</b>, tersimpan 1 bulan. Hari produksi ini: <b>${n} unit</b>.${lp?"":" Akun ini belum punya LP, jadi isinya semua LP."}</div>
+      ${mfaStatusHtml(true)}
+      <div class="field"><label>Tanggal delivery</label><input id="mfDate" type="date" value="${today}" min="${min}"></div>
+      <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (Day + Night)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 – 06:59 besok)</option></select></div>
+      <button class="btn btn-primary" onclick="downloadManifest(this)">⬇ Download Excel</button>
+    </div>`;
+  }catch(e){ console.warn("kartu manifest koordinator", e); return ""; }
 }
 /* Pemeriksa: ILS yang Delout di tanggal/shift ini tetapi tidak jadi baris manifest, beserta alasannya */
 function mfMissing(data, ds, lpSel, shf, rows){
@@ -5877,7 +6045,7 @@ function esjPicFor(b){
 }
 function esjTgl(t){ const m=String(t||"").match(/(\d{1,2})-(\d{1,2})-(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/); if(!m) return 0; const d=new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5],+(m[6]||0)); return isNaN(d)?0:d.getTime(); }
 async function esjCollect(id, picUser){
-  const data=DB.get(), b=(data.ils||[]).find(x=>x.id===id); if(!b) throw new Error("ILS tidak ditemukan");
+  const data=DB.get(), b=sjILSAny(id); if(!b) throw new Error("ILS tidak ditemukan");
   let P={full:{hdr:{},u:{}}, base:{sjkb:"",cab:{}}}, parseNote="";
   if(b.sj){ try{ const v=await sjFetch(id); P=await esjParsePdf(v.b64); }catch(e){ parseNote="PDF surat jalan TLS belum bisa dibaca ("+(e&&e.message||e)+"). Data diambil dari RADAR."; } }
   else parseNote="PDF surat jalan TLS belum ada. No. SJKB dan cabang mungkin kosong.";
@@ -5967,12 +6135,12 @@ function esjFileName(D){ return "E-SJKB "+(D.sjkb||("ILS-"+D.id)).replace(/\//g,
 let _esj=null;
 async function esjOpen(id, picUser){
   sjMarkRead(id);
-  const b=sjILS(id); if(!b) return;
+  const b=sjILSAny(id); if(!b) return;
   if(b.batam){ alert("ILS Batam: surat jalan Batam berbeda dan tetap dibuat manual."); return; }
   showModal('<h3 style="margin:0 0 6px;">🧾 e-SJKB</h3><div class="msg">Menyiapkan e-SJKB…</div>');
   try{
     const D=await esjCollect(id, picUser);
-    if(!b.esjTs){ const ts=D.ts; DB.set(d=>{ const x=(d.ils||[]).find(y=>y.id===id); if(x && !x.esjTs) x.esjTs=ts; }); }
+    if(!b.esjTs && !b._arc){ const ts=D.ts; DB.set(d=>{ const x=(d.ils||[]).find(y=>y.id===id); if(x && !x.esjTs) x.esjTs=ts; }); }
     const cv=await esjDraw(D); _esj={D, pdf:esjPdf(cv), name:esjFileName(D)};
     const miss=[]; if(!D.sjkb) miss.push("No. SJKB"); if(!D.line.sig) miss.push("TTD Line Head"); if(!D.gh.sig) miss.push("TTD Group Head shift "+String(D.shift).toUpperCase()); if(!D.pic.sig) miss.push("TTD PIC Delivery"); if(!D.stamp) miss.push("stempel");
     const us=esjPicUsers();
@@ -5993,11 +6161,11 @@ async function esjOpen(id, picUser){
   }catch(e){ showModal(`<h3>🧾 e-SJKB</h3><div class="msg err">Gagal membuat e-SJKB: ${xlEsc(e&&e.message||e)}</div><button class="btn btn-primary" style="margin-top:10px;" onclick="closeModal()">Tutup</button>`); }
 }
 async function esjDownload(id){ sjMarkRead(id);
-  const b=sjILS(id); if(!b) return;
+  const b=sjILSAny(id); if(!b) return;
   try{
     const D=await esjCollect(id, b.esjPic||undefined);
     if(!D.sjkb){ alert("e-SJKB belum bisa dibuat: No. SJKB belum terbaca dari PDF validasi TLS.\nUnggah PDF validasinya dulu (tombol Unggah PDF di kartu ILS), lalu coba lagi."); return; }
-    if(!b.esjTs){ const ts=D.ts; DB.set(d=>{ const x=(d.ils||[]).find(y=>y.id===id); if(x && !x.esjTs) x.esjTs=ts; }); }
+    if(!b.esjTs && !b._arc){ const ts=D.ts; DB.set(d=>{ const x=(d.ils||[]).find(y=>y.id===id); if(x && !x.esjTs) x.esjTs=ts; }); }
     const cv=await esjDraw(D); mfSave(esjFileName(D),"application/pdf",esjPdf(cv));
   }catch(e){ alert("Gagal membuat e-SJKB: "+(e&&e.message||e)); }
 }
@@ -6251,14 +6419,15 @@ function inputXlCardHtml(data, defKind){
 function manifestCardHtml(data){
   const today=mfDateStr(prodDayStart());   /* hari produksi: jam 06.00 pagi masih tanggal kemarin (shift malam belum selesai) */
   const lps=(()=>{ const seen=new Set(), o=[]; [...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean).forEach(l=>{ const c=lpCanon(l); if(seen.has(c)) return; seen.add(c); o.push(mfLpLabel(data,l)); }); return o; })();
-  const nToday=mfRows(data,today,"").length;
+  const nToday=mfRows(data,today,"").length, mfMin=mfDateStr(prodDayStart()-MFA_KEEP_DAYS*86400000);
+  mfaProbe();
   return `<div class="card"><h3>📊 Download Manifest (Excel)</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 14 hari. Hari produksi ini: <b>${nToday} unit</b>. Nama Cabang dan No. SJKB diisi dari PDF surat jalan; sel kuning berarti PDF-nya belum ada.</div>
-    ${xlStatusLine(data)}
-    <div class="field"><label>Tanggal delivery</label><input id="mfDate" type="date" value="${today}"></div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 1 bulan (No. SJKB &amp; Cabang tetap ada walaupun PDF surat jalan sudah terhapus). Hari produksi ini: <b>${nToday} unit</b>. Nama Cabang dan No. SJKB diisi dari PDF surat jalan; sel kuning berarti PDF-nya belum ada.</div>
+    ${mfaStatusHtml(false)}${xlStatusLine(data)}
+    <div class="field"><label>Tanggal delivery</label><input id="mfDate" type="date" value="${today}" min="${mfMin}"></div>
     <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (Day + Night: 07:00 tanggal ini – 06:59 besok)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 tanggal ini – 06:59 hari berikutnya)</option></select></div>
     <div class="field"><label>Isi file</label><select id="mfLP"><option value="">Semua LP (sheet ALL + satu sheet per LP)</option>${lps.map(l=>`<option value="${l}">Hanya LP ${l}</option>`).join("")}</select></div>
-    <button class="btn btn-primary" onclick="downloadManifest()">⬇ Download Excel</button>
+    <button class="btn btn-primary" onclick="downloadManifest(this)">⬇ Download Excel</button>
     ${(window.AndroidTLS&&window.AndroidTLS.openExcel)?`<button class="btn btn-green" style="margin-top:8px;" onclick="openExcelManifest()">📊 Buka Excel Manifest (baris sudah disalin)</button>`:""}
     <button class="btn btn-green" style="margin-top:8px;" onclick="sendManifestMail(false)">✉ Kirim ke Excel lewat email (baris baru saja)</button>
     <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="sendManifestMail(true)">Kirim semua baris lagi</button>
@@ -6327,6 +6496,7 @@ function ilsFixExec(id, back){
     d.ilsFixLog=(d.ilsFixLog||[]).concat([{ts:Date.now(), id, plat:x.ccPlat, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", units:(x.units||[]).length}]).slice(-100);
   });
   try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+id).remove(); }catch(e){}
+  mfaDel(id, b.tlsTs||b.ts);
   alert("ILS #"+id+" dihapus."+(back?" "+nb+" unit dikembalikan ke stall.":""));
   render();
   tlsCancelAsk(b);
