@@ -1373,7 +1373,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="12 Nov 2026 23.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="12 Nov 2026 23.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3504,6 +3504,22 @@ function csCardHtml(data){
     ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:space-between;gap:8px;align-items:center;"><div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.lp||"-")}${x.driver?" · "+xlEsc(x.driver):""}</span><br><span style="font-size:12px;">Dilanjutkan ${x.n||1} rit (${(x.sisa||[]).map(xlEsc).join(", ")}) · ${xlEsc(x.why||"")} · ${xlEsc(x.by||"-")} ${hm(x.ts)}</span></div><button class="btn btn-outline btn-sm" onclick="csCancel('${xlEsc(normPlat(x.plat))}')">✕</button></div>`).join("")}
   </div>`;
 }
+/* BATCH PERTAMA shift = 3 CC PERTAMA di DCCP (urut jam rit pertama, sama jam -> urutan baris DCCP), yang belum jalan satu rit pun di shift ini.
+   Kalau stall kosong (shift sebelumnya sudah selesai) dan tidak ada CC di waiting list, CC ini langsung diarahkan masuk stall begitu absen —
+   tidak menunggu jam jadwal di Parkir Luar. Yang sudah terlanjur di Parkir Luar ikut dinaikkan otomatis saat stall kosong (urut jadwal).
+   CC ke-4 dan seterusnya tetap mengikuti jam jadwal. */
+const FIRST_BATCH_N=3;
+function ccFirstBatch(d, plat){
+  try{
+    const k=normPlat(plat), mt=d.dccpMeta||{}, base=mt.dateTs||dccpFileDate(mt.fileName)||prodMidnight();
+    const rows=(d.dccpSchedule||[]).map((r,i)=>({r,i})).filter(x=>x.r && !x.r.extra && dccpTripList(x.r).length)
+      .map(x=>Object.assign(x,{t:ccTimeToTs(dccpTripList(x.r)[0], base)})).sort((a,b)=>(a.t-b.t)||(a.i-b.i)).slice(0, FIRST_BATCH_N);
+    const m=rows.find(x=>normPlat(x.r.police)===k); if(!m) return false;
+    return dccpDoneCount(m.r, d)===0;
+  }catch(e){ return false; }
+}
+function ccFreeStalls(d){ const order=[...CONFIG.CC_ACTIVE_DEFAULT]; CONFIG.CC_EMERGENCY.forEach(n=>{ if(d.ccOpen&&d.ccOpen[n]) order.push(n); }); return order.filter(n=>!(d.cc||{})[n]).length; }
+function ccFirstBatchIn(d, plat){ return !(d.queue||[]).length && ccFreeStalls(d)>0 && dccpCurrentOk(d) && ccFirstBatch(d, plat); }
 function ccHoldDue(d, plat){   // ts jadwal bila CC ini masih harus menunggu di luar, selain itu null
   if(csActive(d,plat)) return null;   // Change Shift: prioritas, tanpa menunggu jadwal
   if(ccEarlyPermit(d,plat)) return null;
@@ -3628,17 +3644,29 @@ function ccFarNow(d, plat){
 function holdRelease(force){   // dipanggil berkala; force = daftar plat yang dilepas paksa (Delivery/Admin)
   const d0=DB.get(), h0=d0.hold||[]; if(!h0.length) return;
   const f=(force||[]).map(normPlat);
-  if(!h0.some(x=>f.includes(normPlat(x.plat)) || (!ccHoldDue(d0,x.plat) && !ccFarNow(d0,x.plat)))) return;
+  const fb0=!(d0.queue||[]).length && ccFreeStalls(d0)>0 && dccpCurrentOk(d0) && h0.some(x=>x && !ccFarNow(d0,x.plat) && ccFirstBatch(d0,x.plat));
+  if(!fb0 && !h0.some(x=>f.includes(normPlat(x.plat)) || (!ccHoldDue(d0,x.plat) && !ccFarNow(d0,x.plat)))) return;
   DB.set(d=>{
     const all=d.hold||[], keep=[], rel=[];
     all.forEach(x=>{ if(!f.includes(normPlat(x.plat)) && (ccHoldDue(d,x.plat) || ccFarNow(d,x.plat))) keep.push(x); else rel.push(x); });
-    if(!rel.length) return;
-    d.hold=keep;
-    rel.sort((a,b)=>(ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts)) || ((a.ts||0)-(b.ts||0)));
-    d.holdRel=(Array.isArray(d.holdRel)?d.holdRel:[]).slice(-19);
-    rel.forEach(x=>{ const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall); const k=normPlat(x.plat), fo=f.includes(k), eo=(d.earlyOk||{})[k], ea=d.earlyAll, pd=prodDayStart(Date.now());
-      const why=fo?"force":(ccEarlyPermit(d,x.plat)?"early":"jadwal"), by=fo?((currentUser&&currentUser.name)||""):why==="early"?((eo&&eo.ts>=pd?eo.by:(ea&&ea.by))||""):"";
-      d.holdRel.push({id:String(Date.now())+"-"+k, plat:x.plat, lp:x.lp||"", ts:Date.now(), stall:r.stall||0, queue:r.queue||0, why, by}); });
+    const relLog=()=>{ d.holdRel=(Array.isArray(d.holdRel)?d.holdRel:[]).slice(-19); return d.holdRel; };
+    if(rel.length){
+      d.hold=keep;
+      rel.sort((a,b)=>(ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts)) || ((a.ts||0)-(b.ts||0)));
+      rel.forEach(x=>{ const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall); const k=normPlat(x.plat), fo=f.includes(k), eo=(d.earlyOk||{})[k], ea=d.earlyAll, pd=prodDayStart(Date.now());
+        const why=fo?"force":(ccEarlyPermit(d,x.plat)?"early":"jadwal"), by=fo?((currentUser&&currentUser.name)||""):why==="early"?((eo&&eo.ts>=pd?eo.by:(ea&&ea.by))||""):"";
+        relLog().push({id:String(Date.now())+"-"+k, plat:x.plat, lp:x.lp||"", ts:Date.now(), stall:r.stall||0, queue:r.queue||0, why, by}); });
+    }
+    /* batch pertama: stall kosong & waiting list kosong -> naik langsung ke stall (urut jadwal), sebanyak stall yang kosong */
+    if(dccpCurrentOk(d)){
+      const fb=(d.hold||[]).filter(x=>x && !ccFarNow(d,x.plat) && ccFirstBatch(d,x.plat)).sort((a,b)=>(ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts)) || ((a.ts||0)-(b.ts||0)));
+      for(const x of fb){
+        if((d.queue||[]).length || ccFreeStalls(d)<1) break;
+        d.hold=(d.hold||[]).filter(h=>h!==x);
+        const r=placeCC(d,x); if(r.stall) pushCcCall(d, x, r.stall);
+        relLog().push({id:String(Date.now())+"-"+normPlat(x.plat), plat:x.plat, lp:x.lp||"", ts:Date.now(), stall:r.stall||0, queue:r.queue||0, why:"batch1", by:""});
+      }
+    }
   });
 }
 /* Jadwal DCCP berubah (CC Pengganti / Tukar): CC yang sudah masuk waiting list tetapi ternyata belum waktunya dikembalikan ke Parkir Luar */
@@ -3905,7 +3933,7 @@ function registerCC(plat, lp, dist, auto, manual, src){
     const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
     if(!(d.absenLog||[]).some(x=>x && !x.dup && !x.rejected && normPlat(x.plat)===k && Date.now()-(x.ts||0)<60000)) d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:item.plat, lp:item.lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dist:(dist==null?null:Math.round(dist*10)/10)});
     const hd = ccHoldDue(d, plat);
-    if(hd!=null){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }
+    if(hd!=null && !ccFirstBatchIn(d, plat)){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }   /* batch pertama + stall kosong: langsung masuk */
     res = placeCC(d, item);
     if(res && res.stall) pushCcCall(d, item, res.stall, "absen");   // langsung dapat stall: HP driver dapat perintah masuk (popup + alarm)
   });
@@ -4739,7 +4767,7 @@ function checkKoordAlerts(){
   }); }
   if(currentUser.role==='viewer'){ (Array.isArray(DB.get().holdRel)?DB.get().holdRel:[]).forEach(e=>{   // bunyi 'CC masuk sesuai jadwal' dihapus untuk Delivery/Admin (permintaan Delivery); hanya Pengamat
     if(!e||Date.now()-e.ts>15*60000) return; const key="rel|"+e.id; if(_koordSeen.has(key)) return; _koordSeen.add(key); fired=true;
-    const txt=`CC ${e.plat}${e.lp?" (LP "+e.lp+")":""} sudah waktunya masuk sesuai jadwal: `+(e.stall?`naik ke Stall CC ${ccLbl(e.stall)}.`:`masuk Waiting List${e.queue?" no. "+e.queue:""}.`);
+    const txt=`CC ${e.plat}${e.lp?" (LP "+e.lp+")":""} `+(e.why==="batch1"?"batch pertama (stall kosong): ":"sudah waktunya masuk sesuai jadwal: ")+(e.stall?`naik ke Stall CC ${ccLbl(e.stall)}.`:`masuk Waiting List${e.queue?" no. "+e.queue:""}.`);
     soundEv('jadwal',txt); if(navigator.vibrate) navigator.vibrate([250,120,250]); try{ ringBg("⏰ CC Masuk Sesuai Jadwal", txt); }catch(x){}
     if('Notification' in window && Notification.permission==='granted'){ try{ new Notification("⏰ CC Masuk Sesuai Jadwal",{body:txt}); }catch(x){} }
   }); }
@@ -6958,7 +6986,7 @@ function ccEvHtml(ev, d){
   }
   if(ev.kind==="rel"){
     const x=ev.x, w=ev.where, k=normPlat(x.plat), eo=(d.earlyOk||{})[k], from=prodDayStart(Date.now());
-    const by=x.why==="force"?`Dinaikkan oleh <b>${escH(x.by||"Delivery")}</b> sebelum jadwal.`:x.why==="early"||(eo&&eo.ts>=from)||(d.earlyAll&&d.earlyAll.ts>=from)?`Diizinkan masuk sebelum jadwal oleh <b>${escH(x.by||(eo&&eo.ts>=from?eo.by:(d.earlyAll||{}).by)||"Delivery")}</b>.`:"Sudah waktunya sesuai jadwal DCCP.";
+    const by=x.why==="batch1"?"Batch pertama: stall kosong, langsung masuk tanpa menunggu jadwal.":x.why==="force"?`Dinaikkan oleh <b>${escH(x.by||"Delivery")}</b> sebelum jadwal.`:x.why==="early"||(eo&&eo.ts>=from)||(d.earlyAll&&d.earlyAll.ts>=from)?`Diizinkan masuk sebelum jadwal oleh <b>${escH(x.by||(eo&&eo.ts>=from?eo.by:(d.earlyAll||{}).by)||"Delivery")}</b>.`:"Sudah waktunya sesuai jadwal DCCP.";
     return `<div class="box"><div class="ttl">✅ KAMU NAIK KE WAITING LIST</div><div class="big" style="font-size:34px;">WAITING LIST<br>KE-${w.queue}</div><div class="row" style="font-size:17px;margin-top:8px;"><b>${pl}</b></div>
       <div class="row dim">${by}</div>${ccNoEnterHtml(d,w)}
       <button type="button" class="okbtn" onclick="ccEvOk()">✔ OK, saya tunggu panggilan</button></div>`;
