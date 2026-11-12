@@ -1211,7 +1211,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="12 Nov 2026 15.00";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="12 Nov 2026 15.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -8973,6 +8973,7 @@ function ekyLineShifts(data, ym){
 }
 function mdpSplitModel(k, n, cfg, LS, d){ n=+n||0; cfg=cfg||mdpSplitCfg(); const pat=LS?LS.get(mdpLineOf(k,cfg), d).p:"DN";
   if(pat==="D") return [n,0]; if(pat==="N") return [0,n]; const a=Math.round(n*cfg.r); return [a, n-a]; }
+function mdpSplitByLine(P, cfg, LS, d){ cfg=cfg||mdpSplitCfg(); const o={KP1:[0,0], KP2:[0,0]}; Object.keys(P||{}).forEach(k=>{ const v=mdpSplitModel(k,P[k],cfg,LS,d), l=mdpLineOf(k,cfg); o[l][0]+=v[0]; o[l][1]+=v[1]; }); return o; }
 function mdpSplitDay(P, cfg, LS, d){ cfg=cfg||mdpSplitCfg(); let D=0,N=0; Object.keys(P||{}).forEach(k=>{ const v=mdpSplitModel(k,P[k],cfg,LS,d); D+=v[0]; N+=v[1]; }); return [D,N]; }
 function mdpSplitTxt(){ const c=mdpSplitCfg(); return "Jumlah shift per line ikut DPP: 2 shift → Day "+Math.round(c.r*100)+"% × MDP (dibulatkan), Night = MDP − Day; 1 shift → 100% ke shift itu. Model KP2: "+(c.kp2.join(", ")||"-")+"; model lain ikut KP1"; }
 function mdpPatTxt(LS, d){ const t=x=>x.p==="DN"?"2 shift":(x.p==="D"?"Day":"Night"), a=LS.get("KP1",d), b=LS.get("KP2",d); return {txt:t(a)+" · "+t(b), est:a.src!=="dpp"||b.src!=="dpp"}; }
@@ -9222,7 +9223,7 @@ function drCompute(data, key){
   const act=A?{D:{KP1:ln(A.s1,"KP1"), KP2:ln(A.s1,"KP2"), X:ln(A.s1,"_")}, N:{KP1:ln(A.s2,"KP1"), KP2:ln(A.s2,"KP2"), X:ln(A.s2,"_")}}:null;
   const nightOn=!(key===today && Date.now()<ekyBaseOf(key)+(SHIFT2_START_H-SHIFT_START_H)*3600000);   /* shift Night hari ini belum mulai */
   if(act){ act.D.t=act.D.KP1+act.D.KP2+act.D.X; act.N.t=act.N.KP1+act.N.KP2+act.N.X; act.t=act.D.t+act.N.t; if(!nightOn) act.N={KP1:null, KP2:null, X:0, t:null}; }
-  const mT=M?ekySum((M.plan||{})["d"+d]):null, mSp=M?mdpSplitDay((M.plan||{})["d"+d], null, ekyLineShifts(data, ym), d):null;
+  const LSd=ekyLineShifts(data, ym), mT=M?ekySum((M.plan||{})["d"+d]):null, mSp=M?mdpSplitDay((M.plan||{})["d"+d], null, LSd, d):null, mLine=M?mdpSplitByLine((M.plan||{})["d"+d], null, LSd, d):null;
   const dpp=ekyDppDay(data, key);
   /* bulan berjalan s.d. tanggal ini */
   let mdpMonth=0, mdpTD=0, dppTD=0, actTD=0;
@@ -9232,9 +9233,9 @@ function drCompute(data, key){
   const outM=w=>{ const o=(A||{})["o"+w]||{}, ob=(A||{})["ob"+w]||{}, r={}, b={}; Object.keys(o).forEach(k=>{ const x=(+o[k]||0)-(+ob[k]||0); if(x) r[k]=x; }); Object.keys(ob).forEach(k=>{ if(+ob[k]) b[k]=+ob[k]; }); return {r, b, t:ekySum(o)}; };
   const out={D:outM(1), N:outM(2)};
   const w=A&&A.w?A.w:null;
-  const nk=ekyAddDays(key,1), dpp1=ekyDppDay(data, nk), M1=(data.mdp||{})[nk.slice(0,7)]||null, m1T=M1?ekySum((M1.plan||{})["d"+(+nk.slice(8))]):null, m1Sp=M1?mdpSplitDay((M1.plan||{})["d"+(+nk.slice(8))], null, ekyLineShifts(data, nk.slice(0,7)), +nk.slice(8)):null;
+  const nk=ekyAddDays(key,1), dpp1=ekyDppDay(data, nk), M1=(data.mdp||{})[nk.slice(0,7)]||null, m1T=M1?ekySum((M1.plan||{})["d"+(+nk.slice(8))]):null, LS1=ekyLineShifts(data, nk.slice(0,7)), m1Sp=M1?mdpSplitDay((M1.plan||{})["d"+(+nk.slice(8))], null, LS1, +nk.slice(8)):null, m1Line=M1?mdpSplitByLine((M1.plan||{})["d"+(+nk.slice(8))], null, LS1, +nk.slice(8)):null;
   const rem=(data.dailyRemark||{})[key]||{};
-  return {key, ym, d, M, nightOn, today:key===today, future:key>today, A, act, mT, mSp, dpp, mdpMonth, mdpTD, dppTD, actTD, dlvP, out, w, dp, nk, dpp1, m1T, m1Sp, rem, hasHist:!!((data.prodAct||{})[key])};
+  return {key, ym, d, M, mLine, m1Line, nightOn, today:key===today, future:key>today, A, act, mT, mSp, dpp, mdpMonth, mdpTD, dppTD, actTD, dlvP, out, w, dp, nk, dpp1, m1T, m1Sp, rem, hasHist:!!((data.prodAct||{})[key])};
 }
 function drSaveRemark(key){
   const g=id=>((document.getElementById(id)||{}).value||"").trim();
@@ -9263,15 +9264,18 @@ function drCardHtml(data){
     const th="padding:6px 8px;font-size:11px;color:var(--text-dim);white-space:nowrap;text-align:right;", td="padding:6px 8px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;", tl="text-align:left;font-weight:700;";
     const a=R.act, dppD=R.dpp.KP1[0]+R.dpp.KP2[0], dppN=R.dpp.KP1[1]+R.dpp.KP2[1];
     const v=(x)=>a?x:null;
+    /* tampilan tegak (muat di HP): baris = shift/line, kolom = plan MDP, plan DPP, aktual, selisih */
+    const ml=R.mLine||{KP1:[null,null],KP2:[null,null]}, nOn=R.nightOn, A_=(sh,l)=>!a?null:(sh==="N"&&!nOn?null:(l==="t"?a[sh].t:a[sh][l]));
+    const rowsR=[["Day KP1","D","KP1"],["Day KP2","D","KP2"],["Day","D","t"],["Night KP1","N","KP1"],["Night KP2","N","KP2"],["Night","N","t"]].map(([lb,sh,l])=>{
+      const si=sh==="D"?0:1, mp=R.M?(l==="t"?(R.mSp?R.mSp[si]:null):ml[l][si]):null, dp=l==="t"?R.dpp.KP1[si]+R.dpp.KP2[si]:R.dpp[l][si], ac=A_(sh,l);
+      return {lb, mp, dp:R.dpp.has?dp:null, ac, bold:l==="t", top:l==="t"}; });
+    const tot={lb:"Total hari", mp:R.mT, dp:R.dpp.has?R.dpp.KP1[0]+R.dpp.KP2[0]+R.dpp.KP1[1]+R.dpp.KP2[1]:null, ac:a?a.t:null, bold:true, top:true, big:true};
+    const mon={lb:"Bulan s.d. tgl", mp:R.M?R.mdpTD:null, dp:R.dppTD||null, ac:R.actTD, bold:true, top:true, big:true, sub:R.M&&R.mdpMonth?"MDP sebulan "+f(R.mdpMonth):""};
+    const dif=(x,y)=>x==null||y==null?null:x-y;
     const recv=`<div style="overflow-x:auto;"><table style="font-size:13px;width:100%;">
-      <tr><th style="${th}text-align:left;"></th><th style="${th}"></th><th style="${th}">Day KP1</th><th style="${th}">Day KP2</th><th style="${th}">Day</th><th style="${th}">Night KP1</th><th style="${th}">Night KP2</th><th style="${th}">Night</th><th style="${th}">Total</th><th style="${th}">Bulan s.d. tgl</th></tr>
-      <tr style="border-top:2px solid var(--border);"><td rowspan="3" style="${td}${tl}vertical-align:middle;">vs MDP TAM</td><td style="${td}text-align:left;">Plan</td><td style="${td}"></td><td style="${td}"></td><td style="${td}">${f(R.mSp?R.mSp[0]:null)}</td><td style="${td}"></td><td style="${td}"></td><td style="${td}">${f(R.mSp?R.mSp[1]:null)}</td><td style="${td}"><b>${f(R.mT)}</b></td><td style="${td}">${f(R.M?R.mdpTD:null)}${R.mdpMonth?` <span style="font-size:11px;color:var(--text-dim);">/ ${f(R.mdpMonth)}</span>`:""}</td></tr>
-      <tr><td style="${td}text-align:left;">Aktual</td><td style="${td}">${f(v(a&&a.D.KP1))}</td><td style="${td}">${f(v(a&&a.D.KP2))}</td><td style="${td}"><b>${f(v(a&&a.D.t))}</b></td><td style="${td}">${f(v(a&&a.N.KP1))}</td><td style="${td}">${f(v(a&&a.N.KP2))}</td><td style="${td}"><b>${f(v(a&&a.N.t))}</b></td><td style="${td}"><b>${f(v(a&&a.t))}</b></td><td style="${td}">${f(R.actTD)}</td></tr>
-      <tr><td style="${td}text-align:left;">Diff</td><td style="${td}"></td><td style="${td}"></td><td style="${td}${gc(a&&R.mSp?a.D.t-R.mSp[0]:null)}">${g(a&&R.mSp?a.D.t-R.mSp[0]:null)}</td><td style="${td}"></td><td style="${td}"></td><td style="${td}${gc(a&&R.mSp&&a.N.t!=null?a.N.t-R.mSp[1]:null)}">${g(a&&R.mSp&&a.N.t!=null?a.N.t-R.mSp[1]:null)}</td><td style="${td}${gc(a&&R.mT!=null?a.t-R.mT:null)}">${g(a&&R.mT!=null?a.t-R.mT:null)}</td><td style="${td}${gc(R.M?R.actTD-R.mdpTD:null)}">${g(R.M?R.actTD-R.mdpTD:null)}</td></tr>
-      <tr style="border-top:2px solid var(--border);"><td rowspan="3" style="${td}${tl}vertical-align:middle;">vs DPP ADM</td><td style="${td}text-align:left;">Plan</td><td style="${td}">${f(R.dpp.KP1[0])}</td><td style="${td}">${f(R.dpp.KP2[0])}</td><td style="${td}"><b>${f(dppD)}</b></td><td style="${td}">${f(R.dpp.KP1[1])}</td><td style="${td}">${f(R.dpp.KP2[1])}</td><td style="${td}"><b>${f(dppN)}</b></td><td style="${td}"><b>${f(dppD+dppN)}</b></td><td style="${td}">${f(R.dppTD)}</td></tr>
-      <tr><td style="${td}text-align:left;">Aktual</td><td style="${td}">${f(v(a&&a.D.KP1))}</td><td style="${td}">${f(v(a&&a.D.KP2))}</td><td style="${td}"><b>${f(v(a&&a.D.t))}</b></td><td style="${td}">${f(v(a&&a.N.KP1))}</td><td style="${td}">${f(v(a&&a.N.KP2))}</td><td style="${td}"><b>${f(v(a&&a.N.t))}</b></td><td style="${td}"><b>${f(v(a&&a.t))}</b></td><td style="${td}">${f(R.actTD)}</td></tr>
-      <tr><td style="${td}text-align:left;">Diff</td><td style="${td}${gc(a?a.D.KP1-R.dpp.KP1[0]:null)}">${g(a?a.D.KP1-R.dpp.KP1[0]:null)}</td><td style="${td}${gc(a?a.D.KP2-R.dpp.KP2[0]:null)}">${g(a?a.D.KP2-R.dpp.KP2[0]:null)}</td><td style="${td}${gc(a?a.D.t-dppD:null)}">${g(a?a.D.t-dppD:null)}</td><td style="${td}${gc(a&&a.N.KP1!=null?a.N.KP1-R.dpp.KP1[1]:null)}">${g(a&&a.N.KP1!=null?a.N.KP1-R.dpp.KP1[1]:null)}</td><td style="${td}${gc(a&&a.N.KP2!=null?a.N.KP2-R.dpp.KP2[1]:null)}">${g(a&&a.N.KP2!=null?a.N.KP2-R.dpp.KP2[1]:null)}</td><td style="${td}${gc(a&&a.N.t!=null?a.N.t-dppN:null)}">${g(a&&a.N.t!=null?a.N.t-dppN:null)}</td><td style="${td}${gc(a?a.t-dppD-dppN:null)}">${g(a?a.t-dppD-dppN:null)}</td><td style="${td}${gc(R.actTD-R.dppTD)}">${g(R.actTD-R.dppTD)}</td></tr>
-    </table></div>${a&&(a.D.X||a.N.X)?`<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Termasuk ${a.D.X+a.N.X} unit tanpa area KP1/KP2 (akun Dispatcher belum diisi area).</div>`:""}`;
+      <tr><th style="${th}text-align:left;"></th><th style="${th}">Plan MDP</th><th style="${th}">Plan DPP</th><th style="${th}">Aktual</th><th style="${th}">vs MDP</th><th style="${th}">vs DPP</th></tr>
+      ${rowsR.concat([tot,mon]).map(r=>`<tr style="border-top:${r.big?"2px solid var(--gold)":(r.top?"1px solid var(--border)":"1px dashed var(--border)")};${r.bold?"font-weight:700;":""}"><td style="${td}text-align:left;">${r.lb}${r.sub?`<div style="font-size:10.5px;font-weight:400;color:var(--text-dim);">${r.sub}</div>`:""}</td><td style="${td}">${f(r.mp)}</td><td style="${td}">${f(r.dp)}</td><td style="${td}">${f(r.ac)}</td><td style="${td}${gc(dif(r.ac,r.mp))}">${g(dif(r.ac,r.mp))}</td><td style="${td}${gc(dif(r.ac,r.dp))}">${g(dif(r.ac,r.dp))}</td></tr>`).join("")}
+    </table></div>${!R.dpp.has?`<div class="msg info" style="font-size:12px;margin-top:6px;">DPP bulan ini belum di-upload, jadi Plan DPP kosong. Upload di Admin → Plan Produksi.</div>`:""}${!R.M?`<div class="msg info" style="font-size:12px;margin-top:6px;">MDP bulan ini belum di-upload (Admin → Plan Produksi).</div>`:""}${a&&(a.D.X||a.N.X)?`<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Termasuk ${a.D.X+a.N.X} unit tanpa area KP1/KP2 (akun Dispatcher belum diisi area).</div>`:""}`;
     const dl=`<div style="overflow-x:auto;"><table style="font-size:13px;width:100%;">
       <tr><th style="${th}text-align:left;"></th><th style="${th}">Day</th><th style="${th}">Night</th><th style="${th}">Total</th></tr>
       <tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;">Plan (DCCP)</td><td style="${td}">${f(R.dlvP.D)}</td><td style="${td}">${f(R.dlvP.N)}</td><td style="${td}"><b>${f(R.dlvP.D==null&&R.dlvP.N==null?null:(R.dlvP.D||0)+(R.dlvP.N||0))}</b></td></tr>
@@ -9295,9 +9299,12 @@ function drCardHtml(data){
       <div style="flex:1;min-width:120px;border:1px solid var(--border);border-top:4px solid #D9731F;border-radius:12px;padding:8px 12px;"><div style="font-size:12px;color:var(--text-dim);">WIP Batam</div><div style="font-size:26px;font-weight:800;">${f(R.w.b)}</div></div>
       <div style="flex:2;min-width:220px;display:flex;gap:6px;flex-wrap:wrap;align-content:center;">${ekyModelsOrder(Object.keys(R.w.m||{}).concat(Object.keys(R.w.mb||{}))).map(k=>`<span style="border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;"><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${getModelColor(k,data)};"></i> ${escH(k)} <b>${f((R.w.m||{})[k]||0)}</b>${(R.w.mb||{})[k]?` · BTM ${f(R.w.mb[k])}`:""}</span>`).join("")}</div>
     </div><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${R.today?"Isi stall saat ini.":"Isi stall tercatat terakhir hari itu (akhir hari)"+(R.w.ts?", "+sjFmt(R.w.ts):"")+"."}</div>`:`<div style="font-size:12px;color:var(--text-dim);">Belum tercatat.</div>`;
-    const d1=`<table style="font-size:13px;width:100%;"><tr><th style="${th}text-align:left;">${new Date(ekyBaseOf(R.nk)).toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short'})}</th><th style="${th}">Day KP1</th><th style="${th}">Day KP2</th><th style="${th}">Day</th><th style="${th}">Night KP1</th><th style="${th}">Night KP2</th><th style="${th}">Night</th><th style="${th}">Total</th></tr>
-      <tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;">Receiving (DPP)</td><td style="${td}">${f(R.dpp1.has?R.dpp1.KP1[0]:null)}</td><td style="${td}">${f(R.dpp1.has?R.dpp1.KP2[0]:null)}</td><td style="${td}"><b>${f(R.dpp1.has?R.dpp1.KP1[0]+R.dpp1.KP2[0]:null)}</b></td><td style="${td}">${f(R.dpp1.has?R.dpp1.KP1[1]:null)}</td><td style="${td}">${f(R.dpp1.has?R.dpp1.KP2[1]:null)}</td><td style="${td}"><b>${f(R.dpp1.has?R.dpp1.KP1[1]+R.dpp1.KP2[1]:null)}</b></td><td style="${td}"><b>${f(R.dpp1.has?R.dpp1.KP1[0]+R.dpp1.KP2[0]+R.dpp1.KP1[1]+R.dpp1.KP2[1]:null)}</b></td></tr>
-      <tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;">MDP</td><td style="${td}"></td><td style="${td}"></td><td style="${td}">${f(R.m1Sp?R.m1Sp[0]:null)}</td><td style="${td}"></td><td style="${td}"></td><td style="${td}">${f(R.m1Sp?R.m1Sp[1]:null)}</td><td style="${td}"><b>${f(R.m1T)}</b></td></tr></table>`;
+    const ml1=R.m1Line||{KP1:[null,null],KP2:[null,null]};
+    const d1=`<table style="font-size:13px;width:100%;"><tr><th style="${th}text-align:left;">${new Date(ekyBaseOf(R.nk)).toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short'})}</th><th style="${th}">Plan DPP</th><th style="${th}">Plan MDP</th></tr>
+      ${[["Day KP1",0,"KP1"],["Day KP2",0,"KP2"],["Day",0,"t"],["Night KP1",1,"KP1"],["Night KP2",1,"KP2"],["Night",1,"t"],["Total",-1,"t"]].map(([lb,si,l])=>{
+        const dv=!R.dpp1.has?null:(si<0?R.dpp1.KP1[0]+R.dpp1.KP2[0]+R.dpp1.KP1[1]+R.dpp1.KP2[1]:(l==="t"?R.dpp1.KP1[si]+R.dpp1.KP2[si]:R.dpp1[l][si]));
+        const mv=R.m1T==null?null:(si<0?R.m1T:(l==="t"?(R.m1Sp?R.m1Sp[si]:null):ml1[l][si]));
+        return `<tr style="border-top:${si<0?"2px solid var(--gold)":(l==="t"?"1px solid var(--border)":"1px dashed var(--border)")};${l==="t"?"font-weight:700;":""}"><td style="${td}text-align:left;">${lb}</td><td style="${td}">${f(dv)}</td><td style="${td}">${f(mv)}</td></tr>`; }).join("")}</table>`;
     const rem=canEdit?`<div style="display:flex;gap:10px;flex-wrap:wrap;"><label style="flex:1;min-width:220px;font-size:12px;">☀ Problem Day<textarea id="drRemD" rows="2" style="width:100%;margin-top:4px;">${escH(R.rem.day||"")}</textarea></label><label style="flex:1;min-width:220px;font-size:12px;">🌙 Problem Night<textarea id="drRemN" rows="2" style="width:100%;margin-top:4px;">${escH(R.rem.night||"")}</textarea></label></div><button class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="drSaveRemark('${key}')">Simpan catatan</button>${R.rem.by?`<span style="font-size:11px;color:var(--text-dim);margin-left:8px;">terakhir oleh ${escH(R.rem.by)}</span>`:""}`
       :`<div style="font-size:13px;">☀ ${escH(R.rem.day||"-")}<br>🌙 ${escH(R.rem.night||"-")}</div>`;
     const sec=(t,body)=>`<div style="margin-top:14px;"><div style="font-size:13px;font-weight:800;letter-spacing:.02em;margin-bottom:6px;">${t}</div>${body}</div>`;
@@ -9324,9 +9331,9 @@ function drDownload(){
   const rows=[["DAILY REPORT EKY","","","","","","","","",""]];
   rows.push(["Tanggal", dt.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})]); rows.push([""]);
   rows.push(["RECEIVING","","Day KP1","Day KP2","Day Total","Night KP1","Night KP2","Night Total","Grand Total","Bulan s.d. tgl"]);
-  rows.push(["vs MDP TAM","Plan","","",n(R.mSp?R.mSp[0]:null),"","",n(R.mSp?R.mSp[1]:null),n(R.mT),n(R.M?R.mdpTD:null)]);
+  rows.push(["vs MDP TAM","Plan",n(R.mLine?R.mLine.KP1[0]:null),n(R.mLine?R.mLine.KP2[0]:null),n(R.mSp?R.mSp[0]:null),n(R.mLine?R.mLine.KP1[1]:null),n(R.mLine?R.mLine.KP2[1]:null),n(R.mSp?R.mSp[1]:null),n(R.mT),n(R.M?R.mdpTD:null)]);
   rows.push(["","Aktual",n(a&&a.D.KP1),n(a&&a.D.KP2),n(a&&a.D.t),n(a&&a.N.KP1),n(a&&a.N.KP2),n(a&&a.N.t),n(a&&a.t),n(R.actTD)]);
-  rows.push(["","Diff","","",a&&R.mSp?a.D.t-R.mSp[0]:"","","",a&&R.mSp&&a.N.t!=null?a.N.t-R.mSp[1]:"",a&&R.mT!=null?a.t-R.mT:"",R.M?R.actTD-R.mdpTD:""]);
+  rows.push(["","Diff",a&&R.mLine?a.D.KP1-R.mLine.KP1[0]:"",a&&R.mLine?a.D.KP2-R.mLine.KP2[0]:"",a&&R.mSp?a.D.t-R.mSp[0]:"",a&&R.mLine&&a.N.KP1!=null?a.N.KP1-R.mLine.KP1[1]:"",a&&R.mLine&&a.N.KP2!=null?a.N.KP2-R.mLine.KP2[1]:"",a&&R.mSp&&a.N.t!=null?a.N.t-R.mSp[1]:"",a&&R.mT!=null?a.t-R.mT:"",R.M?R.actTD-R.mdpTD:""]);
   rows.push(["vs DPP ADM","Plan",R.dpp.KP1[0],R.dpp.KP2[0],dppD,R.dpp.KP1[1],R.dpp.KP2[1],dppN,dppD+dppN,R.dppTD]);
   rows.push(["","Aktual",n(a&&a.D.KP1),n(a&&a.D.KP2),n(a&&a.D.t),n(a&&a.N.KP1),n(a&&a.N.KP2),n(a&&a.N.t),n(a&&a.t),n(R.actTD)]);
   rows.push(["","Diff",a?a.D.KP1-R.dpp.KP1[0]:"",a?a.D.KP2-R.dpp.KP2[0]:"",a?a.D.t-dppD:"",a&&a.N.KP1!=null?a.N.KP1-R.dpp.KP1[1]:"",a&&a.N.KP2!=null?a.N.KP2-R.dpp.KP2[1]:"",a&&a.N.t!=null?a.N.t-dppN:"",a?a.t-dppD-dppN:"",R.actTD-R.dppTD]);
@@ -9344,7 +9351,7 @@ function drDownload(){
   if(R.w) ekyModelsOrder(Object.keys(R.w.m||{}).concat(Object.keys(R.w.mb||{}))).forEach(k=>rows.push(["",k,+((R.w.m||{})[k])||0,"BTM",+((R.w.mb||{})[k])||0]));
   rows.push([""]); rows.push(["PLANNING D+1", new Date(ekyBaseOf(R.nk)).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}),"Day KP1","Day KP2","Day Total","Night KP1","Night KP2","Night Total","Total"]);
   rows.push(["","Receiving (DPP)",R.dpp1.KP1[0],R.dpp1.KP2[0],R.dpp1.KP1[0]+R.dpp1.KP2[0],R.dpp1.KP1[1],R.dpp1.KP2[1],R.dpp1.KP1[1]+R.dpp1.KP2[1],R.dpp1.KP1[0]+R.dpp1.KP2[0]+R.dpp1.KP1[1]+R.dpp1.KP2[1]]);
-  rows.push(["","MDP","","",n(R.m1Sp?R.m1Sp[0]:null),"","",n(R.m1Sp?R.m1Sp[1]:null),n(R.m1T)]);
+  rows.push(["","MDP",n(R.m1Line?R.m1Line.KP1[0]:null),n(R.m1Line?R.m1Line.KP2[0]:null),n(R.m1Sp?R.m1Sp[0]:null),n(R.m1Line?R.m1Line.KP1[1]:null),n(R.m1Line?R.m1Line.KP2[1]:null),n(R.m1Sp?R.m1Sp[1]:null),n(R.m1T)]);
   rows.push([""]); rows.push(["PROBLEM","Day",R.rem.day||""]); rows.push(["","Night",R.rem.night||""]);
   mfSave("Daily-Report-EKY-"+key+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx([{name:"Daily Report", rows}], [22,16,11,11,11,11,11,11,12,14]));
 }
