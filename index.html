@@ -1254,7 +1254,7 @@ function capLog(a, n){
 }
 /* Catatan absen yang DITOLAK dari jalur otomatis (peta / auto) cukup sekali per 10 menit per plat per alasan.
    Dulu tiap HP mencoba tiap ±10 detik dan setiap percobaan menambah satu baris → log dikirim ulang terus ke semua HP. */
-const ABSEN_FLAGS=["stale","recent","outbound","loaded","far","driverBusy","ritHabis","nvdc"];
+const ABSEN_FLAGS=["stale","recent","outbound","loaded","far","driverBusy","ritHabis","nvdc","noDccp","notDccp"];
 function absenAdd(L, e){
   L = Array.isArray(L) ? L : ((L && typeof L==="object") ? Object.values(L) : []);
   try{
@@ -1373,7 +1373,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="12 Nov 2026 20.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="12 Nov 2026 23.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1552,11 +1552,11 @@ const TABS_BY_ROLE = {
   pdi:         [{key:"pdi", label:"Scan PDI"}, {key:"display", label:"Display"}],
   dispatcher:  [{key:"dispatcher", label:"Scan Unit"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   cc:          [{key:"orderstall", label:"Order Stall"}, {key:"ccmap", label:"Peta & Chat"}, {key:"display", label:"Display"}],
-  delivery:    [{key:"delivery", label:"Delivery"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
-  koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
-  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
-  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
-  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
+  delivery:    [{key:"delivery", label:"Delivery"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
+  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
+  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
 let selectedRole = null;
@@ -2095,6 +2095,58 @@ function ccForceOutCheck(){
   }
 }
 function ccAutoOutSave(){ const v=(document.getElementById("ccAutoOutH")||{}).value; const n=Math.max(0,Math.min(48,+v||0)); DB.set(d=>{ d.ccAutoOutH=n; }); alert(n?("Driver CC otomatis keluar setelah "+n+" jam login."):"Keluar otomatis dimatikan."); render(); }
+/* KELUAR OTOMATIS SESUDAH RITASE TERAKHIR (DCCP shift ini): semua ritase CC selesai (termasuk +1 Rit), tidak sedang muat / di stall / antrean / Parkir Luar,
+   dan sudah Delout -> ccLastOutM menit (bawaan 60) sesudah Delout terakhir, HP driver keluar sendiri dari RADAR: posisi berhenti dibagikan, GPS & layanan latar APK berhenti.
+   Change Shift (sisa rit dibawa) tidak kena. +1 Rit / Spot Order sesudahnya membatalkan hitung mundur. Driver yang login lagi sesudah keluar otomatis diberi waktu ccLastOutM menit lagi.
+   Cadangan: kalau HP driver tidak menjalankan RADAR (aplikasi tertutup tapi layanan latar APK masih mengirim posisi), HP Admin/Delivery memerintah layanan itu berhenti (trkKill). */
+function ccLastOutMin(d){ const v=(d||DB.get()).ccLastOutM; return (v==null||v==="")?60:Math.max(0,Math.min(240,+v||0)); }
+function ccLastRitState(d, plat){
+  try{
+    const M=ccLastOutMin(d), k=normPlat(plat); if(!M || !k || !dccpCurrentOk(d)) return null;
+    const r=(d.dccpSchedule||[]).find(x=>x && normPlat(x.police)===k); if(!r || csActive(d,plat)) return null;
+    const t=dccpTripList(r); if(!t.length || dccpDoneCount(r,d)<t.length) return null;
+    if(Object.values(d.cc||{}).some(c=>c && normPlat(c.plat)===k) || (d.queue||[]).some(q=>q && normPlat(q.plat)===k) || (d.hold||[]).some(q=>q && normPlat(q.plat)===k)
+       || (d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k)) return null;
+    const lo=ccLastDelout(d, plat); if(!lo || lo<dccpShiftFrom(r) || lo>Date.now()+120000) return null;
+    return {lo, at:lo+M*60000, M, trips:t.length};
+  }catch(e){ return null; }
+}
+function ccLastOutFmtM(M){ return (M>=60 && M%60===0) ? (M/60)+" jam" : M+" menit"; }
+function ccLastOutKill(key){ const now=Date.now(); DB.set(d=>{ d.trkKill=d.trkKill||{}; d.trkKill[key]=now; Object.keys(d.trkKill).forEach(x=>{ if(now-d.trkKill[x]>7*86400000) delete d.trkKill[x]; }); }); }
+let _ccLastOutT=0;
+function ccLastOutCheck(force){
+  const bar=document.getElementById("ccLastOutBar");
+  if(!currentUser || currentUser.role!=="cc" || !currentUser.username){ if(bar) bar.remove(); return; }
+  const now=Date.now(); if(!force && now-_ccLastOutT<10000) return; _ccLastOutT=now;
+  const plat=myCcPlatKey(), d=DB.get(), st=plat?ccLastRitState(d, plat):null;
+  if(!st){ if(bar) bar.remove(); return; }
+  const lt=+currentUser.ts||0, at=(lt && lt>st.at) ? lt+st.M*60000 : st.at;   /* login lagi sesudah batas: hitung dari login itu */
+  if(now>=at){
+    if(bar) bar.remove();
+    try{ ccLastOutKill(trkKey(plat)); }catch(e){}
+    doLogout();
+    setTimeout(()=>{ try{ alert("Ritase terakhir shift ini sudah selesai dan sudah "+ccLastOutFmtM(st.M)+" sejak Delout.\n\nRADAR keluar otomatis — posisi & GPS berhenti dikirim. Login lagi kalau masih ada tugas."); }catch(e){} },300);
+    return;
+  }
+  let el=bar; if(!el){ el=document.createElement("div"); el.id="ccLastOutBar"; el.setAttribute("role","status");
+    el.style.cssText="margin:10px 12px 0;background:#1F2937;color:#fff;border-radius:12px;padding:10px 14px;font:500 13px/1.45 system-ui,sans-serif;";
+    const vp=document.getElementById("viewport"); if(vp && vp.parentNode) vp.parentNode.insertBefore(el, vp); else document.body.appendChild(el); }   /* di bawah tab, tidak menutupi tombol / chip kecepatan */
+  const hm=x=>new Date(x).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"}), sisa=Math.max(1,Math.ceil((at-now)/60000));
+  el.innerHTML=`✅ <b>Ritase terakhir selesai</b> (${st.trips} rit, Delout ${hm(st.lo)}). RADAR keluar otomatis pukul <b>${hm(at)}</b> (±${sisa} menit lagi) — posisi & GPS berhenti dikirim.`;
+}
+let _ccLastOutBkT=0;
+function ccLastOutBackstop(){
+  if(!currentUser || !["admin","delivery"].includes(currentUser.role) || !FBS.enabled || !FBS.conn) return;
+  const now=Date.now(); if(now-_ccLastOutBkT<60000) return; _ccLastOutBkT=now;
+  const d=DB.get(), tk=d.trkKill||{}, raw=TRACK_RAW||{};
+  (d.dccpSchedule||[]).forEach(r=>{
+    const st=r && ccLastRitState(d, r.police); if(!st) return;
+    const key=trkKey(r.police), lim=st.at+3*60000; if(now<lim || (+tk[key]||0)>=st.at) return;   /* HP driver diberi waktu keluar sendiri dulu */
+    if(!Object.keys(raw).some(x=>{ const v=raw[x]; return v && (x===key || trkKey(v.plat)===key) && (+v.ts||0)>st.at+60000; })) return;   /* masih mengirim posisi sesudah batas */
+    DB.set(dd=>{ const o=dd.trkKill||{}; if((+o[key]||0)>=st.at) return; o[key]=Date.now(); Object.keys(o).forEach(x=>{ if(Date.now()-o[x]>7*86400000) delete o[x]; }); dd.trkKill=o; });
+  });
+}
+function ccLastOutSave(){ const v=(document.getElementById("ccLastOutM")||{}).value; const n=Math.max(0,Math.min(240,Math.round(+v||0))); DB.set(d=>{ d.ccLastOutM=n; }); alert(n?("Driver CC otomatis keluar "+ccLastOutFmtM(n)+" sesudah Delout ritase terakhir (DCCP)."):"Keluar otomatis sesudah ritase terakhir dimatikan."); render(); }
 function doLogout(){
   try{ if(currentUser && currentUser.username){ const un=currentUser.username, t=Date.now(); DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===un) x.lo=t; }); }); } }catch(e){}   // tandai sudah logout: titik petanya tidak dianggap punya akun aktif
   ccPlatOk=false; try{ stopShare(true); }catch(e){}
@@ -2227,7 +2279,7 @@ function renderInner(){
   else if(activeTab==="dccp") setVP(vp, chgReqHtml()+schedReqHtml()+renderDccpUpload());
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
-  else if(activeTab==="ccreport"){ setVP(vp, renderCcReport()); if(_vpChanged) setTimeout(()=>tripLoad().then(rptUpdate),0); }
+  else if(activeTab==="ccreport" && TRIP_ON){ setVP(vp, renderCcReport()); if(_vpChanged) setTimeout(()=>tripLoad().then(rptUpdate),0); }
   else if(activeTab==="admin"){ setVP(vp, renderAdmin()); if(adminTab==="users") usrRender(); }
   else if(activeTab==="display") setVP(vp, renderDisplay());
 }
@@ -3171,6 +3223,7 @@ function doAutoRegister(dist){
   const res = registerCC(prof.plat, prof.lp, dist, true);
   if(res.offline){ autoAbsen.state="armed"; autoAbsen.hits=0; autoAbsen.warn="Sinyal belum Online. Absen otomatis dicoba lagi begitu tersambung."; updateAutoStatus(); return; }
   if(res.far){ autoAbsen.state="armed"; autoAbsen.hits=0; autoAbsen.warn=`Masih ${dist.toFixed(1)} km dari yard (radius ${res.radius} km). Absen belum dicatat.`; updateAutoStatus(); return; }
+  if(res.noDccp || res.notDccp){ autoAbsen.state="armed"; autoAbsen.hits=0; autoAbsen.warn=ccAbsenTolakMsg(prof.plat, res); updateAutoStatus(); return; }   /* tunggu DCCP: dicoba lagi otomatis */
   autoAbsen.state = "done"; autoAbsen.doneTs = Date.now();
   autoAbsen.msg = res.dup ? ccAbsenTolakMsg(prof.plat, res)
                 : res.hold ? `🕒 Absen tercatat. Jadwal loading ${prof.plat} jam ${holdHm(res.due)} — belum masuk slot / waiting list. Tunggu di luar, otomatis masuk ${ccEarlyMin()} menit sebelum jadwal.`
@@ -3399,11 +3452,13 @@ function earlyCardHtml(data){
 /* ===== CC CHANGE SHIFT: CC yang minus di shift ini (produksi/hujan/kendala CC) dilanjutkan di shift berikutnya. Begitu DCCP baru diupload, CC ini jadi PRIORITAS masuk, jam berapa pun absen. ===== */
 function canCS(){ return !!(currentUser && ["delivery","koordinator","admin"].includes(currentUser.role)); }
 function csArr(d){ const a=d.csList; return Array.isArray(a)?a:(a&&typeof a==="object"?Object.values(a):[]); }
+/* Koordinator hanya melihat & mengatur Change Shift LP-nya sendiri; Delivery & Admin melihat semua LP. */
+function csLpOk(lp){ if(!currentUser || currentUser.role!=="koordinator") return true; const my=myKoordLP(); if(!my) return true; return lpCanon(lp||"")===lpCanon(my); }   /* koordinator tanpa LP di akunnya: semua LP (sama seperti manifest) */
 function csUntil(){ const h=3600000, pd=prodDayStart(Date.now()), e=currentShift()==="1"?pd+13*h:pd+24*h; return e+(currentShift()==="1"?11*h:13*h); }   // sampai akhir shift berikutnya
 function csActive(d, plat){ const k=normPlat(plat); if(!k) return null; return csArr(d).find(x=>x && normPlat(x.plat)===k && x.until>Date.now() && (d.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=x.ts).length < (x.n||1))||null; }
 function csOpen(){
   if(!canCS()) return; const d=DB.get();
-  const rows=(d.dccpSchedule||[]).map(r=>{ const t=dccpTripList(r), dn=dccpDoneCount(r,d); return {r, sisa:t.slice(dn)}; }).filter(x=>x.sisa.length>0 && !csActive(d,x.r.police));
+  const rows=(d.dccpSchedule||[]).map(r=>{ const t=dccpTripList(r), dn=dccpDoneCount(r,d); return {r, sisa:t.slice(dn)}; }).filter(x=>x.sisa.length>0 && !csActive(d,x.r.police) && csLpOk(x.r.lp));
   showModal(`<h3 style="margin:0 0 4px;">🔁 CC Change Shift</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Pilih CC yang ritasenya belum selesai (minus) dan dilanjutkan di shift berikutnya. Saat DCCP shift berikutnya diupload, CC ini jadi <b>prioritas masuk</b>: jam berapa pun absen, langsung masuk tanpa menunggu jadwal dan didahulukan di waiting list. Berlaku sampai akhir shift berikutnya, atau sampai CC itu ILS.</div>
     ${rows.length?rows.map((x,i)=>`<label style="display:flex;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--border);"><input type="checkbox" class="csChk" value="${i}"> <span><b>${xlEsc(platFmt(x.r.police))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.r.lp||"-")}${x.r.driver?" · "+xlEsc(x.r.driver):""}</span><br><span style="font-size:12px;">Sisa ${x.sisa.length} rit: ${x.sisa.map(xlEsc).join(", ")}</span></span></label>
@@ -3424,11 +3479,11 @@ function csSave(){
     d.csList=capLog(a,60); });
   closeModal(); try{ holdRelease(); }catch(e){} render();
 }
-function csCancel(k){ if(!canCS()) return; if(!confirm("Batalkan status Change Shift untuk CC ini?")) return;
+function csCancel(k){ if(!canCS()) return; { const x=csArr(DB.get()).find(y=>y && normPlat(y.plat)===k); if(x && !csLpOk(x.lp)) return; } if(!confirm("Batalkan status Change Shift untuk CC ini?")) return;
   DB.set(d=>{ d.csList=csArr(d).filter(x=>x && normPlat(x.plat)!==k); }); render(); }
 function csCardHtml(data){
   if(!canCS()) return "";
-  const L=csArr(data).filter(x=>x && csActive(data,x.plat)), hm=t=>holdHm(t);
+  const L=csArr(data).filter(x=>x && csActive(data,x.plat) && csLpOk(x.lp)), hm=t=>holdHm(t);
   return `<div class="card" style="border-left:5px solid #7B4FD0;"><h3>🔁 CC Change Shift${L.length?` (${L.length})`:""}</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">CC yang minus di shift ini dan dilanjutkan di shift berikutnya. Setelah DCCP baru diupload, CC ini diprioritaskan masuk, jam berapa pun hadir.</div>
     <button class="btn btn-primary" style="width:100%;" onclick="csOpen()">➕ Pilih CC Change Shift</button>
@@ -3793,11 +3848,27 @@ function ccDriverBusy(d, plat, lp){
   }catch(e){}
   return null;
 }
+/* ATURAN DCCP (12 Nov 2026): CC hanya boleh absen / masuk kalau platnya ada di Jadwal DCCP shift yang sedang berjalan.
+   Tambahan di luar file DCCP hanya lewat 3 jalan: Change Shift, Spot Order, CC Pengganti. DCCP shift ini belum diupload →
+   semua absen ditolak (GPS HP driver, peta, Spot Order, tombol absen driver, maupun Absenkan oleh Delivery/Admin). */
+function dccpCurrentOk(d){
+  d=d||DB.get(); if(!(d.dccpSchedule||[]).length) return false;
+  const m=d.dccpMeta||{};
+  if(m.shift && m.shift!==dccpShiftNow()) return false;   /* yang aktif masih jadwal shift lain */
+  if(m.dateTs){ const df=m.dateTs-prodMidnight(); return df>=-12*3600000 && df<=36*3600000; }   /* tanggal file = hari produksi ini (atau besoknya untuk file shift malam) */
+  return !!m.uploadedAt && Date.now()-m.uploadedAt < 30*3600000;
+}
 function registerCC(plat, lp, dist, auto, manual, src){
   if(FBS.enabled && fbCurrentState()!=="online") return {offline:true};   /* sinyal putus: absen tidak disimpan di HP lalu dikirim belakangan dengan data lama */
   let res = null; const k = normPlat(plat);
   DB.set(d=>{
     if(Object.values(d.cc).some(c=>c && normPlat(c.plat)===k) || d.queue.some(q=>normPlat(q.plat)===k) || (d.hold||[]).some(q=>normPlat(q.plat)===k) || (d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k)){   /* satu plat = satu data: sudah di stall / antrian / ILS aktif → semua jalur absen (otomatis, peta, manual KR/Delivery) ditolak */ res = {dup:true}; d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, dist:(dist==null?null:Math.round(dist*10)/10)}); return; }
+    { /* berlaku untuk SEMUA jalur absen, termasuk Absenkan manual oleh Delivery/Admin */
+      {
+        const _lg=f=>{ d.absenLog=absenAdd(d.absenLog, Object.assign({ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true}, f)); };
+        if(!dccpCurrentOk(d)){ res={dup:true, noDccp:true}; _lg({noDccp:true}); return; }
+        if(!((d.dccpSchedule||[]).some(r=>normPlat(r.police)===k) || csActive(d, plat))){ res={dup:true, notDccp:true}; _lg({notDccp:true}); return; }
+      } }
     { const lf=((d.ccLeft||{})[k])||0; const _own=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));   // Delivery/Admin boleh mengabsenkan manual kapan saja
       if(lf && (Date.now()<=lf || (!_own && Date.now()-lf < ccReabsenMin(d)*60000))){   // absen dibuat SEBELUM CC keluar (dikirim ulang sinkronisasi / perangkat lain), atau < 20 menit sesudah keluar dari HP driver: satu CC satu catatan
         res={dup:true, stale:true}; d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true}); return; } }
@@ -5136,7 +5207,7 @@ function sjOvRender(full){
   if(!el){ el=document.createElement("div"); el.id="sjOv"; el.style.cssText="position:fixed;inset:0;z-index:150;background:var(--bg,#fff);overflow-y:auto;"; document.body.appendChild(el); full=true; }
   const L=sjFiltered(), now=Date.now(), shown=L.slice(0,sjOv.n);
   const lps=[...new Set([...(DB.get().lpList||[]), ...(DB.get().ils||[]).filter(x=>x.sj).map(x=>x.lp)].filter(Boolean))];
-  const arcNote=!sjOv.date ? (MFA.state==="ok"?" · lebih lama (sampai 2 minggu): pilih tanggal":"") : (sjArc.loading?" · ⏳ mengambil arsip tanggal ini…":(sjArc.err==="denied"?" · arsip 1 bulan belum aktif":(sjArc.err?" · arsip gagal diambil, coba lagi":"")));
+  const arcNote=!sjOv.date ? (MFA.state==="ok"?" · lebih lama (sampai 2 minggu): pilih tanggal":"") : (sjArc.loading?" · ⏳ mengambil arsip tanggal ini…":((sjArc.err==="denied"&&MFA_ON)?" · arsip 1 bulan belum aktif":(sjArc.err?" · arsip gagal diambil, coba lagi":"")));
   const listHtml=`<div style="font-size:12px;color:var(--text-dim);margin:8px 0 0;">${L.length} surat jalan${(sjOv.q||sjOv.date||sjOv.shift)?" cocok dengan pencarian":" (7 hari terakhir)"}${arcNote}</div>`+(shown.length?shown.map(b=>sjRowHtml(b,now)).join(""):`<div class="emptystate">Tidak ada surat jalan yang cocok.</div>`)+(L.length>shown.length?`<button class="btn btn-outline" style="margin-top:10px;width:100%;" onclick="sjOvMore()">Tampilkan lagi (${L.length-shown.length})</button>`:"");
   if(full){
     const shBtn=(k,l)=>`<button class="linechip ${sjOv.shift===k?'on':''}" style="padding:5px 14px;" onclick="sjOvSet('shift','${k}')">${l}</button>`;
@@ -5144,7 +5215,7 @@ function sjOvRender(full){
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">📄 ${sjOv.scope==="cc"?"Surat Jalan Saya":sjOv.scope==="koor"?"Surat Jalan"+(myKoordLP()?" LP "+myKoordLP():""):"Surat Jalan (semua LP)"}</h3><button class="btn btn-outline btn-sm" style="width:auto;" onclick="sjOvClose()">✕ Tutup</button></div>
         <input id="sjQ" type="search" placeholder="Cari plat no, no surat jalan, atau no rangka…" value="${escH(sjOv.q)}" oninput="sjOvSet('q',this.value)" style="width:100%;margin-top:10px;padding:10px 12px;border:1.5px solid var(--border,#ccc);border-radius:9px;font-size:15px;background:var(--panel3,#fff);color:var(--text);">
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
-          <input id="sjD" type="date" value="${sjOv.date}" min="${mfDateStr(Date.now()-SJ_PDF_KEEP_DAYS*86400000)}" onchange="sjOvSet('date',this.value)" style="padding:7px 10px;border:1.5px solid var(--border,#ccc);border-radius:9px;background:var(--panel3,#fff);color:var(--text);">
+          <input id="sjD" type="date" value="${sjOv.date}" min="${mfDateStr(Date.now()-(MFA_ON?SJ_PDF_KEEP_DAYS:7)*86400000)}" onchange="sjOvSet('date',this.value)" style="padding:7px 10px;border:1.5px solid var(--border,#ccc);border-radius:9px;background:var(--panel3,#fff);color:var(--text);">
           <span id="sjShiftBtns">${shBtn("","Semua shift")}${shBtn("red","RED")}${shBtn("white","WHITE")}</span>
           ${sjOv.scope==="del"&&lps.length?`<select onchange="sjLpF=this.value;sjOvRender(false)" style="padding:7px 10px;"><option value="">Semua LP</option>${lps.map(l=>`<option value="${escH(l)}" ${lpKey(l)===lpKey(sjLpF)&&sjLpF?"selected":""}>${escH(l)}</option>`).join("")}</select>`:""}
           <button class="btn btn-outline btn-sm" style="width:auto;" onclick="sjOv.q='';sjOv.date='';sjOv.shift='';sjArcLoad('');sjOvRender(true)">Reset</button></div></div>
@@ -5291,7 +5362,7 @@ async function downloadManifest(btn){
   const data=arc&&arc.length ? Object.assign({}, DB.get(), {_mfArc:arc}) : DB.get();
   const lps=lpSel? [lpSel] : [...new Set(mfRecords(data).map(m=>m.lp).filter(Boolean))].sort();
   const all=mfRows(data, ds, lpSel, shf);
-  if(!all.length){ alert("Tidak ada data manifest untuk tanggal "+ds+(shf?" shift "+shf:"")+(lpSel?" (LP "+lpSel+")":"")+". Manifest dicatat saat Delout."+(MFA.state==="denied"?"\n\nArsip 1 bulan belum aktif (aturan Firebase radar_manifest belum ada), jadi tanggal yang sudah lewat beberapa hari belum bisa diunduh.":"")); return; }
+  if(!all.length){ alert("Tidak ada data manifest untuk tanggal "+ds+(shf?" shift "+shf:"")+(lpSel?" (LP "+lpSel+")":"")+". Manifest dicatat saat Delout."+((MFA.state==="denied"&&MFA_ON)?"\n\nArsip 1 bulan belum aktif (aturan Firebase radar_manifest belum ada), jadi tanggal yang sudah lewat beberapa hari belum bisa diunduh.":"")); return; }
   const sheets=[];
   const add=(name,rows)=>sheets.push({name, rows:[MF_HEAD].concat(rows)});
   if(!lpSel){ add("Manifest ALL", all); lps.forEach(lp=>{ const r=mfRows(data, ds, lp, shf); if(r.length) add("LP "+lp, r); }); }
@@ -5307,7 +5378,12 @@ async function downloadManifest(btn){
    (menangkap Delout dari HP yang masih versi lama). Lebih dari 31 hari dihapus otomatis.
 ====================================================================== */
 const MFA_PATH="radar_manifest", MFA_KEEP_DAYS=31, MFA_HASH_KEY="radar_mfa_h";
-var MFA={state:"", err:"", ts:0, probing:false};   /* state: ok | denied | err | "" (belum dicek) */
+var MFA={state:"", err:"", ts:0, probing:false};
+/* Arsip manifest 1 bulan DIMATIKAN (12 Nov 2026, permintaan Khairul): manifest & surat jalan kembali seperti semula
+   (bisa diunduh selama ILS tersimpan, surat jalan terhapus otomatis 7 hari). Tidak ada baca/tulis ke radar_manifest.
+   Untuk menghidupkan lagi: MFA_ON=true dan tambahkan aturan Firebase radar_manifest. */
+const MFA_ON=false;
+if(!MFA_ON) MFA.state="denied";   /* state: ok | denied | err | "" (belum dicek) */
 const MFA_RULES_SNIPPET=`"radar_manifest": {\n  ".read": "auth != null",\n  ".write": "auth != null"\n}`;
 function mfaCan(){ return !!(currentUser && !isViewer() && sjCanStore()); }
 function mfaStrHash(s){ let h=0x811c9dc5; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193); } return (h>>>0).toString(36); }
@@ -5322,7 +5398,7 @@ function mfaHashes(){ try{ return JSON.parse(localStorage.getItem(MFA_HASH_KEY)|
 function mfaHashSave(H){ try{ const cut=Date.now()-(MFA_KEEP_DAYS+3)*86400000; Object.keys(H).forEach(k=>{ if(!H[k] || (H[k].o||0)<cut) delete H[k]; }); localStorage.setItem(MFA_HASH_KEY, JSON.stringify(H)); }catch(e){} }
 let _mfaBusy=false;
 async function mfaPush(ids){   /* ids: hanya ILS ini; kosong = semua manifest yang masih ada di /radar */
-  if(!mfaCan() || _mfaBusy) return;
+  if(!MFA_ON || !mfaCan() || _mfaBusy) return;
   if(!ids && MFA.state==="denied" && Date.now()-MFA.ts<30*60000) return;   /* aturan belum ada: jangan kirim ulang tiap 2 menit */
   _mfaBusy=true;
   try{
@@ -5344,6 +5420,7 @@ async function mfaPush(ids){   /* ids: hanya ILS ini; kosong = semua manifest ya
 }
 function mfaDel(id, t){   /* batal Delout / hapus ILS: buang dari arsip */
   try{
+    if(!MFA_ON) return;
     if(!mfaCan() || id==null) return;
     const H=mfaHashes(), up={}, ks=new Set(); if(H[id]&&H[id].k) ks.add(H[id].k);
     if(t){ [-1,0,1].forEach(d=>ks.add(mfDateStr(t+d*86400000))); }
@@ -5355,6 +5432,7 @@ function mfaDel(id, t){   /* batal Delout / hapus ILS: buang dari arsip */
 /* Ambil arsip untuk hari produksi ds (jam TLS tanggal ds dan ds+1, karena shift Night lewat tengah malam) */
 async function mfaFetch(ds){ return mfaFetchDays([ds, mfDateStr(new Date(ds+"T12:00:00").getTime()+86400000)]); }
 async function mfaFetchDays(days){
+  if(!MFA_ON) return null;
   if(!sjCanStore()) return null;
   try{
     const snaps=await Promise.race([Promise.all(days.map(k=>FBS.db.ref(MFA_PATH+"/"+k).once("value"))), new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),15000))]);
@@ -5365,6 +5443,7 @@ async function mfaFetchDays(days){
 }
 /* Cek sekali per sesi apakah node arsip sudah diizinkan (membaca anak kosong: ringan) */
 function mfaProbe(){
+  if(!MFA_ON) return;
   if(MFA.state || MFA.probing || !sjCanStore()) return; MFA.probing=true;
   FBS.db.ref(MFA_PATH+"/_cek").once("value").then(()=>{ MFA.state="ok"; }, e=>{ MFA.state=fbDenied(e)?"denied":""; MFA.err=String(e&&e.message||e); })
     .finally(()=>{ MFA.probing=false; MFA.ts=Date.now(); if(MFA.state) mfaRerender(); });
@@ -5394,6 +5473,7 @@ function sjPdfPurge(){
 function mfaTick(){ try{ if(currentUser && ["delivery","admin"].includes(currentUser.role) && !isViewer()){ mfaPush(); mfaCleanup(); sjPdfPurge(); } }catch(e){} }
 setInterval(mfaTick, 120000); setTimeout(mfaTick, 20000);
 function mfaStatusHtml(forKoord){
+  if(!MFA_ON) return "";
   if(MFA.state==="ok") return `<div style="font-size:11px;color:#1E9E5A;margin:-2px 0 8px;">✔ Arsip 1 bulan aktif</div>`;
   if(MFA.state!=="denied") return "";
   if(forKoord) return `<div class="msg info" style="font-size:12px;margin-bottom:8px;">Arsip 1 bulan belum aktif: minta Admin menambah aturan Firebase <b>radar_manifest</b>. Sementara itu yang bisa diunduh hanya beberapa hari terakhir.</div>`;
@@ -5403,11 +5483,11 @@ function mfaStatusHtml(forKoord){
 /* Kartu Koordinator: unduh manifest LP sendiri */
 function mfKoordCardHtml(data){
   try{
-    const today=mfDateStr(prodDayStart()), min=mfDateStr(prodDayStart()-MFA_KEEP_DAYS*86400000);
+    const today=mfDateStr(prodDayStart()), min=mfDateStr(prodDayStart()-(MFA_ON?MFA_KEEP_DAYS:7)*86400000);
     const lpk=myKoordLP(), lp=lpk?mfLpLabel(data,lpk):"", n=mfRows(data,today,lp).length;
     mfaProbe();
     return `<div class="card"><h3>📊 Download Manifest${lp?" LP "+escH(lp):""}</h3>
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Unit ${lp?"LP "+escH(lp)+" ":""}yang sudah <b>Delout</b>, tersimpan 1 bulan. Hari produksi ini: <b>${n} unit</b>.${lp?"":" Akun ini belum punya LP, jadi isinya semua LP."}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Unit ${lp?"LP "+escH(lp)+" ":""}yang sudah <b>Delout</b>, tersimpan ${MFA_ON?"1 bulan":"±1 minggu (selama ILS tersimpan)"}. Hari produksi ini: <b>${n} unit</b>.${lp?"":" Akun ini belum punya LP, jadi isinya semua LP."}</div>
       ${mfaStatusHtml(true)}
       <div class="field"><label>Tanggal delivery</label><input id="mfDate" type="date" value="${today}" min="${min}"></div>
       <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (Day + Night)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 – 06:59 besok)</option></select></div>
@@ -6590,10 +6670,10 @@ function inputXlCardHtml(data, defKind){
 function manifestCardHtml(data){
   const today=mfDateStr(prodDayStart());   /* hari produksi: jam 06.00 pagi masih tanggal kemarin (shift malam belum selesai) */
   const lps=(()=>{ const seen=new Set(), o=[]; [...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean).forEach(l=>{ const c=lpCanon(l); if(seen.has(c)) return; seen.add(c); o.push(mfLpLabel(data,l)); }); return o; })();
-  const nToday=mfRows(data,today,"").length, mfMin=mfDateStr(prodDayStart()-MFA_KEEP_DAYS*86400000);
+  const nToday=mfRows(data,today,"").length, mfMin=mfDateStr(prodDayStart()-(MFA_ON?MFA_KEEP_DAYS:7)*86400000);
   mfaProbe();
   return `<div class="card"><h3>📊 Download Manifest (Excel)</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, tersimpan 1 bulan (No. SJKB &amp; Cabang tetap ada walaupun PDF surat jalan sudah terhapus). Hari produksi ini: <b>${nToday} unit</b>. Nama Cabang dan No. SJKB diisi dari PDF surat jalan; sel kuning berarti PDF-nya belum ada.</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Data dicatat saat <b>Delout</b>, ${MFA_ON?"tersimpan 1 bulan (No. SJKB &amp; Cabang tetap ada walaupun PDF surat jalan sudah terhapus)":"bisa diunduh ±1 minggu (selama ILS tersimpan)"}. Hari produksi ini: <b>${nToday} unit</b>. Nama Cabang dan No. SJKB diisi dari PDF surat jalan; sel kuning berarti PDF-nya belum ada.</div>
     ${mfaStatusHtml(false)}${xlStatusLine(data)}
     <div class="field"><label>Tanggal delivery</label><input id="mfDate" type="date" value="${today}" min="${mfMin}"></div>
     <div class="field"><label>Shift</label><select id="mfShift"><option value="">Semua shift (Day + Night: 07:00 tanggal ini – 06:59 besok)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 tanggal ini – 06:59 hari berikutnya)</option></select></div>
@@ -6628,7 +6708,7 @@ function absenLogCardHtml(data){
   const L=(data.absenLog||[]).slice().reverse().slice(0,40);
   return `<details class="card" style="margin-top:10px;"><summary style="cursor:pointer;font-weight:800;">🕵 Log Absen (siapa yang absen) <span class="badge">${L.length}</span></summary>
     <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">40 absen terakhir. Kalau satu plat absen berulang dari akun yang tidak seharusnya (mis. akun lain yang masih login dengan plat itu), akunnya kelihatan di sini. Akun bisa dikeluarkan dari Admin → User.</div>
-    ${L.length?L.map(x=>`<div style="border-top:1px solid var(--border);padding:6px 0;font-size:13px;"><b>${escH(x.plat)}</b> · ${escH(x.lp||"-")}${(()=>{ const r=(data.dccpSchedule||[]).find(z=>normPlat(z.police)===normPlat(x.plat)); return r&&r.driver?` · <b>${escH(r.driver)}</b>`:""; })()} <span style="color:var(--text-dim);">${hh(x.ts)}</span><br><span style="font-size:12px;">Akun: <b>${escH(x.name||x.u||"-")}</b> (${escH(x.u||"-")}, ${escH(x.role||"-")}) · ${x.auto?"🤖 otomatis":(x.manual?"✍ manual":"✍")}${x.dist!=null?" · "+x.dist+" km dari yard":""}${x.loaded?` · <span style="color:#C77700;">ditolak (sudah muat, belum menjauh dari yard)</span>`:x.stale?` · <span style="color:#C77700;">ditolak (absen lama, CC sudah keluar)</span>`:(x.dup?` · <span style="color:#C77700;">ditolak (sudah terdaftar)</span>`:"")}</span></div>`).join(""):`<div class="emptystate">Belum ada log absen.</div>`}
+    ${L.length?L.map(x=>`<div style="border-top:1px solid var(--border);padding:6px 0;font-size:13px;"><b>${escH(x.plat)}</b> · ${escH(x.lp||"-")}${(()=>{ const r=(data.dccpSchedule||[]).find(z=>normPlat(z.police)===normPlat(x.plat)); return r&&r.driver?` · <b>${escH(r.driver)}</b>`:""; })()} <span style="color:var(--text-dim);">${hh(x.ts)}</span><br><span style="font-size:12px;">Akun: <b>${escH(x.name||x.u||"-")}</b> (${escH(x.u||"-")}, ${escH(x.role||"-")}) · ${x.auto?"🤖 otomatis":(x.manual?"✍ manual":"✍")}${x.dist!=null?" · "+x.dist+" km dari yard":""}${x.noDccp?` · <span style="color:#C0392B;">ditolak (DCCP shift ini belum diupload)</span>`:x.notDccp?` · <span style="color:#C0392B;">ditolak (tidak ada di DCCP)</span>`:x.loaded?` · <span style="color:#C77700;">ditolak (sudah muat, belum menjauh dari yard)</span>`:x.stale?` · <span style="color:#C77700;">ditolak (absen lama, CC sudah keluar)</span>`:(x.dup?` · <span style="color:#C77700;">ditolak (sudah terdaftar)</span>`:"")}</span></div>`).join(""):`<div class="emptystate">Belum ada log absen.</div>`}
   </details>`;
 }
 function ilsFixCardHtml(data){
@@ -7561,7 +7641,8 @@ function dccpSubRit(ri){
 }
 function dccpSaveEdit(){
   const g = id=>document.getElementById(id).value.trim();
-  const police = platFmt(g("dfPolice")), lp=g("dfLP");
+  let police = platFmt(g("dfPolice")); const lp=g("dfLP");
+  if(dccpEditIdx!==-1 && dccpEditIdx!=null){ const _o=(DB.get().dccpSchedule||[])[dccpEditIdx]; if(_o) police=platFmt(_o.police); }   /* edit tidak boleh mengganti plat: pakai CC Pengganti */
   if(!police || !lp){ document.getElementById("dccpEditMsg").innerHTML=`<div class="msg err">Plat & LP wajib diisi.</div>`; return; }
   const _dc = document.getElementById("dfDrvCode");
   const rec = {lp, police, model:g("dfModel"), driver:g("dfDriver"), drvCode:(_dc?_dc.value.trim().toUpperCase():undefined), schedTime:g("dfTime"), dest:g("dfDest"), note:g("dfNote"), planTrip:Math.max(0,parseInt(g("dfTrip"))||0), planUnit:Math.max(0,parseInt(g("dfUnit"))||0)};
@@ -7911,7 +7992,7 @@ function dccpEditForm(data){
     <h3>${idx===-1?"➕ Tambah CC (Spot Order)":"✏️ Edit CC Terjadwal"}</h3>
     ${idx!==-1 && r.origPolice?`<div style="font-size:12px;color:var(--text-dim);">Semula: ${r.origPolice}</div>`:""}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:10px;">
-      <label>Plat CC<input id="dfPolice" value="${r.police}" placeholder="B 1234 ABC"></label>
+      <label>Plat CC<input id="dfPolice" value="${r.police}" placeholder="B 1234 ABC" ${idx!==-1?'readonly style="background:#F1F3F6;color:#555;"':""}>${idx!==-1?'<span style="display:block;font-size:11px;color:var(--text-dim);font-weight:500;margin-top:2px;">Ganti plat lewat 🔁 CC Pengganti</span>':""}</label>
       <label>LP<input id="dfLP" list="dfLPlist" value="${r.lp}"><datalist id="dfLPlist">${lpOpts}</datalist></label>
       <label>Model<input id="dfModel" value="${r.model||""}"></label>
       <label>Nama Driver<input id="dfDriver" value="${r.driver||""}"></label>
@@ -10745,7 +10826,9 @@ function renderAdmin(){
     return `${tabsHtml}
       ${renderRegCard()}
       <div class="card"><h3>⏱ Keluar otomatis Driver CC</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Driver CC yang lupa keluar dari aplikasi otomatis di-logout setelah sekian jam sejak login, sehingga posisinya berhenti dibagikan. Isi 0 untuk mematikan.</div>
-        <div style="display:flex;gap:8px;align-items:center;"><input id="ccAutoOutH" type="number" min="0" max="48" value="${ccAutoOutHours()}" style="width:90px;"><span style="font-size:13px;">jam</span><button class="btn btn-primary btn-sm" style="width:auto;" onclick="ccAutoOutSave()">💾 Simpan</button></div></div>
+        <div style="display:flex;gap:8px;align-items:center;"><input id="ccAutoOutH" type="number" min="0" max="48" value="${ccAutoOutHours()}" style="width:90px;"><span style="font-size:13px;">jam</span><button class="btn btn-primary btn-sm" style="width:auto;" onclick="ccAutoOutSave()">💾 Simpan</button></div>
+        <div style="font-size:12px;color:var(--text-dim);margin:12px 0 8px;border-top:1px solid var(--border);padding-top:10px;">Sesudah <b>ritase terakhir</b> di DCCP selesai dan CC sudah <b>Delout</b>, HP driver otomatis keluar setelah sekian menit — peta & GPS berhenti. Change Shift tidak kena. Isi 0 untuk mematikan.</div>
+        <div style="display:flex;gap:8px;align-items:center;"><input id="ccLastOutM" type="number" min="0" max="240" value="${ccLastOutMin()}" style="width:90px;"><span style="font-size:13px;">menit</span><button class="btn btn-primary btn-sm" style="width:auto;" onclick="ccLastOutSave()">💾 Simpan</button></div></div>
       <div class="card"><h3>Daftar User <span style="font-size:12px;color:var(--text-dim);font-weight:500;" id="usrCnt"></span></h3>
         <input id="usrQBox" type="search" placeholder="🔍 Cari username, nama, LP, kode driver…" value="${String(usrQ||"").replace(/"/g,"&quot;")}" oninput="usrQ=this.value;usrN=20;usrRender()" style="width:100%;margin-bottom:8px;">
         <select id="usrRoleBox" onchange="usrRole=this.value;usrN=20;usrRender()" style="width:100%;margin-bottom:10px;"><option value="">Semua role</option>${ROLES.map(r=>`<option value="${r.key}" ${usrRole===r.key?"selected":""}>${r.label}</option>`).join("")}</select>
@@ -11424,7 +11507,9 @@ function ccRitHabis(d, plat){
     const t=dccpTripList(r); if(!t.length) return false; return dccpDoneCount(r,d) >= t.length; }catch(e){ return false; }
 }
 function ccAbsenTolakMsg(plat, res){   // pesan penolakan absen yang jelas
-  return res.loaded ? `${plat} sudah Delout (sudah muat) dan belum terlihat menjauh dari yard / tiba di NVDC. Absen otomatis diabaikan supaya stall tidak terisi truk yang sudah muat. Kalau kamu sudah kembali dari NVDC, tekan Absen Manual.`
+  return res.noDccp ? `Jadwal DCCP shift ini belum diupload. Absen ${plat} belum bisa dicatat — tunggu DCCP diupload (absen otomatis dicoba lagi sendiri).`
+       : res.notDccp ? `${plat} tidak ada di Jadwal DCCP shift ini. Absen ditolak — hanya CC di DCCP, Change Shift, Spot Order, atau CC Pengganti yang boleh masuk.`
+       : res.loaded ? `${plat} sudah Delout (sudah muat) dan belum terlihat menjauh dari yard / tiba di NVDC. Absen otomatis diabaikan supaya stall tidak terisi truk yang sudah muat. Kalau kamu sudah kembali dari NVDC, tekan Absen Manual.`
        : res.ritHabis ? `Ritase ${plat} shift ini sudah selesai semua. Absen dimatikan, posisi tetap terpantau di peta.`
        : res.nvdc ? `${plat} sudah Delout dan belum tercatat tiba di NVDC. Absen diabaikan (masih dianggap perjalanan).`
        : res.driverBusy ? `Driver ${plat} masih tercatat membawa ${res.driverBusy}. Satu driver hanya satu truk.`
@@ -12302,6 +12387,9 @@ function lapZoomFoto(src){
    Tersimpan di radar_trip/<id> (30 hari). Laporan: Koordinator, Delivery, Leader, Admin.
    Jalur terbanyak = jejak yang paling mirip dengan jejak CC lain (dipakai sebagai rute di peta). */
 const TRIP_PATH="radar_trip", TRIP_KEEP_MS=30*86400*1000, TRIP_ST_KEY="radar_trip_st", TRIP_Q_KEY="radar_trip_q";
+/* Rekam jejak perjalanan DIMATIKAN (tidak dipakai): HP driver tidak merekam/mengirim jejak, tab Laporan CC & garis jejak di peta disembunyikan. Rute peta yang sudah tersimpan tetap dipakai. */
+const TRIP_ON=false;
+if(!TRIP_ON){ try{ localStorage.removeItem(TRIP_Q_KEY); localStorage.removeItem(TRIP_ST_KEY); }catch(e){} }
 let TRIPS=[], _tripLoadedTs=0, _tripLoading=null, _tripCleaned=false, rptDays=7, rptDir="out", _tripMap=null, trailOn=false;
 function tripSt(){ try{ const o=JSON.parse(localStorage.getItem(TRIP_ST_KEY)||"null"); if(o&&typeof o==="object") return o; }catch(e){} return {armed:"",buf:[],t:null}; }
 function tripPersist(S){ try{ localStorage.setItem(TRIP_ST_KEY, JSON.stringify(S)); }catch(e){} }
@@ -12309,6 +12397,7 @@ function tripQ(){ try{ const q=JSON.parse(localStorage.getItem(TRIP_Q_KEY)||"[]"
 function tripQSave(q){ try{ localStorage.setItem(TRIP_Q_KEY, JSON.stringify(q.slice(-12))); }catch(e){} }
 let _tripPersistN=0;
 function tripTick(pos){
+  if(!TRIP_ON) return;
   try{
     if(!currentUser || currentUser.role!=="cc") return;
     const mp=(DB.get().mapPoints||{}); if(!(mp.adm&&mp.nvdc)) return;
@@ -12345,25 +12434,52 @@ function tripFinish(T, endTs, mp){
     const q=tripQ(); q.push(rec); tripQSave(q); tripFlush();
   }catch(e){}
 }
+/* Kirim jejak ke server. Kunci tetap per perjalanan (waktu mulai + plat + arah): kalau sinyal lemah dan pengiriman diulang,
+   data menimpa catatan yang sama (tidak dobel). Hanya satu pengiriman berjalan sekaligus; yang terkirim saja yang dihapus dari antrean. */
+let _tripFlushing=false;
+function tripRecKey(r){ return "t"+(+r.start||0)+"_"+(trkKey(r.plat)||"X")+"_"+(r.dir||"x"); }
 function tripFlush(){
+  if(!TRIP_ON) return;
   try{
-    if(!(FBS.enabled && FBS.db && FBS.authed)) return;
+    if(_tripFlushing || !(FBS.enabled && FBS.db && FBS.authed)) return;
     const q=tripQ(); if(!q.length) return;
-    const rec=q[0];
-    FBS.db.ref(TRIP_PATH).push().set(rec).then(()=>{ const q2=tripQ(); q2.shift(); tripQSave(q2); if(q2.length) setTimeout(tripFlush,500); }).catch(()=>{});
-  }catch(e){}
+    const rec=q[0], key=tripRecKey(rec);
+    _tripFlushing=true; const tm=setTimeout(()=>{ _tripFlushing=false; }, 120000);   /* belum ada jawaban server 2 menit: boleh dicoba lagi (kunci sama, tidak dobel) */
+    FBS.db.ref(TRIP_PATH+"/"+key).set(rec).then(()=>{ clearTimeout(tm); _tripFlushing=false; const q2=tripQ().filter(x=>tripRecKey(x)!==key); tripQSave(q2); if(q2.length) setTimeout(tripFlush,500); })
+      .catch(()=>{ clearTimeout(tm); _tripFlushing=false; });
+  }catch(e){ _tripFlushing=false; }
 }
 setInterval(tripFlush, 60000);
 /* --- memuat data (hanya saat laporan / jejak dibuka) --- */
+/* Hemat data: buka pertama memuat 400 perjalanan terakhir; buka berikutnya (≤ 1 jam) hanya mengambil perjalanan BARU.
+   Catatan dobel (versi lama: kirim ulang saat sinyal lemah) disembunyikan dan dihapus dari server. */
+let _tripFullTs=0, _tripLastKey="", _tripDupGone=new Set();
 function tripLoad(force){
+  if(!TRIP_ON) return Promise.resolve(TRIPS);
   if(!(FBS.enabled && FBS.db)) return Promise.resolve(TRIPS);
   if(!force && Date.now()-_tripLoadedTs<120000) return Promise.resolve(TRIPS);
   if(_tripLoading) return _tripLoading;
-  _tripLoading=FBS.db.ref(TRIP_PATH).limitToLast(400).once("value").then(snap=>{
-    const v=snap.val()||{}; TRIPS=Object.keys(v).map(k=>Object.assign({id:k},v[k])).filter(t=>t&&t.p&&t.start).sort((a,b)=>b.start-a.start);
+  let q=null, inc=false;
+  try{ const base=FBS.db.ref(TRIP_PATH);
+    if(TRIPS.length && _tripLastKey && Date.now()-_tripFullTs<3600000 && typeof base.orderByKey().startAfter==="function"){ q=base.orderByKey().startAfter(_tripLastKey).limitToLast(400); inc=true; }
+    else q=base.limitToLast(400);
+  }catch(e){ q=FBS.db.ref(TRIP_PATH).limitToLast(400); inc=false; }
+  _tripLoading=q.once("value").then(snap=>{
+    const v=snap.val()||{}, keys=Object.keys(v).sort();
+    const add=keys.map(k=>Object.assign({id:k},v[k])).filter(t=>t&&t.p&&t.start);
+    if(keys.length){ const mk=keys[keys.length-1]; if(!inc || mk>_tripLastKey) _tripLastKey=mk; } else if(!inc) _tripLastKey="";
+    TRIPS=tripDedup(inc ? TRIPS.concat(add) : add);
+    if(!inc) _tripFullTs=Date.now();
     _tripLoadedTs=Date.now(); _tripLoading=null; tripCleanup(); tripAutoPopular(); return TRIPS;
   }).catch(e=>{ _tripLoading=null; TRIPERR="Rekam jejak belum diizinkan oleh aturan Firebase (tambahkan node radar_trip)."; return TRIPS; });
   return _tripLoading;
+}
+function tripDedup(L){
+  const seen=new Map(), out=[], dup=[];
+  L.sort((a,b)=>(b.start-a.start)||String(a.id).localeCompare(String(b.id))).forEach(t=>{ const sg=normPlat(t.plat)+"|"+t.dir+"|"+t.start, k=seen.get(sg);
+    if(k!=null){ if(k!==t.id) dup.push(t.id); return; } seen.set(sg, t.id); out.push(t); });
+  try{ if(dup.length && FBS.db && FBS.authed){ dup.forEach(id=>{ if(_tripDupGone.has(id)) return; _tripDupGone.add(id); FBS.db.ref(TRIP_PATH+"/"+id).remove().catch(()=>{}); }); } }catch(e){}
+  return out;
 }
 let TRIPERR="";
 function tripCleanup(){
@@ -12467,6 +12583,7 @@ function tripClose(){ try{ if(_tripMap) _tripMap.remove(); }catch(e){} _tripMap=
 /* --- jejak semua CC di Peta CC (Koordinator / Delivery / Leader / Admin) --- */
 function trailCanSee(){ return !!(currentUser && ["admin","leader","koordinator","delivery"].includes(currentUser.role)); }
 function trailCardHtml(){
+  if(!TRIP_ON) return "";
   if(!trailCanSee()) return "";
   return `<label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-top:8px;"><input type="checkbox" id="trailChk" ${trailOn?"checked":""} onchange="trailToggle(this.checked)"> Tampilkan jejak perjalanan CC 7 hari terakhir (garis tipis)</label>`;
 }
@@ -13111,7 +13228,7 @@ let _lastRaw = null, _lastMinute = -1;
 try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
 /* tiap pengecekan berdiri sendiri: satu error tidak boleh menghentikan yang lain (mis. popup giliran / dikeluarkan di HP driver) */
-const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
+const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>ccLastOutCheck(), ()=>ccLastOutBackstop(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
 setInterval(()=>{ _tick3.forEach(f=>{ try{ f(); }catch(e){} }); }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
