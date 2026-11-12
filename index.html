@@ -1211,7 +1211,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="12 Nov 2026 11.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="12 Nov 2026 15.00";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1390,11 +1390,11 @@ const TABS_BY_ROLE = {
   pdi:         [{key:"pdi", label:"Scan PDI"}, {key:"display", label:"Display"}],
   dispatcher:  [{key:"dispatcher", label:"Scan Unit"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   cc:          [{key:"orderstall", label:"Order Stall"}, {key:"ccmap", label:"Peta & Chat"}, {key:"display", label:"Display"}],
-  delivery:    [{key:"delivery", label:"Delivery"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  delivery:    [{key:"delivery", label:"Delivery"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
-  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
-  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
-  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
+  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
+  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
 let selectedRole = null;
@@ -2058,6 +2058,7 @@ function renderInner(){
   else if(activeTab==="batam") setVP(vp, renderBatamPage());
   else if(activeTab==="prio") setVP(vp, renderPrioPage());
   else if(activeTab==="dashboard") setVP(vp, pdiCardSafe()+renderLeaderDashboard());
+  else if(activeTab==="ekyrep") setVP(vp, renderEkyReport());
   else if(activeTab==="pdi" && typeof renderPdiPage!=="function"){ setVP(vp, `<div class="card" style="text-align:center;">Memuat PDI…</div>`); setTimeout(()=>{ try{ render(); }catch(e){} }, 300); }
   else if(activeTab==="pdi"){ if(!document.getElementById("pdiRoot")){ setVP(vp, renderPdiPage()); setTimeout(pdiMounted,0); } else { _vpChanged=false; pdiUi(); } }
   else if(activeTab==="speedlog") setVP(vp, renderSpeedLog());
@@ -3933,7 +3934,7 @@ function createILS(ccNum, slots){
   const data = DB.get();
   const ccInfo = data.cc[ccNum];
   if(!ccInfo){ alert("Stall CC tidak valid."); return false; }
-  const units = slots.filter(slot=>data.units[slot] && !data.units[slot].ilsId).map(slot=>({slot, loc:data.units[slot].loc||"", frame:data.units[slot].frame, model:data.units[slot].model, batam:!!data.units[slot].batam, prio:!!data.units[slot].prio}));
+  const units = slots.filter(slot=>data.units[slot] && !data.units[slot].ilsId).map(slot=>({slot, loc:data.units[slot].loc||"", frame:data.units[slot].frame, model:data.units[slot].model, batam:!!data.units[slot].batam, prio:!!data.units[slot].prio, ts:data.units[slot].ts||0, line:data.units[slot].line||""}));
   if(!units.length){ alert("Unit sudah tidak tersedia."); return false; }
   const _dupI=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===normPlat(ccInfo.plat));
   if(_dupI){ alert("Plat "+ccInfo.plat+" sudah punya ILS #"+_dupI.id+" yang masih aktif di Stall "+ccLbl(_dupI.ccNum)+(_dupI.mp?" (dibuat oleh "+_dupI.mp+")":"")+". Satu CC hanya boleh punya satu ILS aktif. Selesaikan atau batalkan ILS itu dulu."); return false; }
@@ -8114,6 +8115,7 @@ function renderLeaderDashboard(){
 
   ${batamAlertHtml(data)}
   ${planVsInputHtml(data, R)}
+  ${pdmCardHtml(data)}
   ${rptShiftHtml(data)}
   ${inputXlCardHtml(data,'all')}
 
@@ -8397,6 +8399,976 @@ function planSumLive(){
   PROD_LINES.forEach(l=>{ a+=parseInt(document.getElementById("pl_s1_"+l).value)||0; b+=parseInt(document.getElementById("pl_s2_"+l).value)||0; });
   const t=document.getElementById("planTotals"); if(t) t.textContent = `Shift Day: ${a} · Shift Night: ${b} · Total: ${a+b}`;
 }
+/* ===== Buka Excel berpassword (ECMA-376 Standard AES-128 & Agile) tanpa pustaka luar ===== */
+const OFC=(()=>{
+  /* --- AES (dekripsi) --- */
+  const S=new Uint8Array(256), SI=new Uint8Array(256);
+  (()=>{ let p=1,q=1; const r8=(x,s)=>((x<<s)|(x>>>(8-s)))&0xff;
+    do{ p=(p^((p<<1)&0xff)^((p&0x80)?0x1b:0))&0xff; q^=(q<<1)&0xff; q^=(q<<2)&0xff; q^=(q<<4)&0xff; q&=0xff; if(q&0x80) q^=0x09;
+      S[p]=(q^r8(q,1)^r8(q,2)^r8(q,3)^r8(q,4)^0x63)&0xff; }while(p!==1);
+    S[0]=0x63; for(let i=0;i<256;i++) SI[S[i]]=i; })();
+  const xt=a=>((a<<1)^((a&0x80)?0x1b:0))&0xff;
+  const mul=(a,b)=>{ let r=0; while(b){ if(b&1) r^=a; a=xt(a); b>>=1; } return r; };
+  const M9=new Uint8Array(256), M11=new Uint8Array(256), M13=new Uint8Array(256), M14=new Uint8Array(256);
+  for(let i=0;i<256;i++){ M9[i]=mul(i,9); M11[i]=mul(i,11); M13[i]=mul(i,13); M14[i]=mul(i,14); }
+  function expand(key){
+    const nk=key.length/4, nr=nk+6, w=new Uint8Array(16*(nr+1)); w.set(key); let rc=1;
+    for(let i=nk;i<4*(nr+1);i++){ let t=w.slice(4*(i-1),4*i);
+      if(i%nk===0){ t=new Uint8Array([S[t[1]]^rc,S[t[2]],S[t[3]],S[t[0]]]); rc=xt(rc); }
+      else if(nk>6 && i%nk===4){ t=t.map(x=>S[x]); }
+      for(let j=0;j<4;j++) w[4*i+j]=w[4*(i-nk)+j]^t[j]; }
+    return {w, nr};
+  }
+  function decBlock(K, inp, ip, out, op){
+    const s=new Uint8Array(16), w=K.w, nr=K.nr;
+    for(let i=0;i<16;i++) s[i]=inp[ip+i]^w[16*nr+i];
+    for(let r=nr-1;r>=0;r--){
+      /* InvShiftRows + InvSubBytes */
+      const t=new Uint8Array(16);
+      for(let c=0;c<4;c++) for(let row=0;row<4;row++) t[4*((c+row)%4)+row]=SI[s[4*c+row]];
+      for(let i=0;i<16;i++) s[i]=t[i]^w[16*r+i];
+      if(r>0) for(let c=0;c<4;c++){ const a0=s[4*c],a1=s[4*c+1],a2=s[4*c+2],a3=s[4*c+3];
+        s[4*c]=M14[a0]^M11[a1]^M13[a2]^M9[a3]; s[4*c+1]=M9[a0]^M14[a1]^M11[a2]^M13[a3];
+        s[4*c+2]=M13[a0]^M9[a1]^M14[a2]^M11[a3]; s[4*c+3]=M11[a0]^M13[a1]^M9[a2]^M14[a3]; }
+    }
+    out.set(s, op);
+  }
+  function ecbDec(key, data){ const K=expand(key), n=data.length-(data.length%16), o=new Uint8Array(n); for(let i=0;i<n;i+=16) decBlock(K,data,i,o,i); return o; }
+  function cbcDec(key, iv, data){ const K=expand(key), n=data.length-(data.length%16), o=new Uint8Array(n); let prev=iv;
+    for(let i=0;i<n;i+=16){ decBlock(K,data,i,o,i); for(let j=0;j<16;j++) o[i+j]^=prev[j]; prev=data.subarray(i,i+16); } return o; }
+  /* --- SHA-1 (sinkron, cepat untuk 50.000 putaran) --- */
+  function sha1(m){
+    const ml=m.length, nb=((ml+8)>>6)+1, W=new Int32Array(80), x=new Uint8Array(nb*64); x.set(m); x[ml]=0x80;
+    const bl=ml*8; x[nb*64-4]=(bl>>>24)&255; x[nb*64-3]=(bl>>>16)&255; x[nb*64-2]=(bl>>>8)&255; x[nb*64-1]=bl&255;
+    let h0=0x67452301,h1=0xEFCDAB89,h2=0x98BADCFE,h3=0x10325476,h4=0xC3D2E1F0;
+    for(let b=0;b<nb;b++){
+      for(let i=0;i<16;i++){ const o=b*64+4*i; W[i]=(x[o]<<24)|(x[o+1]<<16)|(x[o+2]<<8)|x[o+3]; }
+      for(let i=16;i<80;i++){ const v=W[i-3]^W[i-8]^W[i-14]^W[i-16]; W[i]=(v<<1)|(v>>>31); }
+      let a=h0,bb=h1,c=h2,d=h3,e=h4;
+      for(let i=0;i<80;i++){ let f,k;
+        if(i<20){ f=(bb&c)|(~bb&d); k=0x5A827999; } else if(i<40){ f=bb^c^d; k=0x6ED9EBA1; } else if(i<60){ f=(bb&c)|(bb&d)|(c&d); k=0x8F1BBCDC; } else { f=bb^c^d; k=0xCA62C1D6; }
+        const t=(((a<<5)|(a>>>27))+f+e+k+W[i])|0; e=d; d=c; c=(bb<<30)|(bb>>>2); bb=a; a=t; }
+      h0=(h0+a)|0; h1=(h1+bb)|0; h2=(h2+c)|0; h3=(h3+d)|0; h4=(h4+e)|0;
+    }
+    const o=new Uint8Array(20); [h0,h1,h2,h3,h4].forEach((h,i)=>{ o[4*i]=h>>>24; o[4*i+1]=(h>>>16)&255; o[4*i+2]=(h>>>8)&255; o[4*i+3]=h&255; }); return o;
+  }
+  const cat=(...a)=>{ const n=a.reduce((s,x)=>s+x.length,0), o=new Uint8Array(n); let p=0; a.forEach(x=>{ o.set(x,p); p+=x.length; }); return o; };
+  const le32=i=>new Uint8Array([i&255,(i>>>8)&255,(i>>>16)&255,(i>>>24)&255]);
+  const u16le=s=>{ const o=new Uint8Array(s.length*2); for(let i=0;i<s.length;i++){ const c=s.charCodeAt(i); o[2*i]=c&255; o[2*i+1]=c>>>8; } return o; };
+  const b64d=s=>{ const b=atob(String(s).trim()), o=new Uint8Array(b.length); for(let i=0;i<b.length;i++) o[i]=b.charCodeAt(i); return o; };
+  const rd32=(b,o)=>(b[o]|(b[o+1]<<8)|(b[o+2]<<16)|(b[o+3]<<24))>>>0;
+  const eq=(a,b)=>{ if(a.length!==b.length) return false; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return false; return true; };
+  const pkgLen=p=>rd32(p,0)+rd32(p,4)*4294967296;
+  async function hashN(alg, data){ if(alg==="SHA-1") return sha1(data); return new Uint8Array(await crypto.subtle.digest(alg, data)); }
+  /* Standard (Excel 2007, AES-128 ECB, SHA-1, 50.000 putaran) */
+  function stdDecrypt(info, pkg, pw){
+    const hSize=rd32(info,8), h=12, keyBits=rd32(info,h+16), v=h+hSize;
+    const saltSize=rd32(info,v), salt=info.slice(v+4,v+4+saltSize), eVer=info.slice(v+20,v+36), vhs=rd32(info,v+36), eVerHash=info.slice(v+40,v+72);
+    let H=sha1(cat(salt,u16le(pw)));
+    const buf=new Uint8Array(24); for(let i=0;i<50000;i++){ buf.set(le32(i),0); buf.set(H,4); H=sha1(buf); }
+    const Hf=sha1(cat(H,le32(0))), b1=new Uint8Array(64).fill(0x36), b2=new Uint8Array(64).fill(0x5c);
+    for(let i=0;i<Hf.length;i++){ b1[i]^=Hf[i]; b2[i]^=Hf[i]; }
+    const key=cat(sha1(b1),sha1(b2)).slice(0,(keyBits||128)/8);
+    const ver=ecbDec(key,eVer), vh=ecbDec(key,eVerHash).slice(0,vhs||20);
+    if(!eq(sha1(ver),vh)) throw new Error("PASSWORD");
+    return ecbDec(key, pkg.subarray(8)).slice(0, pkgLen(pkg));
+  }
+  /* Agile (Excel 2010+, AES-CBC, SHA-512 dsb.) */
+  async function agileDecrypt(info, pkg, pw){
+    const xml=new TextDecoder().decode(info.subarray(8));
+    const tag=re=>{ const m=xml.match(re); if(!m) return null; const a=m[1]; return {getAttribute:n=>{ const x=a.match(new RegExp("(?:^|\\s)"+n+'="([^"]*)"')); return x?x[1]:null; }}; };
+    const kd=tag(/<(?:[\w]+:)?keyData\b([^>]*)>/), ek=tag(/<(?:[\w]+:)?encryptedKey\b([^>]*spinCount[^>]*)>/);
+    if(!kd || !ek) throw new Error("Format enkripsi tidak dikenal");
+    const alg=n=>({SHA1:"SHA-1","SHA-1":"SHA-1",SHA256:"SHA-256",SHA384:"SHA-384",SHA512:"SHA-512"})[String(n).toUpperCase().replace(/-/g,"")]||"SHA-512";
+    const hA=alg(ek.getAttribute("hashAlgorithm")), spin=+ek.getAttribute("spinCount"), kb=+ek.getAttribute("keyBits")/8, salt=b64d(ek.getAttribute("saltValue"));
+    let H=await hashN(hA, cat(salt,u16le(pw)));
+    for(let i=0;i<spin;i++) H=await hashN(hA, cat(le32(i),H));
+    const fix=(x,n)=>{ if(x.length>=n) return x.slice(0,n); const o=new Uint8Array(n).fill(0x36); o.set(x); return o; };
+    const blk=async b=>fix(await hashN(hA, cat(H,b)), kb);
+    const hx=s=>new Uint8Array(s.match(/../g).map(x=>parseInt(x,16)));
+    const kVer=await blk(hx("fea7d2763b4b9e79")), kHash=await blk(hx("d7aa0f6d3061344e")), kVal=await blk(hx("146e0be7abacd0d6"));
+    const vIn=cbcDec(kVer, salt, b64d(ek.getAttribute("encryptedVerifierHashInput"))), vHash=cbcDec(kHash, salt, b64d(ek.getAttribute("encryptedVerifierHashValue")));
+    const calc=await hashN(hA, vIn.slice(0, +(ek.getAttribute("saltSize")||16)));
+    if(!eq(calc, vHash.slice(0,calc.length))) throw new Error("PASSWORD");
+    const secret=cbcDec(kVal, salt, b64d(ek.getAttribute("encryptedKeyValue"))).slice(0,kb);
+    const kHa=alg(kd.getAttribute("hashAlgorithm")), kSalt=b64d(kd.getAttribute("saltValue")), bs=+kd.getAttribute("blockSize")||16;
+    const total=pkgLen(pkg), body=pkg.subarray(8), out=new Uint8Array(body.length - body.length%16); let p=0;
+    for(let seg=0, off=0; off<body.length; seg++, off+=4096){
+      const iv=fix(await hashN(kHa, cat(kSalt, le32(seg))), bs), part=body.subarray(off, Math.min(off+4096, body.length));
+      const d=cbcDec(secret, iv, part); out.set(d, p); p+=d.length;
+    }
+    return out.slice(0,total);
+  }
+  /* bytes: Uint8Array file. Hasil: Uint8Array .xlsx biasa (atau file asli kalau tidak berpassword) */
+  async function open(bytes, passwords){
+    if(!(bytes[0]===0xD0 && bytes[1]===0xCF && bytes[2]===0x11 && bytes[3]===0xE0)) return bytes;   /* bukan file terenkripsi (zip biasa) */
+    const cfb=XLSX.CFB.read(bytes,{type:"array"}), fi=XLSX.CFB.find(cfb,"EncryptionInfo"), fp=XLSX.CFB.find(cfb,"EncryptedPackage");
+    if(!fi || !fp) return bytes;   /* .xls lama, biar SheetJS yang membaca */
+    const info=Uint8Array.from(fi.content), pkg=Uint8Array.from(fp.content), vMin=info[2]|(info[3]<<8);
+    let lastErr=null;
+    for(const pw of passwords){
+      try{ return vMin===4 ? await agileDecrypt(info,pkg,pw) : stdDecrypt(info,pkg,pw); }
+      catch(e){ lastErr=e; if(String(e&&e.message)!=="PASSWORD") throw e; }
+    }
+    throw lastErr||new Error("PASSWORD");
+  }
+  return {open, _t:{ecbDec, cbcDec, sha1}};
+})();
+
+/* ===== DPP (Estimasi Delivery Harian dari Daihatsu): satu file per KAP, satu bulan, kolom per tanggal D/N ===== */
+function dppNum(v){ if(v==null||v==="") return 0; if(typeof v==="number") return isFinite(v)?Math.round(v):0; const n=parseFloat(String(v).replace(/[^\d.\-]/g,"")); return isFinite(n)?Math.round(n):0; }
+function dppLabel(v){ return String(v==null?"":v).replace(/\s+/g," ").trim().toUpperCase(); }
+function dppParse(wb, fileName){
+  const MON={JAN:1,JANUARI:1,JANUARY:1,FEB:2,FEBRUARI:2,FEBRUARY:2,MAR:3,MARET:3,MARCH:3,APR:4,APRIL:4,MEI:5,MAY:5,JUN:6,JUNI:6,JUNE:6,JUL:7,JULI:7,JULY:7,AGU:8,AGT:8,AGUSTUS:8,AUG:8,AUGUST:8,SEP:9,SEPT:9,SEPTEMBER:9,OKT:10,OKTOBER:10,OCT:10,OCTOBER:10,NOV:11,NOVEMBER:11,DES:12,DESEMBER:12,DEC:12,DECEMBER:12};
+  let best=null;
+  wb.SheetNames.forEach(name=>{
+    if(best) return;
+    const g=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null});
+    /* baris nomor tanggal 1..31 + baris D/N di bawahnya */
+    let dayRow=-1, dn=-1;
+    for(let r=0;r<Math.min(g.length,40) && dayRow<0;r++){
+      const row=g[r]||[], nums=row.map((v,c)=>({v,c})).filter(x=>typeof x.v==="number" && x.v>=1 && x.v<=31 && Number.isInteger(x.v));
+      if(nums.length<7) continue;
+      let inc=0; for(let i=1;i<nums.length;i++) if(nums[i].v===nums[i-1].v+1) inc++;
+      if(inc<nums.length*0.7) continue;
+      for(let k=r+1;k<=r+2;k++){ const rr=g[k]||[]; if(nums.filter(x=>dppLabel(rr[x.c])==="D").length>=nums.length*0.6){ dayRow=r; dn=k; break; } }
+    }
+    if(dayRow<0) return;
+    const dayCols={}; (g[dayRow]||[]).forEach((v,c)=>{ if(typeof v==="number" && v>=1 && v<=31 && dppLabel((g[dn]||[])[c])==="D") dayCols[v]=c; });
+    const firstC=Math.min(...Object.values(dayCols));
+    const cats={}, order=[]; let ot=null;
+    for(let r=dn+1;r<g.length;r++){
+      const row=g[r]||[]; let lab="";
+      for(let c=0;c<firstC;c++){ const L=dppLabel(row[c]); if(L){ lab=L; } }
+      if(!lab) continue;
+      if(/ACTUAL/.test(lab)) break;
+      const vals={}; let any=false;
+      Object.keys(dayCols).forEach(d=>{ const c=dayCols[d], D=dppNum(row[c]), N=dppNum(row[c+1]); vals[d]=[D,N]; if(D||N) any=true; });
+      if(/OVER\s*TIME/.test(lab)){ if(any) ot=vals; continue; }
+      if(!any && !/TOTAL/.test(lab)) continue;
+      if(!cats[lab]){ cats[lab]=vals; order.push(lab); }
+    }
+    if(!order.length) return;
+    /* judul, bulan, KAP */
+    let title="", serial=0;
+    for(let r=0;r<dayRow;r++) (g[r]||[]).forEach(v=>{ if(typeof v==="string" && /estimasi|delivery|dpp/i.test(v) && !title) title=v.trim(); if(typeof v==="number" && v>40000 && v<80000 && !serial) serial=v; if(v instanceof Date && !serial) serial=v.getTime()/86400000+25569; });
+    let ym="";
+    if(serial){ const dt=new Date(Math.round((serial-25569)*86400000)); ym=dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0"); }
+    if(!ym){ const fn=String(fileName||"").toUpperCase(), y=fn.match(/(20\d\d)/), m=fn.match(/(?:^|[^0-9])(\d{1,2})[_\-\s]+(?:[A-Z]+[_\-\s]+)?20\d\d/), mn=Object.keys(MON).find(k=>new RegExp("(^|[^A-Z])"+k+"([^A-Z]|$)").test(fn));
+      if(y && (m||mn)) ym=y[1]+"-"+String(m?+m[1]:MON[mn]).padStart(2,"0"); }
+    const src=(title+" "+String(fileName||"")).toUpperCase(), km=src.match(/KAP\s*[_\-]?\s*([12])(?![0-9])|KP\s*[_\-]?\s*([12])(?![0-9])/);
+    best={sheet:name, title, ym, line:km?("KP"+(km[1]||km[2])):"", cats, order, ot};
+  });
+  return best;
+}
+
+/* ======================================================================
+   UPLOAD DPP — Estimasi Delivery Harian dari Daihatsu (satu file per KAP, satu bulan, kolom tanggal D/N)
+   Angka kategori terpilih (default TOYOTA) mengisi Plan Produksi line KP1/KP2, shift Day (D) / Night (N).
+   data.dpp[KP1|KP2] = {ym, file, ts, by, order:[label], cats:{label:{d1:[D,N],…}}, ot}
+====================================================================== */
+const DPP_LINES=["KP1","KP2"];
+function dppCfg(){ const c=DB.get().dppCfg||{}; return {cats:(Array.isArray(c.cats)&&c.cats.length)?c.cats:["TOYOTA"], pw:String(c.pw||"123")}; }
+function dppSafeKey(s){ return String(s).replace(/[.#$\/\[\]]/g," ").replace(/\s+/g," ").trim()||"-"; }
+function dppVal(rec, day, cats){ let D=0,N=0; (cats||[]).forEach(k=>{ const c=(rec.cats||{})[k]; const v=c&&c["d"+day]; if(v){ D+=(+v[0]||0); N+=(+v[1]||0); } }); return [D,N]; }
+function dppMonthName(ym){ const [y,m]=String(ym||"").split("-").map(Number); if(!y||!m) return ym||"-"; return new Date(y,m-1,1).toLocaleDateString('id-ID',{month:'long',year:'numeric'}); }
+/* isi prodPlan dari DPP: hari ini & seterusnya diganti; hari yang sudah lewat hanya diisi kalau masih kosong */
+function dppApplyPlan(d, lines){
+  const cats=((d.dppCfg&&Array.isArray(d.dppCfg.cats)&&d.dppCfg.cats.length)?d.dppCfg.cats:["TOYOTA"]), today=prodDateKey(); let n=0;
+  d.prodPlan=d.prodPlan||{};
+  (lines||DPP_LINES).forEach(line=>{
+    const rec=(d.dpp||{})[line]; if(!rec || !rec.ym) return;
+    const [y,m]=rec.ym.split("-").map(Number), days=new Date(y,m,0).getDate();
+    for(let day=1;day<=days;day++){
+      const key=rec.ym+"-"+String(day).padStart(2,"0"), [D,N]=dppVal(rec, day, cats), past=key<today;
+      const e=d.prodPlan[key]||{}; e.s1=e.s1||{}; e.s2=e.s2||{};
+      let ch=false;
+      [["s1",D],["s2",N]].forEach(([s,v])=>{
+        if(past && e[s][line]!=null) return;
+        if(v>0){ if(e[s][line]!==v){ e[s][line]=v; ch=true; } }
+        else if(!past && e[s][line]!=null){ delete e[s][line]; ch=true; }
+      });
+      if(ch){ e.dpp=Object.assign({}, e.dpp||{}, {[line]:rec.ts||Date.now()}); n++; }
+      if(Object.keys(e).some(k=>k!=="s1"&&k!=="s2") || Object.keys(e.s1).length || Object.keys(e.s2).length) d.prodPlan[key]=e;
+    }
+  });
+  return n;
+}
+function dppReadFile(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(new Uint8Array(r.result)); r.onerror=()=>rej(r.error||new Error("gagal membaca file")); r.readAsArrayBuffer(f); }); }
+function dppMsg(html){ const el=document.getElementById("dppMsg"); if(el) el.innerHTML=html; }
+function dppUpload(){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept=".xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"; inp.multiple=true;
+  inp.onchange=async()=>{
+    const files=[...(inp.files||[])]; if(!files.length) return;
+    if(typeof XLSX==="undefined"){ dppMsg(`<div class="msg err">Pembaca Excel belum termuat (butuh internet). Muat ulang RADAR lalu coba lagi.</div>`); return; }
+    const ok=[], bad=[], cfg=dppCfg();
+    for(const f of files){
+      try{
+        dppMsg(`<div class="msg info">⏳ Membuka ${escH(f.name)}…</div>`);
+        let bytes=await dppReadFile(f);
+        try{ bytes=await OFC.open(bytes, [...new Set([cfg.pw,"123",""])]); }
+        catch(e){ if(String(e&&e.message)==="PASSWORD"){ const pw=prompt("Password file "+f.name+" bukan "+cfg.pw+". Ketik password-nya:"); if(!pw) throw new Error("password salah"); bytes=await OFC.open(bytes,[pw]); DB.set(d=>{ d.dppCfg=Object.assign({}, d.dppCfg||{}, {pw}); }); } else throw e; }
+        const wb=XLSX.read(bytes,{type:"array"}), P=dppParse(wb, f.name);
+        if(!P) throw new Error("bukan format DPP (baris tanggal 1–31 dengan D/N tidak ditemukan)");
+        let line=P.line;
+        if(!line){ const a=prompt("File "+f.name+" untuk KAP berapa? Ketik 1 (KP1) atau 2 (KP2)",""); if(a===null) continue; if(!/^[12]$/.test(String(a).trim())) throw new Error("KAP tidak dipilih"); line="KP"+String(a).trim(); }
+        let ym=P.ym;
+        if(!ym){ const a=prompt("Bulan DPP "+f.name+" (format TAHUN-BULAN, contoh 2026-11):", prodDateKey().slice(0,7)); if(!a||!/^\d{4}-\d{2}$/.test(a.trim())) throw new Error("bulan tidak terbaca"); ym=a.trim(); }
+        const cats={}, order=[]; P.order.forEach(lab=>{ const k=dppSafeKey(lab); if(cats[k]) return; order.push(k); cats[k]={}; Object.keys(P.cats[lab]).forEach(dd=>{ cats[k]["d"+dd]=P.cats[lab][dd]; }); });
+        let ot=null; if(P.ot){ ot={}; Object.keys(P.ot).forEach(dd=>{ ot["d"+dd]=P.ot[dd]; }); }
+        if(!dppCfg().cats.some(c=>cats[c])) throw new Error("kategori "+dppCfg().cats.join(" + ")+" tidak ada di file (yang ada: "+order.join(", ")+")");
+        const rec={ym, file:f.name, ts:Date.now(), by:(currentUser&&currentUser.name)||"", order, cats, ot};
+        let n=0; DB.set(d=>{ d.dpp=Object.assign({}, d.dpp||{}); d.dpp[line]=rec; n=dppApplyPlan(d,[line]); });
+        const today=prodDateKey(), td=today.slice(0,7)===ym?dppVal(rec, +today.slice(8), dppCfg().cats):null;
+        ok.push(`<b>${line}</b> · ${escH(dppMonthName(ym))} · ${n} hari diperbarui${td?` · hari ini Day <b>${td[0]}</b> / Night <b>${td[1]}</b>`:""}`);
+      }catch(e){ bad.push(`<b>${escH(f.name)}</b>: ${escH(String(e&&e.message||e)==="PASSWORD"?"password salah":String(e&&e.message||e))}`); }
+    }
+    render();
+    dppMsg((ok.length?`<div class="msg" style="background:var(--green-bg);color:var(--green);margin-bottom:6px;">✔ ${ok.join("<br>✔ ")}</div>`:"")+(bad.length?`<div class="msg err">✖ ${bad.join("<br>✖ ")}</div>`:""));
+  };
+  inp.click();
+}
+function dppToggleCat(k, on){
+  const cur=dppCfg().cats.slice(); const nx=on?[...new Set(cur.concat([k]))]:cur.filter(x=>x!==k);
+  if(!nx.length){ alert("Pilih minimal satu kategori."); render(); return; }
+  DB.set(d=>{ d.dppCfg=Object.assign({}, d.dppCfg||{}, {cats:nx}); dppApplyPlan(d); });
+}
+function dppSavePw(){ const v=((document.getElementById("dppPw")||{}).value||"").trim(); DB.set(d=>{ d.dppCfg=Object.assign({}, d.dppCfg||{}, {pw:v||"123"}); }); dppMsg(`<div class="msg" style="background:var(--green-bg);color:var(--green);">✔ Password tersimpan.</div>`); }
+function dppCardHtml(data){
+  const D=data.dpp||{}, cfg=dppCfg(), today=prodDateKey();
+  const allCats=[...new Set(DPP_LINES.flatMap(l=>((D[l]||{}).order||[])))].filter(k=>!/TOTAL/.test(k));
+  if(!allCats.length) ["DAIHATSU","TOYOTA","EXPORT MODEL"].forEach(k=>allCats.push(k));
+  const st=l=>{ const r=D[l]; if(!r) return `<div style="font-size:13px;padding:6px 0;border-top:1px solid var(--border);"><b>${l}</b> · <span style="color:var(--text-dim);">belum ada DPP</span></div>`;
+    const old=r.ym<today.slice(0,7);
+    return `<div style="font-size:13px;padding:6px 0;border-top:1px solid var(--border);"><b>${l}</b> · ${escH(dppMonthName(r.ym))}${old?` <span style="color:#b91c1c;font-weight:700;">(bulan lalu — upload DPP bulan ini)</span>`:""}<div style="font-size:11px;color:var(--text-dim);">${escH(r.file||"")} · upload ${sjFmt(r.ts)}${r.by?" oleh "+escH(r.by):""}</div></div>`; };
+  /* 7 hari mulai hari ini */
+  const rows=[]; { const [y,m,dd]=today.split("-").map(Number); for(let i=0;i<7;i++){ const dt=new Date(y,m-1,dd+i), key=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"); rows.push({key, dt}); } }
+  const cell=(l,key,i)=>{ const r=D[l]; if(!r || r.ym!==key.slice(0,7)) return `<td style="color:var(--text-dim);text-align:center;">–</td>`; const v=dppVal(r, +key.slice(8), cfg.cats)[i]; return `<td style="text-align:center;${v?"":"color:var(--text-dim);"}">${v||"0"}</td>`; };
+  const anyDpp=DPP_LINES.some(l=>D[l]);
+  return `<div class="card">
+    <h3>📥 Upload DPP (Estimasi Delivery Harian)</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:4px 0 10px;">File dari Daihatsu, <b>KAP 1</b> dan <b>KAP 2</b> boleh dipilih sekaligus. File berpassword dibuka otomatis. Angka <b>${escH(cfg.cats.join(" + "))}</b> mengisi Plan Produksi di bawah (D = Shift Day, N = Shift Night). Hari ini dan seterusnya diganti angka DPP; hari yang sudah lewat hanya diisi kalau masih kosong.</p>
+    ${DPP_LINES.map(st).join("")}
+    <button class="btn btn-primary" style="margin-top:10px;" onclick="dppUpload()">📂 Pilih file DPP</button>
+    <div id="dppMsg" style="margin-top:8px;"></div>
+    ${anyDpp?`<div style="overflow-x:auto;margin-top:6px;"><table style="font-size:13px;">
+      <tr><th style="text-align:left;">Tanggal</th><th>KP1 Day</th><th>KP1 Night</th><th>KP2 Day</th><th>KP2 Night</th><th>Total</th></tr>
+      ${rows.map(({key,dt},i)=>{ const v=[["KP1",0],["KP1",1],["KP2",0],["KP2",1]].map(([l,s])=>{ const r=D[l]; return (r&&r.ym===key.slice(0,7))?dppVal(r,+key.slice(8),cfg.cats)[s]:0; }), tot=v.reduce((a,b)=>a+b,0);
+        return `<tr style="border-top:1px solid var(--border);${i===0?"font-weight:700;":""}"><td style="white-space:nowrap;">${dt.toLocaleDateString('id-ID',{weekday:'short',day:'2-digit',month:'short'})}${i===0?" · hari ini":""}</td>${cell("KP1",key,0)}${cell("KP1",key,1)}${cell("KP2",key,0)}${cell("KP2",key,1)}<td style="text-align:center;font-weight:700;">${tot}</td></tr>`; }).join("")}
+    </table></div>`:""}
+    <details style="margin-top:10px;"><summary style="cursor:pointer;font-size:13px;font-weight:600;">⚙ Pengaturan DPP</summary>
+      <div style="font-size:12px;color:var(--text-dim);margin:8px 0 4px;">Dihitung sebagai plan unit masuk EKY:</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;">${allCats.map(k=>`<label style="font-size:13px;display:flex;gap:6px;align-items:center;"><input type="checkbox" data-k="${escH(k)}" ${cfg.cats.includes(k)?"checked":""} onchange="dppToggleCat(this.dataset.k,this.checked)"> ${escH(k)}</label>`).join("")}</div>
+      <div class="field" style="margin-top:10px;"><label>Password file DPP</label><input id="dppPw" type="text" value="${escH(cfg.pw)}" autocomplete="off"></div>
+      <button class="btn btn-outline btn-sm" onclick="dppSavePw()">Simpan password</button>
+    </details>
+  </div>`;
+}
+
+/* ===== MDP (plan bulanan dari Lizer): satu baris per unit. DTPLOD = tanggal plan, ModelName, PDIActualDate = aktual PDI ===== */
+function mdpDate(v){
+  if(v==null) return "";
+  if(typeof v==="number" && v>30000 && v<80000){ const dt=new Date(Math.round((v-25569)*86400000)); return dt.getUTCFullYear()+"-"+String(dt.getUTCMonth()+1).padStart(2,"0")+"-"+String(dt.getUTCDate()).padStart(2,"0"); }
+  if(v instanceof Date && !isNaN(v)) return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
+  const s=String(v).trim(); let m=s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/); if(m) return m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0");
+  m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/); if(m) return m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0");
+  m=s.match(/^(\d{4})(\d{2})(\d{2})/); if(m) return m[1]+"-"+m[2]+"-"+m[3];
+  return "";
+}
+function mdpParse(wb, blist){
+  for(const name of wb.SheetNames){
+    const g=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null});
+    let hr=-1, cD=-1, cM=-1, cA=-1, cB=-1, out="";
+    for(let r=0;r<Math.min(g.length,40);r++){
+      const row=(g[r]||[]).map(v=>String(v==null?"":v).replace(/\s+/g,"").toUpperCase());
+      row.forEach(v=>{ const m=v.match(/OUTPUT:?(\d{4}\/\d{2}\/\d{2})(\d{2}:\d{2})?/); if(m && !out) out=m[1].replace(/\//g,"-")+(m[2]?" "+m[2]:""); });
+      const d=row.indexOf("DTPLOD"), mo=row.indexOf("MODELNAME");
+      if(d>=0 && mo>=0){ hr=r; cD=d; cM=mo; cA=row.indexOf("PDIACTUALDATE"); cB=row.indexOf("BRANCHNAME"); break; }
+    }
+    if(hr<0) continue;
+    const plan={}, act={}, planB={}, ymCnt={}; let units=0, nB=0;
+    for(let r=hr+1;r<g.length;r++){
+      const row=g[r]||[], dk=mdpDate(row[cD]); if(!dk) continue;
+      const mdl=dppSafeKey(String(row[cM]==null?"":row[cM]).trim().toUpperCase()||"LAINNYA");
+      (plan[dk]=plan[dk]||{})[mdl]=((plan[dk]||{})[mdl]||0)+1; units++;
+      if(cB>=0 && typeof mdpIsBatam==="function" && mdpIsBatam(row[cB], blist)){ (planB[dk]=planB[dk]||{})[mdl]=((planB[dk]||{})[mdl]||0)+1; nB++; }
+      ymCnt[dk.slice(0,7)]=(ymCnt[dk.slice(0,7)]||0)+1;
+      if(cA>=0){ const ak=mdpDate(row[cA]); if(ak) (act[ak]=act[ak]||{})[mdl]=((act[ak]||{})[mdl]||0)+1; }
+    }
+    if(!units) continue;
+    const ym=Object.keys(ymCnt).sort((a,b)=>ymCnt[b]-ymCnt[a])[0];
+    const P={}, A={}, PB={};
+    Object.keys(plan).forEach(k=>{ if(k.slice(0,7)===ym) P["d"+(+k.slice(8))]=plan[k]; });
+    Object.keys(planB).forEach(k=>{ if(k.slice(0,7)===ym) PB["d"+(+k.slice(8))]=planB[k]; });
+    Object.keys(act).forEach(k=>{ if(k.slice(0,7)===ym) A["d"+(+k.slice(8))]=act[k]; });
+    return {ym, out, units, plan:P, act:A, planB:PB, nB, hasBranch:cB>=0, hasAct:cA>=0};
+  }
+  return null;
+}
+
+/* ======================================================================
+   UPLOAD MDP (plan bulanan dari Lizer) — disimpan ringkas: jumlah unit per tanggal per model (plan DTPLOD & aktual PDI)
+   data.mdp["YYYY-MM"] = {ym, file, ts, by, out, units, plan:{d1:{MODEL:n}}, act:{d1:{MODEL:n}}}
+====================================================================== */
+function mdpSum(o){ let s=0; Object.values(o||{}).forEach(v=>{ s+=(+v||0); }); return s; }
+function mdpUpload(){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept=".xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  inp.onchange=async()=>{
+    const f=inp.files&&inp.files[0]; if(!f) return;
+    const msg=h=>{ const el=document.getElementById("mdpMsg"); if(el) el.innerHTML=h; };
+    if(typeof XLSX==="undefined"){ msg(`<div class="msg err">Pembaca Excel belum termuat (butuh internet). Muat ulang RADAR lalu coba lagi.</div>`); return; }
+    try{
+      msg(`<div class="msg info">⏳ Membaca ${escH(f.name)}… (file besar, tunggu beberapa detik)</div>`);
+      await new Promise(r=>setTimeout(r,30));
+      let bytes=await dppReadFile(f);
+      try{ bytes=await OFC.open(bytes,[...new Set([dppCfg().pw,"123",""])]); }catch(e){ if(String(e&&e.message)==="PASSWORD"){ const pw=prompt("Password file "+f.name+":"); if(!pw) throw new Error("password salah"); bytes=await OFC.open(bytes,[pw]); } else throw e; }
+      const P=mdpParse(XLSX.read(bytes,{type:"array"}), mdpBatamList());
+      if(!P) throw new Error("bukan format MDP (kolom DTPLOD dan ModelName tidak ditemukan)");
+      const rec={ym:P.ym, file:f.name, ts:Date.now(), by:(currentUser&&currentUser.name)||"", out:P.out||"", units:P.units, plan:P.plan, planB:P.planB, nB:P.nB, bl:mdpBatamList().join("|")};
+      DB.set(d=>{ const o=Object.assign({}, d.mdp||{}); o[P.ym]=rec; Object.keys(o).sort().slice(0,-3).forEach(k=>{ delete o[k]; }); d.mdp=o; });
+      render();
+      msg(`<div class="msg" style="background:var(--green-bg);color:var(--green);">✔ MDP ${escH(dppMonthName(P.ym))}: plan <b>${P.units.toLocaleString('id-ID')}</b> unit, <b>${(P.nB||0).toLocaleString('id-ID')}</b> unit dealer Batam${P.hasBranch?"":" (kolom BranchName tidak ada, Batam tidak bisa dipisah)"}. Laporan ada di menu Laporan EKY.</div>`);
+    }catch(e){ msg(`<div class="msg err">✖ ${escH(f.name)}: ${escH(String(e&&e.message||e)==="PASSWORD"?"password salah":String(e&&e.message||e))}</div>`); }
+  };
+  inp.click();
+}
+function mdpSaveBatam(){ const v=((document.getElementById("mdpBatam")||{}).value||"").split(/\n+/).map(x=>x.trim()).filter(Boolean); if(!v.length){ alert("Isi minimal satu nama cabang."); return; } DB.set(d=>{ d.mdpCfg=Object.assign({}, d.mdpCfg||{}, {batam:v}); }); }
+function mdpSaveSplit(){ const r=parseFloat(((document.getElementById("mdpDayR")||{}).value||"").replace(",",".")), only=((document.getElementById("mdpDayOnly")||{}).value||"").split(/[,;\n]+/).map(x=>x.trim().toUpperCase()).filter(Boolean);
+  if(!(r>0 && r<100)){ alert("Porsi Day diisi 1–99 (%)."); return; }
+  DB.set(d=>{ const c=Object.assign({}, d.mdpCfg||{}, {dayR:Math.round(r*10)/1000, kp2:only}); delete c.dayOnly; d.mdpCfg=c; }); }
+function mdpCardHtml(data){
+  const M=data.mdp||{}, ks=Object.keys(M).sort().reverse();
+  return `<div class="card">
+    <h3>📥 Upload MDP (plan bulanan Lizer)</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:4px 0 10px;">File MDP dari Lizer (satu baris per unit). RADAR menghitung plan per tanggal (kolom <b>DTPLOD</b>) per model, dan memisahkan unit <b>dealer Batam</b> (kolom BranchName). Dipakai di menu <b>Laporan EKY</b>: MDP per model Day/Night, Yard Stock, Daily Report.</p>
+    ${ks.length?ks.map(k=>{ const r=M[k], old=r.bl==null||r.bl!==mdpBatamList().join("|");
+      return `<div style="font-size:13px;padding:6px 0;border-top:1px solid var(--border);"><b>${escH(dppMonthName(k))}</b> · plan <b>${(+r.units||0).toLocaleString('id-ID')}</b> unit · Batam <b>${r.nB!=null?(+r.nB).toLocaleString('id-ID'):"–"}</b>${old?` <span style="color:#b45309;font-weight:700;">· upload ulang supaya unit Batam terpisah</span>`:""}<div style="font-size:11px;color:var(--text-dim);">${escH(r.file||"")}${r.out?" · data Lizer "+escH(r.out):""} · upload ${sjFmt(r.ts)}${r.by?" oleh "+escH(r.by):""}</div></div>`; }).join("")
+      :`<div style="font-size:13px;color:var(--text-dim);padding:6px 0;border-top:1px solid var(--border);">Belum ada MDP.</div>`}
+    <button class="btn btn-primary" style="margin-top:10px;" onclick="mdpUpload()">📂 Pilih file MDP</button>
+    ${ks.length?`<button class="btn btn-outline" style="margin-top:8px;" onclick="mdpDownload('${ks[0]}')">⬇ Download tabel MDP (Excel)</button>`:""}
+    <div id="mdpMsg" style="margin-top:8px;"></div>
+    <details style="margin-top:10px;"><summary style="cursor:pointer;font-size:13px;font-weight:600;">⚙ Pembagian Day / Night</summary>
+      <div style="font-size:12px;color:var(--text-dim);margin:6px 0;">Sekarang: ${escH(mdpSplitTxt())}.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;"><label style="font-size:12px;">Porsi Day (%)<br><input id="mdpDayR" type="number" min="1" max="99" inputmode="numeric" value="${Math.round(mdpSplitCfg().r*100)}" style="width:90px;"></label>
+        <label style="font-size:12px;flex:1;min-width:180px;">Model produksi KP2 (pola shift ikut DPP KP2), pisahkan koma<br><input id="mdpDayOnly" type="text" value="${escH(mdpSplitCfg().kp2.join(", "))}" style="width:100%;"></label></div>
+      <button class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="mdpSaveSplit()">Simpan</button></details>
+    <details style="margin-top:10px;"><summary style="cursor:pointer;font-size:13px;font-weight:600;">⚙ Dealer Batam</summary>
+      <div style="font-size:12px;color:var(--text-dim);margin:6px 0;">Nama cabang (BranchName) yang dihitung sebagai unit Batam, satu per baris. Setelah diubah, upload ulang MDP.</div>
+      <textarea id="mdpBatam" rows="5" style="width:100%;font-size:13px;">${escH(mdpBatamList().join("\n"))}</textarea>
+      <button class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="mdpSaveBatam()">Simpan daftar</button></details>
+  </div>`;
+}
+
+
+/* ======================================================================
+   GRAFIK BULANAN DPP · MDP · AKTUAL (Dashboard Leader)
+====================================================================== */
+let pdmYm="", pdmMode="daily";
+function pdmMonthShift(delta){ const base=pdmYm||prodDateKey().slice(0,7); const [y,m]=base.split("-").map(Number); const dt=new Date(y,m-1+delta,1); pdmYm=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0"); render(); }
+function pdmCompute(data, ym){
+  const [y,m]=ym.split("-").map(Number), nd=new Date(y,m,0).getDate(), today=prodDateKey(), cats=dppCfg().cats;
+  const D=data.dpp||{}, M=(data.mdp||{})[ym]||null, A=data.prodAct||{};
+  const dLines=DPP_LINES.filter(l=>D[l] && D[l].ym===ym);
+  const rows=[];
+  for(let day=1;day<=nd;day++){
+    const key=ym+"-"+String(day).padStart(2,"0");
+    const dpp=dLines.length ? dLines.reduce((s,l)=>{ const v=dppVal(D[l],day,cats); return s+v[0]+v[1]; },0) : null;
+    const mdp=M ? mdpSum((M.plan||{})["d"+day]) : null;
+    let act=null, src="";
+    if(key<=today){ const X=ekyDayData(data, key); if(X){ act=ekyRecvTot(X); src="radar"; } }   /* aktual = input Dispatcher (riwayat harian RADAR) */
+    rows.push({day, key, dpp, mdp, act, src, future:key>today, today:key===today});
+  }
+  /* DPP hanya sampai tanggal terakhir yang sudah diestimasi Daihatsu (setelah itu belum ada angka, bukan nol) */
+  let lastD=-1; rows.forEach((r,i)=>{ if(r.dpp) lastD=i; }); rows.forEach((r,i)=>{ if(i>lastD) r.dpp=null; });
+  const upTo=rows.filter(r=>!r.future), sum=(L,k)=>L.reduce((s,r)=>s+(r[k]||0),0);
+  return {ym, nd, rows, M, dLines, tot:{mdpMonth:M?sum(rows,"mdp"):null, mdpTD:M?sum(upTo,"mdp"):null, dppTD:dLines.length?sum(upTo,"dpp"):null, act:sum(upTo,"act")}, anyMdpAct:rows.some(r=>r.src==="mdp")};
+}
+function pdmChartSVG(R, mode){
+  const C={act:"#1E9E5A", dpp:"#2F6FB5", mdp:"#D9731F", ink:"#475467", dim:"#6B7686", grid:"#E2E6ED"};
+  const cum=mode==="cum", rows=R.rows.map(r=>Object.assign({},r));
+  if(cum){ let a=0,b=0,c=0; rows.forEach(r=>{ if(r.dpp!=null){ a+=r.dpp; r.dpp=a; } if(r.mdp!=null){ b+=r.mdp; r.mdp=b; } if(r.act!=null){ c+=r.act; r.act=c; } }); }
+  const n=rows.length, W=Math.max(640, n*22+122), H=300, L=44, Rm=82, T=16, B=34, pw=W-L-Rm, ph=H-T-B;
+  const mx=Math.max(10, ...rows.map(r=>Math.max(r.dpp||0, r.mdp||0, r.act||0)));
+  const step=(()=>{ const raw=mx/4, p=Math.pow(10,Math.floor(Math.log10(raw))), f=raw/p; return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p; })(), top=Math.ceil(mx/step)*step;
+  const x=i=>L+pw*(i+0.5)/n, y=v=>T+ph-(v/top)*ph, gw=pw/n, bw=Math.max(4, Math.min(16, gw*0.56));
+  let g="";
+  for(let v=0; v<=top+1e-9; v+=step){ const yy=y(v); g+=`<line x1="${L}" x2="${L+pw}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="${C.grid}"/><text x="${L-6}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="10" fill="${C.dim}">${Math.round(v).toLocaleString('id-ID')}</text>`; }
+  let bars="", hit="", xl="";
+  rows.forEach((r,i)=>{
+    const cx=x(i);
+    if(r.act!=null && r.act>0){ const yy=y(r.act), h=Math.max(1,T+ph-yy), rr=Math.min(4,h/2,bw/2);
+      bars+=`<path d="M${(cx-bw/2).toFixed(1)} ${(T+ph).toFixed(1)} V${(yy+rr).toFixed(1)} Q${(cx-bw/2).toFixed(1)} ${yy.toFixed(1)} ${(cx-bw/2+rr).toFixed(1)} ${yy.toFixed(1)} H${(cx+bw/2-rr).toFixed(1)} Q${(cx+bw/2).toFixed(1)} ${yy.toFixed(1)} ${(cx+bw/2).toFixed(1)} ${(yy+rr).toFixed(1)} V${(T+ph).toFixed(1)} Z" fill="${C.act}" ${r.src==="mdp"?'fill-opacity=".42"':(r.today?'fill-opacity=".75"':"")}/>`; }
+    if(n<=16 || r.day===1 || r.day%2===1 || r.today) xl+=`<text x="${cx.toFixed(1)}" y="${H-B+15}" text-anchor="middle" font-size="10" fill="${r.today?C.ink:C.dim}" ${r.today?'font-weight="700"':""}>${r.day}</text>`;
+    const tip=`${r.day} ${dppMonthName(R.ym)}${r.today?" (hari ini, berjalan)":""}\nDPP: ${r.dpp==null?"-":r.dpp.toLocaleString('id-ID')}\nMDP: ${r.mdp==null?"-":r.mdp.toLocaleString('id-ID')}\nAktual: ${r.act==null?"-":r.act.toLocaleString('id-ID')}${r.src==="mdp"?" (aktual PDI dari MDP)":(r.src==="radar"?" (input RADAR)":"")}`;
+    hit+=`<rect x="${(cx-gw/2).toFixed(1)}" y="${T}" width="${gw.toFixed(1)}" height="${ph}" fill="transparent"><title>${escH(tip)}</title></rect>`;
+  });
+  const ti=rows.findIndex(r=>r.today);
+  const todayLine=ti>=0?`<line x1="${x(ti).toFixed(1)}" x2="${x(ti).toFixed(1)}" y1="${T}" y2="${T+ph}" stroke="#98A2B3" stroke-dasharray="3 3"/><text x="${(x(ti)+4).toFixed(1)}" y="${T+10}" font-size="10" fill="${C.dim}">hari ini</text>`:"";
+  const path=k=>{ let d="", pen=false; rows.forEach((r,i)=>{ if(r[k]==null){ pen=false; return; } d+=(pen?"L":"M")+x(i).toFixed(1)+" "+y(r[k]).toFixed(1)+" "; pen=true; }); return d; };
+  const dots=(k,shape)=>rows.map((r,i)=>{ if(r[k]==null) return ""; const cx=x(i), cy=y(r[k]);
+    return shape==="sq" ? `<rect x="${(cx-3.5).toFixed(1)}" y="${(cy-3.5).toFixed(1)}" width="7" height="7" rx="1" fill="${C[k]}" stroke="#fff" stroke-width="1.5"/>` : `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4" fill="${C[k]}" stroke="#fff" stroke-width="1.5"/>`; }).join("");
+  /* label langsung di ujung kanan tiap seri (jarak minimal 13px supaya tidak bertumpuk) */
+  const ends=[["dpp","DPP"],["mdp","MDP"],["act","Aktual"]].map(([k,lb])=>{ let li=-1; rows.forEach((r,i)=>{ if(r[k]!=null) li=i; }); return li<0?null:{k,lb,v:rows[li][k],yy:y(rows[li][k])}; }).filter(Boolean).sort((a,b)=>a.yy-b.yy);
+  for(let i=1;i<ends.length;i++) if(ends[i].yy-ends[i-1].yy<13) ends[i].yy=ends[i-1].yy+13;
+  const lbl=ends.map(e=>`<rect x="${L+pw+6}" y="${(e.yy-4).toFixed(1)}" width="8" height="8" rx="2" fill="${C[e.k]}"/><text x="${L+pw+18}" y="${(e.yy+4).toFixed(1)}" font-size="10.5" fill="${C.ink}"><tspan font-weight="700">${e.lb}</tspan> ${Math.round(e.v).toLocaleString('id-ID')}</text>`).join("");
+  const tf=ti>=0?(x(ti)/W).toFixed(3):"";
+  return `<div id="pdmScroll" data-tf="${tf}" style="overflow-x:auto;"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Grafik ${cum?"kumulatif":"harian"} DPP, MDP dan aktual ${escH(dppMonthName(R.ym))}" style="min-width:600px;width:100%;height:auto;display:block;">
+    ${g}<line x1="${L}" x2="${L+pw}" y1="${T+ph}" y2="${T+ph}" stroke="#C9CFD8"/>${todayLine}${bars}
+    <path d="${path("dpp")}" fill="none" stroke="${C.dpp}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${path("mdp")}" fill="none" stroke="${C.mdp}" stroke-width="2" stroke-dasharray="6 4" stroke-linejoin="round"/>
+    ${dots("dpp","c")}${dots("mdp","sq")}${xl}${lbl}${hit}</svg></div>`;
+}
+function pdmScrollToday(){ try{ const el=document.getElementById("pdmScroll"); if(!el || el.scrollWidth<=el.clientWidth+4 || el.dataset.done) return; const f=+el.dataset.tf; if(!f) return; el.scrollLeft=Math.max(0, f*el.scrollWidth-el.clientWidth*0.75); el.dataset.done="1"; }catch(e){} }
+function pdmCardHtml(data){
+  try{
+    setTimeout(pdmScrollToday, 0);
+    const ym=pdmYm||prodDateKey().slice(0,7), R=pdmCompute(data, ym), T=R.tot;
+    const has=R.M || R.dLines.length || R.rows.some(r=>r.act);
+    const fmt=v=>v==null?"–":Math.round(v).toLocaleString('id-ID');
+    const gap=(a,b)=>{ if(a==null||b==null) return ""; const d=a-b; return d===0?"sesuai":(d>0?"+":"−")+Math.abs(d).toLocaleString('id-ID'); };
+    const pct=(a,b)=>(a==null||!b)?"":" ("+Math.round(a/b*100)+"%)";
+    const tile=(lbl,val,col,sub)=>`<div style="flex:1;min-width:140px;background:var(--panel);border:1px solid var(--border);border-top:4px solid ${col};border-radius:12px;padding:10px 12px;"><div style="font-size:12px;color:var(--text-dim);">${lbl}</div><div style="font-size:26px;font-weight:800;line-height:1.15;">${val}</div>${sub?`<div style="font-size:11px;color:var(--text-dim);">${sub}</div>`:""}</div>`;
+    const seg=(k,l)=>`<button class="linechip ${pdmMode===k?"on":""}" style="padding:5px 12px;" onclick="pdmMode='${k}';render()">${l}</button>`;
+    const sw=(c,dash,lb)=>`<span style="display:inline-flex;align-items:center;gap:6px;"><svg width="22" height="10"><line x1="1" x2="21" y1="5" y2="5" stroke="${c}" stroke-width="2" ${dash?'stroke-dasharray="5 3"':""}/>${dash?`<rect x="7.5" y="1.5" width="7" height="7" rx="1" fill="${c}"/>`:`<circle cx="11" cy="5" r="3.5" fill="${c}"/>`}</svg>${lb}</span>`;
+    const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin:2px 0 6px;">
+      <span style="display:inline-flex;align-items:center;gap:6px;"><i style="display:inline-block;width:10px;height:12px;background:#1E9E5A;border-radius:3px 3px 0 0;"></i>Aktual (input Dispatcher)</span>
+      ${R.anyMdpAct?`<span style="display:inline-flex;align-items:center;gap:6px;"><i style="display:inline-block;width:10px;height:12px;background:#1E9E5A;opacity:.42;border-radius:3px 3px 0 0;"></i>Aktual PDI dari MDP</span>`:""}
+      ${sw("#2F6FB5",false,"DPP (estimasi harian Daihatsu)")}${sw("#D9731F",true,"MDP (plan bulanan)")}</div>`;
+    const tbl=`<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:13px;font-weight:600;">Tabel harian</summary><div style="overflow-x:auto;max-height:360px;overflow-y:auto;margin-top:6px;"><table style="font-size:12.5px;">
+      <tr><th style="text-align:left;">Tanggal</th><th>DPP</th><th>MDP</th><th>Aktual</th><th>Aktual − DPP</th><th>Aktual − MDP</th></tr>
+      ${R.rows.map(r=>`<tr style="border-top:1px solid var(--border);${r.today?"font-weight:700;":""}${r.future?"color:var(--text-dim);":""}"><td>${r.day}${r.today?" · hari ini":""}</td><td style="text-align:center;">${fmt(r.dpp)}</td><td style="text-align:center;">${fmt(r.mdp)}</td><td style="text-align:center;">${fmt(r.act)}${r.src==="mdp"?'<sup title="aktual PDI dari MDP">*</sup>':""}</td><td style="text-align:center;">${r.act==null||r.dpp==null?"":gap(r.act,r.dpp)}</td><td style="text-align:center;">${r.act==null||r.mdp==null?"":gap(r.act,r.mdp)}</td></tr>`).join("")}
+      <tr style="border-top:2px solid var(--gold);font-weight:800;"><td>s.d. hari ini</td><td style="text-align:center;">${fmt(T.dppTD)}</td><td style="text-align:center;">${fmt(T.mdpTD)}</td><td style="text-align:center;">${fmt(T.act)}</td><td style="text-align:center;">${gap(T.act,T.dppTD)}</td><td style="text-align:center;">${gap(T.act,T.mdpTD)}</td></tr>
+    </table></div></details>`;
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px 12px;flex-wrap:wrap;">
+        <h3 style="margin:0;">📈 DPP · MDP · Aktual</h3>
+        <div style="display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap;">
+          <span style="display:inline-flex;gap:4px;align-items:center;"><button class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="pdmMonthShift(-1)" aria-label="Bulan sebelumnya">◀</button><b style="font-size:13px;min-width:104px;text-align:center;">${escH(dppMonthName(ym))}</b><button class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="pdmMonthShift(1)" aria-label="Bulan berikutnya">▶</button></span>
+          <span style="display:inline-flex;gap:4px;white-space:nowrap;">${seg("daily","Harian")}${seg("cum","Kumulatif")}</span>
+        </div></div>
+      ${!has?`<div class="emptystate" style="margin-top:10px;">Belum ada data bulan ini. Upload DPP dan MDP di Admin → Plan Produksi.</div>`:`
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;">
+        ${tile("Plan MDP sebulan", fmt(T.mdpMonth), "#D9731F", T.mdpMonth==null?"MDP belum di-upload":"s.d. hari ini "+fmt(T.mdpTD))}
+        ${tile("Plan DPP s.d. hari ini", fmt(T.dppTD), "#2F6FB5", R.dLines.length?R.dLines.join(" + ")+" · "+escH(dppCfg().cats.join(" + ")):"DPP belum di-upload")}
+        ${tile("Aktual s.d. hari ini", fmt(T.act), "#1E9E5A", [T.dppTD!=null?"vs DPP "+gap(T.act,T.dppTD)+pct(T.act,T.dppTD):"", T.mdpTD!=null?"vs MDP "+gap(T.act,T.mdpTD)+pct(T.act,T.mdpTD):""].filter(Boolean).join(" · "))}
+        ${T.mdpMonth!=null?tile("Sisa plan MDP", fmt(Math.max(0,T.mdpMonth-T.act)), "#6B7686", "sampai akhir bulan"):""}
+      </div>
+      ${legend}${pdmChartSVG(R, pdmMode)}${tbl}
+      <button class="btn btn-outline btn-sm" style="width:auto;margin-top:8px;" onclick="mdpDownload('${ym}')">⬇ Download Excel (rekap DPP · MDP · Aktual)</button>
+      <div class="footnote" style="margin-top:6px;">Aktual = input Dispatcher per hari produksi 07:00–06:59 (riwayat harian dicatat RADAR mulai 12 Nov 2026). DPP tampil sampai tanggal terakhir yang sudah diestimasi. Sentuh / arahkan ke tanggal untuk melihat angkanya.</div>`}
+    </div>`;
+  }catch(e){ console.warn("grafik DPP/MDP", e); return ""; }
+}
+
+
+/* ======================================================================
+   LAPORAN EKY — Daily Report, Yard Stock Simulation, MDP per model Day/Night
+   Sumber: DPP (plan harian per shift), MDP (plan bulanan per model, dibagi Day 55% / Night sisanya; unit Batam dari nama cabang dealer),
+   input Dispatcher (aktual receiving), ILS Delout (aktual delivery), isi stall (WIP), DCCP (plan delivery).
+   Riwayat harian: data.prodAct["YYYY-MM-DD"], dicatat tiap 5 menit oleh HP Delivery/Leader/Admin (prodActSnap):
+     s1/s2 {KP1,KP2,_}  receiving per line      m1/m2 {MODEL} receiving per model    b1/b2 receiving Batam  mb1/mb2 {MODEL}
+     o1/o2 {MODEL}      delivery out per model  ob1/ob2 {MODEL} delivery Batam       c1/c2 jumlah CC (ILS)
+     w {t,b,m,mb,ts}    isi stall (WIP) terakhir hari itu      dp {s1,s2} plan delivery DCCP per shift
+====================================================================== */
+const EKY_MODELS_DEF=["AGYA","CALYA","RAIZE","AVANZA"];
+const MDP_BATAM_DEF=["AGUNG AUTOMALL (BATAM)","AGUNG TOYOTA BATAM","AGUNG TOYOTA BATAM CENTER","AGUNG TOYOTA BATU AMPAR","AGUNG TOYOTA SEKUPANG"];
+const EKY_MAPS=["s1","s2","m1","m2","mb1","mb2","o1","o2","ob1","ob2"], EKY_NUMS=["b1","b2","c1","c2"];
+function mdpBatamList(){ const c=(DB.get().mdpCfg||{}).batam; return (Array.isArray(c)&&c.length)?c:MDP_BATAM_DEF; }
+function ekyNorm(s){ return String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
+function mdpIsBatam(branch, list){ const b=ekyNorm(branch); if(!b) return false; return (list||MDP_BATAM_DEF).some(k=>{ const n=ekyNorm(k); return n && b.indexOf(n)>=0; }); }
+function ekyMKey(m){ const u=String(m||"").toUpperCase().replace(/\s+/g," ").trim(); const k=["AGYA","CALYA","RAIZE","AVANZA","VELOZ","RUSH","AYLA","SIGRA","XENIA","ROCKY"].find(x=>u===x||u.startsWith(x+" ")); return dppSafeKey(k||u||"LAINNYA"); }
+function ekyModelsOrder(list){ const s=[...new Set(list.filter(Boolean))]; return s.sort((a,b)=>{ const ia=EKY_MODELS_DEF.indexOf(a), ib=EKY_MODELS_DEF.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib) || a.localeCompare(b); }); }
+function ekyKeyOf(dt){ return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"); }
+function ekyBaseOf(key){ const [y,m,d]=key.split("-").map(Number); return new Date(y,m-1,d,SHIFT_START_H,0,0,0).getTime(); }
+function ekyAddDays(key,n){ const [y,m,d]=key.split("-").map(Number); return ekyKeyOf(new Date(y,m-1,d+n)); }
+function ekySum(o){ let s=0; Object.values(o||{}).forEach(v=>{ s+=(+v||0); }); return s; }
+function ekyAdd(o,k,n){ o[k]=(o[k]||0)+(n==null?1:n); }
+
+/* ---------- unit yang diinput Dispatcher (stall + ILS + log HP), satu kali per unit ---------- */
+function ekyRecvRecs(data){
+  const seen=new Set(), out=[];
+  const add=(f,ts,line,m,b)=>{ if(!ts) return; const k=String(f||"").toUpperCase()+"|"+ts; if(seen.has(k)) return; seen.add(k); out.push({ts:+ts, line:line||"", m:ekyMKey(m), b:!!b}); };
+  Object.values(data.units||{}).forEach(u=>{ if(u) add(u.frame,u.ts,u.line,u.model,u.batam); });
+  (data.ils||[]).forEach(x=>{ if(x) (x.units||[]).forEach(u=>{ if(u && u.ts) add(u.frame,u.ts,u.line,u.model,u.batam||x.batam); }); });
+  (data.unitLog||[]).forEach(e=>{ if(e && e.parkedTs!=null && e.status!=="removed") add(e.frame,e.parkedTs,e.line,e.model,e.batam); });
+  return out;
+}
+/* hitungan satu hari produksi (base = jam 07:00) dari data yang masih ada di RADAR */
+function ekyDay(data, base, recs){
+  recs=recs||ekyRecvRecs(data);
+  const o={s1:{},s2:{},m1:{},m2:{},mb1:{},mb2:{},o1:{},o2:{},ob1:{},ob2:{},b1:0,b2:0,c1:0,c2:0};
+  ["1","2"].forEach(w=>{ const [a,b]=shiftWindow(base,w);
+    recs.forEach(r=>{ if(r.ts>=a && r.ts<b){ ekyAdd(o["s"+w], PROD_LINES.includes(r.line)?r.line:"_"); ekyAdd(o["m"+w], r.m); if(r.b){ o["b"+w]++; ekyAdd(o["mb"+w], r.m); } } });
+    (data.ils||[]).forEach(x=>{ if(!x || x.status!=="done") return; const t=x.outTs||x.doneTs; if(!(t>=a && t<b)) return; o["c"+w]++;
+      (x.units||[]).forEach(u=>{ const m=ekyMKey(u.model); ekyAdd(o["o"+w], m); if(u.batam||x.batam) ekyAdd(o["ob"+w], m); }); });
+  });
+  return o;
+}
+function prodActCompute(data, base){ return ekyDay(data, base); }   /* dipakai grafik DPP · MDP · Aktual */
+function ekyWipNow(data){ const w={t:0,b:0,m:{},mb:{},ts:Date.now()}; Object.values(data.units||{}).forEach(u=>{ if(!u) return; const m=ekyMKey(u.model); w.t++; if(u.batam){ w.b++; ekyAdd(w.mb,m); } else ekyAdd(w.m,m); }); return w; }
+/* plan delivery shift berjalan dari jadwal DCCP (Planning CC) */
+function ekyDpNow(data){
+  const sh=currentShift(), sp=ldrPeriod, ss=ldrShift;
+  try{ ldrPeriod="today"; ldrShift=sh; const R=ccplanCompute(data), lp={};
+    R.rows.forEach(x=>{ if(x.isSpot) return; const k=dppSafeKey(x.r.lp||"-"), o=lp[k]=lp[k]||{n:0,p:0,a:0,pu:0,au:0}; o.n++; o.p+=x.planTrip; o.a+=x.act; o.pu+=x.planUnit; o.au+=x.actUnit; });
+    return {s:"s"+sh, v:{u:R.T.planUnit||0, t:R.T.planTrip||0, a:R.T.act||0, au:R.T.actUnit||0, sp:R.T.spotAct||0, spu:R.T.spotUnit||0, lp}};
+  } finally { ldrPeriod=sp; ldrShift=ss; }
+}
+function ekyMergeMax(cur, c){
+  EKY_MAPS.forEach(k=>{ if(!c[k]) return; const x=Object.assign({}, cur[k]||{}); Object.keys(c[k]).forEach(j=>{ x[j]=Math.max(+x[j]||0, +c[k][j]||0); }); cur[k]=x; });
+  EKY_NUMS.forEach(k=>{ if(c[k]!=null) cur[k]=Math.max(+cur[k]||0, +c[k]||0); });
+  return cur;
+}
+function ekyMore(c, s){
+  s=s||{}; if(EKY_NUMS.some(k=>(+c[k]||0)>(+s[k]||0))) return true;
+  return EKY_MAPS.some(k=>Object.keys(c[k]||{}).some(j=>(+c[k][j]||0)>(+((s[k]||{})[j])||0)));
+}
+/* data satu hari: riwayat tersimpan, untuk hari ini (dan kemarin s.d. 2 jam setelah selesai) digabung dengan hitungan langsung */
+function ekyDayData(data, key){
+  const P=(data.prodAct||{})[key]||null, today=prodDateKey(), base=ekyBaseOf(key), live=key===today || (key===ekyAddDays(today,-1) && Date.now()<ekyBaseOf(today)+2*3600000);
+  if(!P && !live) return null;
+  const o=ekyMergeMax(Object.assign({}, P||{}), live?ekyDay(data, base):{});
+  if(key===today){ o.w=ekyWipNow(data); try{ if((data.dccpSchedule||[]).length){ const dp=ekyDpNow(data); o.dp=Object.assign({}, o.dp||{}, {[dp.s]:dp.v}); } }catch(e){} }
+  return o;
+}
+function ekyRecvTot(o){ return o ? ekySum(o.s1)+ekySum(o.s2) : 0; }
+function prodActTotal(o){ return ekyRecvTot(o); }
+/* tulis ke Firebase per tanggal (radar/prodAct/<tgl>), digabung nilai terbesar di server: ringan, tidak mengirim seluruh riwayat */
+function ekyWrite(k, u){
+  const apply=cur=>{ cur=Object.assign({}, cur||{}); if(u.c) ekyMergeMax(cur,u.c); if(u.w) cur.w=u.w; if(u.dp){ cur.dp=Object.assign({}, cur.dp||{}); cur.dp[u.dp.s]=u.dp.v; } return cur; };
+  if(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.db){
+    try{ FBS.db.ref(FB_ROOT+"/prodAct/"+k).transaction(cur=>apply(cur), ()=>{}, false); return; }catch(e){}
+  }
+  DB.set(d=>{ const P=Object.assign({}, d.prodAct||{}); P[k]=apply(P[k]); d.prodAct=P; });
+}
+function prodActSnap(){
+  try{
+    if(!currentUser || !["delivery","admin","leader"].includes(currentUser.role) || isViewer()) return;
+    const data=DB.get(), now=Date.now(), pd=prodDayStart(now), recs=ekyRecvRecs(data), P=data.prodAct||{}, upd={};
+    const bases=[pd]; if(now<pd+2*3600000) bases.push(pd-86400000);   /* hari kemarin masih dilengkapi 2 jam pertama */
+    bases.forEach(b=>{ const k=prodDateKey(b+3600000), c=ekyDay(data,b,recs); if(ekyMore(c, P[k])) (upd[k]=upd[k]||{}).c=c; });
+    const kT=prodDateKey(pd+3600000), cur=P[kT]||{}, w=ekyWipNow(data), ow=cur.w||{}, age=now-(+ow.ts||0);
+    const wChg=ow.t!==w.t || ow.b!==w.b || JSON.stringify(ow.m||{})!==JSON.stringify(w.m) || JSON.stringify(ow.mb||{})!==JSON.stringify(w.mb);
+    if((wChg && age>9*60000) || age>55*60000) (upd[kT]=upd[kT]||{}).w=w;   /* isi stall: tiap ±10 menit kalau berubah (nilai terakhir = stok akhir hari) */
+    try{ if((data.dccpSchedule||[]).length){ const dp=ekyDpNow(data), old=(cur.dp||{})[dp.s]; if(!old || JSON.stringify(old)!==JSON.stringify(dp.v)) (upd[kT]=upd[kT]||{}).dp=dp; } }catch(e){}
+    Object.keys(upd).forEach(k=>ekyWrite(k, upd[k]));
+    /* riwayat > 45 hari dihapus (sekali sehari) */
+    try{ const last=+localStorage.getItem("radar_pa_clean")||0; if(now-last>20*3600000){ localStorage.setItem("radar_pa_clean", String(now)); const cut=prodDateKey(now-45*86400000); const old=Object.keys(P).filter(k=>k<cut);
+      if(old.length){ if(FBS.enabled && FBS.ready){ const up={}; old.forEach(k=>{ up[FB_ROOT+"/prodAct/"+k]=null; }); FBS.db.ref().update(up).catch(()=>{}); } else DB.set(d=>{ old.forEach(k=>{ if(d.prodAct) delete d.prodAct[k]; }); }); } } }catch(e){}
+  }catch(e){ console.warn("snapshot harian", e); }
+}
+
+/* ---------- pembagian MDP ke shift ----------
+   Jumlah shift tiap line per tanggal mengikuti DPP: Day & Night ada plan → 2 shift (Day = 55% × MDP dibulatkan, Night = MDP − Day);
+   hanya Day → 100% Day; hanya Night → 100% Night. Tanggal tanpa plan DPP memakai pola tanggal terakhir yang ada di DPP
+   (belum ada sama sekali: KP1 2 shift, KP2 1 shift). Model KP2 = daftar di pengaturan (default AVANZA), model lain ikut KP1. */
+function mdpSplitCfg(){ const c=DB.get().mdpCfg||{}, L=Array.isArray(c.kp2)?c.kp2:(Array.isArray(c.dayOnly)?c.dayOnly:["AVANZA"]); return {r:(+c.dayR>0 && +c.dayR<1)?+c.dayR:0.55, kp2:L.map(x=>String(x).toUpperCase().trim()).filter(Boolean)}; }
+function mdpLineOf(k, cfg){ return (cfg||mdpSplitCfg()).kp2.includes(String(k).toUpperCase())?"KP2":"KP1"; }
+function ekyLineShifts(data, ym){
+  const D=data.dpp||{}, cats=dppCfg().cats, [y,m]=ym.split("-").map(Number), nd=new Date(y,m,0).getDate(), out={};
+  DPP_LINES.forEach(l=>{ const r=D[l]&&D[l].ym===ym?D[l]:null; let last=null; out[l]={};
+    for(let d=1; d<=nd; d++){ let p=null; if(r){ const v=dppVal(r,d,cats); p=(v[0]>0&&v[1]>0)?"DN":(v[0]>0?"D":(v[1]>0?"N":null)); }
+      if(p) last=p; out[l][d]={p:p||last||(l==="KP2"?"D":"DN"), src:p?"dpp":(last?"last":"def")}; } });
+  return {get:(l,d)=>(out[l]&&out[l][d])||{p:l==="KP2"?"D":"DN", src:"def"}};
+}
+function mdpSplitModel(k, n, cfg, LS, d){ n=+n||0; cfg=cfg||mdpSplitCfg(); const pat=LS?LS.get(mdpLineOf(k,cfg), d).p:"DN";
+  if(pat==="D") return [n,0]; if(pat==="N") return [0,n]; const a=Math.round(n*cfg.r); return [a, n-a]; }
+function mdpSplitDay(P, cfg, LS, d){ cfg=cfg||mdpSplitCfg(); let D=0,N=0; Object.keys(P||{}).forEach(k=>{ const v=mdpSplitModel(k,P[k],cfg,LS,d); D+=v[0]; N+=v[1]; }); return [D,N]; }
+function mdpSplitTxt(){ const c=mdpSplitCfg(); return "Jumlah shift per line ikut DPP: 2 shift → Day "+Math.round(c.r*100)+"% × MDP (dibulatkan), Night = MDP − Day; 1 shift → 100% ke shift itu. Model KP2: "+(c.kp2.join(", ")||"-")+"; model lain ikut KP1"; }
+function mdpPatTxt(LS, d){ const t=x=>x.p==="DN"?"2 shift":(x.p==="D"?"Day":"Night"), a=LS.get("KP1",d), b=LS.get("KP2",d); return {txt:t(a)+" · "+t(b), est:a.src!=="dpp"||b.src!=="dpp"}; }
+/* (lama) porsi shift dari DPP — tidak dipakai untuk MDP lagi */
+function ekyShare(data, ym){
+  const D=data.dpp||{}, cats=dppCfg().cats, lines=DPP_LINES.filter(l=>D[l]&&D[l].ym===ym), [y,m]=ym.split("-").map(Number), nd=new Date(y,m,0).getDate(), per={};
+  let sD=0, sT=0;
+  for(let d=1; d<=nd; d++){ let a=0,b=0; lines.forEach(l=>{ const v=dppVal(D[l],d,cats); a+=v[0]; b+=v[1]; }); if(a+b>0){ per[d]=a/(a+b); sD+=a; sT+=a+b; } }
+  const avg=sT?sD/sT:null;
+  return {get:d=>per[d]!=null?{share:per[d], src:"dpp"}:(avg!=null?{share:avg, src:"avg"}:null), avg, has:lines.length>0};
+}
+function ekySplit(n, sh){ n=+n||0; if(!sh) return [n,0]; const a=Math.round(n*sh.share); return [a, n-a]; }
+function ekyDppDay(data, key){   /* plan DPP satu tanggal per line per shift */
+  const D=data.dpp||{}, cats=dppCfg().cats, ym=key.slice(0,7), d=+key.slice(8), o={KP1:[0,0], KP2:[0,0], has:false};
+  DPP_LINES.forEach(l=>{ const r=D[l]; if(r && r.ym===ym){ o[l]=dppVal(r,d,cats); o.has=true; } });
+  return o;
+}
+
+/* ======================================================================
+   MDP PER MODEL DAY / NIGHT
+====================================================================== */
+let mdpTblData="plan", mdpTblShift="T";
+function mdpShiftTable(data, ym){
+  const M=(data.mdp||{})[ym]; if(!M) return null;
+  const [y,m]=ym.split("-").map(Number), nd=new Date(y,m,0).getDate(), today=prodDateKey(), SC=mdpSplitCfg(), LS=ekyLineShifts(data, ym);
+  const mods=new Set(); Object.values(M.plan||{}).forEach(o=>Object.keys(o||{}).forEach(k=>mods.add(k)));
+  const rows=[];
+  for(let d=1; d<=nd; d++){
+    const key=ym+"-"+String(d).padStart(2,"0"), P=(M.plan||{})["d"+d]||{}, PB=(M.planB||{})["d"+d]||{}, plan={};
+    Object.keys(P).forEach(k=>{ plan[k]=mdpSplitModel(k, P[k], SC, LS, d); });
+    let act=null; const A=key<=today?ekyDayData(data,key):null;
+    if(A){ act={}; Object.keys(A.m1||{}).concat(Object.keys(A.m2||{})).forEach(k=>{ mods.add(k); act[k]=[+((A.m1||{})[k])||0, +((A.m2||{})[k])||0]; }); }
+    const pT=[0,0]; Object.values(plan).forEach(v=>{ pT[0]+=v[0]; pT[1]+=v[1]; });
+    const aT=act?[ekySum(A.m1), ekySum(A.m2)]:null;
+    rows.push({d, key, dt:new Date(y,m-1,d), plan, planB:PB, pT, act, aT, pat:mdpPatTxt(LS,d), today:key===today, future:key>today});
+  }
+  const models=ekyModelsOrder([...mods]);
+  const upTo=rows.filter(r=>!r.future), sumP=(L,k,i)=>L.reduce((s,r)=>s+(((r.plan[k]||[0,0])[i])||0),0), sumA=(L,k,i)=>L.reduce((s,r)=>s+((r.act&&r.act[k])?r.act[k][i]:0),0);
+  const per=models.map(k=>{ const pm=sumP(rows,k,0)+sumP(rows,k,1), pt=sumP(upTo,k,0)+sumP(upTo,k,1), at=sumA(upTo,k,0)+sumA(upTo,k,1); return {k, pm, pt, at, gap:at-pt, pct:pt?at/pt*100:null}; });
+  const T={pm:per.reduce((s,x)=>s+x.pm,0), pt:per.reduce((s,x)=>s+x.pt,0), at:per.reduce((s,x)=>s+x.at,0)}; T.gap=T.at-T.pt; T.pct=T.pt?T.at/T.pt*100:null;
+  return {M, ym, nd, rows, models, per, T, LS};
+}
+function mdpTableCardHtml(data, opt){
+  try{
+    const ym=(opt&&opt.ym)||pdmYm||prodDateKey().slice(0,7), X=mdpShiftTable(data, ym);
+    if(!X) return (opt&&opt.quiet)?"":`<div class="card"><h3>📋 MDP per Model (Day / Night)</h3><div class="emptystate">MDP ${escH(dppMonthName(ym))} belum di-upload (Admin → Plan Produksi).</div></div>`;
+    const f=v=>v==null?"":Math.round(v).toLocaleString('id-ID'), g=v=>v==null?"":(v===0?"0":(v>0?"+":"−")+Math.abs(v).toLocaleString('id-ID'));
+    const gc=v=>v==null||v===0?"":(v<0?"color:#B42318;":"color:#1E7F4E;");
+    const th="padding:6px 8px;font-size:11px;color:var(--text-dim);white-space:nowrap;text-align:right;", td="padding:5px 8px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;";
+    const chip=(v,cur,k,l)=>`<button class="linechip ${cur===k?"on":""}" style="padding:5px 12px;" onclick="${v}='${k}';render()">${l}</button>`;
+    const si=mdpTblShift==="D"?[0]:mdpTblShift==="N"?[1]:[0,1], pick=a=>a?si.reduce((s,i)=>s+(+a[i]||0),0):null;
+    const shTxt=mdpTblShift==="D"?"Day":mdpTblShift==="N"?"Night":"Day + Night";
+    const per=`<div style="overflow-x:auto;"><table style="font-size:13px;width:100%;">
+      <tr><th style="${th}text-align:left;">Model</th><th style="${th}">Plan sebulan</th><th style="${th}">Plan s.d. hari ini</th><th style="${th}">Aktual input</th><th style="${th}">Selisih</th><th style="${th}">Achv</th></tr>
+      ${X.per.map(p=>`<tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${getModelColor(p.k,data)};"></i> <b>${escH(p.k)}</b></td><td style="${td}">${f(p.pm)}</td><td style="${td}">${f(p.pt)}</td><td style="${td}"><b>${f(p.at)}</b></td><td style="${td}${gc(p.gap)}">${g(p.gap)}</td><td style="${td}">${p.pct==null?"":p.pct.toFixed(1)+"%"}</td></tr>`).join("")}
+      <tr style="border-top:2px solid var(--gold);font-weight:800;"><td style="${td}text-align:left;">TOTAL</td><td style="${td}">${f(X.T.pm)}</td><td style="${td}">${f(X.T.pt)}</td><td style="${td}">${f(X.T.at)}</td><td style="${td}${gc(X.T.gap)}">${g(X.T.gap)}</td><td style="${td}">${X.T.pct==null?"":X.T.pct.toFixed(1)+"%"}</td></tr>
+    </table></div>`;
+    const isA=mdpTblData==="act";
+    const daily=`<div style="overflow-x:auto;max-height:460px;overflow-y:auto;margin-top:8px;"><table style="font-size:12.5px;width:100%;">
+      <tr style="position:sticky;top:0;background:var(--panel);z-index:1;"><th style="${th}text-align:left;">Tanggal</th><th style="${th}text-align:center;" title="Jumlah shift KP1 · KP2 menurut DPP">Shift KP1 · KP2</th>${X.models.map(k=>`<th style="${th}">${escH(k)}</th>`).join("")}<th style="${th}">${isA?"Aktual":"Plan"}</th>${isA?`<th style="${th}">Plan</th>`:`<th style="${th}">Aktual</th>`}<th style="${th}">Selisih</th></tr>
+      ${X.rows.map(r=>{ const pv=pick(r.pT), av=r.aT?pick(r.aT):null, off=!pv && !av;
+        const cell=k=>{ const v=isA?(r.act?pick(r.act[k]||[0,0]):null):pick(r.plan[k]); return `<td style="${td}">${v==null?"":f(v)}</td>`; };
+        return `<tr style="border-top:1px solid var(--border);${r.today?"font-weight:700;background:var(--panel2);":""}${off||r.future?"color:var(--text-dim);":""}"><td style="${td}text-align:left;">${r.dt.toLocaleDateString('id-ID',{weekday:'short',day:'2-digit'})}${r.today?" · hari ini":""}</td><td style="${td}text-align:center;${r.pat.est?"color:var(--text-dim);font-style:italic;":""}" title="${r.pat.est?"Belum ada di DPP: memakai pola tanggal terakhir di DPP":"Dari DPP"}">${r.pat.txt}</td>${X.models.map(cell).join("")}<td style="${td}"><b>${isA?f(av):f(pv)}</b></td><td style="${td}">${isA?f(pv):f(av)}</td><td style="${td}${gc(av==null?null:av-pv)}">${av==null?"":g(av-pv)}</td></tr>`; }).join("")}
+    </table></div>`;
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <h3 style="margin:0;">📋 MDP per Model · ${escH(dppMonthName(ym))}</h3>
+        <button class="btn btn-primary btn-sm" style="width:auto;" onclick="mdpDownload('${ym}')">⬇ Download Excel</button></div>
+      <div style="font-size:11px;color:var(--text-dim);margin:4px 0 10px;">${escH(X.M.file||"")}${X.M.out?" · data Lizer "+escH(X.M.out):""}. Plan dari kolom DTPLOD. ${escH(mdpSplitTxt())}. Aktual = input Dispatcher.</div>
+      ${per}
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;"><b style="font-size:13px;">Harian per model · ${shTxt}</b>
+        <span style="display:inline-flex;gap:10px;flex-wrap:wrap;"><span style="display:inline-flex;gap:4px;">${chip("mdpTblData",mdpTblData,"plan","Plan MDP")}${chip("mdpTblData",mdpTblData,"act","Aktual input")}</span><span style="display:inline-flex;gap:4px;">${chip("mdpTblShift",mdpTblShift,"D","Day")}${chip("mdpTblShift",mdpTblShift,"N","Night")}${chip("mdpTblShift",mdpTblShift,"T","Total")}</span></span></div>
+      ${daily}
+      <div class="footnote" style="margin-top:6px;">Shift KP1 · KP2 diambil dari DPP tanggal itu: <b>2 shift</b> → Day ${Math.round(mdpSplitCfg().r*100)}% / Night sisanya; <b>Day</b> atau <b>Night</b> saja → 100% ke shift itu. Tulisan miring = tanggal belum ada di DPP, memakai pola tanggal terakhir di DPP.</div>
+    </div>`;
+  }catch(e){ console.warn("tabel MDP", e); return ""; }
+}
+/* Excel: rekap DPP·MDP·Aktual + MDP per model (bentuk sama dengan sheet MDP: tanggal ke samping) */
+function mdpDownload(ym){
+  const data=DB.get(); ym=ym||pdmYm||prodDateKey().slice(0,7);
+  const X=mdpShiftTable(data, ym), P=pdmCompute(data, ym);
+  if(!X && !P.dLines.length){ alert("Belum ada MDP / DPP untuk "+dppMonthName(ym)+"."); return; }
+  const ser=dt=>({d:Math.round((Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate())-Date.UTC(1899,11,30))/86400000)});
+  const hari=dt=>dt.toLocaleDateString('id-ID',{weekday:'long'}), n=v=>v==null?"":Math.round(v), r1=v=>v==null?"":Math.round(v*10)/10;
+  const sheets=[];
+  if(X){
+    const days=X.rows.map(r=>r.d), H=["MDP "+dppMonthName(ym)].concat(days).concat(["Total"]);
+    const line=(lab, fn, skipFuture)=>{ let t=0; const v=X.rows.map(r=>{ if(skipFuture && r.future) return ""; const x=fn(r); if(x===""||x==null) return ""; t+=x; return x; }); return [lab].concat(v).concat([t]); };
+    const rows=[H];
+    rows.push(["PLAN MDP"]);
+    X.models.forEach(k=>rows.push(line(k, r=>{ const p=r.plan[k]; return p?p[0]+p[1]:0; })));
+    rows.push(line("Total", r=>r.pT[0]+r.pT[1]));
+    rows.push([""]); rows.push(["PLAN PER SHIFT ("+mdpSplitTxt()+")"]);
+    rows.push(["Shift KP1·KP2 (DPP)"].concat(X.rows.map(r=>r.pat.txt+(r.pat.est?"*":""))).concat([""]));
+    X.models.forEach(k=>{ rows.push(line(k+" Day", r=>(r.plan[k]||[0,0])[0])); rows.push(line(k+" Night", r=>(r.plan[k]||[0,0])[1])); });
+    rows.push(line("DAY", r=>r.pT[0])); rows.push(line("NIGHT", r=>r.pT[1])); rows.push(line("Total", r=>r.pT[0]+r.pT[1]));
+    rows.push([""]); rows.push(["AKTUAL INPUT DISPATCHER"]);
+    X.models.forEach(k=>{ rows.push(line(k+" Day", r=>r.act?(r.act[k]||[0,0])[0]:"", true)); rows.push(line(k+" Night", r=>r.act?(r.act[k]||[0,0])[1]:"", true)); });
+    rows.push(line("DAY", r=>r.aT?r.aT[0]:"", true)); rows.push(line("NIGHT", r=>r.aT?r.aT[1]:"", true)); rows.push(line("Total", r=>r.aT?r.aT[0]+r.aT[1]:"", true));
+    rows.push(line("Selisih (aktual − plan)", r=>r.aT?(r.aT[0]+r.aT[1])-(r.pT[0]+r.pT[1]):"", true));
+    const bm=ekyModelsOrder([...new Set(X.rows.flatMap(r=>Object.keys(r.planB||{})))]);
+    if(bm.length){ rows.push([""]); rows.push(["MDP BATAM (dealer Batam)"]); bm.forEach(k=>rows.push(line(k, r=>+((r.planB||{})[k])||0))); rows.push(line("Total Batam", r=>ekySum(r.planB))); }
+    sheets.push({name:"MDP per Model", rows});
+    const rs=[["Model","Plan Sebulan","Plan s.d. Hari Ini","Aktual Input s.d. Hari Ini","Selisih","Achievement %"]];
+    X.per.forEach(p=>rs.push([p.k, p.pm, p.pt, p.at, p.gap, r1(p.pct)])); rs.push(["TOTAL", X.T.pm, X.T.pt, X.T.at, X.T.gap, r1(X.T.pct)]);
+    sheets.push({name:"Ringkasan Model", rows:rs});
+  }
+  { let a=0,b=0,c=0; const rows=[["Tanggal","Hari","DPP","MDP Plan","Aktual Input","Aktual − DPP","Aktual − MDP","Kum. DPP","Kum. MDP","Kum. Aktual"]];
+    P.rows.forEach(r=>{ const dt=new Date(+ym.slice(0,4), +ym.slice(5,7)-1, r.day); if(r.dpp!=null) a+=r.dpp; if(r.mdp!=null) b+=r.mdp; if(r.act!=null) c+=r.act;
+      rows.push([ser(dt), hari(dt), n(r.dpp), n(r.mdp), n(r.act), r.act!=null&&r.dpp!=null?r.act-r.dpp:"", r.act!=null&&r.mdp!=null?r.act-r.mdp:"", r.dpp!=null?a:"", r.mdp!=null?b:"", r.act!=null?c:""]); });
+    sheets.push({name:"DPP vs MDP vs Aktual", rows}); }
+  const w=[24]; for(let i=0;i<40;i++) w.push(7);
+  mfSave("MDP-EKY-"+ym+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx(sheets, w));
+}
+
+/* ======================================================================
+   YARD STOCK SIMULATION (reguler & Batam)
+   Plan stok = stok aktual hari sebelumnya (kalau belum ada: plan hari sebelumnya) + MDP − plan delivery.
+   Aktual stok = isi stall akhir hari (catatan terakhir hari itu). Plan delivery reguler = jadwal DCCP (kalau tercatat),
+   selain itu = MDP reguler hari itu. Plan delivery Batam diisi manual (sentuh angkanya).
+====================================================================== */
+let ysKind="R";
+function ysCfg(data){ const c=(data||DB.get()).ysCfg||{}; return {cap:+c.cap>0?+c.cap:(CONFIG.STALL_GROUPS.length*CONFIG.SLOTS_PER_STALL), std:c.std!=null&&c.std!==""?+c.std:5, capB:+c.capB>0?+c.capB:(+c.cap>0?+c.cap:(CONFIG.STALL_GROUPS.length*CONFIG.SLOTS_PER_STALL)), s0:c.s0||{}}; }
+function ysCompute(data, ym){
+  const [y,m]=ym.split("-").map(Number), nd=new Date(y,m,0).getDate(), today=prodDateKey(), M=(data.mdp||{})[ym]||null, cfg=ysCfg(data), BP=data.ysBdp||{};
+  const prevKey=ekyAddDays(ym+"-01",-1), prev=ekyDayData(data, prevKey), s0=cfg.s0[ym]||{};
+  let stR=s0.r!=null&&s0.r!==""?+s0.r:(prev&&prev.w?prev.w.t-prev.w.b:0), stB=s0.b!=null&&s0.b!==""?+s0.b:(prev&&prev.w?prev.w.b:0);
+  const start={r:stR, b:stB};
+  const rows=[]; let pR=stR, pB=stB, aR=stR, aB=stB, haveA=true;
+  for(let d=1; d<=nd; d++){
+    const key=ym+"-"+String(d).padStart(2,"0"), fut=key>today, D=fut?null:ekyDayData(data,key);
+    const mT=M?ekySum((M.plan||{})["d"+d]):null, mB=M?ekySum((M.planB||{})["d"+d]):null, mR=M?mT-mB:null;
+    const iT=D?ekyRecvTot(D):null, iB=D?(+D.b1||0)+(+D.b2||0):null, iR=D?iT-iB:null;
+    const oT=D?ekySum(D.o1)+ekySum(D.o2):null, oB=D?ekySum(D.ob1)+ekySum(D.ob2):null, oR=D?oT-oB:null;
+    const dpOk=D&&D.dp&&D.dp.s1&&D.dp.s2&&!(key===today);
+    const dpR=dpOk?Math.max(0,(+D.dp.s1.u||0)+(+D.dp.s2.u||0)-0):(mR!=null?mR:null);
+    const dpB=BP[key]!=null?+BP[key]:0;
+    /* plan: dasar = stok aktual kemarin kalau ada */
+    const baseR=haveA?aR:pR, baseB=haveA?aB:pB;
+    const planR=Math.max(0, baseR+(mR||0)-(dpR!=null?dpR:(mR||0))), planB=Math.max(0, baseB+(mB||0)-dpB);
+    let sR=null, sB=null;
+    if(D && D.w){ sR=D.w.t-D.w.b; sB=D.w.b; }
+    pR=planR; pB=planB;
+    if(sR!=null){ aR=sR; aB=sB; haveA=true; } else haveA=false;
+    rows.push({d, key, today:key===today, future:fut, mR, mB, iR, iB, dpR, dpB, oR, oB, planR, planB, sR, sB, dpEst:!dpOk});
+  }
+  return {ym, nd, rows, cfg, start, M};
+}
+function ysEditBdp(key){
+  const cur=(DB.get().ysBdp||{})[key]; const v=prompt("Plan delivery BATAM tanggal "+key+" (unit). Kosongkan untuk hapus:", cur!=null?cur:"");
+  if(v===null) return; const s=String(v).trim(); if(s!=="" && !/^\d+$/.test(s)){ alert("Isi angka saja."); return; }
+  DB.set(d=>{ const o=Object.assign({}, d.ysBdp||{}); if(s==="") delete o[key]; else o[key]=+s; const cut=ekyAddDays(prodDateKey(),-70); Object.keys(o).forEach(k=>{ if(k<cut) delete o[k]; }); d.ysBdp=o; });
+}
+function ysSaveCfg(ym){
+  const g=id=>((document.getElementById(id)||{}).value||"").trim(), num=s=>s===""?"":(/^\d+$/.test(s)?+s:null);
+  const cap=num(g("ysCap")), std=num(g("ysStd")), r=num(g("ysS0r")), b=num(g("ysS0b"));
+  if([cap,std,r,b].some(v=>v===null)){ alert("Isi angka saja (boleh dikosongkan)."); return; }
+  DB.set(d=>{ const c=Object.assign({}, d.ysCfg||{}); if(cap!=="") c.cap=cap; if(std!=="") c.std=std; c.s0=Object.assign({}, c.s0||{}); c.s0[ym]={r, b}; if(r===""&&b==="") delete c.s0[ym]; d.ysCfg=c; });
+}
+function ysChartSVG(Y, kind){
+  const C={act:"#1E9E5A", plan:"#2F6FB5", std:"#D9731F", cap:"#475467", ink:"#475467", dim:"#6B7686", grid:"#E2E6ED"};
+  const R=Y.rows, n=R.length, W=Math.max(640, n*22+122), H=280, L=40, Rm=86, T=16, B=34, pw=W-L-Rm, ph=H-T-B;
+  const S=r=>kind==="B"?r.sB:r.sR, PL=r=>kind==="B"?r.planB:r.planR, cap=kind==="B"?Y.cfg.capB:Y.cfg.cap, std=kind==="B"?null:Y.cfg.std;
+  const mx=Math.max(10, cap*1.1, ...R.map(r=>Math.max(S(r)||0, PL(r)||0)));
+  const step=(()=>{ const raw=mx/4, p=Math.pow(10,Math.floor(Math.log10(raw))), f=raw/p; return (f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p; })(), top=Math.ceil(mx/step)*step;
+  const x=i=>L+pw*(i+0.5)/n, y=v=>T+ph-(v/top)*ph, gw=pw/n, bw=Math.max(4, Math.min(16, gw*0.56));
+  let g=""; for(let v=0; v<=top+1e-9; v+=step){ const yy=y(v); g+=`<line x1="${L}" x2="${L+pw}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="${C.grid}"/><text x="${L-6}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="10" fill="${C.dim}">${Math.round(v)}</text>`; }
+  let bars="", hit="", xl="";
+  R.forEach((r,i)=>{ const cx=x(i), v=S(r);
+    if(v!=null && v>0){ const yy=y(v), h=T+ph-yy, rr=Math.min(4,h/2,bw/2); bars+=`<path d="M${(cx-bw/2).toFixed(1)} ${(T+ph).toFixed(1)} V${(yy+rr).toFixed(1)} Q${(cx-bw/2).toFixed(1)} ${yy.toFixed(1)} ${(cx-bw/2+rr).toFixed(1)} ${yy.toFixed(1)} H${(cx+bw/2-rr).toFixed(1)} Q${(cx+bw/2).toFixed(1)} ${yy.toFixed(1)} ${(cx+bw/2).toFixed(1)} ${(yy+rr).toFixed(1)} V${(T+ph).toFixed(1)} Z" fill="${C.act}" ${r.today?'fill-opacity=".75"':""}/>`; }
+    if(n<=16 || r.d%2===1 || r.today) xl+=`<text x="${cx.toFixed(1)}" y="${H-B+15}" text-anchor="middle" font-size="10" fill="${r.today?C.ink:C.dim}" ${r.today?'font-weight="700"':""}>${r.d}</text>`;
+    hit+=`<rect x="${(cx-gw/2).toFixed(1)}" y="${T}" width="${gw.toFixed(1)}" height="${ph}" fill="transparent"><title>${escH(r.d+" "+dppMonthName(Y.ym)+(r.today?" (hari ini)":"")+"\nStok aktual: "+(v==null?"-":v)+"\nStok plan: "+PL(r)+(kind==="B"?"":"\nKapasitas: "+cap+" · Standard: "+std))}</title></rect>`; });
+  const path=fn=>R.map((r,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(fn(r)).toFixed(1)).join(" ");
+  const ti=R.findIndex(r=>r.today), tl=ti>=0?`<line x1="${x(ti).toFixed(1)}" x2="${x(ti).toFixed(1)}" y1="${T}" y2="${T+ph}" stroke="#98A2B3" stroke-dasharray="3 3"/><text x="${(x(ti)+4).toFixed(1)}" y="${T+10}" font-size="10" fill="${C.dim}">hari ini</text>`:"";
+  const ref=(v,col,dash,lb)=>v==null?"":`<line x1="${L}" x2="${L+pw}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="${dash}"/>`;
+  const ends=[["plan","Plan",PL(R[n-1])],["cap","Kapasitas",cap]].concat(std!=null?[["std","Standard",std]]:[]).concat(ti>=0&&S(R[ti])!=null?[["act","Aktual",S(R[ti])]]:[]).map(([k,lb,v])=>({k,lb,v,yy:y(v)})).sort((a,b)=>a.yy-b.yy);
+  for(let i=1;i<ends.length;i++) if(ends[i].yy-ends[i-1].yy<13) ends[i].yy=ends[i-1].yy+13;
+  const lbl=ends.map(e=>`<rect x="${L+pw+6}" y="${(e.yy-4).toFixed(1)}" width="8" height="8" rx="2" fill="${C[e.k]}"/><text x="${L+pw+18}" y="${(e.yy+4).toFixed(1)}" font-size="10.5" fill="${C.ink}"><tspan font-weight="700">${e.lb}</tspan> ${Math.round(e.v)}</text>`).join("");
+  return `<div class="ysScroll" data-tf="${ti>=0?(x(ti)/W).toFixed(3):""}" style="overflow-x:auto;"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Simulasi stok yard ${kind==="B"?"Batam":"reguler"}" style="min-width:600px;width:100%;height:auto;display:block;">
+    ${g}<line x1="${L}" x2="${L+pw}" y1="${T+ph}" y2="${T+ph}" stroke="#C9CFD8"/>${ref(cap,C.cap,"6 4")}${ref(std,C.std,"2 3")}${tl}${bars}
+    <path d="${path(PL)}" fill="none" stroke="${C.plan}" stroke-width="2" stroke-linejoin="round"/>${R.map((r,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(PL(r)).toFixed(1)}" r="3" fill="${C.plan}" stroke="#fff" stroke-width="1.2"/>`).join("")}
+    ${xl}${lbl}${hit}</svg></div>`;
+}
+function ysCardHtml(data){
+  try{
+    const ym=pdmYm||prodDateKey().slice(0,7), Y=ysCompute(data, ym), K=ysKind, isB=K==="B", cfg=Y.cfg, canEdit=!!currentUser&&["admin","leader","delivery"].includes(currentUser.role)&&!isViewer();
+    setTimeout(()=>{ document.querySelectorAll(".ysScroll").forEach(el=>{ if(el.scrollWidth>el.clientWidth+4 && !el.dataset.done && +el.dataset.tf){ el.scrollLeft=Math.max(0,(+el.dataset.tf)*el.scrollWidth-el.clientWidth*0.75); el.dataset.done="1"; } }); },0);
+    const f=v=>v==null?"":Math.round(v).toLocaleString('id-ID');
+    const chip=(k,l)=>`<button class="linechip ${K===k?"on":""}" style="padding:5px 12px;" onclick="ysKind='${k}';render()">${l}</button>`;
+    const th="padding:5px 6px;font-size:11px;color:var(--text-dim);white-space:nowrap;text-align:right;", td="padding:4px 6px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;font-size:12px;";
+    const st="position:sticky;left:0;background:var(--panel);z-index:1;text-align:left;font-weight:700;";
+    const L=isB?[["MDP Batam",r=>r.mB],["Aktual input",r=>r.iB],["Plan delivery",r=>r.dpB,"bdp"],["Aktual delivery",r=>r.oB],["Stok plan",r=>r.planB,"p"],["Stok aktual",r=>r.sB,"a"]]
+               :[["MDP reguler",r=>r.mR],["Aktual input",r=>r.iR],["Plan delivery",r=>r.dpR,"dp"],["Aktual delivery",r=>r.oR],["Stok plan",r=>r.planR,"p"],["Stok aktual",r=>r.sR,"a"]];
+    const tot=(fn,kind)=>kind==="p"||kind==="a"?"":f(Y.rows.reduce((s,r)=>s+(+fn(r)||0),0));
+    const table=`<div style="overflow-x:auto;margin-top:8px;"><table style="border-collapse:separate;border-spacing:0;">
+      <tr><th style="${th}${st}">${isB?"Batam":"Reguler"}</th>${Y.rows.map(r=>`<th style="${th}${r.today?"color:var(--text);":""}">${r.d}</th>`).join("")}<th style="${th}">Total</th></tr>
+      ${L.map(([lb,fn,kind])=>`<tr style="border-top:1px solid var(--border);"><td style="${td}${st}">${lb}</td>${Y.rows.map(r=>{ const v=fn(r), clk=kind==="bdp"&&canEdit?` onclick="ysEditBdp('${r.key}')" title="Sentuh untuk isi plan delivery Batam" `:"";
+          const est=(kind==="dp"&&r.dpEst&&v!=null)||(kind==="p"&&r.future);
+          return `<td ${clk} style="${td}${r.today?"background:var(--panel2);font-weight:700;":""}${est?"color:var(--text-dim);font-style:italic;":""}${clk?"cursor:pointer;text-decoration:underline dotted;":""}">${v==null?"":f(v)}</td>`; }).join("")}<td style="${td}font-weight:700;">${tot(fn,kind)}</td></tr>`).join("")}
+    </table></div>`;
+    const leg=`<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin:8px 0 4px;">
+      <span style="display:inline-flex;align-items:center;gap:6px;"><i style="display:inline-block;width:10px;height:12px;background:#1E9E5A;border-radius:3px 3px 0 0;"></i>Stok aktual (akhir hari)</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;"><svg width="22" height="10"><line x1="1" x2="21" y1="5" y2="5" stroke="#2F6FB5" stroke-width="2"/><circle cx="11" cy="5" r="3" fill="#2F6FB5"/></svg>Stok plan</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;"><svg width="22" height="10"><line x1="1" x2="21" y1="5" y2="5" stroke="#475467" stroke-width="1.5" stroke-dasharray="6 4"/></svg>Kapasitas yard</span>
+      ${isB?"":`<span style="display:inline-flex;align-items:center;gap:6px;"><svg width="22" height="10"><line x1="1" x2="21" y1="5" y2="5" stroke="#D9731F" stroke-width="1.5" stroke-dasharray="2 3"/></svg>Standard stock</span>`}</div>`;
+    const set=canEdit?`<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:13px;font-weight:600;">⚙ Pengaturan simulasi</summary>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+        <label style="font-size:12px;">Kapasitas yard<br><input id="ysCap" type="number" min="0" inputmode="numeric" value="${cfg.cap}" style="width:100px;"></label>
+        <label style="font-size:12px;">Standard stock<br><input id="ysStd" type="number" min="0" inputmode="numeric" value="${cfg.std}" style="width:100px;"></label>
+        <label style="font-size:12px;">Stok awal reguler (${escH(dppMonthName(ym))})<br><input id="ysS0r" type="number" min="0" inputmode="numeric" value="${(cfg.s0[ym]||{}).r??""}" placeholder="${Y.start.r}" style="width:120px;"></label>
+        <label style="font-size:12px;">Stok awal Batam<br><input id="ysS0b" type="number" min="0" inputmode="numeric" value="${(cfg.s0[ym]||{}).b??""}" placeholder="${Y.start.b}" style="width:120px;"></label>
+      </div><button class="btn btn-outline btn-sm" style="width:auto;margin-top:8px;" onclick="ysSaveCfg('${ym}')">Simpan</button>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Stok awal kosong = memakai isi stall akhir bulan lalu kalau tercatat (sekarang ${Y.start.r} reguler · ${Y.start.b} Batam).</div></details>`:"";
+    const td0=Y.rows.find(r=>r.today);
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <h3 style="margin:0;">🏗 Yard Stock Simulation · ${escH(dppMonthName(ym))}</h3>
+        <span style="display:inline-flex;gap:8px;flex-wrap:wrap;"><span style="display:inline-flex;gap:4px;">${chip("R","Reguler")}${chip("B","Batam")}</span><button class="btn btn-primary btn-sm" style="width:auto;" onclick="ysDownload('${ym}')">⬇ Download Excel</button></span></div>
+      ${td0&&td0.sR!=null?`<div style="font-size:13px;margin:8px 0 0;">Isi stall sekarang: <b>${f(isB?td0.sB:td0.sR)}</b> unit ${isB?"Batam":"reguler"} · kapasitas ${isB?cfg.capB:cfg.cap}${isB?"":" · standard "+cfg.std}</div>`:""}
+      ${leg}${ysChartSVG(Y, K)}${table}
+      <div class="footnote" style="margin-top:6px;">Plan stok = stok aktual hari sebelumnya + MDP − plan delivery (kalau stok aktual belum ada, memakai plan hari sebelumnya). ${isB?"MDP Batam = unit dealer Batam di MDP. Plan delivery Batam diisi manual: sentuh angka di baris Plan delivery.":"Plan delivery = jadwal DCCP (kalau tercatat); angka miring = perkiraan dari MDP reguler."} Aktual stok = isi stall akhir hari.${!Y.M?" MDP bulan ini belum di-upload.":""}</div>
+      ${set}
+    </div>`;
+  }catch(e){ console.warn("yard stock", e); return ""; }
+}
+function ysDownload(ym){
+  const data=DB.get(), Y=ysCompute(data, ym||pdmYm||prodDateKey().slice(0,7)), f=v=>v==null?"":Math.round(v);
+  const mk=(isB)=>{ const L=isB?[["MDP Batam",r=>r.mB],["Aktual input",r=>r.iB],["Plan delivery",r=>r.dpB],["Aktual delivery",r=>r.oB],["Stok plan",r=>r.planB,1],["Stok aktual",r=>r.sB,1],["Kapasitas",()=>Y.cfg.capB,1]]
+      :[["MDP reguler",r=>r.mR],["Aktual input",r=>r.iR],["Plan delivery",r=>r.dpR],["Aktual delivery",r=>r.oR],["Stok plan",r=>r.planR,1],["Stok aktual",r=>r.sR,1],["Kapasitas",()=>Y.cfg.cap,1],["Standard stock",()=>Y.cfg.std,1]];
+    const rows=[[(isB?"BATAM ":"REGULER ")+dppMonthName(Y.ym)].concat(Y.rows.map(r=>r.d)).concat(["Total"])];
+    L.forEach(([lb,fn,noTot])=>{ let t=0; const v=Y.rows.map(r=>{ const x=fn(r); if(x==null) return ""; t+=+x||0; return f(x); }); rows.push([lb].concat(v).concat([noTot?"":t])); });
+    rows.push([""]); rows.push(["Stok awal bulan", isB?Y.start.b:Y.start.r]);
+    return rows; };
+  const w=[18]; for(let i=0;i<33;i++) w.push(6);
+  mfSave("Yard-Stock-EKY-"+Y.ym+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx([{name:"Stock Reguler", rows:mk(false)},{name:"Stock Batam", rows:mk(true)}], w));
+}
+
+/* ======================================================================
+   DAILY REPORT EKY (per hari produksi)
+====================================================================== */
+let drKey="";
+function drDefaultKey(){ const t=prodDateKey(), h=new Date().getHours(); return (h>=SHIFT_START_H && h<12) ? ekyAddDays(t,-1) : t; }   /* pagi: laporan hari kemarin */
+function drShift(n){ drKey=ekyAddDays(drKey||drDefaultKey(), n); render(); }
+function drCompute(data, key){
+  const ym=key.slice(0,7), d=+key.slice(8), today=prodDateKey(), M=(data.mdp||{})[ym]||null, A=key<=today?ekyDayData(data, key):null;
+  const ln=(o,l)=>+((o||{})[l])||0;
+  const act=A?{D:{KP1:ln(A.s1,"KP1"), KP2:ln(A.s1,"KP2"), X:ln(A.s1,"_")}, N:{KP1:ln(A.s2,"KP1"), KP2:ln(A.s2,"KP2"), X:ln(A.s2,"_")}}:null;
+  const nightOn=!(key===today && Date.now()<ekyBaseOf(key)+(SHIFT2_START_H-SHIFT_START_H)*3600000);   /* shift Night hari ini belum mulai */
+  if(act){ act.D.t=act.D.KP1+act.D.KP2+act.D.X; act.N.t=act.N.KP1+act.N.KP2+act.N.X; act.t=act.D.t+act.N.t; if(!nightOn) act.N={KP1:null, KP2:null, X:0, t:null}; }
+  const mT=M?ekySum((M.plan||{})["d"+d]):null, mSp=M?mdpSplitDay((M.plan||{})["d"+d], null, ekyLineShifts(data, ym), d):null;
+  const dpp=ekyDppDay(data, key);
+  /* bulan berjalan s.d. tanggal ini */
+  let mdpMonth=0, mdpTD=0, dppTD=0, actTD=0;
+  if(M){ Object.keys(M.plan||{}).forEach(k=>{ const v=ekySum(M.plan[k]); mdpMonth+=v; if(+k.slice(1)<=d) mdpTD+=v; }); }
+  for(let i=1;i<=d;i++){ const k=ym+"-"+String(i).padStart(2,"0"), dd=ekyDppDay(data,k); dppTD+=dd.KP1[0]+dd.KP1[1]+dd.KP2[0]+dd.KP2[1]; const a=k<=today?ekyDayData(data,k):null; if(a) actTD+=ekyRecvTot(a); }
+  const dp=A&&A.dp?A.dp:{}, dlvP={D:dp.s1?+dp.s1.u||0:null, N:dp.s2?+dp.s2.u||0:null};
+  const outM=w=>{ const o=(A||{})["o"+w]||{}, ob=(A||{})["ob"+w]||{}, r={}, b={}; Object.keys(o).forEach(k=>{ const x=(+o[k]||0)-(+ob[k]||0); if(x) r[k]=x; }); Object.keys(ob).forEach(k=>{ if(+ob[k]) b[k]=+ob[k]; }); return {r, b, t:ekySum(o)}; };
+  const out={D:outM(1), N:outM(2)};
+  const w=A&&A.w?A.w:null;
+  const nk=ekyAddDays(key,1), dpp1=ekyDppDay(data, nk), M1=(data.mdp||{})[nk.slice(0,7)]||null, m1T=M1?ekySum((M1.plan||{})["d"+(+nk.slice(8))]):null, m1Sp=M1?mdpSplitDay((M1.plan||{})["d"+(+nk.slice(8))], null, ekyLineShifts(data, nk.slice(0,7)), +nk.slice(8)):null;
+  const rem=(data.dailyRemark||{})[key]||{};
+  return {key, ym, d, M, nightOn, today:key===today, future:key>today, A, act, mT, mSp, dpp, mdpMonth, mdpTD, dppTD, actTD, dlvP, out, w, dp, nk, dpp1, m1T, m1Sp, rem, hasHist:!!((data.prodAct||{})[key])};
+}
+function drSaveRemark(key){
+  const g=id=>((document.getElementById(id)||{}).value||"").trim();
+  const day=g("drRemD"), night=g("drRemN");
+  DB.set(d=>{ const o=Object.assign({}, d.dailyRemark||{}); if(day||night) o[key]={day, night, by:(currentUser&&currentUser.name)||"", ts:Date.now()}; else delete o[key]; const cut=ekyAddDays(prodDateKey(),-60); Object.keys(o).forEach(k=>{ if(k<cut) delete o[k]; }); d.dailyRemark=o; });
+}
+function drWaText(R){
+  const f=v=>v==null?"-":Math.round(v).toLocaleString('id-ID'), g=v=>v==null?"-":(v>0?"+":"")+v;
+  const dt=new Date(ekyBaseOf(R.key)).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const a=R.act||{D:{t:null,KP1:null,KP2:null},N:{t:null,KP1:null}};
+  const dppD=R.dpp.KP1[0]+R.dpp.KP2[0], dppN=R.dpp.KP1[1]+R.dpp.KP2[1];
+  let t=`*DAILY REPORT EKY*\n${dt}\n\n*Receiving vs DPP ADM*\nDay: plan ${f(dppD)} | aktual ${f(a.D.t)} (KP1 ${f(a.D.KP1)}, KP2 ${f(a.D.KP2)}) | diff ${g(a.D.t!=null?a.D.t-dppD:null)}\nNight: plan ${f(dppN)} | aktual ${f(a.N.t)} | diff ${g(a.N.t!=null?a.N.t-dppN:null)}\nTotal: plan ${f(dppD+dppN)} | aktual ${f(R.act?R.act.t:null)}\n`;
+  if(R.mSp) t+=`\n*Receiving vs MDP TAM*\nPlan ${f(R.mT)} (Day ${f(R.mSp[0])}, Night ${f(R.mSp[1])}) | aktual ${f(R.act?R.act.t:null)}\nBulan ini: MDP ${f(R.mdpMonth)} | aktual s.d. tgl ${f(R.actTD)}\n`;
+  t+=`\n*Delivery EKY Out*\nDay: plan ${f(R.dlvP.D)} | aktual ${f(R.out.D.t)}\nNight: plan ${f(R.dlvP.N)} | aktual ${f(R.out.N.t)}\n`;
+  if(R.w) t+=`\n*WIP*: reguler ${f(R.w.t-R.w.b)} · Batam ${f(R.w.b)}\n`;
+  if(R.rem.day||R.rem.night) t+=`\n*Problem*\nDay: ${R.rem.day||"-"}\nNight: ${R.rem.night||"-"}\n`;
+  return t.trim();
+}
+function drCopyWa(){ const t=drWaText(drCompute(DB.get(), drKey||drDefaultKey())); const ok=()=>{ const el=document.getElementById("drMsg"); if(el) el.innerHTML=`<span style="color:#1E9E5A;font-weight:700;">✔ Laporan tersalin, tinggal tempel di WhatsApp.</span>`; };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, ()=>prompt("Salin laporan:", t)); else prompt("Salin laporan:", t); }
+function drCardHtml(data){
+  try{
+    const key=drKey||drDefaultKey(), R=drCompute(data, key), f=v=>v==null?"–":Math.round(v).toLocaleString('id-ID');
+    const g=v=>v==null?"–":(v===0?"0":(v>0?"+":"−")+Math.abs(v).toLocaleString('id-ID')), gc=v=>v==null||v===0?"":(v<0?"color:#B42318;font-weight:700;":"color:#1E7F4E;font-weight:700;");
+    const dt=new Date(ekyBaseOf(key)), canEdit=!!currentUser&&["admin","leader","delivery"].includes(currentUser.role)&&!isViewer();
+    const th="padding:6px 8px;font-size:11px;color:var(--text-dim);white-space:nowrap;text-align:right;", td="padding:6px 8px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;", tl="text-align:left;font-weight:700;";
+    const a=R.act, dppD=R.dpp.KP1[0]+R.dpp.KP2[0], dppN=R.dpp.KP1[1]+R.dpp.KP2[1];
+    const v=(x)=>a?x:null;
+    const recv=`<div style="overflow-x:auto;"><table style="font-size:13px;width:100%;">
+      <tr><th style="${th}text-align:left;"></th><th style="${th}"></th><th style="${th}">Day KP1</th><th style="${th}">Day KP2</th><th style="${th}">Day</th><th style="${th}">Night KP1</th><th style="${th}">Night KP2</th><th style="${th}">Night</th><th style="${th}">Total</th><th style="${th}">Bulan s.d. tgl</th></tr>
+      <tr style="border-top:2px solid var(--border);"><td rowspan="3" style="${td}${tl}vertical-align:middle;">vs MDP TAM</td><td style="${td}text-align:left;">Plan</td><td style="${td}"></td><td style="${td}"></td><td style="${td}">${f(R.mSp?R.mSp[0]:null)}</td><td style="${td}"></td><td style="${td}"></td><td style="${td}">${f(R.mSp?R.mSp[1]:null)}</td><td style="${td}"><b>${f(R.mT)}</b></td><td style="${td}">${f(R.M?R.mdpTD:null)}${R.mdpMonth?` <span style="font-size:11px;color:var(--text-dim);">/ ${f(R.mdpMonth)}</span>`:""}</td></tr>
+      <tr><td style="${td}text-align:left;">Aktual</td><td style="${td}">${f(v(a&&a.D.KP1))}</td><td style="${td}">${f(v(a&&a.D.KP2))}</td><td style="${td}"><b>${f(v(a&&a.D.t))}</b></td><td style="${td}">${f(v(a&&a.N.KP1))}</td><td style="${td}">${f(v(a&&a.N.KP2))}</td><td style="${td}"><b>${f(v(a&&a.N.t))}</b></td><td style="${td}"><b>${f(v(a&&a.t))}</b></td><td style="${td}">${f(R.actTD)}</td></tr>
+      <tr><td style="${td}text-align:left;">Diff</td><td style="${td}"></td><td style="${td}"></td><td style="${td}${gc(a&&R.mSp?a.D.t-R.mSp[0]:null)}">${g(a&&R.mSp?a.D.t-R.mSp[0]:null)}</td><td style="${td}"></td><td style="${td}"></td><td style="${td}${gc(a&&R.mSp&&a.N.t!=null?a.N.t-R.mSp[1]:null)}">${g(a&&R.mSp&&a.N.t!=null?a.N.t-R.mSp[1]:null)}</td><td style="${td}${gc(a&&R.mT!=null?a.t-R.mT:null)}">${g(a&&R.mT!=null?a.t-R.mT:null)}</td><td style="${td}${gc(R.M?R.actTD-R.mdpTD:null)}">${g(R.M?R.actTD-R.mdpTD:null)}</td></tr>
+      <tr style="border-top:2px solid var(--border);"><td rowspan="3" style="${td}${tl}vertical-align:middle;">vs DPP ADM</td><td style="${td}text-align:left;">Plan</td><td style="${td}">${f(R.dpp.KP1[0])}</td><td style="${td}">${f(R.dpp.KP2[0])}</td><td style="${td}"><b>${f(dppD)}</b></td><td style="${td}">${f(R.dpp.KP1[1])}</td><td style="${td}">${f(R.dpp.KP2[1])}</td><td style="${td}"><b>${f(dppN)}</b></td><td style="${td}"><b>${f(dppD+dppN)}</b></td><td style="${td}">${f(R.dppTD)}</td></tr>
+      <tr><td style="${td}text-align:left;">Aktual</td><td style="${td}">${f(v(a&&a.D.KP1))}</td><td style="${td}">${f(v(a&&a.D.KP2))}</td><td style="${td}"><b>${f(v(a&&a.D.t))}</b></td><td style="${td}">${f(v(a&&a.N.KP1))}</td><td style="${td}">${f(v(a&&a.N.KP2))}</td><td style="${td}"><b>${f(v(a&&a.N.t))}</b></td><td style="${td}"><b>${f(v(a&&a.t))}</b></td><td style="${td}">${f(R.actTD)}</td></tr>
+      <tr><td style="${td}text-align:left;">Diff</td><td style="${td}${gc(a?a.D.KP1-R.dpp.KP1[0]:null)}">${g(a?a.D.KP1-R.dpp.KP1[0]:null)}</td><td style="${td}${gc(a?a.D.KP2-R.dpp.KP2[0]:null)}">${g(a?a.D.KP2-R.dpp.KP2[0]:null)}</td><td style="${td}${gc(a?a.D.t-dppD:null)}">${g(a?a.D.t-dppD:null)}</td><td style="${td}${gc(a&&a.N.KP1!=null?a.N.KP1-R.dpp.KP1[1]:null)}">${g(a&&a.N.KP1!=null?a.N.KP1-R.dpp.KP1[1]:null)}</td><td style="${td}${gc(a&&a.N.KP2!=null?a.N.KP2-R.dpp.KP2[1]:null)}">${g(a&&a.N.KP2!=null?a.N.KP2-R.dpp.KP2[1]:null)}</td><td style="${td}${gc(a&&a.N.t!=null?a.N.t-dppN:null)}">${g(a&&a.N.t!=null?a.N.t-dppN:null)}</td><td style="${td}${gc(a?a.t-dppD-dppN:null)}">${g(a?a.t-dppD-dppN:null)}</td><td style="${td}${gc(R.actTD-R.dppTD)}">${g(R.actTD-R.dppTD)}</td></tr>
+    </table></div>${a&&(a.D.X||a.N.X)?`<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Termasuk ${a.D.X+a.N.X} unit tanpa area KP1/KP2 (akun Dispatcher belum diisi area).</div>`:""}`;
+    const dl=`<div style="overflow-x:auto;"><table style="font-size:13px;width:100%;">
+      <tr><th style="${th}text-align:left;"></th><th style="${th}">Day</th><th style="${th}">Night</th><th style="${th}">Total</th></tr>
+      <tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;">Plan (DCCP)</td><td style="${td}">${f(R.dlvP.D)}</td><td style="${td}">${f(R.dlvP.N)}</td><td style="${td}"><b>${f(R.dlvP.D==null&&R.dlvP.N==null?null:(R.dlvP.D||0)+(R.dlvP.N||0))}</b></td></tr>
+      <tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;">Aktual</td><td style="${td}">${f(R.A?R.out.D.t:null)}</td><td style="${td}">${f(R.A?R.out.N.t:null)}</td><td style="${td}"><b>${f(R.A?R.out.D.t+R.out.N.t:null)}</b></td></tr>
+      <tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;">Diff</td>${["D","N"].map(s=>{ const x=R.A&&R.dlvP[s]!=null?R.out[s].t-R.dlvP[s]:null; return `<td style="${td}${gc(x)}">${g(x)}</td>`; }).join("")}<td style="${td}${gc(R.A&&R.dlvP.D!=null&&R.dlvP.N!=null?R.out.D.t+R.out.N.t-R.dlvP.D-R.dlvP.N:null)}">${g(R.A&&R.dlvP.D!=null&&R.dlvP.N!=null?R.out.D.t+R.out.N.t-R.dlvP.D-R.dlvP.N:null)}</td></tr>
+    </table></div>`;
+    const mods=ekyModelsOrder([...new Set(["D","N"].flatMap(s=>Object.keys(R.out[s].r).concat(Object.keys(R.out[s].b))))]);
+    const byModel=["D","N"].map(s=>{ const o=R.out[s], keys=ekyModelsOrder(Object.keys(o.r)), bk=ekyModelsOrder(Object.keys(o.b));
+      return `<div style="flex:1;min-width:220px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">${s==="D"?"☀ Day":"🌙 Night"} · ${f(R.A?o.t:null)} unit</div><table style="font-size:13px;width:100%;">
+        ${keys.length||bk.length?keys.map(k=>`<tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${getModelColor(k,data)};"></i> ${escH(k)}</td><td style="${td}"><b>${f(o.r[k])}</b></td></tr>`).join("")+bk.map(k=>`<tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;">BTM · ${escH(k)}</td><td style="${td}"><b>${f(o.b[k])}</b></td></tr>`).join(""):`<tr><td style="${td}text-align:left;color:var(--text-dim);">belum ada delivery</td></tr>`}
+      </table></div>`; }).join("");
+    const lpT=["s1","s2"].map(s=>{ const x=R.dp[s]; if(!x||!x.lp) return ""; const L=Object.keys(x.lp).sort();
+      return `<div style="flex:1;min-width:280px;"><div style="font-size:12px;font-weight:700;margin-bottom:4px;">${s==="s1"?"☀ Day":"🌙 Night"} · plan ${f(x.t)} rit / ${f(x.u)} unit</div><table style="font-size:12.5px;width:100%;">
+        <tr><th style="${th}text-align:left;">LP</th><th style="${th}">CC</th><th style="${th}">Plan rit</th><th style="${th}">Rit</th><th style="${th}">Unit</th></tr>
+        ${L.map(k=>{ const o=x.lp[k]; return `<tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;"><b>${escH(k)}</b></td><td style="${td}">${f(o.n)}</td><td style="${td}">${f(o.p)}</td><td style="${td}${gc(o.a-o.p)}">${f(o.a)}</td><td style="${td}">${f(o.au)}</td></tr>`; }).join("")}
+        <tr style="border-top:2px solid var(--gold);font-weight:800;"><td style="${td}text-align:left;">Total</td><td style="${td}">${f(L.reduce((s,k)=>s+(+x.lp[k].n||0),0))}</td><td style="${td}">${f(x.t)}</td><td style="${td}">${f(x.a)}</td><td style="${td}">${f(x.au)}</td></tr>
+        ${x.sp?`<tr><td colspan="5" style="${td}text-align:left;font-size:11px;color:var(--text-dim);">+ Spot order ${x.sp} rit · ${x.spu} unit</td></tr>`:""}
+      </table></div>`; }).join("");
+    const wip=R.w?`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;">
+      <div style="flex:1;min-width:120px;border:1px solid var(--border);border-top:4px solid #1E9E5A;border-radius:12px;padding:8px 12px;"><div style="font-size:12px;color:var(--text-dim);">WIP reguler</div><div style="font-size:26px;font-weight:800;">${f(R.w.t-R.w.b)}</div></div>
+      <div style="flex:1;min-width:120px;border:1px solid var(--border);border-top:4px solid #D9731F;border-radius:12px;padding:8px 12px;"><div style="font-size:12px;color:var(--text-dim);">WIP Batam</div><div style="font-size:26px;font-weight:800;">${f(R.w.b)}</div></div>
+      <div style="flex:2;min-width:220px;display:flex;gap:6px;flex-wrap:wrap;align-content:center;">${ekyModelsOrder(Object.keys(R.w.m||{}).concat(Object.keys(R.w.mb||{}))).map(k=>`<span style="border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;"><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${getModelColor(k,data)};"></i> ${escH(k)} <b>${f((R.w.m||{})[k]||0)}</b>${(R.w.mb||{})[k]?` · BTM ${f(R.w.mb[k])}`:""}</span>`).join("")}</div>
+    </div><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${R.today?"Isi stall saat ini.":"Isi stall tercatat terakhir hari itu (akhir hari)"+(R.w.ts?", "+sjFmt(R.w.ts):"")+"."}</div>`:`<div style="font-size:12px;color:var(--text-dim);">Belum tercatat.</div>`;
+    const d1=`<table style="font-size:13px;width:100%;"><tr><th style="${th}text-align:left;">${new Date(ekyBaseOf(R.nk)).toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short'})}</th><th style="${th}">Day KP1</th><th style="${th}">Day KP2</th><th style="${th}">Day</th><th style="${th}">Night KP1</th><th style="${th}">Night KP2</th><th style="${th}">Night</th><th style="${th}">Total</th></tr>
+      <tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;">Receiving (DPP)</td><td style="${td}">${f(R.dpp1.has?R.dpp1.KP1[0]:null)}</td><td style="${td}">${f(R.dpp1.has?R.dpp1.KP2[0]:null)}</td><td style="${td}"><b>${f(R.dpp1.has?R.dpp1.KP1[0]+R.dpp1.KP2[0]:null)}</b></td><td style="${td}">${f(R.dpp1.has?R.dpp1.KP1[1]:null)}</td><td style="${td}">${f(R.dpp1.has?R.dpp1.KP2[1]:null)}</td><td style="${td}"><b>${f(R.dpp1.has?R.dpp1.KP1[1]+R.dpp1.KP2[1]:null)}</b></td><td style="${td}"><b>${f(R.dpp1.has?R.dpp1.KP1[0]+R.dpp1.KP2[0]+R.dpp1.KP1[1]+R.dpp1.KP2[1]:null)}</b></td></tr>
+      <tr style="border-top:1px solid var(--border);"><td style="${td}text-align:left;">MDP</td><td style="${td}"></td><td style="${td}"></td><td style="${td}">${f(R.m1Sp?R.m1Sp[0]:null)}</td><td style="${td}"></td><td style="${td}"></td><td style="${td}">${f(R.m1Sp?R.m1Sp[1]:null)}</td><td style="${td}"><b>${f(R.m1T)}</b></td></tr></table>`;
+    const rem=canEdit?`<div style="display:flex;gap:10px;flex-wrap:wrap;"><label style="flex:1;min-width:220px;font-size:12px;">☀ Problem Day<textarea id="drRemD" rows="2" style="width:100%;margin-top:4px;">${escH(R.rem.day||"")}</textarea></label><label style="flex:1;min-width:220px;font-size:12px;">🌙 Problem Night<textarea id="drRemN" rows="2" style="width:100%;margin-top:4px;">${escH(R.rem.night||"")}</textarea></label></div><button class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="drSaveRemark('${key}')">Simpan catatan</button>${R.rem.by?`<span style="font-size:11px;color:var(--text-dim);margin-left:8px;">terakhir oleh ${escH(R.rem.by)}</span>`:""}`
+      :`<div style="font-size:13px;">☀ ${escH(R.rem.day||"-")}<br>🌙 ${escH(R.rem.night||"-")}</div>`;
+    const sec=(t,body)=>`<div style="margin-top:14px;"><div style="font-size:13px;font-weight:800;letter-spacing:.02em;margin-bottom:6px;">${t}</div>${body}</div>`;
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <h3 style="margin:0;">🗒 Daily Report EKY</h3>
+        <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;"><button class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="drShift(-1)" aria-label="Hari sebelumnya">◀</button><input type="date" value="${key}" onchange="drKey=this.value;render()" style="font-size:14px;"><button class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="drShift(1)" aria-label="Hari berikutnya">▶</button>
+        <button class="btn btn-outline btn-sm" style="width:auto;" onclick="drCopyWa()">📋 Salin WA</button><button class="btn btn-primary btn-sm" style="width:auto;" onclick="drDownload()">⬇ Download Excel</button></span></div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">${dt.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · hari produksi 07:00 – 06:59${R.today?" · <b>berjalan</b>":""}${!R.A&&!R.future?" · data hari ini belum tercatat di RADAR (pencatatan harian mulai 12 Nov 2026)":""}</div>
+      <div id="drMsg" style="font-size:12px;margin-top:4px;"></div>
+      ${sec("RECEIVING (aktual = input Dispatcher)", recv)}
+      ${sec("DELIVERY EKY OUT", dl)}
+      ${sec("DELIVERY PER MODEL", `<div style="display:flex;gap:16px;flex-wrap:wrap;">${byModel}</div>`)}
+      ${lpT?sec("DELIVERY PER LP (DCCP)", `<div style="display:flex;gap:16px;flex-wrap:wrap;">${lpT}</div>`):""}
+      ${sec("WIP", wip)}
+      ${sec("PLANNING D+1", `<div style="overflow-x:auto;">${d1}</div>`)}
+      ${sec("PROBLEM / REMARK", rem)}
+    </div>`;
+  }catch(e){ console.warn("daily report", e); return `<div class="card"><h3>🗒 Daily Report EKY</h3><div class="msg err">Gagal menyusun laporan: ${escH(String(e&&e.message||e))}</div></div>`; }
+}
+function drDownload(){
+  const data=DB.get(), key=drKey||drDefaultKey(), R=drCompute(data, key), n=v=>v==null?"":Math.round(v);
+  const a=R.act, dppD=R.dpp.KP1[0]+R.dpp.KP2[0], dppN=R.dpp.KP1[1]+R.dpp.KP2[1], dt=new Date(ekyBaseOf(key));
+  const rows=[["DAILY REPORT EKY","","","","","","","","",""]];
+  rows.push(["Tanggal", dt.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})]); rows.push([""]);
+  rows.push(["RECEIVING","","Day KP1","Day KP2","Day Total","Night KP1","Night KP2","Night Total","Grand Total","Bulan s.d. tgl"]);
+  rows.push(["vs MDP TAM","Plan","","",n(R.mSp?R.mSp[0]:null),"","",n(R.mSp?R.mSp[1]:null),n(R.mT),n(R.M?R.mdpTD:null)]);
+  rows.push(["","Aktual",n(a&&a.D.KP1),n(a&&a.D.KP2),n(a&&a.D.t),n(a&&a.N.KP1),n(a&&a.N.KP2),n(a&&a.N.t),n(a&&a.t),n(R.actTD)]);
+  rows.push(["","Diff","","",a&&R.mSp?a.D.t-R.mSp[0]:"","","",a&&R.mSp&&a.N.t!=null?a.N.t-R.mSp[1]:"",a&&R.mT!=null?a.t-R.mT:"",R.M?R.actTD-R.mdpTD:""]);
+  rows.push(["vs DPP ADM","Plan",R.dpp.KP1[0],R.dpp.KP2[0],dppD,R.dpp.KP1[1],R.dpp.KP2[1],dppN,dppD+dppN,R.dppTD]);
+  rows.push(["","Aktual",n(a&&a.D.KP1),n(a&&a.D.KP2),n(a&&a.D.t),n(a&&a.N.KP1),n(a&&a.N.KP2),n(a&&a.N.t),n(a&&a.t),n(R.actTD)]);
+  rows.push(["","Diff",a?a.D.KP1-R.dpp.KP1[0]:"",a?a.D.KP2-R.dpp.KP2[0]:"",a?a.D.t-dppD:"",a&&a.N.KP1!=null?a.N.KP1-R.dpp.KP1[1]:"",a&&a.N.KP2!=null?a.N.KP2-R.dpp.KP2[1]:"",a&&a.N.t!=null?a.N.t-dppN:"",a?a.t-dppD-dppN:"",R.actTD-R.dppTD]);
+  rows.push([""]); rows.push(["DELIVERY EKY OUT","","Day","Night","Total"]);
+  rows.push(["","Plan (DCCP)",n(R.dlvP.D),n(R.dlvP.N),R.dlvP.D==null&&R.dlvP.N==null?"":(R.dlvP.D||0)+(R.dlvP.N||0)]);
+  rows.push(["","Aktual",n(R.A?R.out.D.t:null),n(R.A?R.out.N.t:null),n(R.A?R.out.D.t+R.out.N.t:null)]);
+  rows.push([""]); rows.push(["DELIVERY PER MODEL","","Day","Night","Total"]);
+  const mods=ekyModelsOrder([...new Set(["D","N"].flatMap(s=>Object.keys(R.out[s].r)))]), bms=ekyModelsOrder([...new Set(["D","N"].flatMap(s=>Object.keys(R.out[s].b)))]);
+  mods.forEach(k=>rows.push(["",k,+R.out.D.r[k]||0,+R.out.N.r[k]||0,(+R.out.D.r[k]||0)+(+R.out.N.r[k]||0)]));
+  bms.forEach(k=>rows.push(["","BTM - "+k,+R.out.D.b[k]||0,+R.out.N.b[k]||0,(+R.out.D.b[k]||0)+(+R.out.N.b[k]||0)]));
+  rows.push(["","Total",n(R.A?R.out.D.t:null),n(R.A?R.out.N.t:null),n(R.A?R.out.D.t+R.out.N.t:null)]);
+  ["s1","s2"].forEach(s=>{ const x=R.dp[s]; if(!x||!x.lp) return; rows.push([""]); rows.push(["DELIVERY PER LP "+(s==="s1"?"DAY":"NIGHT"),"LP","CC","Plan Rit","Rit","Plan Unit","Unit"]);
+    Object.keys(x.lp).sort().forEach(k=>{ const o=x.lp[k]; rows.push(["",k,o.n,o.p,o.a,o.pu,o.au]); }); rows.push(["","Total","",x.t,x.a,x.u,x.au]); if(x.sp) rows.push(["","Spot order","","",x.sp,"",x.spu]); });
+  rows.push([""]); rows.push(["WIP","Reguler",R.w?R.w.t-R.w.b:"","Batam",R.w?R.w.b:""]);
+  if(R.w) ekyModelsOrder(Object.keys(R.w.m||{}).concat(Object.keys(R.w.mb||{}))).forEach(k=>rows.push(["",k,+((R.w.m||{})[k])||0,"BTM",+((R.w.mb||{})[k])||0]));
+  rows.push([""]); rows.push(["PLANNING D+1", new Date(ekyBaseOf(R.nk)).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}),"Day KP1","Day KP2","Day Total","Night KP1","Night KP2","Night Total","Total"]);
+  rows.push(["","Receiving (DPP)",R.dpp1.KP1[0],R.dpp1.KP2[0],R.dpp1.KP1[0]+R.dpp1.KP2[0],R.dpp1.KP1[1],R.dpp1.KP2[1],R.dpp1.KP1[1]+R.dpp1.KP2[1],R.dpp1.KP1[0]+R.dpp1.KP2[0]+R.dpp1.KP1[1]+R.dpp1.KP2[1]]);
+  rows.push(["","MDP","","",n(R.m1Sp?R.m1Sp[0]:null),"","",n(R.m1Sp?R.m1Sp[1]:null),n(R.m1T)]);
+  rows.push([""]); rows.push(["PROBLEM","Day",R.rem.day||""]); rows.push(["","Night",R.rem.night||""]);
+  mfSave("Daily-Report-EKY-"+key+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx([{name:"Daily Report", rows}], [22,16,11,11,11,11,11,11,12,14]));
+}
+
+/* ======================================================================
+   TAB LAPORAN EKY (Leader / Admin / Delivery / Pengamat)
+====================================================================== */
+let ekyRepTab="daily";
+function renderEkyReport(){
+  const data=DB.get(), ym=pdmYm||prodDateKey().slice(0,7);
+  const chip=(k,l)=>`<button class="linechip ${ekyRepTab===k?"on":""}" style="padding:7px 14px;" onclick="ekyRepTab='${k}';render()">${l}</button>`;
+  const monthNav=(ekyRepTab==="stock"||ekyRepTab==="mdp")?`<span style="display:inline-flex;gap:4px;align-items:center;"><button class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="pdmMonthShift(-1)" aria-label="Bulan sebelumnya">◀</button><b style="font-size:13px;min-width:110px;text-align:center;">${escH(dppMonthName(ym))}</b><button class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="pdmMonthShift(1)" aria-label="Bulan berikutnya">▶</button></span>`:"";
+  let body="";
+  if(ekyRepTab==="daily") body=drCardHtml(data);
+  else if(ekyRepTab==="stock") body=ysCardHtml(data);
+  else if(ekyRepTab==="mdp") body=mdpTableCardHtml(data,{ym});
+  else body=pdmCardHtml(data);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <span style="display:inline-flex;gap:6px;flex-wrap:wrap;">${chip("daily","🗒 Daily Report")}${chip("stock","🏗 Yard Stock")}${chip("mdp","📋 MDP per Model")}${chip("chart","📈 DPP · MDP · Aktual")}</span>${monthNav}</div>
+    ${body}`;
+}
+
+setInterval(prodActSnap, 5*60000); setTimeout(prodActSnap, 30000);
+
 function renderPlanAdmin(){
   const data = DB.get();
   const key = planKey();
@@ -8407,7 +9379,7 @@ function renderPlanAdmin(){
   const hasModel = sum(e.m1)+sum(e.m2) > 0;
   const saved = Object.keys(data.prodPlan||{}).sort().reverse().slice(0,7);
   const inp = (id,val)=>`<input id="${id}" type="number" min="0" inputmode="numeric" value="${val||""}" oninput="planSumLive()" style="width:90px;font-size:16px;text-align:center;">`;
-  return `
+  return `${dppCardHtml(data)}${mdpCardHtml(data)}
   <div class="card">
     <h3>🏭 Plan Produksi</h3>
     <p style="font-size:13px;color:var(--text-dim);margin:6px 0 12px;">Isi target unit <b>semua model</b> per line dan per shift. Plan per model juga tersedia di bawahnya. Selisih terhadap unit yang sudah diinput tampil di Dashboard Leader dan Display. Tanggal = <b>hari produksi</b> (berganti jam 07:00).</p>
