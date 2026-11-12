@@ -1117,7 +1117,7 @@ function normalizeData(raw){
     if(!Array.isArray(d[k])) d[k] = (d[k] && typeof d[k]==="object") ? Object.values(d[k]) : [];
   });
   /* daftar tidak boleh berisi lubang kosong (null): bisa muncul kalau dua HP menulis baris berbeda bersamaan */
-  ["queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs","hold","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList","ccShiftPlat"].forEach(k=>{
+  ["manifest","queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs","hold","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList","ccShiftPlat"].forEach(k=>{
     const v=d[k]; if(Array.isArray(v)){ if(v.some(x=>x===null||x===undefined)) d[k]=v.filter(x=>x!==null&&x!==undefined); }
     else if(v && typeof v==="object" && k!=="queue") d[k]=Object.values(v).filter(x=>x!==null&&x!==undefined);
   });
@@ -1164,13 +1164,29 @@ function fbPush(k, pre, fn, T, seed, retried){
 }
 /* Kartu "Sudah PDI, belum masuk stall": modul PDI ada di blok script terpisah — jangan sampai error menghentikan RADAR */
 function pdiCardSafe(){ try{ return typeof pdiOpenCardHtml==="function" ? pdiOpenCardHtml() : ""; }catch(e){ console.warn("kartu PDI", e); return ""; } }
+/* ===== Pita darurat: server tidak bisa dihubungi =====
+   Kalau HP sebenarnya online tapi tidak tersambung ke server RADAR lebih dari 3 menit (mis. server dimatikan karena kuota),
+   tampilkan pesan yang jelas supaya tim langsung pakai prosedur manual, bukan bingung. Hilang sendiri begitu tersambung lagi. */
+let _fbDownSince=Date.now();
+function fbDownBar(){
+  let el=document.getElementById("fbDownBar");
+  const down = FBS.enabled && !FBS.conn && _fbDownSince && Date.now()-_fbDownSince > 3*60000 && navigator.onLine!==false;
+  if(!down){ if(el) el.remove(); return; }
+  if(!el){ el=document.createElement("div"); el.id="fbDownBar";
+    el.style.cssText="position:fixed;left:0;right:0;top:0;z-index:99999;background:#B42318;color:#fff;padding:10px 14px;font:600 13px/1.4 system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25);";
+    document.body.appendChild(el); }
+  const t=new Date(_fbDownSince).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"});
+  el.innerHTML=`⚠ Server RADAR tidak bisa dihubungi sejak ${t}. Data di HP ini belum tersambung dengan HP lain — <b>gunakan prosedur manual dulu</b>. Data di server tetap aman; RADAR tersambung lagi otomatis.`;
+}
+setInterval(()=>{ try{ fbDownBar(); }catch(e){} }, 20000);
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && !FBS.conn) _fbDownSince=Date.now(); try{ fbDownBar(); }catch(e){} });   /* baru kembali dari latar: hitung ulang, beri waktu menyambung */
 function fbStart(){
   if(typeof firebase === "undefined" || !/^https?:/.test(location.protocol)){ fbState("off"); return; }
   try{
     firebase.initializeApp(FB_CONFIG);
     try{ fbMeterBoot(); }catch(e){}
     FBS.db = firebase.database(); FBS.enabled = true; fbState("connecting");
-    FBS.db.ref(".info/connected").on("value", s=>{ FBS.conn = !!s.val(); fbState(fbCurrentState()); });
+    FBS.db.ref(".info/connected").on("value", s=>{ FBS.conn = !!s.val(); if(FBS.conn) _fbDownSince=0; else if(!_fbDownSince) _fbDownSince=Date.now(); fbState(fbCurrentState()); try{ fbDownBar(); }catch(e){} });
     firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); trackAttach(); })
       .catch(e=>{ console.warn("login anonim gagal", e); fbState("offline"); });
     /* Sesi Firebase hilang di tengah jalan (mis. penyimpanan WebView terhapus saat Logout penuh TLS): login ulang otomatis lalu pasang ulang semua listener */
@@ -1197,8 +1213,8 @@ function fbCanon(v){
 function fbCJ(v){ return JSON.stringify(fbCanon(v)); }
 const FB_BADKEY=/[.#$\/\[\]]/;
 /* Daftar (array): isi boleh diubah per baris. Menambah baris di ujung hanya untuk log (urutan antrian/ILS tetap ditulis utuh). */
-const FB_LIST_KEYS=["queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs","hold","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList","ccShiftPlat"];
-const FB_LOG_KEYS=["absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList"];
+const FB_LIST_KEYS=["manifest","queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs","hold","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList","ccShiftPlat"];
+const FB_LOG_KEYS=["manifest","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList"];
 function fbPushSmart(k, pre, post, fn, T, seed){
   try{
     if(!FBS.enabled) return;
@@ -1357,7 +1373,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="12 Nov 2026 19.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="12 Nov 2026 20.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1538,9 +1554,9 @@ const TABS_BY_ROLE = {
   cc:          [{key:"orderstall", label:"Order Stall"}, {key:"ccmap", label:"Peta & Chat"}, {key:"display", label:"Display"}],
   delivery:    [{key:"delivery", label:"Delivery"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
-  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
-  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
-  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccmap", label:"Peta CC"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
+  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
+  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccreport", label:"Laporan CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
 let selectedRole = null;
@@ -3499,7 +3515,7 @@ function ccQueueResort(){
 }
 function ccQueueAdvance(){
   try{
-    if(!trkLive()) return;   /* hanya HP yang menerima posisi CC realtime (Admin/Delivery/Koordinator/Display atau yang membuka peta) */
+    if(!trkLive()) return;   /* hanya HP yang menerima posisi CC realtime (Delivery/Koordinator/Display atau Driver yang membuka peta) */
     const d0=DB.get(); if(!(d0.queue||[]).length) return;
     const order=[...CONFIG.CC_ACTIVE_DEFAULT]; CONFIG.CC_EMERGENCY.forEach(n=>{ if(d0.ccOpen&&d0.ccOpen[n]) order.push(n); });
     if(!order.some(n=>!d0.cc[n])) return;
@@ -4779,7 +4795,7 @@ function delout(id){
     }
     d.manifest=d.manifest||[];
     if(!d.manifest.some(m=>m.id===x.id)) d.manifest.push(mfRecord(d,x));
-    { const cm=Date.now()-MF_KEEP_MS; d.manifest=d.manifest.filter(m=>m.out>=cm); }
+    { const cm=Date.now()-MF_KEEP_MS; if(d.manifest.some(m=>!m || (m.out||0) < cm-6*3600000)) d.manifest=d.manifest.filter(m=>m && m.out>=cm); }   /* hemat data: dipangkas sekaligus tiap ±6 jam, bukan tiap Delout (tiap pangkas = seluruh daftar dikirim ulang ke semua HP) */
     x.undo=snap;
   });
   try{ mfaPush([id]); }catch(e){}
@@ -5165,7 +5181,7 @@ function myCcPlatKey(){ try{ let k=normPlat((getCcProfile()||{}).plat||""); if(!
    MANIFEST DELIVERY OUT — unduh Excel (semua LP / per LP)
    Dicatat saat Delout. Data harian ada di /radar (selama ILS masih tersimpan); salinan 1 bulan ada di arsip radar_manifest (lihat ARSIP MANIFEST). Kolom Nama Cabang & No. SJKB dibiarkan kosong (diisi macro Excel dari TLS).
 ====================================================================== */
-const MF_KEEP_MS=14*24*3600*1000;
+const MF_KEEP_MS=8*24*3600*1000;   /* manifest di data utama cukup 8 hari: unduhan hanya memakai ILS yang masih ada (maks. 7 hari, surat jalan); riwayat 1 bulan ada di arsip radar_manifest */
 function mfDriver(d,plat){ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); return (r&&(r.driver||r.drvCode))||""; }
 function mfRecord(d,x){ return {id:x.id, out:x.outTs||Date.now(), t:x.tlsTs||x.ts, lp:x.lp||"", plat:x.ccPlat||"", drv:mfDriver(d,x.ccPlat), bt:!!x.batam, sk:x.sjkb||"", cb:x.sjCab||{}, u:(x.units||[]).map(u=>[u.frame,u.model||""])}; }
 function mfTitle(m){ m=String(m||""); return m.charAt(0).toUpperCase()+m.slice(1).toLowerCase(); }
@@ -11229,14 +11245,16 @@ function trkStopHidden(k){
 function escH(t){ return String(t==null?"":t).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 /* ===== Peta CC: realtime hanya bila perlu (hemat data) =====
    Posisi tiap CC dikirim ±12 detik sekali. Dulu SEMUA HP menerima setiap kiriman itu (±5 kali per menit per CC).
-   Sekarang realtime hanya di: tab Peta CC/Peta & Chat (role apa pun), dan HP Admin/Delivery/Koordinator/Display
+   Sekarang realtime hanya di: tab Peta CC/Peta & Chat (role apa pun), dan HP Delivery/Koordinator/Display
    yang menjalankan absen-peta & antrian otomatis. HP lain (Driver, Dispatcher, Leader, Pengamat, PDI) mengambil posisi tiap 2 menit
    (5 menit kalau aplikasi di latar). */
 let _trkMode="", _trkPollT=null, _trkPollLast=0;
-const TRK_LIVE_ROLES=["admin","delivery","koordinator","display"];
+const TRK_LIVE_ROLES=["delivery","koordinator","display"];   /* peta CC hanya untuk Driver, Delivery, Koordinator (Leader/Pengamat/Admin tanpa peta) */
 function trkWantLive(){
   if(!currentUser) return false;
   if(activeTab==="ccmap") return true;
+  try{ if(routeRec && routeRec.on) return true; }catch(e){}   /* Admin sedang merekam rute: butuh posisi realtime */
+  if(activeTab==="admin" && typeof adminTab!=="undefined" && (adminTab==="titik"||adminTab==="rute")) return true;   /* Admin → Titik Lokasi */
   return TRK_LIVE_ROLES.includes(currentUser.role);
 }
 function trkLive(){ return !FBS.enabled || _trkMode==="live"; }   /* mode Lokal (tanpa server): tetap jalan seperti biasa */
@@ -11464,7 +11482,7 @@ function mapAbsenWhy(d, r, km){   // alasan CC di dalam radius belum tercatat (u
 }
 function mapAbsenTick(){
   try{
-    if(!currentUser || !trkLive()) return;   /* hemat data: absen-peta dijalankan HP yang menerima posisi realtime (Admin/Delivery/Koordinator/Display atau yang membuka peta) */   // perangkat apa pun yang sedang terbuka (semua role + Display) ikut membaca peta; cek dobel di registerCC menjamin satu catatan
+    if(!currentUser || !trkLive()) return;   /* hemat data: absen-peta dijalankan HP yang menerima posisi realtime (Delivery/Koordinator/Display atau Driver yang membuka peta) */   // perangkat apa pun yang sedang terbuka (semua role + Display) ikut membaca peta; cek dobel di registerCC menjamin satu catatan
     const d=DB.get(), y=d.yardLocation||{}; if(y.lat==null || y.radiusKm==null || !(d.dccpSchedule||[]).length) return;
     const now=Date.now(), rad=+y.radiusKm;
     const have=new Set([...Object.values(d.cc||{}).filter(Boolean).map(c=>normPlat(c.plat)), ...(d.queue||[]).map(q=>normPlat(q.plat)), ...(d.hold||[]).map(q=>normPlat(q.plat))]);
