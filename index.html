@@ -1373,7 +1373,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="12 Nov 2026 23.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="12 Nov 2026 23.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1687,6 +1687,19 @@ function onSpdPos(pos){
   SPD.cur = v; spdChipUpdate();
   if(v > cfg.limit){ SPD.hits++; if(SPD.hits>=3) spdTrigger(v, c.latitude, c.longitude); } else { SPD.hits = 0;  }
 }
+/* Riwayat kecepatan DISPATCHER disimpan 24 jam saja (pelanggaran role lain tetap seperti biasa, maks 100 terakhir).
+   Yang lewat 24 jam langsung tidak ditampilkan; penghapusan di server dikumpulkan (paling sering ±3 jam sekali) supaya hemat data. */
+const SPD_DISP_KEEP=24*3600000;
+function spdKeep(a, now){ return !!a && !(a.role==="dispatcher" && (now||Date.now())-(+a.ts||0) > SPD_DISP_KEEP); }
+function spdNeedPrune(L){ const now=Date.now(); return (L||[]).some(a=>a && a.role==="dispatcher" && now-(+a.ts||0) > SPD_DISP_KEEP+3*3600000); }
+function spdPrune(L){ const now=Date.now(); return (L||[]).filter(a=>spdKeep(a, now)); }
+let _spdPruneT=0;
+function spdAutoPrune(){
+  if(!currentUser || !["admin","delivery"].includes(currentUser.role)) return;
+  const now=Date.now(); if(now-_spdPruneT<10*60000) return; _spdPruneT=now;
+  if(FBS.enabled && !FBS.conn) return;
+  if(spdNeedPrune(DB.get().speedAlerts)) DB.set(d=>{ if(spdNeedPrune(d.speedAlerts)) d.speedAlerts=spdPrune(d.speedAlerts); });
+}
 function spdTrigger(v, lat, lng, force){
   const cfg = speedCfg();
   if(!force && Date.now()-SPD.lastAlert < cfg.cool*60000) return;
@@ -1697,7 +1710,7 @@ function spdTrigger(v, lat, lng, force){
   const a = {id:Date.now()+"-"+Math.floor(Math.random()*1000), ts:Date.now(), name:(currentUser&&currentUser.name)||"", username:(currentUser&&currentUser.username)||"",
     dev:spdDev(), role:(currentUser&&currentUser.role)||"", shift:(currentUser&&currentUser.shift)||"", plat:prof.plat||"", lp:prof.lp||"", unit:unit, spd:Math.round(v), limit:cfg.limit,
     lat:lat!=null?+(+lat).toFixed(6):null, lng:lng!=null?+(+lng).toFixed(6):null};
-  try{ DB.set(d=>{ d.speedAlerts = capLog((d.speedAlerts||[]).concat([a]), 100); }); }catch(e){}
+  try{ DB.set(d=>{ let L=d.speedAlerts||[]; if(spdNeedPrune(L)) L=spdPrune(L); d.speedAlerts = capLog(L.concat([a]), 100); }); }catch(e){}
   spdShowOverlay(a, true);
 }
 function spdMsgText(a){
@@ -1795,7 +1808,7 @@ function spdCheckIncoming(){
 let spdF = {period:"7", shift:"all"};
 function spdSetF(k,v){ spdF[k]=v; render(); }
 function spdRows(){
-  let list = (DB.get().speedAlerts||[]).slice().reverse();
+  let list = spdPrune(DB.get().speedAlerts).reverse();
   const now = Date.now(), p = spdF.period;
   if(p==="1"){ const d=new Date(); d.setHours(0,0,0,0); list = list.filter(a=>a.ts>=d.getTime()); }
   else if(p!=="all"){ list = list.filter(a=>now-a.ts <= (+p)*86400000); }
@@ -1813,13 +1826,14 @@ function renderSpeedLog(){
   const rows = list.length ? list.slice(0,spdAll?200:5).map(a=>`<tr><td>${new Date(a.ts).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td><td>${rsShift(a.shift)}</td><td><b>${escH(a.name)}</b>${(a.plat||a.unit)?`<br><small>${a.plat?escH(a.plat)+(a.lp?" · "+escH(a.lp):""):""}${a.unit?"Unit setelahnya: "+escH(a.unit):""}</small>`:""}</td><td><b style="color:#D64545;">${a.spd}</b> / ${a.limit}</td><td>${a.ack?`<span style="color:#2E7D32;font-weight:800;">✔ ${new Date(a.ack).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</span>`:`<span style="color:#D64545;font-weight:800;">✖</span>`}</td></tr>`).join("")
     : `<tr><td colspan="5" class="emptystate">Tidak ada pelanggaran pada filter ini.</td></tr>`;
   return `<div class="card"><h3>🏎 Riwayat Kecepatan</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin:-2px 0 8px;">Pelanggaran Dispatcher disimpan 24 jam terakhir.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">${chip("period","1","Hari ini")}${chip("period","7","7 hari")}${chip("period","30","30 hari")}${chip("period","all","Semua")}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${chip("shift","all","Semua shift")}${chip("shift","red","🔴 Red")}${chip("shift","white","⚪ White")}</div>
     <div style="font-size:13px;margin-bottom:10px;"><b>${list.length}</b> pelanggaran${top.length?` · terbanyak: ${top.map(([n,v])=>`<b>${escH(n)}</b> (${v.n}×, maks ${v.mx})`).join(", ")}`:""}</div>
     <div style="overflow-x:auto;"><table><thead><tr><th>Waktu</th><th>Shift</th><th>Pengemudi</th><th>km/j</th><th>OK</th></tr></thead><tbody>${rows}</tbody></table></div>${spdMoreBtn(list.length)}</div>`;
 }
 function spdLogHtml(n, onlyMyShift){
-  let list = (DB.get().speedAlerts||[]).slice().reverse();
+  let list = spdPrune(DB.get().speedAlerts).reverse();
   if(onlyMyShift && currentUser && currentUser.shift && currentUser.role!=="admin") list = list.filter(a=>a.shift===currentUser.shift);
   const _tot=list.length; list = list.slice(0, spdAll?(n||30):5);
   const rows = list.length ? list.map(a=>`<tr><td>${new Date(a.ts).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td><td>${rsShift(a.shift)}</td><td>${escH(a.name)}${(a.plat||a.unit)?`<br><small>${a.plat?escH(a.plat):""}${a.unit?"Unit setelahnya: "+escH(a.unit):""}</small>`:""}</td><td><b style="color:#D64545;">${a.spd}</b> / ${a.limit}</td><td>${a.ack?`<span style="color:#2E7D32;font-weight:800;">✔ ${new Date(a.ack).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</span>`:`<span style="color:#D64545;font-weight:800;">✖ belum</span>`}</td></tr>`).join("")
@@ -13228,7 +13242,7 @@ let _lastRaw = null, _lastMinute = -1;
 try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
 /* tiap pengecekan berdiri sendiri: satu error tidak boleh menghentikan yang lain (mis. popup giliran / dikeluarkan di HP driver) */
-const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>ccLastOutCheck(), ()=>ccLastOutBackstop(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
+const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>ccLastOutCheck(), ()=>ccLastOutBackstop(), ()=>spdAutoPrune(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
 setInterval(()=>{ _tick3.forEach(f=>{ try{ f(); }catch(e){} }); }, 3000);
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
