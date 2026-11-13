@@ -1440,8 +1440,8 @@ const FB_LITE={
   cc:         { skip:["manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp"], win:{ils:60} },
   dispatcher: { skip:["manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent"], win:{ils:60} },
   pdi:        { skip:["manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent"], win:{ils:60} } };
-let _fbMode="", _fbRefs=[], _fbRaw={}, _fbGot=new Set(), _fbNeed=0, _fbWinKeys={}, _fbGen=0;
-function fbModeWant(){ const r=currentUser ? currentUser.role : "cc"; return FB_LITE[r] ? r : "full"; }   /* belum login = mode driver */
+let _fbMode="", _fbRefs=[], _fbRaw={}, _fbGot=new Set(), _fbNeed=0, _fbWinKeys={}, _fbGen=0, _fbLiteOff=false;
+function fbModeWant(){ if(_fbLiteOff) return "full"; const r=currentUser ? currentUser.role : "cc"; return FB_LITE[r] ? r : "full"; }   /* belum login = mode driver */
 function fbLiteCfg(){ return (_fbMode && _fbMode!=="full") ? FB_LITE[_fbMode] : null; }
 function fbLiteWin(k){ const c=fbLiteCfg(); return !!(c && c.win && c.win[k]); }
 function fbLiteSkip(k){ const c=fbLiteCfg(); return !!(c && c.skip.indexOf(k)>=0); }
@@ -1475,7 +1475,7 @@ function appMinCheck(){
   if(!FBS.enabled || !FBS.ready || !FBS.db || _verBlocked) return;
   const me=radarBuildTs(RADAR_BUILD); if(!me) return;
   const d=DB.get(), am=d.appMin||{}, t=+am.t||0;
-  if(t && me<t){ appBlock(am.b||""); return; }
+  if(t && me<t){ appNewerReady().then(ok=>{ if(ok) appBlock(am.b||""); }); return; }   /* blokir + muat ulang hanya kalau file versi baru SUDAH tersedia (GitHub kadang telat beberapa menit) */
   try{ sessionStorage.removeItem("radar_blkreload"); }catch(e){}
   if(me>t && !isViewer() && Date.now()-_appMinBump>60000){ _appMinBump=Date.now();
     FBS.db.ref(FB_ROOT+"/appMin").transaction(cur=>{ if(cur && (+cur.t||0)>=me) return; return {b:RADAR_BUILD, t:me, at:Date.now()}; }); }
@@ -1485,6 +1485,15 @@ function appMinCheck(){
     else if(!d.verKick.done && Date.now()-(+d.verKick.ts||0)>5000) DB.set(x=>{ const vk=x.verKick; if(!vk || vk.done) return;
       const fo=(x.forceOut && typeof x.forceOut==="object") ? x.forceOut : {}; (x.users||[]).forEach(u=>{ if(u && u.username && !FB_BADKEY.test(String(u.username))) fo[u.username]=+vk.ts; }); x.forceOut=fo; vk.done=1; });
   }
+}
+let _appChkT=0;
+async function appNewerReady(){
+  if(Date.now()-_appChkT<120000) return false; _appChkT=Date.now();
+  try{ if(!/^https?:/.test(location.protocol)) return false;
+    const base=location.href.split("#")[0].split("?")[0], url=/\.html?$/i.test(base)?base:base.replace(/\/?$/,"/")+"index.html";
+    const res=await fetch(url,{cache:"no-cache"}); if(!res || !res.ok) return false;
+    const m=(await res.text()).match(_verRe); return !!(m && radarBuildTs(m[1])>radarBuildTs(RADAR_BUILD));
+  }catch(e){ return false; }
 }
 function appBlock(newB){
   if(_verBlocked) return; _verBlocked=true;
@@ -1523,6 +1532,7 @@ function fbAttach(){
   }
   /* MODE HEMAT: daftar bagian = daftar tetap ∪ nama bagian yang ada di server (REST shallow, hanya nama, ±1 KB) */
   const cfg=FB_LITE[_fbMode];
+  setTimeout(()=>{ if(gen===_fbGen && !FBS.ready && FBS.authed){ console.warn("mode hemat: data belum lengkap 20 detik → pakai mode penuh"); _fbLiteOff=true; fbAttach(); } }, 20000);   /* pengaman: jangan sampai absen tertahan "belum Online" */
   const go=names=>{
     if(gen!==_fbGen) return;
     const keys=[...new Set(FB_KEYS_ALL.concat(names||[]))].filter(k=>k && !FB_BADKEY.test(k) && LOCAL_ONLY.indexOf(k)<0 && cfg.skip.indexOf(k)<0);
@@ -1559,7 +1569,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="13 Nov 2026 12.18";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="13 Nov 2026 14.48";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3406,15 +3416,9 @@ function apPosSuspect(pos, dist, y){
     const prev=_apHist.length ? _apHist[_apHist.length-1] : null;
     _apHist.push({lat, lng, t:now, km:dist}); while(_apHist.length>40 || (_apHist.length && now-_apHist[0].t>20*60000)) _apHist.shift();
     if(dist>rad) return "";   /* di luar radius: tidak dipakai absen, tidak perlu disaring */
-    if(pos.via==="bg" && prev && prev.lat===lat && prev.lng===lng && now-prev.t>=3000) return "Posisi GPS tidak berubah (posisi simpanan, bukan bacaan baru). Menunggu bacaan GPS terbaru.";   /* posisi dari APK tidak membawa jam: angka identik = simpanan */
-    const pts=_apHist.slice(0,-1).map(p=>({lat:p.lat, lng:p.lng, t:p.t}));
-    try{ const k=normPlat(getCcProfile().plat||""); Object.values(TRACK||{}).forEach(r=>{ if(r && typeof r.lat==="number" && normPlat(r.plat)===k && r.ts) pts.push({lat:r.lat, lng:r.lng, t:r.ts}); }); }catch(e){}
-    for(const p of pts){
-      const dt=(now-p.t)/3600000; if(dt<=0 || dt>0.25) continue;
-      const far=haversineKm(p.lat, p.lng, y.lat, y.lng); if(far<=rad+1) continue;
-      const v=haversineKm(p.lat, p.lng, lat, lng)/Math.max(dt, 1/120);
-      if(v>100) return `Posisi GPS melompat tidak wajar (${far.toFixed(1)} km dari yard ${Math.max(1,Math.round(dt*60))} menit lalu). Absen ditunda — pastikan GPS asli aktif, bukan aplikasi lokasi palsu.`;
-    }
+    /* (aturan "posisi APK identik" dicabut 13 Nov 14.50: CC yang diam di area tunggu dalam radius dengan aplikasi di latar jadi tidak pernah absen otomatis.
+       Penyaring posisi palsu/lama menunggu data: Log Absen kini mencatat sumber posisi & akurasinya.) */
+    /* (aturan "posisi melompat" dicabut 13 Nov 14.50: salah menolak absen kalau plat yang sama juga dipakai HP lain yang jauh) */
   }catch(e){}
   return "";
 }
