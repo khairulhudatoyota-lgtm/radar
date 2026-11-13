@@ -1435,7 +1435,7 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["absenLog","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg"];
+const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg"];
 const FB_LITE={
   cc:         { skip:["manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp"], win:{ils:60} },
   dispatcher: { skip:["manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent"], win:{ils:60} },
@@ -1457,6 +1457,48 @@ function fbAfterData(d, local){
   if(!wasReady && FBS.q.length){ const q = FBS.q; FBS.q = []; q.forEach(a=>fbPush.apply(null,a)); }
   fbRender();
   try{ if(currentUser && (currentUser.role==="cc" || isViewer())) ccCallCheck(); }catch(e){}   // panggilan giliran langsung bunyi begitu data masuk, tidak menunggu putaran timer
+  try{ appMinCheck(); }catch(e){}
+}
+/* ===== WAJIB VERSI TERBARU (13 Nov 2026, permintaan Khairul) =====
+   /radar/appMin = build terbaru yang sudah pernah dibuka. HP mana pun yang membuka build lebih baru menaikkannya.
+   HP dengan build LEBIH LAMA dari appMin langsung DIPUTUS dari server (tidak membaca / menulis data) dan memuat ulang
+   halaman sendiri → otomatis mendapat versi terbaru. Berlaku untuk build ini dan sesudahnya.
+   HP yang masih memakai build SEBELUM fitur ini: sekali saja, HP Delivery/Admin pertama yang membuka build ini mengeluarkan
+   (logout) semua akun lewat forceOut; di layar login versi lama itu memuat ulang sendiri ke versi terbaru. Build baru mengabaikan tanda ini. */
+function radarBuildTs(b){
+  const m=/(\d{1,2}) ([A-Za-z]{3}) (\d{4}) (\d{1,2})[.:](\d{2})/.exec(String(b||"")); if(!m) return 0;
+  const mon={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Mei:4,Jun:5,Jul:6,Aug:7,Agu:7,Sep:8,Oct:9,Okt:9,Nov:10,Dec:11,Des:11}[m[2]];
+  return mon===undefined ? 0 : Date.UTC(+m[3], mon, +m[1], +m[4], +m[5]);   /* UTC: sama di semua HP walau zona waktunya beda */
+}
+let _verBlocked=false, _appMinBump=0;
+function appMinCheck(){
+  if(!FBS.enabled || !FBS.ready || !FBS.db || _verBlocked) return;
+  const me=radarBuildTs(RADAR_BUILD); if(!me) return;
+  const d=DB.get(), am=d.appMin||{}, t=+am.t||0;
+  if(t && me<t){ appBlock(am.b||""); return; }
+  try{ sessionStorage.removeItem("radar_blkreload"); }catch(e){}
+  if(me>t && !isViewer() && Date.now()-_appMinBump>60000){ _appMinBump=Date.now();
+    FBS.db.ref(FB_ROOT+"/appMin").transaction(cur=>{ if(cur && (+cur.t||0)>=me) return; return {b:RADAR_BUILD, t:me, at:Date.now()}; }); }
+  /* dua langkah: tanda verKick dulu (supaya semua HP build baru sudah tahu), 5 detik kemudian baru logout massal */
+  if(currentUser && ["delivery","admin"].includes(currentUser.role) && !isViewer()){
+    if(!d.verKick) DB.set(x=>{ if(x.verKick) return; x.verKick={ts:Date.now(), b:RADAR_BUILD}; });
+    else if(!d.verKick.done && Date.now()-(+d.verKick.ts||0)>5000) DB.set(x=>{ const vk=x.verKick; if(!vk || vk.done) return;
+      const fo=(x.forceOut && typeof x.forceOut==="object") ? x.forceOut : {}; (x.users||[]).forEach(u=>{ if(u && u.username && !FB_BADKEY.test(String(u.username))) fo[u.username]=+vk.ts; }); x.forceOut=fo; vk.done=1; });
+  }
+}
+function appBlock(newB){
+  if(_verBlocked) return; _verBlocked=true;
+  try{ FBS.db.goOffline(); }catch(e){}   /* versi lama: putus dari server */
+  let el=document.getElementById("verBlock");
+  if(!el){ el=document.createElement("div"); el.id="verBlock"; document.body.appendChild(el); }
+  el.style.cssText="position:fixed;inset:0;z-index:200000;background:#16213E;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center;font-family:Inter,Arial,sans-serif;";
+  el.innerHTML=`<div style="font-size:44px;margin-bottom:10px;">🔄</div><div style="font-size:20px;font-weight:800;margin-bottom:8px;">RADAR sedang diperbarui</div>
+    <div style="font-size:14px;opacity:.85;max-width:340px;line-height:1.5;">Versi di HP ini (${escH(RADAR_BUILD)}) sudah lama dan diputus dari server. Versi terbaru: <b>${escH(newB)}</b>.<br>Halaman dimuat ulang otomatis…</div>
+    <button type="button" onclick="location.reload()" style="margin-top:18px;background:#E8B04B;color:#16213E;border:0;border-radius:10px;padding:12px 22px;font-weight:800;font-size:14px;">MUAT ULANG SEKARANG</button>`;
+  let n=0; try{ n=+sessionStorage.getItem("radar_blkreload")||0; }catch(e){}
+  if(n<3){ try{ sessionStorage.setItem("radar_blkreload", String(n+1)); }catch(e){} setTimeout(()=>{ try{ location.reload(); }catch(e){} }, 2500); }
+  else setInterval(async()=>{ try{ const base=location.href.split("#")[0].split("?")[0], url=/\.html?$/i.test(base)?base:base.replace(/\/?$/,"/")+"index.html";
+    const tx=await (await fetch(url,{cache:"no-cache"})).text(), m=tx.match(_verRe); if(m && radarBuildTs(m[1])>radarBuildTs(RADAR_BUILD)){ try{ sessionStorage.removeItem("radar_blkreload"); }catch(e){} location.reload(); } }catch(e){} }, 60000);   /* server belum menyajikan versi baru: cek tiap menit */
 }
 function fbAttach(){
   fbDetachMain();
@@ -1517,7 +1559,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="13 Nov 2026 11.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="13 Nov 2026 12.18";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2240,7 +2282,7 @@ function ccUserOfPlat(plat){
 function ccProfForceOut(){ const _o=(window._trkRows||[]).find(x=>normPlat(x.plat)===normPlat(ccProfPlat)), un=(_o&&_o.u)||ccUserOfPlat(ccProfPlat); if(!un){ alert("Akun driver untuk plat ini belum terdeteksi. Keluarkan lewat Admin → User."); return; } forceOutUser(un, platFmt(ccProfPlat)+" ("+un+")"); }
 function ccForceOutCheck(){
   if(!currentUser || currentUser.role==="display" || !currentUser.username) return;
-  const d=DB.get(), un=currentUser.username, fo=+((d.forceOut||{})[un])||0;
+  const d=DB.get(), un=currentUser.username, vk=+((d.verKick||{}).ts)||0, fo0=+((d.forceOut||{})[un])||0, fo=(vk && fo0===vk) ? 0 : fo0;   /* logout massal untuk HP versi lama: build ini tidak ikut keluar */
   let ack=0; try{ ack=+localStorage.getItem("radar_forceack_"+un)||0; }catch(e){}
   const lt=+currentUser.ts||0;
   if(fo && fo>ack && Date.now()-fo<24*3600000 && !(lt && lt>fo)){
@@ -3333,7 +3375,7 @@ function stopAutoAbsen(silent){
   if(!silent) render();
 }
 /* posisi dari layanan latar belakang aplikasi Android (tetap jalan saat layar terkunci / aplikasi diminimalkan) */
-window.radarBgPos=function(lat,lng,acc){ window._myPos={lat:lat,lng:lng,ts:Date.now()}; const P={coords:{latitude:lat,longitude:lng,accuracy:acc,speed:null}}; try{ if(autoAbsen.on) onAutoPos(P); }catch(e){} try{ if(shareTrk.on) onSharePos(P); }catch(e){} };
+window.radarBgPos=function(lat,lng,acc){ window._myPos={lat:lat,lng:lng,ts:Date.now()}; const P={coords:{latitude:lat,longitude:lng,accuracy:acc,speed:null}, via:"bg"}; try{ if(autoAbsen.on) onAutoPos(P); }catch(e){} try{ if(shareTrk.on) onSharePos(P); }catch(e){} };
 function onAutoErr(err){
   if(err && err.code===1){ autoAbsen.err = "Izin lokasi ditolak. Aktifkan izin lokasi (pilih 'Izinkan') lalu aktifkan ulang."; updateAutoStatus(); }
 }
@@ -3350,6 +3392,31 @@ function autoOutLock(dist, y){
     if(dist > y.radiusKm + 1){ try{ localStorage.setItem(k,"1"); }catch(e){} return false; }
     try{ return localStorage.getItem(k)!=="1"; }catch(e){ return false; }
   }catch(e){ return false; }
+}
+/* ===== Penyaring posisi untuk absen otomatis (13 Nov 2026) =====
+   Kasus: driver masih di tol tetapi tercatat absen "0 km dari yard". Penyebab yang mungkin: HP mengirim posisi TERSIMPAN
+   (posisi terakhir saat di yard pada rit sebelumnya, tanpa jam) atau aplikasi GPS palsu. Posisi ditolak untuk absen kalau:
+   • dari layanan latar APK dan sama persis dengan posisi sebelumnya (angka identik = posisi simpanan, bukan bacaan GPS baru);
+   • "melompat": posisi lain plat ini (HP ini atau peta) dalam 15 menit terakhir masih jauh, dan untuk sampai ke yard
+     perlu kecepatan > 100 km/jam. */
+const _apHist=[];
+function apPosSuspect(pos, dist, y){
+  try{
+    const now=Date.now(), lat=+pos.coords.latitude, lng=+pos.coords.longitude, rad=+y.radiusKm||5;
+    const prev=_apHist.length ? _apHist[_apHist.length-1] : null;
+    _apHist.push({lat, lng, t:now, km:dist}); while(_apHist.length>40 || (_apHist.length && now-_apHist[0].t>20*60000)) _apHist.shift();
+    if(dist>rad) return "";   /* di luar radius: tidak dipakai absen, tidak perlu disaring */
+    if(pos.via==="bg" && prev && prev.lat===lat && prev.lng===lng && now-prev.t>=3000) return "Posisi GPS tidak berubah (posisi simpanan, bukan bacaan baru). Menunggu bacaan GPS terbaru.";   /* posisi dari APK tidak membawa jam: angka identik = simpanan */
+    const pts=_apHist.slice(0,-1).map(p=>({lat:p.lat, lng:p.lng, t:p.t}));
+    try{ const k=normPlat(getCcProfile().plat||""); Object.values(TRACK||{}).forEach(r=>{ if(r && typeof r.lat==="number" && normPlat(r.plat)===k && r.ts) pts.push({lat:r.lat, lng:r.lng, t:r.ts}); }); }catch(e){}
+    for(const p of pts){
+      const dt=(now-p.t)/3600000; if(dt<=0 || dt>0.25) continue;
+      const far=haversineKm(p.lat, p.lng, y.lat, y.lng); if(far<=rad+1) continue;
+      const v=haversineKm(p.lat, p.lng, lat, lng)/Math.max(dt, 1/120);
+      if(v>100) return `Posisi GPS melompat tidak wajar (${far.toFixed(1)} km dari yard ${Math.max(1,Math.round(dt*60))} menit lalu). Absen ditunda — pastikan GPS asli aktif, bukan aplikasi lokasi palsu.`;
+    }
+  }catch(e){}
+  return "";
 }
 function onAutoPos(pos){
   if(!autoAbsen.on) return;
@@ -3376,8 +3443,9 @@ function onAutoPos(pos){
   if(pos.coords.accuracy > 150 && dist <= y.radiusKm + 0.5){ autoAbsen.hits=0; autoAbsen.warn=`Akurasi GPS kurang (±${Math.round(pos.coords.accuracy)} m). Menunggu posisi yang lebih tepat.`; updateAutoStatus(); return; }
   if(autoOutLock(dist, y)){ autoAbsen.hits = 0; autoAbsen.lock = true; updateAutoStatus(); return; }   // baru Delout: jangan absen lagi sebelum keluar area
   autoAbsen.lock = false;
+  { const bad=apPosSuspect(pos, dist, y); if(bad){ autoAbsen.hits=0; autoAbsen.warn=bad; updateAutoStatus(); return; } }   /* posisi lama / melompat: bukan bukti CC sudah di yard */
   autoAbsen.hits = dist <= y.radiusKm ? autoAbsen.hits+1 : 0;
-  if(autoAbsen.hits >= 2) doAutoRegister(dist); else updateAutoStatus();
+  if(autoAbsen.hits >= 2){ window._absenVia={via:pos.via||"gps", acc:Math.round(pos.coords.accuracy||0)}; try{ doAutoRegister(dist); } finally { window._absenVia=null; } } else updateAutoStatus();
 }
 function doAutoRegister(dist){
   const prof = getCcProfile();
@@ -4078,7 +4146,7 @@ function registerCC(plat, lp, dist, auto, manual, src){
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
     const _sr=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k); if(_sr && _sr.lp) lp=_sr.lp;   // LP resmi dari jadwal DCCP (sama seperti absen admin)
     const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
-    if(!(d.absenLog||[]).some(x=>x && !x.dup && !x.rejected && normPlat(x.plat)===k && Date.now()-(x.ts||0)<60000)) d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:item.plat, lp:item.lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dist:(dist==null?null:Math.round(dist*10)/10)});
+    if(!(d.absenLog||[]).some(x=>x && !x.dup && !x.rejected && normPlat(x.plat)===k && Date.now()-(x.ts||0)<60000)) d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:item.plat, lp:item.lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dist:(dist==null?null:Math.round(dist*10)/10), via:(!src && auto && window._absenVia) ? window._absenVia.via : undefined, acc:(!src && auto && window._absenVia) ? window._absenVia.acc : undefined});
     const hd = ccHoldDue(d, plat);
     if(hd!=null && !ccFirstBatchIn(d, plat)){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }   /* batch pertama + stall kosong: langsung masuk */
     res = placeCC(d, item);
@@ -7009,7 +7077,7 @@ function absenLogCardHtml(data){
   const L=(data.absenLog||[]).slice().reverse().slice(0,40);
   return `<details class="card" style="margin-top:10px;"><summary style="cursor:pointer;font-weight:800;">🕵 Log Absen (siapa yang absen) <span class="badge">${L.length}</span></summary>
     <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">40 absen terakhir. Kalau satu plat absen berulang dari akun yang tidak seharusnya (mis. akun lain yang masih login dengan plat itu), akunnya kelihatan di sini. Akun bisa dikeluarkan dari Admin → User.</div>
-    ${L.length?L.map(x=>`<div style="border-top:1px solid var(--border);padding:6px 0;font-size:13px;"><b>${escH(x.plat)}</b> · ${escH(x.lp||"-")}${(()=>{ const r=(data.dccpSchedule||[]).find(z=>normPlat(z.police)===normPlat(x.plat)); return r&&r.driver?` · <b>${escH(r.driver)}</b>`:""; })()} <span style="color:var(--text-dim);">${hh(x.ts)}</span><br><span style="font-size:12px;">Akun: <b>${escH(x.name||x.u||"-")}</b> (${escH(x.u||"-")}, ${escH(x.role||"-")}) · ${x.auto?"🤖 otomatis":(x.manual?"✍ manual":"✍")}${x.dist!=null?" · "+x.dist+" km dari yard":""}${x.noDccp?` · <span style="color:#C0392B;">ditolak (DCCP shift ini belum diupload)</span>`:x.notDccp?` · <span style="color:#C0392B;">ditolak (tidak ada di DCCP)</span>`:x.loaded?` · <span style="color:#C77700;">ditolak (sudah muat, belum menjauh dari yard)</span>`:x.stale?` · <span style="color:#C77700;">ditolak (absen lama, CC sudah keluar)</span>`:(x.dup?` · <span style="color:#C77700;">ditolak (sudah terdaftar)</span>`:"")}</span></div>`).join(""):`<div class="emptystate">Belum ada log absen.</div>`}
+    ${L.length?L.map(x=>`<div style="border-top:1px solid var(--border);padding:6px 0;font-size:13px;"><b>${escH(x.plat)}</b> · ${escH(x.lp||"-")}${(()=>{ const r=(data.dccpSchedule||[]).find(z=>normPlat(z.police)===normPlat(x.plat)); return r&&r.driver?` · <b>${escH(r.driver)}</b>`:""; })()} <span style="color:var(--text-dim);">${hh(x.ts)}</span><br><span style="font-size:12px;">Akun: <b>${escH(x.name||x.u||"-")}</b> (${escH(x.u||"-")}, ${escH(x.role||"-")}) · ${x.auto?"🤖 otomatis":(x.manual?"✍ manual":"✍")}${x.dist!=null?" · "+x.dist+" km dari yard":""}${x.via?" · posisi "+(x.via==="bg"?"APK latar":"GPS aplikasi")+(x.acc?" ±"+x.acc+" m":""):""}${x.noDccp?` · <span style="color:#C0392B;">ditolak (DCCP shift ini belum diupload)</span>`:x.notDccp?` · <span style="color:#C0392B;">ditolak (tidak ada di DCCP)</span>`:x.loaded?` · <span style="color:#C77700;">ditolak (sudah muat, belum menjauh dari yard)</span>`:x.stale?` · <span style="color:#C77700;">ditolak (absen lama, CC sudah keluar)</span>`:(x.dup?` · <span style="color:#C77700;">ditolak (sudah terdaftar)</span>`:"")}</span></div>`).join(""):`<div class="emptystate">Belum ada log absen.</div>`}
   </details>`;
 }
 function ilsFixCardHtml(data){
@@ -10840,9 +10908,9 @@ function confirmDefect(id){
    LAPORAN UNIT DEFECT + SURAT (PDF)
    Alur: Driver CC / Dispatcher / Koordinator lapor → Delivery & Koordinator dapat bunyi + tanda →
    Delivery memutuskan: OK lanjut / Lanjut dengan catatan / Tidak lanjut (ganti unit), dengan TTD MP Delivery →
-   Surat Laporan Unit Defect (PDF) tampil di Delivery, Koordinator (LP-nya), dan Driver CC (platnya). Disimpan 14 hari.
+   Surat Laporan Unit Defect (PDF) tampil di Delivery, Koordinator (LP-nya), dan Driver CC (platnya). Disimpan 2×24 jam.
 ====================================================================== */
-const DF_KEEP_MS = 14*24*3600*1000;
+const DF_KEEP_MS = 48*3600*1000;   /* data defect cukup 2×24 jam (permintaan Khairul, 13 Nov 2026), lalu dihapus beserta fotonya */
 const DF_DEC = {ok:{t:"OK, LANJUT KIRIM", s:"OK lanjut", c:"#1E9E5A", bg:"#E7F6EC"}, note:{t:"LANJUT DENGAN CATATAN", s:"Lanjut dgn catatan", c:"#B7791F", bg:"#FFF4D6"}, no:{t:"TIDAK LANJUT (UNIT DIGANTI)", s:"Tidak lanjut", c:"#C0392B", bg:"#FDECEA"}};
 function dfList(d){ return ((d||DB.get()).defects||[]).filter(x=>x && Date.now()-(x.ts||0)<DF_KEEP_MS); }
 function dfPending(d){ return dfList(d).filter(x=>x.status==="open"); }
@@ -10983,7 +11051,7 @@ function dfLettersCardHtml(data){
   if(!(canKeluarkanCC() || ko || r==="viewer" || r==="leader")) return "";
   const L=dfDecided(data).filter(x=>!lp || lpKey(x.lp)===lp).sort((a,b)=>(b.decision.ts||0)-(a.decision.ts||0));
   return `<details class="card" style="margin-top:12px;"><summary style="cursor:pointer;font-weight:800;">📄 Surat Laporan Unit Defect <span class="badge">${L.length}</span></summary>
-    <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">Tersimpan 14 hari. Tekan Surat untuk lihat, kirim WhatsApp, atau simpan PDF.</div>
+    <div style="font-size:12px;color:var(--text-dim);margin:8px 0;">Tersimpan 2×24 jam. Tekan Surat untuk lihat, kirim WhatsApp, atau simpan PDF.</div>
     ${L.length?L.map(x=>dfRowHtml(x)).join(""):`<div class="emptystate">Belum ada surat.</div>`}</details>`;
 }
 function dfDecideOpen(id, k){
@@ -11114,7 +11182,7 @@ function dfTick(){
   }catch(e){}
 }
 setInterval(dfTick, 4000);
-/* hapus laporan > 14 hari beserta fotonya (perangkat mana pun yang online) */
+/* hapus laporan > 2×24 jam beserta fotonya (perangkat mana pun yang online) */
 setInterval(()=>{ try{
   if(!currentUser || isViewer() || (FBS.enabled && fbCurrentState()!=="online")) return;
   const old=((DB.get().defects)||[]).filter(x=>x && Date.now()-(x.ts||0)>=DF_KEEP_MS); if(!old.length) return;
