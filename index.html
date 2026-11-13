@@ -1144,6 +1144,8 @@ function fbState(s){
 function fbCurrentState(){ return !FBS.enabled ? "off" : (!FBS.authed ? "connecting" : (FBS.conn ? (FBS.ready?"online":"connecting") : "offline")); }
 function fbPush(k, pre, fn, T, seed, retried){
   if(!FBS.enabled) return;
+  if(k==="sigs") return sigsPush(pre, fn, T, seed);
+  if(fbLiteSkip(k) || fbLiteWin(k)){ fbMeterW(k, "blok"); console.warn("hemat data: '"+k+"' utuh tidak dikirim dari HP mode hemat"); return; }
   if(!FBS.ready){ FBS.q.push([k,pre,fn,T,seed]); return; }
   FBS.db.ref(FB_ROOT+"/"+k).transaction(cur=>{
     const tmp = cloneJ(pre);
@@ -1215,9 +1217,16 @@ const FB_BADKEY=/[.#$\/\[\]]/;
 /* Daftar (array): isi boleh diubah per baris. Menambah baris di ujung hanya untuk log (urutan antrian/ILS tetap ditulis utuh). */
 const FB_LIST_KEYS=["manifest","queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs","hold","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList","ccShiftPlat"];
 const FB_LOG_KEYS=["manifest","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList"];
+/* Hemat data tahap 2 (13 Nov 2026): ILS BARU juga cukup dikirim 1 baris (dulu seluruh daftar ILS ±7 hari dikirim ulang ke semua HP setiap ada ILS dibuat).
+   Tetap aman dari ILS dobel: baris ditulis dengan compare-and-set di posisi ujung; kalau di saat yang sama HP lain sudah menambah ILS,
+   penulisan ini batal lalu jatuh ke transaksi lama yang mengecek ulang plat/stall di data server terbaru. */
+const FB_APPEND_KEYS=FB_LOG_KEYS.concat(["ils"]);
 function fbPushSmart(k, pre, post, fn, T, seed){
   try{
     if(!FBS.enabled) return;
+    if(k==="sigs") return sigsPush(pre, fn, T, seed);   /* TTD disimpan di luar /radar (lihat SIGS_PATH) */
+    if(fbLiteSkip(k)){ fbMeterW(k, "blok"); console.warn("hemat data: '"+k+"' tidak dikirim dari HP mode hemat"); return; }
+    if(fbLiteWin(k)) return fbPushWin(k, pre, post);
     if(!FBS.ready || !FBS.db) return fbPush(k, pre, fn, T, seed);
     const a=pre[k], b=post[k];
     if(!a || !b || typeof a!=="object" || typeof b!=="object" || Array.isArray(a)!==Array.isArray(b)) return fbPush(k, pre, fn, T, seed);
@@ -1232,7 +1241,7 @@ function fbPushSmart(k, pre, post, fn, T, seed){
     const c=ch[0];
     if(Array.isArray(a)){
       const had=a[c]!==undefined && a[c]!==null, has=b[c]!==undefined && b[c]!==null;
-      const ok = FB_LIST_KEYS.includes(k) && ((had && has && a.length===b.length) || (!had && has && FB_LOG_KEYS.includes(k) && +c===a.length && b.length===a.length+1));
+      const ok = FB_LIST_KEYS.includes(k) && ((had && has && a.length===b.length) || (!had && has && FB_APPEND_KEYS.includes(k) && +c===a.length && b.length===a.length+1));
       if(!ok){ fbMeterW(k, "utuh"); return fbPush(k, pre, fn, T, seed); }
     }
     const expect=fbCJ(a[c]), nv=(b[c]===undefined||b[c]===null) ? null : cloneJ(b[c]);
@@ -1245,6 +1254,72 @@ function fbPushSmart(k, pre, post, fn, T, seed){
       try{ if(window._fbAck) window._fbAck(k, null, true); }catch(e){}
     }, true);
   }catch(e){ console.warn("hemat data:", k, e); fbPush(k, pre, fn, T, seed); }
+}
+/* HP mode hemat memegang daftar yang terpotong (mis. 60 ILS terbaru): posisi baris di HP ≠ posisi di server.
+   Hanya PERUBAHAN isi baris yang dikirim, ke posisi server yang benar (compare-and-set). Tambah / hapus baris tidak dikirim dari HP ini. */
+function fbPushWin(k, pre, post){
+  const a=pre[k], b=post[k], keys=_fbWinKeys[k]||[];
+  if(!FBS.ready || !FBS.db || !Array.isArray(a) || !Array.isArray(b) || a.length!==b.length || a.length!==keys.length){ fbMeterW(k, "blok"); console.warn("hemat data: tambah/hapus '"+k+"' tidak dikirim dari HP mode hemat"); return; }
+  for(let i=0;i<a.length;i++){
+    const expect=fbCJ(a[i]); if(expect===fbCJ(b[i])) continue;
+    const nv=(b[i]===undefined||b[i]===null) ? null : cloneJ(b[i]);
+    fbMeterW(k, "isi");
+    FBS.db.ref(FB_ROOT+"/"+k+"/"+keys[i]).transaction(cur=>{ if(fbCJ(cur)!==expect) return; return nv; },
+      (err, ok)=>{ if(err || !ok){ fbMeterW(k, "ulang"); console.warn("hemat data: perubahan '"+k+"' bentrok dengan HP lain, tidak dikirim", err||""); } }, true);
+  }
+}
+/* ===== TTD e-SJKB di luar data utama (13 Nov 2026) =====
+   Gambar TTD & stempel (±300 KB) dulu ikut /radar/sigs → ikut terunduh SETIAP HP SETIAP kali RADAR dibuka.
+   Sekarang disimpan di radar_foto/_sigs dan hanya diambil saat dibutuhkan (membuat e-SJKB / surat defect / menu TTD Admin),
+   lalu disimpan di HP. /radar/sigsVer (angka kecil) memberi tahu kalau TTD berubah. Data lama dipindah otomatis oleh HP Delivery/Admin. */
+const SIGS_PATH="radar_foto/_sigs", SIGS_LS="radar_sigs_cache";
+function sigsHasAny(o){ if(!o || typeof o!=="object") return false; return Object.keys(o).some(k=>{ const v=o[k]; return (typeof v==="string" && v.indexOf("data:")===0) || (v && typeof v==="object" && Object.keys(v).some(j=>typeof v[j]==="string" && v[j].indexOf("data:")===0)); }); }
+function sigsCache(){ try{ return JSON.parse(localStorage.getItem(SIGS_LS)||"null"); }catch(e){ return null; } }
+function sigsCacheSave(ver, data){ try{ localStorage.setItem(SIGS_LS, JSON.stringify({ver, data})); }catch(e){} }
+function sigsAfterSnap(d, local){
+  if(sigsHasAny(d.sigs)) return;   /* data lama: TTD masih di /radar (belum dipindah) */
+  const c=sigsCache(); if(c && c.data) d.sigs=c.data; else if(local && sigsHasAny(local.sigs)) d.sigs=local.sigs;
+}
+let _sigsP=null;
+function sigsEnsure(){   /* pastikan TTD terbaru ada di HP ini sebelum membuat e-SJKB / surat */
+  if(_sigsP) return _sigsP;
+  _sigsP=(async()=>{
+    try{
+      if(!FBS.enabled || !FBS.db || !FBS.authed) return;
+      const d=DB.get(), ver=d.sigsVer||0, c=sigsCache();
+      if(!ver){ if(sigsHasAny(d.sigs)) return; const v=(await FBS.db.ref(FB_ROOT+"/sigs").once("value")).val(); if(sigsHasAny(v)){ const x=DB.get(); x.sigs=v; DB.save(x); } return; }   /* belum dipindah (HP mode hemat tidak mengunduh /radar/sigs) */
+      if(c && c.ver===ver && c.data){ if(!sigsHasAny(d.sigs)){ const x=DB.get(); x.sigs=c.data; DB.save(x); } return; }
+      const v=(await FBS.db.ref(SIGS_PATH).once("value")).val();
+      if(v){ sigsCacheSave(ver, v); const x=DB.get(); x.sigs=v; DB.save(x); }
+    }catch(e){ console.warn("TTD belum bisa diambil", e); }
+  })().finally(()=>{ _sigsP=null; });
+  return _sigsP;
+}
+function sigsMerge(a, b){ const o=Object.assign({}, a||{}); Object.keys(b||{}).forEach(k=>{ const v=b[k]; o[k]=(v && typeof v==="object" && !Array.isArray(v)) ? Object.assign({}, o[k]||{}, v) : v; }); return o; }
+function sigsPush(pre, fn, T, seed){
+  if(!FBS.ready || !FBS.db){ FBS.q.push(["sigs",pre,fn,T,seed]); return; }
+  const legacy=sigsHasAny(DB.get().sigs) && !DB.get().sigsVer;
+  if(legacy){   /* belum dipindah: tulis seperti dulu */
+    FBS.db.ref(FB_ROOT+"/sigs").transaction(cur=>{ const tmp=cloneJ(pre); if(cur) tmp.sigs=cur; const nt=normalizeData(tmp); runMut(nt, fn, T, seed); return cloneJ(nt.sigs)||null; }, ()=>{}, true);
+    return;
+  }
+  FBS.db.ref(SIGS_PATH).transaction(cur=>{ const tmp=cloneJ(pre); tmp.sigs=(cur && typeof cur==="object") ? cur : (pre.sigs||{}); const nt=normalizeData(tmp); runMut(nt, fn, T, seed); return cloneJ(nt.sigs)||null; },
+    (err, ok, snap)=>{ if(err || !ok){ console.warn("TTD gagal disimpan", err||""); return; }
+      const v=Date.now(); try{ sigsCacheSave(v, snap.val()); }catch(e){} FBS.db.ref(FB_ROOT+"/sigsVer").set(v); }, false);
+}
+let _sigsMig=false;
+async function sigsMigrateCheck(legacy){   /* hanya HP Delivery / Admin, sekali: pindahkan TTD lama dari /radar ke radar_foto/_sigs. legacy = /radar/sigs ASLI dari server */
+  if(_sigsMig || !sigsHasAny(legacy) || !currentUser || !["admin","delivery"].includes(currentUser.role) || isViewer()) return;
+  _sigsMig=true;
+  try{
+    const r=await FBS.db.ref(SIGS_PATH).transaction(cur=>sigsMerge(cur||{}, legacy));
+    const chk=r && r.snapshot && r.snapshot.val();
+    const same=chk && Object.keys(legacy).every(k=>fbCJ((legacy[k] && typeof legacy[k]==="object") ? Object.assign({}, chk[k]||{}, legacy[k]) : legacy[k])===fbCJ(chk[k]));
+    if(!same){ console.warn("TTD: pemindahan belum lengkap, dicoba lagi nanti"); _sigsMig=false; return; }
+    const ver=Date.now(); sigsCacheSave(ver, chk);
+    await FBS.db.ref(FB_ROOT).update({sigs:null, sigsVer:ver});
+    console.log("TTD dipindah ke "+SIGS_PATH);
+  }catch(e){ console.warn("TTD: pemindahan gagal (cek aturan Firebase radar_foto)", e); setTimeout(()=>{ _sigsMig=false; }, 30*60000); }
 }
 /* Log berbatas (mis. 120 baris): dulu tiap baris baru menggeser semua baris → seluruh log dikirim ulang ke semua HP.
    Sekarang dipangkas sekaligus saat sudah lewat batas + cadangan, jadi baris baru biasanya cukup dikirim satu baris. */
@@ -1271,7 +1346,7 @@ function absenAdd(L, e){
    jadi angka ini × jumlah HP yang terbuka ≈ pemakaian di tagihan. Hanya aktif kalau dinyalakan (ringan, tapi tidak perlu terus). */
 const FBM_KEY="radar_fbmeter";
 let FBM = (()=>{ try{ return JSON.parse(localStorage.getItem(FBM_KEY)||"null"); }catch(e){ return null; } })();
-let _fbmDirty=false;
+let _fbmDirty=false, _fbmReq={};
 function fbMeterOn(){ return !!(FBM && FBM.on); }
 function fbMeterSave(){ if(!_fbmDirty) return; _fbmDirty=false; try{ localStorage.setItem(FBM_KEY, JSON.stringify(FBM)); }catch(e){} }
 setInterval(fbMeterSave, 15000);
@@ -1294,7 +1369,14 @@ function fbMeterLog(msg){
       fbMeterAdd(p, body.length); return;
     }
     i=msg.indexOf("from server: ");   /* jawaban atas permintaan HP ini (termasuk isi transaksi yang ditolak) */
-    if(i>=0) fbMeterAdd("(jawaban server)", msg.length-i-13);
+    if(i>=0){
+      let lbl="(jawaban server)";
+      try{ const m=/"r":(\d+)/.exec(msg.slice(i)); if(m && _fbmReq[m[1]]){ lbl="(jawaban "+_fbmReq[m[1]]+")"; delete _fbmReq[m[1]]; } }catch(e){}
+      fbMeterAdd(lbl, msg.length-i-13); return;
+    }
+    i=msg.indexOf('{"r":');   /* permintaan yang dikirim HP ini: catat jenis & tujuannya supaya jawabannya bisa dikenali */
+    if(i>=0){ try{ const o=JSON.parse(msg.slice(i)); if(o && o.a){ const k=Object.keys(_fbmReq); if(k.length>300) k.slice(0,150).forEach(x=>delete _fbmReq[x]);
+      _fbmReq[o.r]=({q:"pantau",n:"lepas",p:"tulis",m:"tulis",o:"tulis",g:"ambil",auth:"login",gauth:"login",s:"statistik"}[o.a]||o.a)+(o.b&&o.b.p!=null?" "+fbMeterPath(o.b.p):""); } }catch(e){} }
   }catch(e){}
 }
 function fbMeterW(k, how){
@@ -1341,31 +1423,93 @@ function fbReauth(){
   _fbReT.push(now);
   _fbReP = firebase.auth().signInAnonymously().then(()=>{
     FBS.authed = true;
-    try{ [FB_ROOT, TRK_PATH, LAP_PATH, CHAT_PATH].forEach(p=>FBS.db.ref(p).off()); }catch(e){}
+    try{ fbDetachMain(); [FB_ROOT, TRK_PATH, LAP_PATH, CHAT_PATH].forEach(p=>FBS.db.ref(p).off()); }catch(e){}
     fbAttach(); trackAttach(); fbState(fbCurrentState()); return true;
   }).catch(e=>{ console.warn("login ulang gagal", e); return false; }).finally(()=>{ _fbReP=null; });
   return _fbReP;
 }
 const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
-function fbAttach(){
-  const ref = FBS.db.ref(FB_ROOT);
-  ref.on("value", snap=>{
-    const v = snap.val(), local = DB.load();
-    if(v === null){
-      // database masih kosong → data perangkat ini jadi data awal
-      const o = {}; dbKeys(local).forEach(k=>{ o[k] = cloneJ(local[k]); });
-      FBS.ready = true; ref.set(o).catch(e=>console.warn(e)); fbState(fbCurrentState()); return;
-    }
-    const d = normalizeData(v);
-    LOCAL_ONLY.forEach(k=>{ if(local[k]!==undefined) d[k] = local[k]; });
-    syncUnitLog(d);
-    DB.save(d);
-    const wasReady = FBS.ready; FBS.ready = true; fbState(fbCurrentState());
-    if(!wasReady && FBS.q.length){ const q = FBS.q; FBS.q = []; q.forEach(a=>fbPush.apply(null,a)); }
-    fbRender();
-    try{ if(currentUser && (currentUser.role==="cc" || isViewer())) ccCallCheck(); }catch(e){}   // panggilan giliran langsung bunyi begitu data masuk, tidak menunggu putaran timer
-  }, err=>{ console.warn("listener ditolak:", err); fbState("offline"); if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth(); }catch(e){} }, 1500); });
+/* ===== HEMAT DATA TAHAP 2b (13 Nov 2026): data per role =====
+   Akun "penuh" (Admin, Delivery, Koordinator, Leader, Pengamat, Display) tetap menerima seluruh data /radar seperti dulu.
+   Driver CC, Dispatcher, PDI (dan HP yang belum login, kebanyakan HP driver) memakai MODE HEMAT:
+   • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
+   • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
+   HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
+const FB_KEYS_ALL=["absenLog","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg"];
+const FB_LITE={
+  cc:         { skip:["manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp"], win:{ils:60} },
+  dispatcher: { skip:["manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent"], win:{ils:60} },
+  pdi:        { skip:["manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent"], win:{ils:60} } };
+let _fbMode="", _fbRefs=[], _fbRaw={}, _fbGot=new Set(), _fbNeed=0, _fbWinKeys={}, _fbGen=0;
+function fbModeWant(){ const r=currentUser ? currentUser.role : "cc"; return FB_LITE[r] ? r : "full"; }   /* belum login = mode driver */
+function fbLiteCfg(){ return (_fbMode && _fbMode!=="full") ? FB_LITE[_fbMode] : null; }
+function fbLiteWin(k){ const c=fbLiteCfg(); return !!(c && c.win && c.win[k]); }
+function fbLiteSkip(k){ const c=fbLiteCfg(); return !!(c && c.skip.indexOf(k)>=0); }
+function fbDetachMain(){ _fbRefs.forEach(([r,cb])=>{ try{ r.off("value", cb); }catch(e){} }); _fbRefs=[]; }
+function fbListenErr(err){ console.warn("listener ditolak:", err); fbState("offline"); if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth(); }catch(e){} }, 1500); }
+/* data dari server sudah lengkap → simpan, kirim antrean perubahan, gambar ulang */
+function fbAfterData(d, local){
+  LOCAL_ONLY.forEach(k=>{ if(local[k]!==undefined) d[k] = local[k]; });
+  try{ sigsAfterSnap(d, local); }catch(e){}
+  syncUnitLog(d);
+  DB.save(d);
+  const wasReady = FBS.ready; FBS.ready = true; fbState(fbCurrentState());
+  if(!wasReady && FBS.q.length){ const q = FBS.q; FBS.q = []; q.forEach(a=>fbPush.apply(null,a)); }
+  fbRender();
+  try{ if(currentUser && (currentUser.role==="cc" || isViewer())) ccCallCheck(); }catch(e){}   // panggilan giliran langsung bunyi begitu data masuk, tidak menunggu putaran timer
 }
+function fbAttach(){
+  fbDetachMain();
+  const gen=++_fbGen;
+  _fbMode=fbModeWant(); _fbRaw={}; _fbGot=new Set(); _fbWinKeys={};
+  if(_fbMode==="full"){
+    const ref = FBS.db.ref(FB_ROOT);
+    const cb = snap=>{
+      const v = snap.val(), local = DB.load();
+      if(v === null){
+        // database masih kosong → data perangkat ini jadi data awal
+        const o = {}; dbKeys(local).forEach(k=>{ o[k] = cloneJ(local[k]); });
+        FBS.ready = true; ref.set(o).catch(e=>console.warn(e)); fbState(fbCurrentState()); return;
+      }
+      const legacySigs = sigsHasAny(v.sigs) ? v.sigs : null;   /* dicatat SEBELUM normalisasi (sigsAfterSnap bisa mengisi TTD dari simpanan HP) */
+      fbAfterData(normalizeData(v), local);
+      if(legacySigs){ try{ sigsMigrateCheck(legacySigs); }catch(e){} }
+      try{ dfImgMigrateCheck(); }catch(e){}
+    };
+    ref.on("value", cb, fbListenErr); _fbRefs.push([ref, cb]);
+    return;
+  }
+  /* MODE HEMAT: daftar bagian = daftar tetap ∪ nama bagian yang ada di server (REST shallow, hanya nama, ±1 KB) */
+  const cfg=FB_LITE[_fbMode];
+  const go=names=>{
+    if(gen!==_fbGen) return;
+    const keys=[...new Set(FB_KEYS_ALL.concat(names||[]))].filter(k=>k && !FB_BADKEY.test(k) && LOCAL_ONLY.indexOf(k)<0 && cfg.skip.indexOf(k)<0);
+    _fbNeed=keys.length;
+    keys.forEach(k=>{
+      const w=cfg.win && cfg.win[k]; let q=FBS.db.ref(FB_ROOT+"/"+k); if(w) q=q.limitToLast(w);
+      const cb=snap=>{
+        if(gen!==_fbGen) return;
+        if(w){ const ks=[]; snap.forEach(c=>{ if(c.val()!==null) ks.push(c.key); }); _fbWinKeys[k]=ks; }
+        _fbRaw[k]=snap.val(); _fbGot.add(k);
+        if(_fbGot.size>=_fbNeed) fbLiteApply();
+      };
+      q.on("value", cb, fbListenErr); _fbRefs.push([q, cb]);
+    });
+  };
+  let done=false; const fin=n=>{ if(done) return; done=true; go(n); };
+  try{
+    setTimeout(()=>fin(null), 6000);
+    firebase.auth().currentUser.getIdToken().then(t=>fetch(FB_CONFIG.databaseURL+"/"+FB_ROOT+".json?shallow=true&auth="+encodeURIComponent(t)))
+      .then(r=>r.ok?r.json():null).then(j=>fin(j&&typeof j==="object"?Object.keys(j):null)).catch(()=>fin(null));
+  }catch(e){ fin(null); }
+}
+function fbLiteApply(){
+  const local=DB.load(), raw={};
+  Object.keys(_fbRaw).forEach(k=>{ const v=_fbRaw[k]; if(v!==null && v!==undefined) raw[k]=cloneJ(v); });
+  fbAfterData(normalizeData(raw), local);   /* bagian kantor tidak ikut: di HP ini kembali ke bawaan kosong */
+}
+/* login / logout / ganti role: pasang ulang listener kalau modenya berubah */
+function fbModeSync(){ try{ if(FBS.enabled && FBS.authed && FBS.db && fbModeWant()!==_fbMode){ FBS.ready=false; fbAttach(); } }catch(e){} }
 function fbRender(){
   const mv = document.getElementById("mainView"); if(!mv || mv.classList.contains("hidden")) return;
   const a = document.activeElement, typing = a && (a.tagName==="INPUT" || a.tagName==="TEXTAREA" || a.tagName==="SELECT");
@@ -1373,7 +1517,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="12 Nov 2026 23.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="13 Nov 2026 11.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2162,6 +2306,7 @@ function ccLastOutBackstop(){
 }
 function ccLastOutSave(){ const v=(document.getElementById("ccLastOutM")||{}).value; const n=Math.max(0,Math.min(240,Math.round(+v||0))); DB.set(d=>{ d.ccLastOutM=n; }); alert(n?("Driver CC otomatis keluar "+ccLastOutFmtM(n)+" sesudah Delout ritase terakhir (DCCP)."):"Keluar otomatis sesudah ritase terakhir dimatikan."); render(); }
 function doLogout(){
+  try{ ilsSeatRelease(); }catch(e){}   /* kursi pembuat ILS dilepas supaya HP lain bisa memakai */
   try{ if(currentUser && currentUser.username){ const un=currentUser.username, t=Date.now(); DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===un) x.lo=t; }); }); } }catch(e){}   // tandai sudah logout: titik petanya tidak dianggap punya akun aktif
   ccPlatOk=false; try{ stopShare(true); }catch(e){}
   spdStop(); spdCloseOverlay();
@@ -2175,6 +2320,7 @@ function doLogout(){
   clearSession();
   currentUser = null;
   selectedRole = null;
+  fbModeSync();
   document.getElementById("mainView").classList.add("hidden");
   document.getElementById("credScreen").classList.add("hidden");
   document.getElementById("roleSelectScreen").classList.remove("hidden");
@@ -2211,6 +2357,7 @@ function cleanPlatForUser(){
   }catch(e){}
 }
 function enterApp(forceTab){
+  fbModeSync();   /* hemat data: listener mengikuti role yang login */
   viewerGuardInstall(); viewerBadge(); cleanPlatForUser();
   syncCcProfileFromAccount();
   try{ if(window.AndroidTLS && AndroidTLS.keepAlive && currentUser && currentUser.role!=="display") AndroidTLS.keepAlive(); }catch(e){}
@@ -4117,6 +4264,7 @@ function renderDelivery(){
   const earlyBox=`<details class="card" style="margin:0 0 10px;" ${(_earlyOpen!==null?_earlyOpen:(_hn&&!_ea))?"open":""} ontoggle="if(event.isTrusted)_earlyOpen=this.open"><summary style="cursor:pointer;font-weight:800;">🔓 Izin masuk sebelum jadwal${_ea?` <span class="badge" style="background:#1E9E5A;color:#fff;">SEMUA DIIZINKAN</span>`:""}${_hn?` <span class="badge gold">Parkir Luar ${_hn}</span>`:""}</summary><div style="margin-top:8px;">${earlyCardHtml(data)}${holdCardHtml(data,false)}</div></details>`;
   return `
     ${jump}
+    ${ilsSeatBanner(data)}
     ${dfAlertHtml(data)}
     ${takeCardHtml(data)}
     ${csCardHtml(data)}
@@ -4214,6 +4362,7 @@ function notifyILSCreated(ccPlat, count){
 function createILS(ccNum, slots){
   /* sinyal putus / belum Online: perubahan antre di HP lalu terkirim ulang saat tersambung (bisa jadi ILS dobel) → tahan dulu */
   if(FBS.enabled && fbCurrentState()!=="online"){ alert("Sinyal belum Online (status: "+fbCurrentState()+"). ILS tidak dibuat supaya tidak dobel. Tunggu sampai pojok atas tertulis ● Online, lalu coba lagi."); return false; }
+  if(!ilsSeatEnsure()) return false;   /* maksimal 2 HP per akun yang boleh membuat ILS */
   const data = DB.get();
   const ccInfo = data.cc[ccNum];
   if(!ccInfo){ alert("Stall CC tidak valid."); return false; }
@@ -4238,19 +4387,119 @@ function createILS(ccNum, slots){
   notifyILSCreated(ccInfo.plat, units.length);
   return true;
 }
-/* Jaga-jaga balapan dua perangkat: unit bertanda ILS tapi ILS-nya tidak ada (ILS kedua ditolak server). Setelah >20 detik tetap yatim, tanda ILS dilepas supaya unit bisa dipilih lagi. */
+/* Jaga-jaga tautan unit ↔ ILS (diperluas 13 Nov 2026). Dijalankan HP Delivery/Admin yang Online, tiap 8 detik; bertindak hanya
+   kalau keadaannya tetap sama > 20 detik (bukan sesaat ketika ILS sedang dibuat):
+   • link  : unit ada di ILS aktif tapi tanda ILS-nya hilang / menunjuk ILS yang tidak ada → disambungkan lagi ke ILS aktif itu
+   • out   : unit sudah ikut Delout (ada di ILS selesai, diparkir sebelum ILS itu dibuat) tapi masih tertinggal di stall → dikeluarkan
+   • strip : tanda ILS yatim (ILS-nya tidak ada & unit tidak ada di ILS mana pun) → dilepas supaya unit bisa dipilih lagi */
 const _ilsOrph = {};
+function ilsLinkPlan(d){
+  const L=(d.ils||[]).filter(Boolean), ids=new Set(L.map(b=>b.id)), openIds=new Set(), openBy=new Map(), doneBy=new Map();
+  L.forEach(b=>{ const open=b.status==="open" && !b.outTs; if(open) openIds.add(b.id);
+    (b.units||[]).forEach(u=>{ const f=normVin(u&&u.frame); if(!f) return;
+      if(open) openBy.set(f,b);
+      else if(b.status==="done" && b.outTs){ const o=doneBy.get(f); if(!o || (b.ts||0)>(o.ts||0)) doneBy.set(f,b); } }); });
+  const todo=[];
+  Object.entries(d.units||{}).forEach(([k,u])=>{
+    if(!u) return; const f=normVin(u.frame); if(!f) return;
+    if(u.ilsId && openIds.has(u.ilsId)) return;                                   /* terikat ILS aktif: normal */
+    const ob=openBy.get(f);
+    if(ob && (u.ts||0)<=(ob.ts||0)+60000){ todo.push(["link",k,f,u.ilsId||0,ob.id]); return; }
+    const db=doneBy.get(f);
+    if(db && (u.ts||0)<=(db.ts||0)+60000){ todo.push(["out",k,f,u.ilsId||0,db.id]); return; }
+    if(u.ilsId && !ids.has(u.ilsId)) todo.push(["strip",k,f,u.ilsId,0]);
+  });
+  return todo;
+}
 function ilsOrphanTick(){
   try{
-    if(!currentUser || !["delivery","admin"].includes(currentUser.role)) return;
+    if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer()) return;
     if(FBS.enabled && fbCurrentState()!=="online") return;
-    const d = DB.get(), ids = new Set((d.ils||[]).filter(Boolean).map(b=>b.id)), now = Date.now(), bad = [];
-    Object.entries(d.units||{}).forEach(([k,u])=>{ if(u && u.ilsId && !ids.has(u.ilsId)){ const key=k+"|"+u.ilsId; if(!_ilsOrph[key]) _ilsOrph[key]=now; else if(now-_ilsOrph[key]>20000) bad.push([k,u.ilsId]); } });
-    Object.keys(_ilsOrph).forEach(key=>{ const [k,id]=key.split("|"); const u=(d.units||{})[k]; if(!(u && String(u.ilsId)===id && !ids.has(u.ilsId))) delete _ilsOrph[key]; });
-    if(bad.length){ DB.set(x=>{ bad.forEach(([k,id])=>{ const u=x.units[k]; if(u && u.ilsId===id) delete u.ilsId; }); }); bad.forEach(([k,id])=>delete _ilsOrph[k+"|"+id]); }
-  }catch(e){}
+    const now=Date.now(), todo=ilsLinkPlan(DB.get()), seen=new Set();
+    const due=todo.filter(t=>{ const key=t.join("|"); seen.add(key); if(!_ilsOrph[key]){ _ilsOrph[key]=now; return false; } return now-_ilsOrph[key]>20000; });
+    Object.keys(_ilsOrph).forEach(key=>{ if(!seen.has(key)) delete _ilsOrph[key]; });
+    if(!due.length) return;
+    DB.set(x=>{
+      const plan=new Set(ilsLinkPlan(x).map(t=>t.join("|")));   /* dicek ulang di data terbaru (server) */
+      due.forEach(t=>{ if(!plan.has(t.join("|"))) return; const [kind,k]=t, u=x.units[k]; if(!u) return;
+        if(kind==="link") u.ilsId=t[4];
+        else if(kind==="strip") delete u.ilsId;
+        else if(kind==="out"){ unitOutLogAdd(x,k,u,"delout"); if(isOffKey(k)) delete x.units[k]; else x.units[k]=null; } });
+    });
+    due.forEach(t=>delete _ilsOrph[t.join("|")]);
+  }catch(e){ console.warn("ilsOrphanTick", e); }
 }
 setInterval(ilsOrphanTick, 8000);
+/* ===== Kursi pembuat ILS (13 Nov 2026, permintaan Khairul) =====
+   ILS hanya bisa dibuat dari 2 HP per akun: 2 HP Delivery dan 2 HP Admin ("user"). HP ke-3 tidak bisa membuat ILS dan
+   diminta menonaktifkan salah satu HP yang aktif. Kursi diambil saat HP pertama kali membuat ILS, dilepas saat Logout,
+   atau kosong sendiri kalau HP itu 16 jam tidak dibuka. Mencegah ILS dobel dari banyak HP sekaligus. */
+const ILS_SEAT_MAX={delivery:2, admin:2}, ILS_SEAT_TTL=16*3600000, ILS_SEAT_REFRESH=2*3600000;
+function ilsDevId(){ try{ let v=localStorage.getItem("radar_devid"); if(!v){ v=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem("radar_devid",v); } return v; }catch(e){ return "x"; } }
+function ilsSeatRole(){ return (currentUser && !isViewer() && ILS_SEAT_MAX[currentUser.role]) ? currentUser.role : ""; }
+function ilsSeatRoleTxt(r){ return r==="admin" ? "Admin" : "Delivery"; }
+function ilsSeatsLive(d, role){
+  const o=(d||DB.get()).ilsSeats||{}, now=Date.now();
+  return Object.keys(o).map(k=>Object.assign({dev:k}, o[k]||{})).filter(x=>x.r===role && !x.off && now-(x.ts||0)<ILS_SEAT_TTL).sort((a,b)=>(a.since||0)-(b.since||0));
+}
+function ilsSeatMine(d){ const r=ilsSeatRole(); if(!r) return true; const me=ilsDevId(); return ilsSeatsLive(d,r).some(x=>x.dev===me); }
+/* ambil / segarkan kursi; kick = kursi HP lain yang dinonaktifkan. Hasil: true kalau HP ini memegang kursi */
+function ilsSeatClaim(kick){
+  const r=ilsSeatRole(); if(!r) return true;
+  const me=ilsDevId(), who=(currentUser&&(currentUser.name||currentUser.username))||"-"; let ok=false;
+  DB.set(d=>{
+    const o=d.ilsSeats=(d.ilsSeats&&typeof d.ilsSeats==="object")?d.ilsSeats:{}, now=Date.now();
+    Object.keys(o).forEach(k=>{ if(!o[k] || now-(o[k].ts||0)>=ILS_SEAT_TTL) delete o[k]; });
+    if(kick && kick!==me && o[kick] && o[kick].r===r && !o[kick].off) o[kick]={r, off:1, by:who, ts:now};   /* HP itu diberi tahu saat dibuka */
+    if(o[me] && o[me].r===r && !o[me].off){ o[me].ts=now; o[me].u=currentUser.username; o[me].n=who; ok=true; return; }
+    if(ilsSeatsLive(d,r).length < ILS_SEAT_MAX[r]){ o[me]={r, u:currentUser.username, n:who, p:(window.AndroidTLS?"APK":"Web"), since:now, ts:now}; ok=true; }
+  });
+  return ok;
+}
+function ilsSeatRelease(){ try{ const me=ilsDevId(), o=DB.get().ilsSeats||{}; if(o[me]) DB.set(d=>{ if(d.ilsSeats && d.ilsSeats[me]) delete d.ilsSeats[me]; }); }catch(e){} }
+/* dipanggil sebelum membuat ILS */
+function ilsSeatEnsure(){
+  const r=ilsSeatRole(); if(!r) return true;
+  const d=DB.get(), me=ilsDevId(), mine=ilsSeatsLive(d,r).find(x=>x.dev===me);
+  if(mine){ if(Date.now()-(mine.ts||0)>ILS_SEAT_REFRESH) ilsSeatClaim(); return true; }
+  if(ilsSeatsLive(d,r).length < ILS_SEAT_MAX[r]) return ilsSeatClaim();
+  ilsSeatModal(); return false;
+}
+function ilsSeatModal(){
+  const r=ilsSeatRole(); if(!r) return;
+  const L=ilsSeatsLive(DB.get(), r), hm=t=>new Date(t).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"});
+  showModal(`<h3 style="margin:0 0 6px;">⛔ ILS hanya dari ${ILS_SEAT_MAX[r]} HP ${ilsSeatRoleTxt(r)}</h3>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">Sudah ada ${L.length} HP ${ilsSeatRoleTxt(r)} yang aktif membuat ILS. Supaya HP ini bisa membuat ILS, <b>nonaktifkan salah satu</b> (mis. HP yang sudah tidak dipakai / ketinggalan login).</div>
+    ${L.map(x=>`<div class="kitem" style="display:flex;align-items:center;gap:10px;margin-top:8px;"><div style="flex:1;min-width:0;"><b>${escH(x.n||x.u||"-")}</b> <span style="font-size:11px;color:var(--text-dim);">(${escH(x.u||"-")} · ${escH(x.p||"")})</span><div style="font-size:11px;color:var(--text-dim);">aktif sejak ${hm(x.since||x.ts)} · terakhir ${hm(x.ts)}</div></div><button class="btn btn-sm" style="width:auto;" onclick="ilsSeatKick('${escH(x.dev)}')">Nonaktifkan</button></div>`).join("")}
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:12px;" onclick="closeModal()">Batal</button>`);
+}
+function ilsSeatKick(dev){
+  const L=ilsSeatsLive(DB.get(), ilsSeatRole()), x=L.find(y=>y.dev===dev); if(!x){ closeModal(); return; }
+  if(!confirm("Nonaktifkan HP "+(x.n||x.u||"-")+" dari pembuatan ILS?\n\nHP itu tidak bisa membuat ILS lagi sampai diaktifkan kembali.")) return;
+  closeModal();
+  if(ilsSeatClaim(dev)){ try{ sndToast("✅ HP ini sekarang aktif membuat ILS. Tekan Buat ILS lagi."); const t=document.getElementById("sndToast"); if(t){ t.style.background="#167A45"; clearTimeout(t._bg); t._bg=setTimeout(()=>{ t.style.background="#B91C1C"; },5200); } }catch(e){} }
+  render();
+}
+/* HP yang dinonaktifkan HP lain: beri tahu sekali lalu hapus tandanya */
+let _ilsSeatOffSeen=0;
+function ilsSeatTick(){
+  try{
+    const r=ilsSeatRole(); if(!r || !FBS.ready && FBS.enabled) return;
+    const me=ilsDevId(), x=(DB.get().ilsSeats||{})[me];
+    if(x && x.off && x.ts!==_ilsSeatOffSeen){ _ilsSeatOffSeen=x.ts;
+      alert("HP ini dinonaktifkan dari pembuatan ILS oleh "+(x.by||"-")+" ("+new Date(x.ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})+").\n\nILS sekarang dibuat dari HP lain. Kalau HP ini perlu membuat ILS lagi, tekan Buat ILS lalu pilih HP yang dinonaktifkan.");
+      DB.set(d=>{ if(d.ilsSeats && d.ilsSeats[me] && d.ilsSeats[me].off) delete d.ilsSeats[me]; }); render(); return; }
+    if(x && !x.off && x.r===r && Date.now()-(x.ts||0)>ILS_SEAT_REFRESH) ilsSeatClaim();   /* HP pemegang kursi yang tetap terbuka: kursinya tidak kedaluwarsa */
+  }catch(e){}
+}
+setInterval(ilsSeatTick, 30000);
+function ilsSeatBanner(data){
+  const r=ilsSeatRole(); if(!r) return "";
+  const L=ilsSeatsLive(data, r), me=ilsDevId();
+  if(L.some(x=>x.dev===me) || L.length<ILS_SEAT_MAX[r]) return "";
+  return `<div class="card" style="border:1.5px solid #E8B04B;background:#FFF8E6;"><div style="font-size:13px;"><b>⛔ HP ini belum aktif membuat ILS.</b> Maksimal ${ILS_SEAT_MAX[r]} HP ${ilsSeatRoleTxt(r)}; yang aktif: ${L.map(x=>escH(x.n||x.u||"-")).join(", ")}.</div>
+    <button class="btn btn-sm" style="width:auto;margin-top:8px;" onclick="ilsSeatModal()">Aktifkan HP ini…</button></div>`;
+}
 function generateILS(){
   if(createILS(parseInt(deliverySelCC), deliverySelUnits.slice())){
     deliverySelUnits = [];
@@ -4881,11 +5130,22 @@ function validasiSelesai(id){
   DB.set(d=>{ const x=d.ils.find(y=>y.id===id); if(x&&!x.valTs){ x.valTs=Date.now(); x.valDoneBy=sjWho(); } });
   try{ if(window.AndroidTLS && window.AndroidTLS.closeTls) window.AndroidTLS.closeTls(); }catch(e){}
 }
+/* Cari slot unit ILS x di stall (13 Nov 2026). Dulu hanya slot tercatat + tanda ilsId yang sama; kalau tanda ILS-nya hilang
+   (mis. dua HP membuat ILS bersamaan lalu tanda yatim dilepas), unit tertinggal di stall walau sudah Delout.
+   Sekarang: unit dengan No. Rangka yang sama juga dihitung milik ILS ini, asal tidak sedang terikat ILS aktif lain
+   dan diparkir sebelum ILS dibuat (unit yang diparkir ulang sesudahnya tidak disentuh). */
+function ilsUnitSlot(d, x, u){
+  const f=normVin(u&&u.frame); if(!f) return null;
+  const openOther=id=>(d.ils||[]).some(b=>b && b.id===id && b.id!==x.id && b.status==="open" && !b.outTs);
+  const ok=v=> v && normVin(v.frame)===f && (v.ilsId===x.id || !v.ilsId || !openOther(v.ilsId)) && (v.ilsId===x.id || (v.ts||0)<=(x.ts||0)+60000);
+  if(ok((d.units||{})[u.slot])) return u.slot;
+  return Object.keys(d.units||{}).find(k=>ok(d.units[k])) || null;
+}
 function loadingSelesai(id){
   const b=sjILS(id); if(!b||b.loadTs) return;
   if(!confirm("CC sudah selesai loading semua unit?\n\n• Slot unit di yard langsung dikosongkan (dispatcher boleh parkir unit baru)\n• CC tetap tercatat di stall sampai Delout (CC berangkat)")) return;
   DB.set(d=>{ const x=d.ils.find(y=>y.id===id); if(x&&!x.loadTs){ x.loadTs=Date.now(); x.loadBy=sjWho();
-    x.loadSnap=[]; (x.units||[]).forEach(u=>{ const cur=d.units[u.slot]; if(cur && cur.ilsId===id){ x.loadSnap.push({slot:u.slot, v:cur}); if(isOffKey(u.slot)) delete d.units[u.slot]; else d.units[u.slot]=null; } }); } });
+    x.loadSnap=[]; (x.units||[]).forEach(u=>{ const sk=ilsUnitSlot(d,x,u), cur=sk?d.units[sk]:null; if(cur){ x.loadSnap.push({slot:sk, v:cur}); if(isOffKey(sk)) delete d.units[sk]; else d.units[sk]=null; } }); } });
 }
 function delout(id){
   const b=sjILS(id); if(!b||b.status!=="open") return;
@@ -4896,9 +5156,9 @@ function delout(id){
   DB.set(d=>{
     const x=(d.ils||[]).find(y=>y.id===id); if(!x||x.status!=="open") return;
     const snap={units:[],cc:null,promoted:null};
-    x.units.forEach(u=>{ const cur=d.units[u.slot], own=!!(cur && cur.ilsId===id), ls=(x.loadSnap||[]).find(e=>e.slot===u.slot);
-      snap.units.push({slot:u.slot, v: own?cur:(ls?ls.v:null)});
-      if(own){ if(isOffKey(u.slot)) delete d.units[u.slot]; else d.units[u.slot]=null; } });   // slot yang sudah dikosongkan saat Loading Selesai (atau sudah diisi unit baru) tidak disentuh
+    x.units.forEach(u=>{ const sk=ilsUnitSlot(d,x,u), cur=sk?d.units[sk]:null, own=!!cur, ls=(x.loadSnap||[]).find(e=>e.slot===u.slot);
+      snap.units.push({slot:sk||u.slot, v: own?cur:(ls?ls.v:null)});
+      if(own){ if(isOffKey(sk)) delete d.units[sk]; else d.units[sk]=null; } });   // slot yang sudah dikosongkan saat Loading Selesai (atau sudah diisi unit baru) tidak disentuh
     x.status="done"; x.doneTs=Date.now(); x.outTs=x.doneTs; x.outBy=sjWho();
     if(currentUser && currentUser.role==="delivery" && !x.esjPic) x.esjPic=currentUser.username;
     const c=d.cc[x.ccNum];
@@ -5272,19 +5532,15 @@ function deliverySjHtml(data){ return sjBoxHtml("del","Surat Jalan","Semua LP. M
 function canUndoDelout(){ return !!(currentUser && (currentUser.role==="koordinator"||currentUser.role==="delivery"||currentUser.role==="admin")); }
 /* Lewat 7 hari: catatan PDF dilepas dari ILS (supaya data /radar tetap ringan).
    Arsip aktif → PDF-nya TETAP disimpan (dihapus bersama arsip setelah 31 hari). Arsip belum aktif → PDF dihapus seperti dulu. Belum tahu → tunda. */
+/* Hemat data tahap 2 (13 Nov 2026): dulu fungsi ini juga menghapus catatan "undo" & "sj" di beberapa ILS sekaligus tiap 10 menit,
+   dan setiap kali lebih dari satu ILS berubah, SELURUH daftar ILS dikirim ulang ke semua HP. Sekarang hanya PDF lama di radar_sj yang dihapus;
+   catatan undo dibuang bersama pemangkasan ILS yang dikumpulkan (syncUnitLog), dan ILS ber-surat jalan memang terhapus utuh saat lewat 7 hari. */
+const _sjPdfGone=new Set();
 async function sjCleanup(){
   try{
-    const d=DB.get(), now=Date.now(); if(isViewer()) return;
-    const old=(d.ils||[]).filter(b=>(b.sj && now-(b.outTs||b.sj.ts)>SJ_KEEP_MS) || (b.undo && b.outTs && now-b.outTs>DELOUT_UNDO_MS));
-    if(!old.length) return;
-    const exp=old.filter(b=>b.sj && now-(b.outTs||b.sj.ts)>SJ_KEEP_MS), drop=new Set();
-    if(exp.length){
-      if(MFA.state==="denied"){ exp.forEach(b=>{ drop.add(b.id); if(sjCanStore()){ try{ FBS.db.ref(SJ_PATH+"/"+b.id).remove(); }catch(e){} } }); }
-      else if(MFA.state==="ok"){ await mfaPush(exp.map(b=>b.id)); const H=mfaHashes(); exp.forEach(b=>{ if(H[b.id]) drop.add(b.id); }); }   /* hanya yang sudah pasti tercatat di arsip */
-      else mfaProbe();
-    }
-    if(!drop.size && !old.some(b=>b.undo && b.outTs && now-b.outTs>DELOUT_UNDO_MS)) return;
-    DB.set(dd=>{ (dd.ils||[]).forEach(b=>{ const n=Date.now(); if(b.sj && drop.has(b.id) && n-(b.outTs||b.sj.ts)>SJ_KEEP_MS) delete b.sj; if(b.undo && b.outTs && n-b.outTs>DELOUT_UNDO_MS) delete b.undo; }); });
+    if(isViewer() || !FBS.db || !sjCanStore()) return;
+    const d=DB.get(), now=Date.now();
+    (d.ils||[]).forEach(b=>{ if(b && b.sj && now-(b.outTs||b.sj.ts||0)>SJ_KEEP_MS && !_sjPdfGone.has(b.id)){ _sjPdfGone.add(b.id); try{ FBS.db.ref(SJ_PATH+"/"+b.id).remove(); }catch(e){} } });
   }catch(e){}
 }
 setInterval(sjCleanup, 600000); setTimeout(sjCleanup, 9000);
@@ -6235,7 +6491,7 @@ function unitOutLogHtml(){
   const L=xlArr(DB.get().unitOutLog).slice().sort((a,b)=>b.ts-a.ts).slice(0,50);
   return `<div class="card"><h3>🔧 Riwayat unit dikeluarkan (7 hari)</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Keluarkan unit dari stall / parkir luar wajib password akun yang login.</div>
-    ${L.length?`<table><thead><tr><th>Waktu</th><th>No. Rangka</th><th>Dari</th><th>Oleh</th></tr></thead><tbody>${L.map(x=>`<tr><td style="white-space:nowrap;">${xlTime(x.ts)}</td><td class="mono">${xlEsc(x.frame)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.model)}</span></td><td>${x.kind==="luar"?"Parkir luar":"Stall "+xlEsc(x.slot)}</td><td>${xlEsc(x.by)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.role)}</span></td></tr>`).join("")}</tbody></table>`:`<div style="font-size:12px;color:var(--text-dim);">Belum ada.</div>`}</div>`;
+    ${L.length?`<table><thead><tr><th>Waktu</th><th>No. Rangka</th><th>Dari</th><th>Oleh</th></tr></thead><tbody>${L.map(x=>`<tr><td style="white-space:nowrap;">${xlTime(x.ts)}</td><td class="mono">${xlEsc(x.frame)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.model)}</span></td><td>${x.kind==="luar"?"Parkir luar":"Stall "+xlEsc(x.slot)}${x.kind==="delout"?`<br><span style="font-size:10px;color:var(--text-dim);">otomatis: sudah Delout</span>`:""}</td><td>${xlEsc(x.by)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.role)}</span></td></tr>`).join("")}</tbody></table>`:`<div style="font-size:12px;color:var(--text-dim);">Belum ada.</div>`}</div>`;
 }
 function wipeLogHtml(){
   const L=wipeLogList();
@@ -6338,6 +6594,7 @@ function esjPicFor(b){
 }
 function esjTgl(t){ const m=String(t||"").match(/(\d{1,2})-(\d{1,2})-(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/); if(!m) return 0; const d=new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5],+(m[6]||0)); return isNaN(d)?0:d.getTime(); }
 async function esjCollect(id, picUser){
+  await sigsEnsure();   /* TTD diambil saat dibutuhkan (tidak lagi ikut data utama) */
   const data=DB.get(), b=sjILSAny(id); if(!b) throw new Error("ILS tidak ditemukan");
   let P={full:{hdr:{},u:{}}, base:{sjkb:"",cab:{}}}, parseNote="";
   if(b.sj){ try{ const v=await sjFetch(id); P=await esjParsePdf(v.b64); }catch(e){ parseNote="PDF surat jalan TLS belum bisa dibaca ("+(e&&e.message||e)+"). Data diambil dari RADAR."; } }
@@ -6505,7 +6762,9 @@ function esjSaveCfg(){
   DB.set(d=>{ d.esjCfg=Object.assign({}, d.esjCfg||{}, {pengirim:g("esjPengirim").trim(), pembuat:g("esjPembuat").trim(), validMin:vm}); });
   alert("Pengaturan e-SJKB tersimpan.");
 }
+let _sigsUiT=0;
 function renderAdminEsj(){
+  if(FBS.enabled && Date.now()-_sigsUiT>60000){ _sigsUiT=Date.now(); sigsEnsure().then(()=>{ try{ if(activeTab==="admin") render(); }catch(e){} }); }   /* menu TTD: ambil TTD terbaru sekali */
   const data=DB.get(), s=data.sigs||{}, lib=esjLib(), cfg=esjCfg(), mps=esjPicUsers();
   return `<div class="card"><h3>🧾 Master e-SJKB</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Dipakai untuk membuat e-SJKB (format E-SJKB Converter) dari PDF surat jalan TLS. Pasang sekali dengan <b>paket TTD</b> (.json), lalu cocokkan PIC Delivery dengan user Delivery.</div>
@@ -7049,6 +7308,7 @@ function keluarkanCC(n){
   if(!canKeluarkanCC()){ alert("Hanya Delivery yang boleh memulangkan CC."); return; }
   const d0=DB.get(), c=d0.cc[n]; if(!c){ alert("Stall "+ccLbl(n)+" sudah kosong."); return; }
   const ils=(d0.ils||[]).find(b=>b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat));
+  if(ils && ils.loadTs && !confirm(`CC ${c.plat} sudah LOADING SELESAI (ILS #${ils.id}, ${(ils.units||[]).length} unit).\n\nKalau CC sudah berangkat membawa unit, pakai tombol DELOUT, bukan Keluarkan CC, supaya unit hilang dari stall dan surat jalan / manifest tersimpan.\n\nTetap Keluarkan CC? ILS akan DIHAPUS dan ${(ils.units||[]).length} unit DIKEMBALIKAN ke stall.`)) return;
   const q=(d0.queue||[])[0];
   const why=prompt(`Keluarkan CC ${c.plat} dari Stall ${ccLbl(n)}?\n`+(ils?`• ILS #${ils.id} ikut dibatalkan, unit kembali ke stall\n`:"")+`• Stall ${ccLbl(n)} dikosongkan`+(q?`\n• CC berikutnya naik: ${q.plat}`:"")+`\n\nDikeluarkan oleh: ${(currentUser&&currentUser.name)||"-"} (otomatis dari akun login)\n\nKetik alasan (wajib, mis. tidak lolos verifikasi / unit NG):`, "");
   if(why===null) return;
@@ -7246,6 +7506,7 @@ function miniCarDiagram(locX, locY){
   </div>`;
 }
 function defectLocationThumb(x){
+  if(!x.diagramSnapshot && x.diagRef) return fotoLazy(x.diagRef, "width:64px;height:56px;object-fit:cover;border-radius:8px;flex:none;cursor:pointer;");
   if(x.diagramSnapshot){
     return `<img src="${x.diagramSnapshot}" data-photo="${x.diagramSnapshot}" style="width:64px;height:56px;object-fit:cover;border-radius:8px;flex:none;cursor:pointer;" onclick="zoomDefectPhoto(this)">`;
   }
@@ -8126,6 +8387,8 @@ function renderDccpUpload(){
    status: parked → ils (ILS dibuat) → sent (ILS selesai) | removed (dikeluarkan)
 ====================================================================== */
 const RETAIN_MS = 26*3600*1000;   // lama simpan data unit terkirim (jam)
+const ILS_PRUNE_N=40, ILS_PRUNE_LAG=6*3600000;
+function ilsExpAt(b){ const t=b.doneTs||b.ts||0; return Math.max(t+RETAIN_MS, b.sj ? (b.outTs||t)+SJ_KEEP_MS : 0); }   /* sama dengan aturan lama: 26 jam, atau 7 hari kalau ada surat jalan */
 function syncUnitLog(d){
   try{ dfSync(d); }catch(e){}
   try{ pdiOpenSync(d); }catch(e){}
@@ -8166,7 +8429,14 @@ function syncUnitLog(d){
   d.unitLog = log.filter(e=> !((e.status==="sent" && (e.sentTs||e.ilsTs||0) < cut) || (e.status==="removed" && (e.removedTs||0) < cut)))
     .filter(e=> present.has(e) || !clr || Math.max(e.parkedTs||0,e.ilsTs||0,e.sentTs||0,e.removedTs||0) > clr);
   if(clr) d.ils = (d.ils||[]).filter(b=> !(b.status==="done" && (b.doneTs||b.ts||0) <= clr));
-  d.ils = (d.ils||[]).filter(b=> !(b.status==="done" && (b.doneTs||b.ts||0) < cut && !(b.sj && now-(b.outTs||b.doneTs||b.ts||0) < SJ_KEEP_MS)));
+  /* Hemat data tahap 2: ILS lama tidak lagi dihapus satu per satu begitu lewat masa simpan (tiap hapus = seluruh daftar ILS dikirim ulang ke semua HP).
+     Dikumpulkan: dipangkas sekaligus kalau sudah ≥ ILS_PRUNE_N yang lewat masa simpan, atau yang paling lama sudah lewat ILS_PRUNE_LAG. */
+  /* ILS yang sudah lewat masa batal Delout (5 menit) juga dirampingkan sekaligus: salinan unit untuk "batal" (undo / loadSnap) dibuang,
+     karena hanya dipakai dalam 5 menit itu. Satu ILS selesai jadi ±1,5 KB, bukan ±3–4 KB. HP mode hemat (daftar ILS terbaru saja) tidak memangkas. */
+  if(!fbLiteWin("ils")){ const L=d.ils||[], old=L.filter(b=>b && b.status==="done" && now>ilsExpAt(b)), fat=L.filter(b=>b && b.outTs && now-b.outTs>DELOUT_UNDO_MS && (b.undo || b.loadSnap));
+    if((old.length && (old.length>=ILS_PRUNE_N || now-Math.min.apply(null, old.map(ilsExpAt))>=ILS_PRUNE_LAG)) || fat.length>=ILS_PRUNE_N){
+      const o=new Set(old); d.ils=L.filter(b=>!o.has(b));
+      d.ils.forEach(b=>{ if(b && b.outTs && now-b.outTs>DELOUT_UNDO_MS){ delete b.undo; delete b.loadSnap; } }); } }
 }
 
 /* ======================================================================
@@ -10412,7 +10682,7 @@ function renderDefectReport(){
           </div>
           <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
             ${defectLocationThumb(x)}
-            ${x.photo?`<img src="${x.photo}" data-photo="${x.photo}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex:none;cursor:pointer;" onclick="zoomDefectPhoto(this)">`:''}
+            ${x.photo?`<img src="${x.photo}" data-photo="${x.photo}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex:none;cursor:pointer;" onclick="zoomDefectPhoto(this)">`:(x.photoRef?fotoLazy(x.photoRef,"width:52px;height:52px;object-fit:cover;border-radius:8px;flex:none;cursor:pointer;"):'')}
           </div>
         </div>
         <button class="btn btn-danger btn-sm" style="margin-top:10px;" onclick="deleteDefect(${x.id})">🗑 Hapus Laporan</button>
@@ -10469,7 +10739,7 @@ function renderDefectReport(){
   `;
 }
 
-function saveDefectReport(){
+async function saveDefectReport(){
   const vin = document.getElementById("defectVin").value.trim().toUpperCase();
   const dtype = document.getElementById("defectType").value;
   const { part, side, pos, note, locX, locY, subLoc, diagramSnapshot } = defectFormState;
@@ -10478,13 +10748,15 @@ function saveDefectReport(){
   if(!part){ alert("Ketuk lokasi defect pada gambar mobil."); return; }
   const data = DB.get();
   const model = detectModel(vin, data.models) || "-";
+  /* Hemat data: foto & gambar lokasi disimpan terpisah di radar_foto (diambil saat dilihat), bukan di daftar defect yang ikut terunduh semua HP */
+  const id = Date.now(), img = await dfImgStore(id, defectPhotoDataUrl, diagramSnapshot);
   DB.set(d=>{
     if(!d.defects) d.defects = [];
-    d.defects.push(dfLink(d, {
-      id: Date.now(), frame: vin, model, defectType: dtype, part, side, position: pos, note, subLoc,
-      locX, locY, diagramSnapshot, photo: defectPhotoDataUrl, reportedBy: currentUser.name, reportedUser: currentUser.username, src: currentUser.role, ts: Date.now(),
+    d.defects.push(dfLink(d, Object.assign({
+      id, frame: vin, model, defectType: dtype, part, side, position: pos, note, subLoc,
+      locX, locY, reportedBy: currentUser.name, reportedUser: currentUser.username, src: currentUser.role, ts: Date.now(),
       status: "open", confirmedBy: null, confirmedTs: null
-    }));
+    }, img)));
   });
   defectPhotoDataUrl = null;
   defectFormState = { vin:"", type:"", part:"", side:"", pos:"", note:"", locX:null, locY:null, subLoc:"", diagramSnapshot:null };
@@ -10493,12 +10765,58 @@ function saveDefectReport(){
 
 function deleteDefect(id){
   if(!confirm("Hapus laporan defect ini secara permanen? (bukan konfirmasi, datanya akan hilang juga dari laporan)")) return;
+  const x=(DB.get().defects||[]).find(y=>y && y.id===id);
   DB.set(d=>{ d.defects = (d.defects||[]).filter(x=>x.id!==id); });
+  try{ if(x && FBS.enabled && FBS.db) [x.photoRef, x.diagRef].forEach(r=>{ if(r) FBS.db.ref(FOTO_PATH+"/"+r).remove(); }); }catch(e){}
 }
 
 function zoomDefectPhoto(el){
+  if(!el.dataset.photo) return;   /* gambar belum selesai diambil */
   showModal(`<h3>📷 Foto Defect</h3><img src="${el.dataset.photo}" style="width:100%; border-radius:10px;">`);
 }
+/* ===== Gambar defect di radar_foto (13 Nov 2026) =====
+   Dulu foto + gambar lokasi (data URL) ditanam di daftar defect → ±300 KB ikut terunduh setiap HP setiap RADAR dibuka.
+   Sekarang disimpan di radar_foto/<ref> dan diambil hanya saat gambarnya tampil di layar (sekali per HP per sesi). */
+const _fotoMem=new Map(), _fotoWait=new Map();
+function fotoUrl(v){ if(!v) return ""; if(typeof v==="string") return v; return v.b64 ? "data:"+(v.m||"image/jpeg")+";base64,"+v.b64 : (v.d||v.img||""); }
+function fotoGet(ref){
+  if(!ref) return Promise.resolve("");
+  if(_fotoMem.has(ref)) return Promise.resolve(_fotoMem.get(ref));
+  if(_fotoWait.has(ref)) return _fotoWait.get(ref);
+  if(!(FBS.enabled && FBS.db)) return Promise.resolve("");
+  const p=FBS.db.ref(FOTO_PATH+"/"+ref).once("value").then(sn=>{ const u=fotoUrl(sn.val()); if(u){ _fotoMem.set(ref,u); if(_fotoMem.size>60) _fotoMem.delete(_fotoMem.keys().next().value); } return u; }).catch(()=>"").finally(()=>_fotoWait.delete(ref));
+  _fotoWait.set(ref,p); return p;
+}
+function fotoLazy(ref, style){ return `<img class="fzl" data-fref="${escH(ref)}" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" style="background:#E3E7EE;${style||""}" onclick="zoomDefectPhoto(this)">`; }
+function fotoHydrate(){
+  document.querySelectorAll("img.fzl:not([data-ok])").forEach(el=>{ el.setAttribute("data-ok","0"); const ref=el.getAttribute("data-fref");
+    fotoGet(ref).then(u=>{ if(u){ el.src=u; el.dataset.photo=u; el.style.background=""; el.setAttribute("data-ok","1"); } }); });
+}
+try{ let _fzT=null; new MutationObserver(()=>{ if(_fzT) return; _fzT=setTimeout(()=>{ _fzT=null; fotoHydrate(); }, 150); }).observe(document.documentElement, {childList:true, subtree:true}); }catch(e){}
+/* simpan foto & gambar lokasi ke radar_foto; hasil: {photoRef, diagRef} — atau data URL lama kalau server tidak bisa */
+function dfImgB64(u){ const m=/^data:([^;]+);base64,(.*)$/.exec(String(u||"")); return m ? {m:m[1], b64:m[2]} : null; }
+async function dfImgStore(id, photo, diag){
+  const out={};
+  const put=async(ref, u, key, refKey)=>{ const b=dfImgB64(u); if(!b) return;
+    if(FBS.enabled && FBS.db && FBS.authed){ try{ await Promise.race([FBS.db.ref(FOTO_PATH+"/"+ref).set({b64:b.b64, m:b.m, ts:id}), new Promise((_,j)=>setTimeout(()=>j(new Error("timeout")),20000))]); out[refKey]=ref; _fotoMem.set(ref,u); return; }catch(e){ console.warn("foto defect: simpan terpisah gagal", e); } }
+    out[key]=u; };
+  await put("dp"+id, photo, "photo", "photoRef");
+  await put("dd"+id, diag, "diagramSnapshot", "diagRef");
+  return out;
+}
+/* data lama: gambar yang masih tertanam dipindah sekali oleh HP Delivery / Admin */
+let _dfMigT=0;
+async function dfImgMigrateCheck(){ try{
+  if(!currentUser || !["admin","delivery"].includes(currentUser.role) || isViewer() || !FBS.authed || Date.now()-_dfMigT<10*60000) return;
+  const L=(DB.get().defects||[]).filter(x=>x && x.id && (dfImgB64(x.photo) || dfImgB64(x.diagramSnapshot))).slice(0,15); if(!L.length) return;
+  _dfMigT=Date.now();
+  const done=[];
+  for(const x of L){ const r=await dfImgStore(x.id, x.photo, x.diagramSnapshot); if((!x.photo || r.photoRef) && (!x.diagramSnapshot || r.diagRef)) done.push({id:x.id, ph:x.photo||"", dg:x.diagramSnapshot||"", r}); }
+  if(!done.length) return;
+  DB.set(d=>{ (d.defects||[]).forEach(y=>{ const t=y && done.find(z=>z.id===y.id); if(!t || (y.photo||"")!==t.ph || (y.diagramSnapshot||"")!==t.dg) return;
+    delete y.photo; delete y.diagramSnapshot; if(t.r.photoRef) y.photoRef=t.r.photoRef; if(t.r.diagRef) y.diagRef=t.r.diagRef; }); });
+  _dfMigT=0;   /* masih ada sisa? lanjut di putaran berikutnya */
+}catch(e){ console.warn("pindah gambar defect", e); } }
 
 function renderConfirmDefect(){
   const data = DB.get(), L=dfPending(data).sort((a,b)=>(a.ts||0)-(b.ts||0));
@@ -10591,7 +10909,7 @@ function dfAckHtml(data){
 async function dfPhotoGet(x){
   if(x.photo) return x.photo;
   if(!x.photoRef || !(FBS.enabled && FBS.db)) return "";
-  try{ const v=(await FBS.db.ref(FOTO_PATH+"/"+x.photoRef).once("value")).val(); return v&&v.b64 ? "data:image/jpeg;base64,"+v.b64 : ""; }catch(e){ return ""; }
+  try{ return await fotoGet(x.photoRef); }catch(e){ return ""; }
 }
 /* ---------- Driver CC: lapor defect dari unit di ILS truknya ---------- */
 let _dfCc={foto:null};
@@ -10692,6 +11010,7 @@ function dfDecideSave(id, k){
 function dfFixed(id){ if(!canKeluarkanCC()) return; if(!confirm("Tandai unit sudah diperbaiki dan boleh dikirim lagi?")) return; DB.set(d=>{ const x=(d.defects||[]).find(y=>y.id===id); if(x){ x.fixedTs=Date.now(); x.fixedBy=currentUser.name||""; } }); }
 /* ---------- Surat PDF ---------- */
 async function dfDraw(x){
+  await sigsEnsure();
   const data=DB.get(), K=5, W=210*K, H=297*K, c=document.createElement("canvas"); c.width=W; c.height=H;
   const g=c.getContext("2d"), mm=v=>v*K;
   g.fillStyle="#fff"; g.fillRect(0,0,W,H); g.strokeStyle="#000"; g.textBaseline="alphabetic";
@@ -10800,7 +11119,7 @@ setInterval(()=>{ try{
   if(!currentUser || isViewer() || (FBS.enabled && fbCurrentState()!=="online")) return;
   const old=((DB.get().defects)||[]).filter(x=>x && Date.now()-(x.ts||0)>=DF_KEEP_MS); if(!old.length) return;
   const ids=new Set(old.map(x=>x.id)); DB.set(d=>{ d.defects=(d.defects||[]).filter(x=>!(x && ids.has(x.id))); });
-  old.forEach(x=>{ if(x.photoRef){ try{ FBS.db.ref(FOTO_PATH+"/"+x.photoRef).remove(); }catch(e){} } });
+  old.forEach(x=>{ [x.photoRef, x.diagRef].forEach(r=>{ if(r){ try{ FBS.db.ref(FOTO_PATH+"/"+r).remove(); }catch(e){} } }); });
 }catch(e){} }, 600000);
 
 
