@@ -1635,7 +1635,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 15.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="17 Nov 2026 16.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4564,9 +4564,32 @@ function notifyILSCreated(ccPlat, count){
     try{ new Notification('🧾 ILS Baru Dibuat', { body: `${count} unit siap loading ke CC ${ccPlat}` }); }catch(e){}
   }
 }
+/* 17 Nov 2026: HP tersambung tapi data / sesi server belum siap (status "connecting", sering hanya beberapa detik):
+   jangan langsung ditolak — tunggu otomatis sampai Online (maks. 1 menit), lalu ILS dibuat sendiri. */
+function ilsFlags(){ return "a"+(FBS.authed?1:0)+" k"+(FBS.conn?1:0)+" r"+(FBS.ready?1:0)+" "+(_fbMode||"-"); }
+function miniToast(msg, ms){ try{ let t=document.getElementById("miniToast"); if(!t){ t=document.createElement("div"); t.id="miniToast"; document.body.appendChild(t); }
+  t.style.cssText="position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:199500;background:#16213E;color:#fff;padding:12px 18px;border-radius:12px;font:600 14px Inter,Arial,sans-serif;max-width:88vw;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25);";
+  t.textContent=msg; clearTimeout(t._h); t._h=setTimeout(()=>{ try{ t.remove(); }catch(e){} }, ms||4000); }catch(e){} }
+let _ilsWait=null;
+function ilsWaitOnline(retry){
+  if(_ilsWait){ miniToast("⏳ Masih menunggu data server siap…"); return; }
+  if(!FBS.authed){ try{ fbReauth(); }catch(e){} }
+  const t0=Date.now(); _ilsWait={retry};
+  miniToast("⏳ Menunggu data server siap… ILS dibuat otomatis.", 60000);
+  const iv=setInterval(()=>{
+    if(fbCurrentState()==="online"){ clearInterval(iv); const f=_ilsWait&&_ilsWait.retry; _ilsWait=null; try{ const t=document.getElementById("miniToast"); if(t) t.remove(); }catch(e){} if(f) f(); return; }
+    if(Date.now()-t0>60000){ clearInterval(iv); _ilsWait=null; try{ const t=document.getElementById("miniToast"); if(t) t.remove(); }catch(e){}
+      alert("Data server belum siap setelah 1 menit (status: "+fbCurrentState()+" · "+ilsFlags()+"). ILS tidak dibuat supaya tidak dobel. Cek sinyal, lalu coba lagi. Kalau terus begini, kirim foto pesan ini."); }
+  }, 500);
+}
+let _ilsRetry=null;
 function createILS(ccNum, slots){
   /* sinyal putus / belum Online: perubahan antre di HP lalu terkirim ulang saat tersambung (bisa jadi ILS dobel) → tahan dulu */
-  if(FBS.enabled && fbCurrentState()!=="online"){ alert("Sinyal belum Online (status: "+fbCurrentState()+"). ILS tidak dibuat supaya tidak dobel. Tunggu sampai pojok atas tertulis ● Online, lalu coba lagi."); return false; }
+  if(FBS.enabled && fbCurrentState()!=="online"){
+    const rt=_ilsRetry; _ilsRetry=null;
+    if(FBS.conn && rt){ ilsWaitOnline(rt); return false; }   /* tersambung, data/sesi sedang disiapkan: tunggu lalu buat otomatis */
+    alert("Sinyal belum Online (status: "+fbCurrentState()+" · "+ilsFlags()+"). ILS tidak dibuat supaya tidak dobel. Tunggu sampai pojok atas tertulis ● Online, lalu coba lagi."); return false; }
+  _ilsRetry=null;
   if(!ilsSeatEnsure()) return false;   /* maksimal 2 HP per akun yang boleh membuat ILS */
   const data = DB.get();
   const ccInfo = data.cc[ccNum];
@@ -4717,6 +4740,7 @@ function ilsSeatBanner(data){
     <button class="btn btn-sm" style="width:auto;margin-top:8px;" onclick="ilsSeatModal()">Aktifkan HP ini…</button></div>`;
 }
 function generateILS(){
+  _ilsRetry=()=>generateILS();
   if(createILS(parseInt(deliverySelCC), deliverySelUnits.slice())){
     deliverySelUnits = [];
     deliverySelCC = null;
@@ -4796,18 +4820,20 @@ function draftGoMix(n){
   draftSaveDrvInput(n);
   const d=DB.get(), p=ccProposals(d).find(x=>x.n===n); if(!p) return;
   const units=draftMixUnits(d,p); if(!units.length){ alert("Belum ada unit yang dipilih."); return; }
+  _ilsRetry=()=>draftGoMix(n);
   if(createILS(n, units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); }
 }
 function draftSetDrv(n, v){ const c=DB.get().cc[n]; if(c) setDrvCode(c.plat, v, n); }
 function draftSaveDrvInput(n){ const el=document.getElementById("drvIn"+n); if(el) draftSetDrv(n, el.value); }
 function draftSetStall(n, v){ if(v) draftStall[n]=v; else delete draftStall[n]; render(); }
-function draftGo(n){ draftSaveDrvInput(n); const p = ccProposals(DB.get()).find(x=>x.n===n); if(p && p.ready && createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); } }
+function draftGo(n){ draftSaveDrvInput(n); const p = ccProposals(DB.get()).find(x=>x.n===n); _ilsRetry=()=>draftGo(n); if(p && p.ready && createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); } }
 function draftWait(n){ DB.set(d=>{ if(d.cc[n]) d.cc[n].waiting = true; }); }
 function draftSendRest(n, noConfirm){
   draftSaveDrvInput(n);
   const p = ccProposals(DB.get()).find(x=>x.n===n);
   if(!p || !p.units.length){ alert("Tidak ada unit tersisa untuk jenis ini."); return; }
   if(!noConfirm && !confirm(`Kirim ${p.units.length} unit dari stall ${p.stall} (kurang dari ${CONFIG.SLOTS_PER_STALL}) ke CC ${p.plat}?`)) return;
+  _ilsRetry=()=>draftSendRest(n, true);
   if(createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); }
 }
 function draftDismiss(n, on){ DB.set(d=>{ if(d.cc[n]) d.cc[n].dismissed = !!on; }); }
