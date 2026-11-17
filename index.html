@@ -1127,6 +1127,22 @@ function normalizeData(raw){
   d.units = d.units || {};
   for(const k of Object.keys(seed.units)){ if(d.units[k]===undefined) d.units[k] = null; }
   (d.ils||[]).forEach(b=>{ if(b && !Array.isArray(b.units)) b.units = b.units ? Object.values(b.units) : []; if(b && b.units.some(u=>!u)) b.units=b.units.filter(Boolean); });
+  /* 17 Nov 18.40: baris rusak (tipe salah / kolom wajib kosong) dirapikan di pintu masuk data, supaya satu baris tidak membuat layar / penyimpanan gagal */
+  try{
+    const S=v=>(v==null?"":String(v));
+    d.dccpSchedule=d.dccpSchedule.filter(r=>r && typeof r==="object").map(r=>{
+      if(!Array.isArray(r.trips)) r.trips = (r.trips && typeof r.trips==="object") ? Object.values(r.trips) : (typeof r.trips==="string" && r.trips ? [r.trips] : (r.trips==null?r.trips:[]));
+      if(Array.isArray(r.trips) && r.trips.some(t=>typeof t!=="string")) r.trips=r.trips.filter(t=>t!=null).map(String);
+      ["police","lp","driver","schedTime","drvCode","model","dest","note"].forEach(k=>{ if(r[k]!=null && typeof r[k]!=="string") r[k]=S(r[k]); });
+      return r; });
+    d.lpList=d.lpList.filter(x=>x!=null && x!=="").map(S);
+    ["queue","hold"].forEach(k=>{ if(Array.isArray(d[k])) d[k]=d[k].filter(q=>q && typeof q==="object" && q.plat); });
+    Object.keys(d.cc||{}).forEach(n=>{ const c=d.cc[n]; if(c && (typeof c!=="object" || !c.plat)) d.cc[n]=null; });
+    d.users=d.users.filter(u=>u && typeof u==="object" && u.username);
+    d.ils.forEach(b=>{ if(b && b.ccPlat!=null && typeof b.ccPlat!=="string") b.ccPlat=S(b.ccPlat); if(b && b.ccPlat==null) b.ccPlat=""; });
+    Object.keys(d.units||{}).forEach(k=>{ const u=d.units[k]; if(u && typeof u==="object"){ if(typeof u.frame!=="string") u.frame=S(u.frame); if(typeof u.model!=="string") u.model=S(u.model); } else if(u!=null && typeof u!=="object") d.units[k]=null; });
+    if(Array.isArray(d.ccShiftPlat)) d.ccShiftPlat=d.ccShiftPlat.filter(x=>x && x.u && x.plat);
+  }catch(e){ try{ console.warn("normalizeData rapikan", e); }catch(_){} }
   if(d.unitLog && !Array.isArray(d.unitLog) && typeof d.unitLog==="object") d.unitLog=Object.values(d.unitLog);
   if(Array.isArray(d.unitLog) && d.unitLog.some(e=>!e || typeof e!=="object")) d.unitLog=d.unitLog.filter(e=>e && typeof e==="object");
   return d;
@@ -1417,6 +1433,7 @@ function fbMeterCardHtml(){
     ${meter}
     <details style="margin-top:10px;"><summary style="font-size:12px;cursor:pointer;">Ukuran data utama di HP ini: <b>${fbFmtB(total)}</b> (diunduh penuh tiap RADAR dibuka)</summary>
       <table style="width:100%;font-size:12px;margin-top:6px;">${top}</table></details>
+    ${errDevCardHtml()}
     ${ilsIdxCardHtml()}
     ${koSeatsCardHtml()}
   </div>`;
@@ -1431,6 +1448,17 @@ function koSeatsCardHtml(){
     ${L.length?`<table style="width:100%;font-size:12px;"><tr><th style="text-align:left;">LP</th><th style="text-align:left;">Dipakai</th><th style="text-align:left;">Sejak</th><th></th></tr>${L.map(x=>`<tr><td><b>${escH(x.k)}</b></td><td>${escH(x.n||x.u||"-")}${x.p?` <span style="color:var(--text-dim);">(${escH(x.p)})</span>`:""}</td><td>${hm(x.ts)}</td><td>${x.sh===sid?`<span style="color:#17803d;font-weight:700;">shift ini</span>`:`<span style="color:var(--text-dim);">shift lalu</span>`}</td></tr>`).join("")}</table>`
       :`<div style="color:var(--text-dim);">Belum ada.</div>`}</div>`;
 }
+/* Error terakhir per HP (dikirim otomatis oleh errReport) */
+function errDevCardHtml(){
+  const o=(DB.get().errDev)||{}, now=Date.now(), hm=t=>t?new Date(t).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):"-";
+  const L=Object.keys(o).map(k=>Object.assign({k}, o[k]||{})).filter(x=>x.t && now-x.t<3*24*3600000).sort((a,b)=>b.t-a.t).slice(0,30);
+  return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;">
+    <div style="font-weight:800;margin-bottom:4px;">⚠ Error terakhir per HP (3 hari)${L.length?` · ${L.length} HP`:""}</div>
+    ${L.length?`<div style="max-height:260px;overflow:auto;">${L.map(x=>`<div style="padding:6px 0;border-top:1px dashed var(--border);"><b>${escH(hm(x.t))}</b> · ${escH(x.u||"-")} (${escH(x.r||"-")}${x.apk?" · APK":""}) · ${escH(x.b||"")} · tab ${escH(x.tab||"-")} · ${escH(x.st||"")}<br><span style="color:#B91C1C;">${escH(x.w||"")}: ${escH(x.m||"")}</span>${x.s?`<br><span style="color:var(--text-dim);font-size:11px;">${escH(x.s)}</span>`:""} <span style="color:var(--text-dim);">(${+x.n||1}x)</span></div>`).join("")}</div>
+      <button type="button" class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="errDevClear()">🧹 Kosongkan daftar</button>`
+      :`<div style="color:var(--text-dim);">Belum ada error tercatat. 👍</div>`}</div>`;
+}
+function errDevClear(){ if(!confirm("Kosongkan daftar error semua HP?")) return; try{ FBS.db.ref(FB_ROOT+"/errDev").remove(); }catch(e){} try{ DB.set(d=>{ delete d.errDev; }); }catch(e){} }
 /* Status index ILS per plat (dibutuhkan HP Driver supaya hanya mengunduh ILS miliknya) */
 function ilsIdxCardHtml(){
   const st=_fbIlsIdx===true?`<b style="color:#17803d;">✔ terpasang</b> — HP Driver hanya mengunduh ILS platnya sendiri.`:_fbIlsIdx===false?`<b style="color:#b91c1c;">✖ belum terpasang</b> — HP Driver masih mengunduh 60 ILS terakhir semua CC.`:`<b>belum dicek</b>`;
@@ -1461,9 +1489,9 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
 const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg"];
 const FB_LITE={
-  cc:         { skip:["manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
-  dispatcher: { skip:["manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
-  pdi:        { skip:["manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
+  cc:         { skip:["errDev","manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
+  dispatcher: { skip:["errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
+  pdi:        { skip:["errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
 let _fbMode="", _fbRefs=[], _fbRaw={}, _fbGot=new Set(), _fbNeed=0, _fbWinKeys={}, _fbGen=0, _fbLiteOff=false;
 let _ilsNewId=0;
 let _fbFullGot=0, _fbRestTs=0, _fbRestBusy=false, _fbReAtt=[], _fbRestOk=0;   /* pengaman mode penuh (lihat fbFullWatch) */
@@ -1515,16 +1543,39 @@ function fbDetachMain(){ _fbRefs.forEach(([r,cb])=>{ try{ r.off("value", cb); }c
 function fbListenErr(err){ console.warn("listener ditolak:", err); fbErrNote("listener", err); fbState("offline"); if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth(); }catch(e){} }, 1500); }
 /* data dari server sudah lengkap → simpan, kirim antrean perubahan, gambar ulang */
 let _fbAttachTs=0, _fbLastErr=null;
-try{ window.addEventListener("error", ev=>{ try{ if(!_fbLastErr || Date.now()-_fbLastErr.t>5000) _fbLastErr={t:Date.now(), where:"js", msg:String((ev&&(ev.message||ev.error))||"").slice(0,140)}; }catch(_){} }); }catch(e){}
-function fbErrNote(where, e){ _fbLastErr={t:Date.now(), where, msg:String((e&&(e.message||e))||e).slice(0,140)}; try{ console.error("RADAR "+where, e); }catch(_){} }
+try{ window.addEventListener("error", ev=>{ try{ const m=String((ev&&(ev.message||ev.error))||"").slice(0,140); if(!m || /ResizeObserver|Script error/i.test(m)) return;
+    if(!_fbLastErr || Date.now()-_fbLastErr.t>5000) _fbLastErr={t:Date.now(), where:"js", msg:m};
+    errReport(Date.now()-_uAct<2500?"tombol":"js", m, ev&&ev.error);
+    if(Date.now()-_uAct<2500 && !(_fbLastErr && _fbLastErr.where==="simpan" && Date.now()-_fbLastErr.t<3000)) saveFailToast({message:m}); }catch(_){} });
+  window.addEventListener("unhandledrejection", ev=>{ try{ const r=ev&&ev.reason; const m=String((r&&(r.message||r))||"").slice(0,140); if(!m || /permission_denied|network|Failed to fetch|AbortError/i.test(m)) return; errReport("promise", m, r); }catch(_){} }); }catch(e){}
+function fbErrNote(where, e){ _fbLastErr={t:Date.now(), where, msg:String((e&&(e.message||e))||e).slice(0,140)}; try{ console.error("RADAR "+where, e); }catch(_){} try{ errReport(where, _fbLastErr.msg, e); }catch(_){} }
+/* 17 Nov 19.00: error tiap HP dikirim ke /radar/errDev/<id HP> (1 baris per HP, maks. 1x per menit) → terlihat di Admin → Data. Supaya kalau ada yang macet saat trial, penyebabnya langsung ketahuan tanpa menunggu screenshot. */
+let _erT=0, _erN=0, _erPend=null;
+function errReport(where, msg, e){
+  _erN++; _erPend={where:String(where||"").slice(0,40), msg:String(msg||"").slice(0,160), st:String((e&&e.stack)||"").split("\n").slice(1,3).map(x=>x.trim().replace(/https?:\/\/[^ )]+\//g,"")).join(" | ").slice(0,200)};
+  if(Date.now()-_erT<60000) { if(!_erPend._tm){ _erPend._tm=setTimeout(()=>{ try{ if(_erPend){ delete _erPend._tm; errFlush(); } }catch(_){} }, 61000-(Date.now()-_erT)); } return; }
+  errFlush();
+}
+function errFlush(){
+  try{ if(!_erPend || !FBS.enabled || !FBS.db || !FBS.authed) return; const p=_erPend; _erPend=null; _erT=Date.now();
+    const id=String(ilsDevId()).replace(/[.#$\/\[\]]/g,"").slice(0,40);
+    FBS.db.ref(FB_ROOT+"/errDev/"+id).set({t:Date.now(), b:RADAR_BUILD, u:(currentUser&&currentUser.username)||"-", r:(currentUser&&currentUser.role)||"-", w:p.where, m:p.msg, s:p.st||"", n:_erN, tab:activeTab||"", st:fbCurrentState(), apk:!!window.AndroidTLS}).catch(()=>{});
+  }catch(_){}
+}
+let _uAct=0, _sfT=0;
+try{ ["pointerdown","keydown"].forEach(ev=>document.addEventListener(ev, ()=>{ _uAct=Date.now(); }, true)); }catch(e){}
+function saveFailToast(e){
+  if(Date.now()-_sfT<8000) return; _sfT=Date.now();
+  try{ miniToast("⚠ Gagal menyimpan: "+String((e&&(e.message||e))||e).slice(0,90)+" — data tidak berubah, coba lagi.", 7000); const t=document.getElementById("miniToast"); if(t) t.style.background="#B91C1C"; }catch(_){}
+}
 function fbAfterData(d, local){
   LOCAL_ONLY.forEach(k=>{ if(local[k]!==undefined) d[k] = local[k]; });
   try{ sigsAfterSnap(d, local); }catch(e){}
   try{ syncUnitLog(d); }catch(e){ fbErrNote("syncUnitLog", e); }   /* 17 Nov: error di sini dulu membuat HP tertahan "Menyambung" selamanya */
   try{ DB.save(d); }catch(e){ fbErrNote("DB.save", e); }
   const wasReady = FBS.ready; FBS.ready = true; fbState(fbCurrentState());
-  if(!wasReady && FBS.q.length){ const q = FBS.q; FBS.q = []; q.forEach(a=>fbPush.apply(null,a)); }
-  fbRender();
+  if(!wasReady && FBS.q.length){ const q = FBS.q; FBS.q = []; q.forEach(a=>{ try{ fbPush.apply(null,a); }catch(e){ fbErrNote("kirim antre", e); } }); }
+  try{ fbRender(); }catch(e){ renderFail(e); }
   try{ if(currentUser && (currentUser.role==="cc" || isViewer())) ccCallCheck(); }catch(e){}   // panggilan giliran langsung bunyi begitu data masuk, tidak menunggu putaran timer
   try{ appMinCheck(); }catch(e){}
   try{ if(_koWait) _koWait=0; koSeatCheck(); }catch(e){}
@@ -1674,7 +1725,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 18.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="17 Nov 2026 21.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1760,11 +1811,12 @@ const DB = {
     const data = this.load();
     const pre = cloneJ(data);
     const T = Date.now(), seed = (T ^ 0x9e3779b9) >>> 0;
-    runMut(data, mutatorFn, T, seed);
+    try{ runMut(data, mutatorFn, T, seed); }
+    catch(e){ _mem = pre; fbErrNote("simpan", e); saveFailToast(e); throw e; }   /* 17 Nov: perubahan setengah jadi tidak boleh tertinggal di HP (dulu jadi ILS / Delout "hantu") */
     const keys = dbKeys(data).filter(k=> JSON.stringify(data[k]) !== JSON.stringify(pre[k]));
     this.save(data);
-    keys.forEach(k=> fbPushSmart(k, pre, data, mutatorFn, T, seed));
-    render();
+    keys.forEach(k=>{ try{ fbPushSmart(k, pre, data, mutatorFn, T, seed); }catch(e){ fbErrNote("kirim "+k, e); } });
+    try{ render(); }catch(e){ renderFail(e); }
   }
 };
 
@@ -1865,7 +1917,7 @@ let currentUser = null;
 let activeTab = null;
 let pickedSlot = null;   // dispatcher: slot dipilih
 let deliverySelUnits = []; // slot ids dipilih buat 1 ILS
-let deliverySelCC = null;
+let deliverySelCC = null, deliverySelPlat = "", dlIlsOpen = {};
 let scanStream = null;
 
 /* ======================================================================
@@ -2560,7 +2612,7 @@ function render(){
     vpEl.querySelectorAll("*").forEach((el,i)=>{ if(el.scrollLeft>0 || el.scrollTop>0) saved.push([i, el.scrollLeft, el.scrollTop]); });
   }
   const winY = window.scrollY, winX = window.scrollX;
-  renderInner();
+  try{ renderInner(); }catch(e){ renderFail(e); }
   if(vpEl){
     const all = vpEl.querySelectorAll("*");
     saved.forEach(([i,l,t])=>{ const el = all[i]; if(el){ el.scrollLeft = l; el.scrollTop = t; } });
@@ -2569,6 +2621,16 @@ function render(){
   try{ sjBadgeUpdate(); }catch(e){}
 }
 let _lastVPHtml = "", _lastVPTab = "", _autoRender = false, _vpChanged = true;
+/* 17 Nov 19.00: satu bagian tampilan error tidak boleh membekukan layar / menghentikan penyimpanan. Tampilan terakhir tetap terlihat + pesan kecil. */
+let _rfT=0;
+function renderFail(e){
+  try{ fbErrNote("tampilan "+(activeTab||"-"), e); }catch(_){}
+  try{ _lastVPHtml=""; const vp=document.getElementById("viewport"); if(!vp) return;
+    let w=document.getElementById("renderErr"); if(!w){ w=document.createElement("div"); w.id="renderErr"; vp.insertBefore(w, vp.firstChild); }
+    w.style.cssText="margin:8px 0;padding:10px 12px;border-radius:10px;background:#FEF3C7;color:#92400E;font-size:12px;font-weight:600;";
+    w.textContent="⚠ Sebagian tampilan gagal dimuat (data tetap aman). Kode: "+String((e&&(e.message||e))||e).slice(0,120);
+  }catch(_){}
+}
 function setVP(vp, html){
   // Auto-refresh: kalau hasil HTML sama persis, jangan sentuh layar sama sekali
   if(_autoRender && html === _lastVPHtml && _lastVPTab === activeTab){ _vpChanged = false; return; }
@@ -3501,7 +3563,7 @@ function autoOutLock(dist, y){
     const np = normPlat(getCcProfile().plat||""); if(!np) return false;
     autoAbsen.loaded = ccLoadedNear(DB.get(), np); if(autoAbsen.loaded) return true;   // sudah muat, belum menjauh / tiba NVDC
     let lo = 0; (DB.get().ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===np && x.outTs>lo) lo = x.outTs; });
-    (DB.get().ccOutLog||[]).forEach(x=>{ if(x && x.ts && normPlat(x.plat)===np && x.ts>lo) lo = x.ts; });
+    (DB.get().ccOutLog||[]).forEach(x=>{ if(x && x.ts && !x.wl && normPlat(x.plat)===np && x.ts>lo) lo = x.ts; });
     { const lf=((DB.get().ccLeft||{})[np])||0; if(lf>lo) lo=lf; }   // dikosongkan Koordinator / stall ditutup: sama, jangan absen otomatis lagi sebelum HP keluar area   // dikeluarkan Delivery: jangan absen otomatis lagi sebelum HP keluar area
     if(!lo || Date.now()-lo > 60*60*1000) return false;   // kunci Delout maks. 1 jam (kalau aplikasi sempat mati di luar area, kunci tidak nyangkut)
     const k = "apcc_left_"+lo;
@@ -3939,7 +4001,7 @@ function ccQueueSort(d){
   (d.queue||[]).forEach(q=>{ if(_part && normPlat(q.plat)!==_me && typeof q.due==="number") return; const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; } if(rit(q)>=1){ q.due=(q.ts||0); return; } const du=ccNextDue(d,q.plat); q.due = du!=null ? du : (q.ts||0); });
   const dIdx=q=>{ const i=(d.dccpSchedule||[]).findIndex(r=>normPlat(r.police)===normPlat(q.plat)); return i<0?9e6:i; };
   /* BATCH: CC dengan jam jadwal yang sama = satu batch. Batch lebih awal masuk dulu, lalu batch berikutnya. Dalam satu batch: rit lebih sedikit dulu, lalu yang lebih dulu tiba. */
-  d.queue.sort((a,b)=>{ if(a.mo!=null||b.mo!=null){ if(a.mo!=null&&b.mo!=null&&a.mo!==b.mo) return a.mo-b.mo; if(a.mo==null) return 1; if(b.mo==null) return -1; } const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(ra===0){ const ia=dIdx(a), ib=dIdx(b); if(ia!==ib) return ia-ib; } if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
+  d.queue.sort((a,b)=>{ if(a.mo!=null||b.mo!=null){ if(a.mo!=null&&b.mo!=null&&a.mo!==b.mo) return a.mo-b.mo; if(a.mo==null) return 1; if(b.mo==null) return -1; } if(!!a.bk!==!!b.bk) return a.bk?1:-1; if(a.bk&&b.bk&&a.bk!==b.bk) return a.bk-b.bk; const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(ra===0){ const ia=dIdx(a), ib=dIdx(b); if(ia!==ib) return ia-ib; } if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
 }
 /* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
 /* Susun ulang waiting list menurut aturan DCCP kalau urutannya belum sesuai (mis. CC yang absen sebelum aturan berubah). Hanya perangkat Delivery/Admin; tidak menyentuh urutan manual (📌). */
@@ -4486,13 +4548,12 @@ function renderDelivery(){
     ? `<div class="msg info">Belum ada truk CC yang parkir di stall. Tunggu driver CC daftar dulu.</div>`
     : `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${nBelum} CC belum dibuatkan ILS · ${ccOptions.length-nBelum} sudah. Ketuk CC untuk memilih.</div>`+ccRowsSorted.map(n=>{
         const c=data.cc[n], b=ilsOfCC(n), sel=deliverySelCC==n, col=ccColor(c.plat), st=b?ilsStage(b):null;
-        return `<div onclick="deliverySelCC='${n}';render()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;border:${sel?'3px':'1.5px'} solid ${sel?col:'var(--border)'};border-left:8px solid ${col};border-radius:12px;padding:9px 12px;margin-bottom:7px;${b&&!sel?'opacity:.8;':''}background:${sel?'var(--panel2)':'transparent'};">
+        return `<div onclick="deliverySelCC='${n}';deliverySelPlat='${escH(normPlat(c.plat))}';render()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;border:${sel?'3px':'1.5px'} solid ${sel?col:'var(--border)'};border-left:8px solid ${col};border-radius:12px;padding:9px 12px;margin-bottom:7px;${b&&!sel?'opacity:.8;':''}background:${sel?'var(--panel2)':'transparent'};">
           <div><b style="background:${col};color:#fff;border-radius:6px;padding:1px 8px;font-weight:900;">${escH(c.plat)}</b> <span style="font-size:12px;color:var(--text-dim);">Stall ${ccLbl(n)} · ${escH(c.lp||"-")}</span>${(()=>{ const dn=ccDriverAny(c.plat); return dn?`<div style="font-size:13px;font-weight:800;margin-top:2px;">👤 ${escH(dn)}</div>`:""; })()}${(()=>{ const o=ilsOrphanAt(data,n); return o?`<div style="font-size:12px;font-weight:800;color:#C0392B;margin-top:3px;">⚠ Stall ini masih terkunci ILS #${o.id} milik ${escH(o.ccPlat)} (${o.loadTs?"sudah loading selesai":"belum loading"}). Ketuk Buat ILS untuk menyelesaikannya.</div>`:""; })()}</div>
           <span style="font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;white-space:nowrap;${b?`background:${st.bg};color:${st.c};`:'background:#ffedd5;color:#b45309;'}">${b?`✔ ILS #${b.id} · ${b.units.length} unit`:"○ Belum ada ILS"}</span></div>`; }).join("");
 
-  const loadingBatches = data.ils.filter(b=>b.status==="open");
-  const batchHtml = loadingBatches.map(b=>`
-    <div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};">
+  const loadingBatches = data.ils.filter(b=>b.status==="open").slice().sort((a,b)=>((a.sj?1:0)-(b.sj?1:0)) || (a.ts-b.ts));   /* yang belum punya surat jalan (perlu dikerjakan) di atas */
+  const ilsInner = b=>`
       <h3>🚚 ILS #${b.id} — CC <span style="background:${ccColor(b.ccPlat)};color:#fff;border-radius:6px;padding:1px 8px;">${escH(b.ccPlat)}</span> (Stall ${ccLbl(b.ccNum)}) ${b.batam?`<span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 8px;font-size:12px;">BATAM</span>`:""}</h3>
       ${(()=>{ const dn=b.drvName||ccDriverAny(b.ccPlat,b.ts); let lpn=b.lp||""; if(!lpn){ try{ lpn=(Object.values(DB.get().cc||{}).filter(Boolean).find(c=>normPlat(c.plat)===normPlat(b.ccPlat))||{}).lp||(ccPlatRow(b.ccPlat)||{}).lp||""; }catch(e){} } const lb=lpn?`<span style="background:var(--gold);color:#fff;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:900;margin-left:6px;vertical-align:2px;">LP ${escH(lpn)}</span>`:""; return (dn||lb)?`<div style="font-size:15px;font-weight:800;margin:-2px 0 6px;">${dn?"👤 "+escH(dn):""}${lb}</div>`:""; })()}
       <div style="margin:0 0 8px;"><span style="font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;background:${ilsStage(b).bg};color:${ilsStage(b).c};">${ilsStage(b).t}</span></div>
@@ -4504,7 +4565,7 @@ function renderDelivery(){
       <div style="display:flex; gap:8px; margin-top:12px;">
         <button class="btn btn-outline btn-sm" style="flex:1;" onclick="printILS(${b.id})">🖨 Cetak ILS</button>
         ${b.batam?"":`<button class="btn btn-outline btn-sm" style="flex:1;" onclick="openTLS(${b.id})">📋 Salin untuk TLS</button>`}
-        <button class="btn btn-green btn-sm" style="flex:1;" onclick="delout(${b.id})">✔ CC Berangkat / Dell Out</button>
+        <button class="btn ${b.sj?"btn-green":"btn-outline"} btn-sm" style="flex:1;" onclick="delout(${b.id})" title="${b.sj?"":"Surat jalan belum disimpan"}">✔ CC Berangkat / Dell Out${b.sj?"":"<br><span style='font-size:10px;font-weight:600;'>📄 simpan surat jalan dulu</span>"}</button>
       </div>
       <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:8px;" onclick="ilsCopyExcel(${b.id},this)">📊 Salin No. Rangka untuk Excel</button>
       <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
@@ -4513,7 +4574,19 @@ function renderDelivery(){
       </div>
       ${b.batam?`<div style="margin-top:10px;font-size:12px;color:var(--text-dim);">ILS BATAM: input ke TLS dilakukan manual di PC.</div>`:""}
       ${tlsBadgeHtml(b)}
-      ${canKeluarkanCC()?`<div style="margin-top:10px;padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;background:var(--panel);">${b.sj?`<div style="font-size:12px;font-weight:800;color:#17803d;">📄 PDF ILS / Surat Jalan tersimpan${b.sjkb?` · <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;">No. SJKB ${escH(b.sjkb)}</span>`:""}</div><div style="font-size:11px;color:var(--text-dim);margin:2px 0 6px;">Hanya Delivery &amp; Admin yang bisa melihat sebelum Delout. Cek dulu kalau ada kesalahan; No. SJKB dipakai untuk batal SJKB.</div><div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" style="flex:1;" onclick="sjView(${b.id})">👁 Lihat PDF</button><button class="btn btn-outline btn-sm" style="flex:1;" onclick="sjDownload(${b.id})">⬇ Unduh</button></div>`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</div>`}</div>`:""}
+      ${canKeluarkanCC()?`<div style="margin-top:10px;padding:8px 10px;border:1.5px solid var(--border);border-radius:10px;background:var(--panel);">${b.sj?`<div style="font-size:12px;font-weight:800;color:#17803d;">📄 PDF ILS / Surat Jalan tersimpan${b.sjkb?` · <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;">No. SJKB ${escH(b.sjkb)}</span>`:""}</div><div style="font-size:11px;color:var(--text-dim);margin:2px 0 6px;">Hanya Delivery &amp; Admin yang bisa melihat sebelum Delout. Cek dulu kalau ada kesalahan; No. SJKB dipakai untuk batal SJKB.</div><div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" style="flex:1;" onclick="sjView(${b.id})">👁 Lihat PDF</button><button class="btn btn-outline btn-sm" style="flex:1;" onclick="sjDownload(${b.id})">⬇ Unduh</button></div>`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</div>`}</div>`:""}`;
+  /* 17 Nov 19.45 (permintaan Khairul): ILS yang SUDAH punya surat jalan tampil ringkas. No. Rangka, QR, cetak, dll. dibuka lewat "Lihat detail". */
+  const ilsCompact = b=>{ const st=ilsStage(b), op=!!dlIlsOpen[b.id];
+    return `<div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};padding:10px 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div style="min-width:0;"><b style="font-size:15px;">🚚 ${escH(b.ccPlat)}</b> <span style="font-size:12px;color:var(--text-dim);">· LP ${escH(b.lp||"-")} · Stall ${ccLbl(b.ccNum)} · ${b.units.length} unit${b.batam?" · BATAM":""}</span>
+          <div style="margin-top:4px;font-size:11px;"><span style="font-weight:800;border-radius:999px;padding:2px 8px;background:${st.bg};color:${st.c};">${st.t}</span> <span style="font-weight:800;color:#17803d;">📄 Surat jalan ✓</span>${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 6px;font-weight:800;">${escH(b.sjkb)}</span>`:""}</div></div>
+        <button class="btn btn-green btn-sm" style="width:auto;min-width:120px;" onclick="delout(${b.id})">✔ Delout</button>
+      </div>
+      <details ${op?"open":""} ontoggle="dlIlsOpen[${b.id}]=this.open" style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:var(--text-dim);">Lihat detail (No. Rangka, cetak, batal)</summary>${ilsInner(b)}</details>
+    </div>`; };
+  const batchHtml = loadingBatches.map(b=> b.sj ? ilsCompact(b) : `
+    <div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};">${ilsInner(b)}
     </div>
   `).join("");
 
@@ -4628,18 +4701,34 @@ function miniToast(msg, ms){ try{ let t=document.getElementById("miniToast"); if
   t.textContent=msg; clearTimeout(t._h); t._h=setTimeout(()=>{ try{ t.remove(); }catch(e){} }, ms||4000); }catch(e){} }
 let _ilsWait=null;
 function ilsWaitOnline(retry){
-  if(_ilsWait){ miniToast("⏳ Masih menunggu data server siap…"); return; }
+  if(_ilsWait){ miniToast("⏳ Masih menunggu server untuk ILS "+((_ilsWait.retry&&_ilsWait.retry.plat)||"sebelumnya")+"…"); return; }
   if(!FBS.authed){ try{ fbReauth(); }catch(e){} }
   const t0=Date.now(); _ilsWait={retry};
-  miniToast("⏳ Menunggu data server siap… ILS dibuat otomatis.", 60000);
+  miniToast("⏳ Menunggu data server siap… nanti ditanya dulu sebelum ILS "+((retry&&retry.plat)||"")+" dibuat.", 60000);
   const iv=setInterval(()=>{
-    try{ const t=document.getElementById("miniToast"); if(t) t.textContent="⏳ Menunggu data server siap… ("+Math.round((Date.now()-t0)/1000)+" dtk) ILS dibuat otomatis."; }catch(e){}
+    try{ const t=document.getElementById("miniToast"); if(t) t.textContent="⏳ Menunggu data server siap… ("+Math.round((Date.now()-t0)/1000)+" dtk) ILS "+((retry&&retry.plat)||"")+" ditanyakan dulu sebelum dibuat."; }catch(e){}
     if(fbCurrentState()==="online"){ clearInterval(iv); const f=_ilsWait&&_ilsWait.retry; _ilsWait=null; try{ const t=document.getElementById("miniToast"); if(t) t.remove(); }catch(e){} if(f) f(); return; }
     if(Date.now()-t0>60000){ clearInterval(iv); _ilsWait=null; try{ const t=document.getElementById("miniToast"); if(t) t.remove(); }catch(e){}
       alert("Data server belum siap setelah 1 menit (status: "+fbCurrentState()+" · "+ilsFlags()+"). ILS tidak dibuat supaya tidak dobel. Cek sinyal, lalu coba lagi. Kalau terus begini, kirim foto pesan ini."); }
   }, 500);
 }
 let _ilsRetry=null;
+/* Coba-ulang sesudah menunggu server: SELALU ditanyakan dulu dengan plat yang dimaksud, dan dibatalkan kalau stall sudah diisi CC lain */
+function ilsRetryFor(n, fn){
+  const c=(DB.get().cc||{})[n], k=c?normPlat(c.plat):"", pf=c?c.plat:"";
+  const r=()=>{ const c2=(DB.get().cc||{})[n];
+    if(!c2 || normPlat(c2.plat)!==k){ alert("ILS untuk "+pf+" TIDAK dibuat: Stall "+ccLbl(n)+" sekarang "+(c2?"diisi "+c2.plat:"kosong")+"."); return; }
+    if(!confirm("Server sudah siap.\n\nBuat ILS untuk "+pf+" (Stall "+ccLbl(n)+") sekarang?")) return;
+    fn(); };
+  r.plat=pf; return r;
+}
+/* 17 Nov 19.30: tombol ILS terikat ke PLAT yang tampil di kartu, bukan hanya nomor stall. Kalau stall sudah diisi CC lain (layar belum segar), ILS TIDAK dibuat. */
+function ilsCardOk(n, k){
+  if(!k) return true; const c=(DB.get().cc||{})[n];
+  if(c && normPlat(c.plat)===k) return true;
+  alert("Kartu ini sudah tidak sesuai: Stall "+ccLbl(n)+" sekarang "+(c?"diisi "+c.plat:"kosong")+".\n\nILS TIDAK dibuat. Periksa lagi daftar CC lalu tekan ulang.");
+  try{ render(); }catch(e){} return false;
+}
 /* 17 Nov 16.55: tombol Buat ILS tidak boleh "diam". Error apa pun ditampilkan, dan 12 dtk setelah dibuat dicek ILS-nya benar ada. */
 function ilsTry(fn){
   try{ fn(); }catch(e){ fbErrNote("buat ILS", e); try{ console.error(e); }catch(_){}
@@ -4671,7 +4760,9 @@ function createILS(ccNum, slots){
       /* 17 Nov 2026: ILS "yatim" — plat pemilik ILS sudah tidak ada di stall ini (stall sudah diisi CC lain). Delivery/Admin langsung diberi jalan keluar. */
       if(normPlat(_dupS.ccPlat)!==normPlat(ccInfo.plat) && canKeluarkanCC()){
         const lb=ccLbl(ccNum), pl=_dupS.ccPlat, np=(_dupS.units||[]).length;
-        if(_dupS.loadTs){
+        if(_dupS.loadTs && !_dupS.sj && !(currentUser && currentUser.role==="admin")){
+          alert(`Stall ${lb} masih terkunci ILS #${_dupS.id} milik ${pl} yang SUDAH LOADING SELESAI, tapi surat jalannya belum disimpan.\n\nSimpan PDF surat jalan ${pl} dulu di kartu ILS-nya, lalu Delout. Setelah itu ILS untuk ${ccInfo.plat} bisa dibuat.`);
+        } else if(_dupS.loadTs){
           if(confirm(`Stall ${lb} masih terkunci ILS #${_dupS.id} milik ${pl} yang SUDAH LOADING SELESAI, padahal ${pl} sudah tidak ada di stall ini.\n\nKalau ${pl} sudah berangkat membawa ${np} unitnya: tekan OK untuk DELOUT ILS itu (surat jalan & manifest tersimpan). Setelah itu ILS untuk ${ccInfo.plat} bisa dibuat.\n\nBatal = biarkan dulu.`)) delout(_dupS.id);
         } else {
           if(confirm(`Stall ${lb} masih terkunci ILS #${_dupS.id} milik ${pl}, padahal ${pl} sudah tidak ada di stall ini.\n\nKalau ${pl} tidak jadi muat: tekan OK lalu konfirmasi Batal ILS (${np} unit kembali ke stall). Setelah itu ILS untuk ${ccInfo.plat} bisa dibuat.\n\nBatal = biarkan dulu.`)) cancelILS(_dupS.id);
@@ -4810,9 +4901,10 @@ function ilsSeatBanner(data){
   return `<div class="card" style="border:1.5px solid #E8B04B;background:#FFF8E6;"><div style="font-size:13px;"><b>⛔ HP ini belum aktif membuat ILS.</b> Maksimal ${ILS_SEAT_MAX[r]} HP ${ilsSeatRoleTxt(r)}; yang aktif: ${L.map(x=>escH(x.n||x.u||"-")).join(", ")}.</div>
     <button class="btn btn-sm" style="width:auto;margin-top:8px;" onclick="ilsSeatModal()">Aktifkan HP ini…</button></div>`;
 }
-function generateILS(){ ilsTry(generateILS0); }
+function generateILS(){ ilsTry(()=>{ if(deliverySelCC && !ilsCardOk(parseInt(deliverySelCC), deliverySelPlat)) return; generateILS0(); }); }
 function generateILS0(){
-  _ilsRetry=()=>generateILS();
+  { const n0=parseInt(deliverySelCC), k0=deliverySelPlat, u0=deliverySelUnits.slice().join(",");
+    _ilsRetry=ilsRetryFor(n0, ()=>{ if(String(parseInt(deliverySelCC))!==String(n0) || deliverySelUnits.slice().join(",")!==u0 || deliverySelPlat!==k0){ miniToast("ILS tidak dibuat otomatis: pilihan CC / unit sudah berubah. Tekan Buat ILS lagi."); return; } generateILS(); }); }
   if(createILS(parseInt(deliverySelCC), deliverySelUnits.slice())){
     deliverySelUnits = [];
     deliverySelCC = null;
@@ -4888,29 +4980,29 @@ function draftOffToggle(n, k){
   draftOffOpen[n]=true; render();
 }
 function draftOffClear(n){ delete draftOff[n]; render(); }
-function draftGoMix(n){ ilsTry(()=>draftGoMix0(n)); }
-function draftGoMix0(n){
+function draftGoMix(n, k){ ilsTry(()=>{ if(!ilsCardOk(n,k)) return; draftGoMix0(n, k); }); }
+function draftGoMix0(n, k){
   draftSaveDrvInput(n);
   const d=DB.get(), p=ccProposals(d).find(x=>x.n===n); if(!p) return;
   const units=draftMixUnits(d,p); if(!units.length){ alert("Belum ada unit yang dipilih."); return; }
-  _ilsRetry=()=>draftGoMix(n);
+  _ilsRetry=ilsRetryFor(n, ()=>draftGoMix(n, k));
   if(createILS(n, units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); }
 }
 function draftSetDrv(n, v){ const c=DB.get().cc[n]; if(c) setDrvCode(c.plat, v, n); }
 function draftSaveDrvInput(n){ const el=document.getElementById("drvIn"+n); if(el) draftSetDrv(n, el.value); }
 function draftSetStall(n, v){ if(v) draftStall[n]=v; else delete draftStall[n]; render(); }
-function draftGo(n){ ilsTry(()=>{ draftSaveDrvInput(n); const p = ccProposals(DB.get()).find(x=>x.n===n); _ilsRetry=()=>draftGo(n);
+function draftGo(n, k){ ilsTry(()=>{ if(!ilsCardOk(n,k)) return; draftSaveDrvInput(n); const p = ccProposals(DB.get()).find(x=>x.n===n); _ilsRetry=ilsRetryFor(n, ()=>draftGo(n, k));
   if(!p){ alert("Draft ILS untuk stall CC ini sudah tidak ada (CC pindah / sudah dibuatkan ILS). Halaman dimuat ulang."); render(); return; }
   if(!p.ready){ alert("Stall unit untuk CC "+p.plat+" belum penuh. Pakai tombol Tetap Buat ILS kalau mau kirim yang ada."); return; }
   if(createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); } }); }
 function draftWait(n){ DB.set(d=>{ if(d.cc[n]) d.cc[n].waiting = true; }); }
-function draftSendRest(n, noConfirm){ ilsTry(()=>draftSendRest0(n, noConfirm)); }
-function draftSendRest0(n, noConfirm){
+function draftSendRest(n, noConfirm, k){ ilsTry(()=>{ if(!ilsCardOk(n,k)) return; draftSendRest0(n, noConfirm, k); }); }
+function draftSendRest0(n, noConfirm, k){
   draftSaveDrvInput(n);
   const p = ccProposals(DB.get()).find(x=>x.n===n);
   if(!p || !p.units.length){ alert("Tidak ada unit tersisa untuk jenis ini."); return; }
   if(!noConfirm && !confirm(`Kirim ${p.units.length} unit dari stall ${p.stall} (kurang dari ${CONFIG.SLOTS_PER_STALL}) ke CC ${p.plat}?`)) return;
-  _ilsRetry=()=>draftSendRest(n, true);
+  _ilsRetry=ilsRetryFor(n, ()=>draftSendRest(n, true, k));
   if(createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); }
 }
 function draftDismiss(n, on){ DB.set(d=>{ if(d.cc[n]) d.cc[n].dismissed = !!on; }); }
@@ -4941,7 +5033,7 @@ function draftCardsHtml(data){
       <div style="font-size:14px;line-height:1.5;">${who}<br><b style="font-size:17px;">${mix.length} unit</b>: ${nOff} dari luar stall${nSt?` + ${nSt} dari <b>Stall ${p.stall}</b>`:""}${mix.length<CONFIG.MAX_LOAD_PER_CC?` <span style="color:#C9661A;font-weight:700;">(belum ${CONFIG.MAX_LOAD_PER_CC})</span>`:""}${p.batam?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800;">BATAM</span>`:""}</div>
       ${typeSw(p)}${stallSel(p)}${drvRow(p)}<div class="dchips">${chipsOf(mix)}</div>${offBlock(p)}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-        <button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="draftGoMix(${p.n})">✔ Buat ILS (${mix.length} unit)</button>
+        <button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="draftGoMix(${p.n},'${escH(normPlat(p.plat))}')">✔ Buat ILS (${mix.length} unit)</button>
         <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftOffClear(${p.n})">✖ Hapus centang</button>
         ${outBtn(p)}
       </div></div>`;
@@ -4960,7 +5052,7 @@ function draftCardsHtml(data){
       <div style="font-size:14px;line-height:1.5;">${who}<br>Siap loading unit di <b style="font-size:17px;">Stall ${p.stall}</b> · ${p.units.length} unit${p.batam?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800;">BATAM</span>`:""}</div>
       ${typeSw(p)}${stallSel(p)}${drvRow(p)}<div class="dchips">${chips(p)}</div>${offBlock(p)}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-        <button class="btn btn-primary" style="flex:2;" onclick="draftGo(${p.n})">✔ Lanjutkan — Buat ILS</button>
+        <button class="btn btn-primary" style="flex:2;" onclick="draftGo(${p.n},'${escH(normPlat(p.plat))}')">✔ Lanjutkan — Buat ILS</button>
         <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
         ${outBtn(p)}
       </div></div>`;
@@ -4970,7 +5062,7 @@ function draftCardsHtml(data){
       <div style="font-size:14px;line-height:1.5;">${who}<br>${info}</div>
       ${typeSw(p)}${stallSel(p)}${drvRow(p)}${p.units.length?`<div class="dchips">${chips(p)}</div>`:""}${offBlock(p)}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-        ${p.units.length?`<button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="draftSendRest(${p.n},true)">✔ Tetap Buat ILS (${p.units.length} unit)</button>`:""}
+        ${p.units.length?`<button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="draftSendRest(${p.n},true,'${escH(normPlat(p.plat))}')">✔ Tetap Buat ILS (${p.units.length} unit)</button>`:""}
         <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftWait(${p.n})">⏳ Menunggu</button>
         <button class="btn btn-outline" style="flex:1;min-width:90px;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
         ${outBtn(p)}
@@ -5557,7 +5649,7 @@ function sjActionsHtml(b){
   else h+=btn('btn-green','🚪 Delout','delout');
   h+=`</div>`;
   if(b.valStartTs){
-    h+=`<div style="margin-top:8px;font-size:12px;">${b.sj?`<span style="color:#17803d;font-weight:700;">📄 Surat jalan tersimpan (disembunyikan dari CC sampai Delout)</span>${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;font-weight:800;">SJKB ${escH(b.sjkb)}</span>`:""}${canKeluarkanCC()?` <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjView(${b.id})">👁 Lihat PDF</button> <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjDownload(${b.id})">⬇ Unduh</button>`:""}`:`<span style="color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</span>`} <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjUploadPick(${b.id})">${b.sj?'Ganti':'Unggah'} PDF</button></div>`;
+    h+=`<div style="margin-top:8px;font-size:12px;">${b.sj?`<span style="color:#17803d;font-weight:700;">📄 Surat jalan tersimpan (terlihat oleh CC sejak Loading selesai)</span>${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;font-weight:800;">SJKB ${escH(b.sjkb)}</span>`:""}${canKeluarkanCC()?` <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjView(${b.id})">👁 Lihat PDF</button> <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjDownload(${b.id})">⬇ Unduh</button>`:""}`:`<span style="color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</span>`} <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjUploadPick(${b.id})">${b.sj?'Ganti':'Unggah'} PDF</button></div>`;
   }
   return h;
 }
@@ -5594,6 +5686,13 @@ function loadingSelesai(id){
 }
 function delout(id){
   const b=sjILS(id); if(!b||b.status!=="open") return;
+  /* 17 Nov 19.45 (permintaan Khairul): Delout hanya kalau PDF surat jalan sudah tersimpan. Admin bisa darurat dengan alasan (tercatat). */
+  let _noSj=null;
+  if(!b.sj){
+    if(!(currentUser && currentUser.role==="admin")){ alert("Belum bisa Delout "+b.ccPlat+": surat jalan (PDF dari TLS) belum disimpan di ILS ini.\n\nSimpan PDF surat jalannya dulu, baru Delout."); return; }
+    const why=prompt("ILS "+b.ccPlat+" BELUM punya surat jalan.\n\nDelout darurat oleh Admin? Ketik alasannya (tercatat):",""); if(why===null) return;
+    if(String(why).trim().length<3){ alert("Alasan wajib diisi. Delout dibatalkan."); return; }
+    _noSj={by:(currentUser&&currentUser.name)||"", why:String(why).trim(), ts:Date.now()}; }
   { const bl=(b.units||[]).map(u=>({u, z:dfBlockOf(DB.get(),u.frame)})).filter(q=>q.z); if(bl.length){ alert("Belum bisa Delout. Ada unit defect:\n"+bl.map(q=>"• "+q.u.frame+" — "+q.z.why).join("\n")+"\n\nPutuskan di Konfirmasi Defect. Kalau TIDAK LANJUT, batalkan ILS lalu buat ulang dengan unit pengganti."); return; } }
   const data=DB.get(), q=(data.queue||[])[0];
   const msg=`Delout ${b.ccPlat}?\n\n• CC keluar dari Stall ${ccLbl(b.ccNum)}\n• ${b.units.length} unit dihapus dari stall (sudah loading)\n`+(q?`• CC berikutnya naik ke stall: ${q.plat} (${q.lp||"-"})\n`:"")+(b.sj?"• Surat jalan jadi terlihat oleh CC & Koordinator":"• PDF surat jalan belum masuk — bisa diunggah nanti")+"\n\nBisa dibatalkan dalam 5 menit.";
@@ -5604,7 +5703,7 @@ function delout(id){
     x.units.forEach(u=>{ const sk=ilsUnitSlot(d,x,u), cur=sk?d.units[sk]:null, own=!!cur, ls=(x.loadSnap||[]).find(e=>e.slot===u.slot);
       snap.units.push({slot:sk||u.slot, v: own?cur:(ls?ls.v:null)});
       if(own){ if(isOffKey(sk)) delete d.units[sk]; else d.units[sk]=null; } });   // slot yang sudah dikosongkan saat Loading Selesai (atau sudah diisi unit baru) tidak disentuh
-    x.status="done"; x.doneTs=Date.now(); x.outTs=x.doneTs; x.outBy=sjWho();
+    x.status="done"; x.doneTs=Date.now(); x.outTs=x.doneTs; x.outBy=sjWho(); if(_noSj) x.outNoSj=_noSj;
     if(currentUser && currentUser.role==="delivery" && !x.esjPic) x.esjPic=currentUser.username;
     const c=d.cc[x.ccNum];
     ccDropPlat(d, x.ccPlat);   /* sisa antrian / Parkir Luar plat yang sama (dobel) ikut dihapus: tidak boleh naik lagi ke stall yang baru ditinggalkan */
@@ -5735,8 +5834,52 @@ async function mfEnsureParsed(){
   for(const m of need){ try{ const v=await sjFetch(m.id); await sjIndex(m.id, v.b64); }catch(e){} }
 }
 function sjCanStore(){ return !!(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.authed); }
+/* 17 Nov 19.45: tanggal & jam di PDF surat jalan harus sesuai ILS-nya. Semua jalur simpan PDF lewat sjStore, jadi dicek di sini. */
+async function sjPdfText(b64){
+  const lib=await pdfjsLoad();
+  const bin=atob(b64), arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  const pdf=await lib.getDocument({data:arr}).promise; let t="";
+  for(let p=1;p<=pdf.numPages;p++){ const pg=await pdf.getPage(p), tc=await pg.getTextContent(); tc.items.forEach(it=>{ if(it.str) t+=it.str+" "; }); t+=" \n "; }
+  return t;
+}
+function sjDatesIn(txt){
+  const M={januari:0,january:0,jan:0,februari:1,february:1,feb:1,peb:1,maret:2,march:2,mar:2,april:3,apr:3,mei:4,may:4,juni:5,june:5,jun:5,juli:6,july:6,jul:6,agustus:7,august:7,agu:7,agt:7,aug:7,september:8,sept:8,sep:8,oktober:9,october:9,okt:9,oct:9,november:10,nov:10,nop:10,desember:11,december:11,des:11,dec:11};
+  const out=[], T=String(txt||""), add=(y,mo,d,hh,mi,weak)=>{ y=+y; if(y<100) y+=2000; if(!(y>=2020&&y<=2100&&mo>=0&&mo<=11&&d>=1&&d<=31)) return; const hasT=hh!=null && mi!=null && +hh<24 && +mi<60;
+    const dt=new Date(y,mo,d,hasT?+hh:12,hasT?+mi:0,0,0); if(dt.getMonth()!==mo) return; out.push({ts:dt.getTime(), t:hasT, s:!weak}); };
+  const tm="(?:[\\sT,]+(\\d{1,2})[:.](\\d{2})(?:[:.]\\d{2})?)?";
+  let r=new RegExp("\\b(\\d{1,2})[\\/\\-.](\\d{1,2})[\\/\\-.](\\d{4}|\\d{2})\\b"+tm,"g"), m;
+  while((m=r.exec(T))) add(m[3], +m[2]-1, +m[1], m[4], m[5], String(m[3]).length<4);
+  r=new RegExp("\\b(\\d{4})[\\/\\-.](\\d{1,2})[\\/\\-.](\\d{1,2})\\b"+tm,"g");
+  while((m=r.exec(T))) add(m[1], +m[2]-1, +m[3], m[4], m[5]);
+  r=new RegExp("\\b(\\d{1,2})[\\s\\-./]*([A-Za-z]{3,9})[\\s\\-./,]*(\\d{4})\\b"+tm,"g");
+  while((m=r.exec(T))){ const k=m[2].toLowerCase(); if(k in M) add(m[3], M[k], +m[1], m[4], m[5]); }
+  r=/\/((20\d{2})(\d{2})(\d{2}))\//g; while((m=r.exec(T))) add(m[2], +m[3]-1, +m[4]);   /* tanggal di dalam No. SJKB (yyyymmdd) */
+  return out;
+}
+async function sjDateCheck(id, b64){
+  const b=sjILS(id); if(!b) return {ok:true};
+  let txt=""; try{ txt=await sjPdfText(b64); }catch(e){ return {ok:true, skip:"PDF tidak bisa dibaca otomatis"}; }
+  const D=sjDatesIn(txt); if(!D.length) return {ok:true, skip:"tanggal tidak terbaca"};
+  const ref=+b.ts||Date.now(), day=t=>{ const x=new Date(t); return x.getFullYear()*10000+x.getMonth()*100+x.getDate(); };
+  /* 17 Nov 20.50: dibandingkan dengan waktu ILS DIBUAT (bukan jam upload). Toleransi lebar untuk kasus RADAR error lama:
+     ILS sempat dibuat manual di TLS dulu, baru dimasukkan ke RADAR belakangan. Jam di PDF: selisih maks. 36 jam; tanggal saja: maks. 1 hari. */
+  const dIdx=t=>Math.floor((new Date(new Date(t).getFullYear(), new Date(t).getMonth(), new Date(t).getDate()).getTime())/86400000);
+  const okD=D.some(x=> x.t ? Math.abs(x.ts-ref)<=36*3600000 : Math.abs(dIdx(x.ts)-dIdx(ref))<=1);
+  if(okD) return {ok:true};
+  if(!D.some(x=>x.s)) return {ok:true, skip:"tanggal tidak pasti"};   /* hanya pola lemah (tahun 2 digit): jangan menolak */
+  const best=D.filter(x=>x.s).sort((a,c)=>Math.abs(a.ts-ref)-Math.abs(c.ts-ref))[0];
+  return {ok:false, pdf:new Date(best.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:best.t?'2-digit':undefined,minute:best.t?'2-digit':undefined}), ils:new Date(ref).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})};
+}
 async function sjStore(id,name,b64,mime){
   if(!sjILS(id)){ alert("ILS tidak ditemukan."); return false; }
+  { const ck=await sjDateCheck(id,b64); const bb=sjILS(id);
+    window._sjChk = ck.skip || "";
+    if(!ck.ok){
+      const msg="Tanggal di PDF ("+ck.pdf+") jauh dari waktu ILS "+(bb?bb.ccPlat:"")+" dibuat ("+ck.ils+").";
+      if(!(currentUser && currentUser.role==="admin")){ alert("Surat jalan DITOLAK: "+msg+"\n\nPastikan PDF dari TLS adalah surat jalan rit ini. Kalau memang benar (mis. ILS baru dimasukkan ke RADAR jauh setelah dibuat di TLS), minta Admin yang menyimpan."); return false; }
+      const why=prompt("⚠ "+msg+"\n\nAdmin: tetap simpan PDF ini? Ketik alasannya (tercatat):",""); if(why===null) return false;
+      if(String(why).trim().length<3){ alert("Alasan wajib diisi. PDF tidak disimpan."); return false; }
+      window._sjChk = "tanggal beda, disimpan Admin: "+String(why).trim(); } }
   const size=Math.floor(b64.length*3/4);
   if(size>900000){ alert("PDF terlalu besar (maks ±900 KB)."); return false; }
   if(!sjCanStore()){ alert("RADAR sedang offline — PDF belum bisa disimpan. Coba lagi saat online."); return false; }
@@ -5748,7 +5891,8 @@ async function sjStore(id,name,b64,mime){
     if(fbDenied(e)){ try{ if(await fbReauth()){ await _put(); err=null; } }catch(e2){ err=e2; } }   /* sesi Firebase kedaluwarsa / terhapus: login ulang lalu coba sekali lagi */
     if(err){ alert("Gagal menyimpan PDF: "+(err&&err.message||err)+(fbDenied(err)?"\nSesi RADAR ke server terputus. Tutup lalu buka lagi aplikasi RADAR, kemudian simpan ulang PDF ini.":"")); return false; }
   }
-  DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.sj={name:name||"surat-jalan.pdf", size, ts}; if(!b.tlsTs){ b.tlsTs=ts; b.tlsBy=((currentUser&&currentUser.name)||"")+" (otomatis, PDF masuk)"; } } });   // PDF dari TLS sudah ada = ILS sudah di TLS
+  const _ck=window._sjChk||""; window._sjChk="";
+  DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.sj={name:name||"surat-jalan.pdf", size, ts}; if(_ck) b.sj.chk=_ck; if(!b.tlsTs){ b.tlsTs=ts; b.tlsBy=((currentUser&&currentUser.name)||"")+" (otomatis, PDF masuk)"; } } });   // PDF dari TLS sudah ada = ILS sudah di TLS
   sjIndex(id,b64);   // baca No. SJKB & Cabang di latar belakang (untuk manifest)
   return true;
 }
@@ -5762,6 +5906,8 @@ async function sjPickStore(name,b64,showAll){
   let flat=""; try{ flat=await sjPdfFlat(b64); }catch(e){}
   const m=flat?sjMatchIls(flat):null;
   if(m && !m.b.sj){ await sjPickDo(m.b.id); return; }      // nomor rangka di PDF cocok dengan satu ILS: simpan otomatis
+  /* 17 Nov 19.30: PDF ini milik ILS yang SUDAH punya surat jalan → jangan ditawarkan ke ILS lain (dulu bisa nyasar ke CC lain) */
+  if(m && m.b.sj){ _sjPick=null; alert("PDF ini berisi No. Rangka ILS "+m.b.ccPlat+" (LP "+(m.b.lp||"-")+") yang SUDAH punya surat jalan.\n\nTidak disimpan ke ILS lain. Kalau memang mau mengganti PDF ILS itu, buka ILS "+m.b.ccPlat+" lalu unggah ulang di sana."); return; }
   const now=Date.now(), me=(currentUser&&currentUser.name)||"";
   /* hanya ILS yang BELUM punya PDF; yang cocok nomor rangka di atas, lalu ILS buatanmu, lalu yang terbaru */
   const L=(DB.get().ils||[]).filter(b=>!b.batam && !b.sj && (b.status==="open" || (b.outTs && now-b.outTs<SJ_KEEP_MS)))
@@ -5769,9 +5915,13 @@ async function sjPickStore(name,b64,showAll){
   if(!L.length){ alert("Tidak ada ILS yang menunggu PDF surat jalan."); return; }
   const row=b=>{ const fr=(b.units||[]).map(u=>u.frame).filter(Boolean)[0]||"";
     return `<button class="btn btn-primary" style="width:100%;text-align:left;margin-bottom:6px;" onclick="sjPickDo(${b.id})"><b>${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")} · ${b.units.length} unit<br><span style="font-size:11px;opacity:.85;">ILS dibuat ${sjFmt(b.ts)}${fr?" · "+escH(fr):""}</span></button>`; };
-  const shown=_sjPickAll ? L.slice(0,5) : L.slice(0,1);
-  showModal(`<h3 style="margin:0 0 6px;">💾 Jadikan surat jalan</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${_sjPickAll?"ILS yang belum punya PDF":"PDF ini untuk ILS berikut?"} (${escH(name)})</div>`+shown.map(row).join("")+
-    (!_sjPickAll && L.length>1?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:2px;" onclick="sjPickMore()">Bukan ini — lihat ILS lain yang belum punya PDF</button>`:""));
+  /* tidak cocok otomatis: tampilkan beberapa pilihan + No. Rangka, beri peringatan jelas (tidak ada lagi satu tombol besar yang mudah salah tekan) */
+  const shown=L.slice(0,_sjPickAll?8:4);
+  const warn=flat?`⚠ No. Rangka di PDF ini <b>tidak cocok</b> dengan ILS mana pun. Kemungkinan PDF untuk CC yang ILS-nya tidak ada di RADAR. Periksa No. Rangka sebelum memilih.`:`⚠ Isi PDF tidak terbaca otomatis. <b>Cocokkan No. Rangka</b> di PDF dengan pilihan di bawah sebelum memilih.`;
+  const row2=b=>{ const fr=(b.units||[]).map(u=>u.frame).filter(Boolean);
+    return `<button class="btn btn-outline" style="width:100%;text-align:left;margin-bottom:6px;" onclick="if(confirm('Simpan PDF ini sebagai surat jalan ${String(b.ccPlat||"").replace(/[^A-Za-z0-9 ]/g,"")}?')) sjPickDo(${b.id})"><b>${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")} · ${b.units.length} unit · ${sjFmt(b.ts)}<br><span style="font-size:11px;">${escH(fr.slice(0,3).join(" · "))}${fr.length>3?" …":""}</span></button>`; };
+  showModal(`<h3 style="margin:0 0 6px;">💾 Jadikan surat jalan</h3><div style="font-size:12px;background:#FEF3C7;color:#92400E;border-radius:8px;padding:8px;margin-bottom:8px;">${warn}</div><div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${escH(name)}</div>`+shown.map(row2).join("")+
+    (!_sjPickAll && L.length>shown.length?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:2px;" onclick="sjPickMore()">Lihat ILS lain yang belum punya PDF</button>`:"")+`<button class="btn btn-sm" style="width:100%;margin-top:6px;" onclick="_sjPick=null;closeModal()">Batal</button>`);
 }
 async function sjPickDo(id){
   const p=_sjPick; if(!p) return;
@@ -5783,7 +5933,13 @@ async function sjPickDo(id){
 function sjUploadPick(id){
   const inp=document.createElement("input"); inp.type="file"; inp.accept="application/pdf,.pdf";
   inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
-    const r=new FileReader(); r.onload=async()=>{ const u=String(r.result); const ok=await sjStore(id,f.name,u.substring(u.indexOf(",")+1),"application/pdf"); if(ok) alert("Surat jalan tersimpan."); }; r.readAsDataURL(f); };
+    const r=new FileReader(); r.onload=async()=>{ const u=String(r.result), b64=u.substring(u.indexOf(",")+1);
+      /* 17 Nov 19.30: cek No. Rangka di PDF dulu, supaya PDF CC lain tidak tersimpan di ILS ini */
+      let tgt=id; try{ const flat=await sjPdfFlat(b64), me=sjILS(id);
+        if(flat){ const m=sjMatchIls(flat);
+          if(m && m.b.id!==id){ if(!confirm("PDF ini berisi No. Rangka milik ILS "+m.b.ccPlat+" (LP "+(m.b.lp||"-")+"), BUKAN ILS "+(me?me.ccPlat:"ini")+".\n\nOK = simpan ke ILS "+m.b.ccPlat+"\nBatal = tidak disimpan")) return; tgt=m.b.id; }
+          else if(!m && me && (me.units||[]).some(x=>x && x.frame) && !confirm("No. Rangka di PDF ini TIDAK cocok dengan unit ILS "+me.ccPlat+".\n\nTetap simpan ke ILS ini?")) return; } }catch(e){}
+      const ok=await sjStore(tgt,f.name,b64,"application/pdf"); if(ok){ const bb=sjILS(tgt); alert("Surat jalan tersimpan"+(bb?" di ILS "+bb.ccPlat:"")+"."); } }; r.readAsDataURL(f); };
   inp.click();
 }
 /* ===== Upload PDF ILS (akun Delivery di PC): aplikasi membaca PDF, mencocokkan ke ILS lewat nomor rangka unit, lalu menyimpannya ===== */
@@ -5901,9 +6057,26 @@ function sjRowHtml(b, now){
       <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${b.units.length} unit · ${sjWhen(b)}${arc?` · <span class="badge">arsip</span>`:""}${b.sj?` · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:arc?`<div style="font-size:12px;color:var(--text-dim);">PDF surat jalan tidak tersimpan untuk ILS ini.</div>`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>${sjCanUp?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="sjUploadPick(${b.id})">⬆ Unggah PDF validasi</button>`:""}`}${(sjCanUp && (b.sj||b.sjkb) && !b.batam)?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjUploadPick(${b.id})">⬆ Ganti PDF</button>`:""}${(!arc&&b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
 }
+/* 17 Nov 19.30: plat bisa dipakai banyak driver (beda shift / beda hari). Driver hanya melihat surat jalan rit yang dibuat
+   SELAMA akunnya memegang plat itu (sejak mengisi plat, sampai driver lain mengisi plat yang sama), atau ILS yang tercatat atas namanya. */
+function sjDrvPass(){
+  const k=myCcPlatKey(); if(!k || !currentUser) return ()=>false;
+  const me=currentUser.username, nk=v=>String(v||"").toLowerCase().replace(/[^a-z]/g,""), myN=nk(currentUser.name);
+  const L=(DB.get().ccShiftPlat||[]).filter(x=>x && normPlat(x.plat)===k);
+  const mine=L.filter(x=>x.u===me).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0];
+  let from=mine ? (+mine.ts||0)-10*60000 : null;
+  const until=mine ? Math.min(9e15, ...L.filter(x=>x.u!==me && (+x.ts||0)>(+mine.ts||0)).map(x=>+x.ts||9e15)) : 9e15;
+  if(!mine){ /* catatan pegang plat akun ini tidak ada (mis. gagal tersimpan): pakai rit shift ini saja, sesudah driver lain terakhir mengisi plat ini */
+    try{ const st=shiftWindow(prodDayStart(Date.now()), currentShift())[0];
+      from = L.some(x=>(+x.ts||0)>=st-2*3600000) ? null : st-3600000;   /* plat ini sudah diisi driver lain di shift ini: bukan milik akun ini */
+    }catch(e){ from=null; } }
+  return b=>{ if(!b || normPlat(b.ccPlat)!==k) return false; const t=+b.ts||sjT(b);
+    if(from!=null && t>=from && t<until) return true;
+    return myN.length>=4 && nk(b.drvName)===myN; };
+}
 /* kotak ringkas di halaman; daftar lengkap + pencarian dibuka lewat tombol */
 function sjScopePass(scope){
-  if(scope==="cc") return b=>!!myCcPlatKey() && normPlat(b.ccPlat)===myCcPlatKey();
+  if(scope==="cc") return sjDrvPass();
   if(scope==="koor") return b=>lpMine(b.lp);
   return b=>!sjLpF||lpCanon(b.lp)===lpCanon(sjLpF);
 }
@@ -7753,9 +7926,52 @@ function ccOutLogHtml(data){
   const mid=prodMidnight(), L=(data.ccOutLog||[]).filter(x=>x.ts>=mid).slice().reverse();
   if(!L.length) return "";
   const hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
-  return `<div class="card"><h3>🚪 CC Dikeluarkan (hari produksi ini)</h3>${L.map(x=>`<div class="kitem" style="margin-top:8px;"><b>${x.plat}</b> · LP ${x.lp||"-"} · Stall ${ccLbl(x.ccNum)}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${hm(x.ts)} · ${x.kosong?"dikosongkan":"dipulangkan"} oleh <b>${x.by||"-"}</b>${x.ilsId?" · ILS dibatalkan":""} · ${x.ack?`<span style="color:#1E9E5A;font-weight:700;">✔ dibaca driver ${hm(x.ack)}</span>`:`<span style="color:#E8833A;">⏳ belum dibaca driver</span>`}</div><div style="font-size:13px;margin-top:4px;">Alasan: ${String(x.why||"").replace(/</g,"&lt;")}</div></div>`).join("")}</div>`;
+  return `<div class="card"><h3>🚪 CC Dikeluarkan (hari produksi ini)</h3>${L.map(x=>`<div class="kitem" style="margin-top:8px;"><b>${x.plat}</b> · LP ${x.lp||"-"} · Stall ${ccLbl(x.ccNum)}<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${hm(x.ts)} · ${x.wl?`<b style="color:#1E3A8A;">↩ dikembalikan ke waiting list (${x.wl==="belakang"?"paling belakang":"urutan tetap"})</b>`:x.kosong?"dikosongkan":"dipulangkan"} oleh <b>${x.by||"-"}</b>${x.ilsId?" · ILS dibatalkan":""} · ${x.ack?`<span style="color:#1E9E5A;font-weight:700;">✔ dibaca driver ${hm(x.ack)}</span>`:`<span style="color:#E8833A;">⏳ belum dibaca driver</span>`}</div><div style="font-size:13px;margin-top:4px;">Alasan: ${String(x.why||"").replace(/</g,"&lt;")}</div></div>`).join("")}</div>`;
 }
+/* 17 Nov 21.30 (permintaan Khairul): Keluarkan CC → pilih: tidak kembali (pulang / rit habis / rusak) atau masuk waiting list lagi */
 function keluarkanCC(n){
+  if(!canKeluarkanCC()){ alert("Hanya Delivery yang boleh memulangkan CC."); return; }
+  const d0=DB.get(), c=d0.cc[n]; if(!c){ alert("Stall "+ccLbl(n)+" sudah kosong."); return; }
+  const ils=(d0.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat));
+  const wlOk=!(ils && ils.loadTs), q=(d0.queue||[]).length;
+  showModal(`<h3 style="margin:0 0 6px;">🚪 Keluarkan ${escH(c.plat)} dari Stall ${ccLbl(n)}</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">LP ${escH(c.lp||"-")}${ils?` · ILS #${ils.id} akan dibatalkan (unit kembali ke stall)`:""}${q?` · ${q} CC di waiting list`:""}</div>
+    <button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;color:var(--red);border-color:var(--red);" onclick="closeModal();keluarkanCC1(${n})"><b>🚪 Keluarkan — tidak kembali</b><br><span style="font-size:11px;font-weight:500;">Pulang, rit habis, rusak, salah absen, dll.</span></button>
+    ${wlOk?`<button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;" onclick="closeModal();keluarkanWL(${n},false)"><b>↩ Masuk waiting list — urutan tetap</b><br><span style="font-size:11px;font-weight:500;">Stall diberikan ke CC berikutnya, CC ini dipanggil lagi di giliran berikutnya.</span></button>
+    <button class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;" onclick="closeModal();keluarkanWL(${n},true)"><b>⤵ Masuk waiting list — paling belakang</b><br><span style="font-size:11px;font-weight:500;">Antri ulang di belakang semua CC yang sedang menunggu.</span></button>`
+      :`<div style="font-size:12px;background:#FEF3C7;color:#92400E;border-radius:8px;padding:8px;margin-bottom:8px;">ILS sudah Loading selesai: tidak bisa dikembalikan ke waiting list. Kalau CC sudah berangkat, pakai Delout.</div>`}
+    <button class="btn btn-sm" style="width:100%;" onclick="closeModal()">Batal</button>`);
+}
+function keluarkanWL(n, toBack){
+  if(!canKeluarkanCC()) return;
+  const d0=DB.get(), c=d0.cc[n]; if(!c){ alert("Stall "+ccLbl(n)+" sudah kosong."); return; }
+  const ils=(d0.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat));
+  if(ils && ils.loadTs){ alert("ILS #"+ils.id+" sudah Loading selesai. Tidak bisa dikembalikan ke waiting list."); return; }
+  const q=(d0.queue||[]).filter(x=>x && normPlat(x.plat)!==normPlat(c.plat))[0];
+  const why=prompt(`Kembalikan ${c.plat} ke WAITING LIST (${toBack?"paling belakang":"urutan tetap"})?\n`+(ils?`• ILS #${ils.id} dibatalkan, unit kembali ke stall\n`:"")+`• Stall ${ccLbl(n)} dikosongkan`+(q?`\n• CC berikutnya naik: ${q.plat}`:"\n• Waiting list kosong: stall ini akan memanggil "+c.plat+" lagi")+`\n\nKetik alasan (wajib, mis. driver belum siap):`, "");
+  if(why===null) return;
+  if(String(why).trim().length<3){ alert("Alasan wajib diketik (minimal 3 huruf). CC tidak jadi dipindah."); return; }
+  const k=normPlat(c.plat);
+  DB.set(d=>{
+    const cur=d.cc[n]; if(!cur || normPlat(cur.plat)!==k) return;
+    const oi=(d.ils||[]).findIndex(b=>b && b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===k);
+    let ilsId=null;
+    if(oi>=0){ const x=d.ils[oi]; if(x.loadTs) return; ilsId=x.id; (x.units||[]).forEach(u=>{ const un=d.units[u.slot]; if(un && un.ilsId===x.id) delete un.ilsId; }); d.ils.splice(oi,1); d.manifest=(d.manifest||[]).filter(m=>m.id!==x.id); }
+    d.ccOutLog=d.ccOutLog||[]; d.ccOutLog.push({ts:Date.now(), plat:cur.plat, lp:cur.lp||"", ccNum:n, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", ilsId, wl:toBack?"belakang":"tetap"});
+    d.ccOutLog=capLog(d.ccOutLog,200);
+    d.cc[n]=null;
+    ccDropPlat(d, cur.plat);
+    if((d.queue||[]).length){ const next=ccQueueTake(d); if(next){ d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d, next, n); } }
+    const it={plat:cur.plat, lp:cur.lp||"", drvCode:cur.drvCode||"", ts:+cur.absenTs||+cur.ts||Date.now(), auto:!!cur.auto, manual:!!cur.manual, wlBy:(currentUser&&currentUser.name)||"", wlTs:Date.now()};
+    if(toBack) it.bk=Date.now();
+    d.queue=(d.queue||[]).concat([it]); ccQueueSort(d);
+  });
+  if(ils){ try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+ils.id).remove(); }catch(e){} }
+  const d2=DB.get(), pos=(d2.queue||[]).findIndex(x=>x && normPlat(x.plat)===k), st=Object.keys(d2.cc||{}).find(m=>d2.cc[m] && normPlat(d2.cc[m].plat)===k);
+  alert(st ? c.plat+" langsung dipanggil lagi ke Stall "+ccLbl(st)+" (tidak ada CC lain yang menunggu)." : pos>=0 ? c.plat+" sekarang di waiting list no. "+(pos+1)+"." : c.plat+" dikembalikan.");
+  render();
+}
+function keluarkanCC1(n){
   if(!canKeluarkanCC()){ alert("Hanya Delivery yang boleh memulangkan CC."); return; }
   const d0=DB.get(), c=d0.cc[n]; if(!c){ alert("Stall "+ccLbl(n)+" sudah kosong."); return; }
   const ils=(d0.ils||[]).find(b=>b.status==="open" && !b.outTs && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat));
@@ -8464,7 +8680,7 @@ function editExecIdx(idx, rec){
 }
 
 /* ===== CC PENGGANTI (per ritase atau sampai ritase terakhir) ===== */
-function dccpTripList(r){ return ((r.trips&&r.trips.length)?r.trips:(r.schedTime?[r.schedTime]:[])).slice().sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0)); }
+function dccpTripList(r){ if(!r) return []; const tr=Array.isArray(r.trips)?r.trips.filter(t=>typeof t==="string" && t):(typeof r.trips==="string"&&r.trips?[r.trips]:[]); return (tr.length?tr:(r.schedTime&&typeof r.schedTime==="string"?[r.schedTime]:[])).slice().sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0)); }   /* 17 Nov: tahan baris DCCP rusak (trips bukan daftar) */
 /* Ritase yang sudah jalan dihitung sejak awal SHIFT milik baris jadwal itu (dari jam ritase pertamanya), bukan sejak 07.00: plat 24 jam yang sudah jalan di shift pagi tidak mengurangi jadwal shift malam */
 function dccpFileDate(fn){
   const M={januari:0,january:0,jan:0,februari:1,february:1,feb:1,maret:2,march:2,mar:2,april:3,apr:3,mei:4,may:4,juni:5,june:5,jun:5,juli:6,july:6,jul:6,agustus:7,august:7,agu:7,aug:7,september:8,sept:8,sep:8,oktober:9,october:9,okt:9,oct:9,november:10,nov:10,desember:11,december:11,des:11,dec:11};
@@ -12462,7 +12678,7 @@ const MAPABS={hits:{}, out:{}, ts:{}};
 function ccLastLeft(d, plat){
   const k=normPlat(plat); let lo=((d.ccLeft||{})[k])||0;
   (d.ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===k && x.outTs>lo) lo=x.outTs; });
-  (d.ccOutLog||[]).forEach(x=>{ if(x && x.ts && normPlat(x.plat)===k && x.ts>lo) lo=x.ts; });
+  (d.ccOutLog||[]).forEach(x=>{ if(x && x.ts && !x.wl && normPlat(x.plat)===k && x.ts>lo) lo=x.ts; });
   return lo;
 }
 function mapAbsenWhy(d, r, km){   // alasan CC di dalam radius belum tercatat (untuk kartu "CC Online, Belum Absen")
