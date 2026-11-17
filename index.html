@@ -1425,6 +1425,7 @@ function koSeatsCardHtml(){
   const L=Object.keys(o).map(k=>Object.assign({k}, o[k]||{})).filter(x=>x.dev).sort((a,b)=>String(a.k).localeCompare(String(b.k)));
   return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;">
     <div style="font-weight:800;margin-bottom:4px;">HP Koordinator aktif (1 HP per LP per shift)</div>
+    <div style="color:var(--text-dim);margin-bottom:4px;">LP di Jadwal DCCP aktif (tulisan asli → dibaca sebagai): ${(()=>{ const m={}; (DB.get().dccpSchedule||[]).forEach(r=>{ const a=String((r&&r.lp)||"").trim(); if(a) m[a]=lpCanon(a); }); const k=Object.keys(m); return k.length?k.map(a=>escH(a)+" → <b>"+escH(m[a])+"</b>").join(" · "):"-"; })()}</div>
     ${L.length?`<table style="width:100%;font-size:12px;"><tr><th style="text-align:left;">LP</th><th style="text-align:left;">Dipakai</th><th style="text-align:left;">Sejak</th><th></th></tr>${L.map(x=>`<tr><td><b>${escH(x.k)}</b></td><td>${escH(x.n||x.u||"-")}${x.p?` <span style="color:var(--text-dim);">(${escH(x.p)})</span>`:""}</td><td>${hm(x.ts)}</td><td>${x.sh===sid?`<span style="color:#17803d;font-weight:700;">shift ini</span>`:`<span style="color:var(--text-dim);">shift lalu</span>`}</td></tr>`).join("")}</table>`
       :`<div style="color:var(--text-dim);">Belum ada.</div>`}</div>`;
 }
@@ -1634,7 +1635,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 15.05";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="17 Nov 2026 15.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4048,7 +4049,8 @@ function ccQueueFarPurge(){
     const gone=[];
     ks.forEach(k=>{
       /* satu plat bisa punya >1 titik (HP/akun lain): dianggap jauh hanya kalau SEMUA titik segarnya jauh; ada satu saja di yard = masih di yard */
-      const fr=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k && now-(t.ts||0)<=120000);
+      /* 17 Nov 2026: hanya posisi GPS (bukan posisi jaringan yang bisa meleset km-an) dari HP driver pemegang plat di shift ini */
+      const fr=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k && now-(t.ts||0)<=120000 && !trkCoarse(t) && !(t.u && absenHolderWhy(t.u, t.plat)));
       if(!fr.length){ delete QFAR[k]; return; }
       const km=Math.min(...fr.map(t=>haversineKm(t.lat,t.lng,y.lat,y.lng)));
       if(km>rad+1){ if(!QFAR[k]) QFAR[k]=now; if(now-QFAR[k]>=QFAR_MIN*60000) gone.push([k,km]); } else delete QFAR[k];
@@ -4060,6 +4062,7 @@ function ccQueueFarPurge(){
         const sn=Object.keys(d2.cc||{}).find(n=>d2.cc[n] && normPlat(d2.cc[n].plat)===k);
         if(sn!==undefined && !(d2.ils||[]).some(b=>b && b.status==="open" && !b.outTs && b.ccNum==sn)){
           const cur=d2.cc[sn]; ccMarkLeft(d2,cur); d2.cc[sn]=null;
+          d2.ccOutLog=d2.ccOutLog||[]; d2.ccOutLog.push({ts:Date.now(), plat:cur.plat, lp:cur.lp||"", ccNum:+sn, why:"otomatis: posisi GPS di peta "+km.toFixed(1)+" km dari yard selama "+QFAR_MIN+" menit, belum ada ILS", by:"Sistem (peta)"}); d2.ccOutLog=capLog(d2.ccOutLog,200);
           if((d2.queue||[]).length>0){ const next=ccQueueTake(d2); if(next){ d2.cc[sn]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d2, next, sn); } }
           d2.absenLog=absenAdd(d2.absenLog, {ts:Date.now(), plat:platFmt(cur.plat), lp:cur.lp||"", u:"peta", name:"Peta: CC sudah jauh ("+km.toFixed(1)+" km), keluar dari stall", role:"peta", auto:true, manual:false, dist:Math.round(km*10)/10, rejected:true});
           return;
@@ -4331,7 +4334,8 @@ function ccGuardScan(d){
 }
 function ccGuardTick(){
   try{
-    if(!currentUser || isViewer()) return;   // aturan ketat mati: hanya penjaga yang selalu berlaku (ILS aktif, absen lagi sesudah Delout); aturan ketat dicek di ccGuardWhy
+    if(!currentUser || isViewer()) return;
+    if(FBS.enabled && _fbMode!=="full") return;   /* 17 Nov 2026: hanya HP berdata lengkap (Delivery/Admin/Koordinator/Display/Leader). HP Driver/Dispatcher mode hemat tidak lagi mengeluarkan CC dari stall berdasarkan data sebagian */   // aturan ketat mati: hanya penjaga yang selalu berlaku (ILS aktif, absen lagi sesudah Delout); aturan ketat dicek di ccGuardWhy
     if(FBS.enabled && fbCurrentState()!=="online") return;
     if(!ccGuardScan(DB.get()).length) return;
     DB.set(d=>{
@@ -5158,7 +5162,8 @@ function lpKey(x){ return String(x||"").trim().toUpperCase().replace(/\s+/g," ")
 function myKoordLP(){   // LP milik koordinator yang sedang login ("" = semua LP)
   try{
     if(!currentUser || currentUser.role!=="koordinator") return "";
-    const u=(DB.get().users||[]).find(x=>x.username===currentUser.username);
+    const us=(DB.get().users||[]).filter(x=>x.username===currentUser.username);   /* satu username bisa punya beberapa peran: pakai LP dari akun Koordinator-nya */
+    const u=us.find(x=>x.role==="koordinator" && x.lp) || us.find(x=>x.lp) || us[0];
     return lpKey(u&&u.lp);
   }catch(e){ return ""; }
 }
@@ -5200,8 +5205,8 @@ function koSeatCheck(){
     const now=Date.now(); if(_koWait && now<_koWait) return; _koWait=0;
     if(koVisible()) _koHidSince=0; else if(!_koHidSince) _koHidSince=now;
     const d=DB.get(), key=koSeatKey(), me=ilsDevId(), sid=koShiftId(now);
-    const lps=koDccpLps(d);
-    if(lps && key!=="SEMUA" && !lps.has(key)){ koBlock("nodccp"); return; }
+    /* (17 Nov 15.20) aturan "LP tidak ada di DCCP → Koordinator dijeda" DICABUT: salah menolak Koordinator LP TOP yang hari ini ada di DCCP
+       (nama LP di kolom DCCP bisa berbeda tulisan). Yang tetap berlaku: satu HP per LP per shift. */
     const s=((d.koSeats||{})[key])||null;
     if(!s || !s.dev){ koClaim(key, sid); return; }
     if(s.dev===me){
