@@ -1635,7 +1635,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 15.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="17 Nov 2026 15.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -5175,6 +5175,40 @@ function lpCanon(x){   // KPL/KPLM/KPC = satu LP; KMD/KMDI/"KMD I" = satu LP (ab
   if(/^(PAM|PRN|PARANI)$/.test(k)) return "PAM";
   return (typeof TLS_VENDOR_MAP!=="undefined" && TLS_VENDOR_MAP[k])||k;
 }
+/* LP dari kode driver TLS: KPCDRV0000000031 → KPC, KMDCCDRV302 → KMD */
+function lpFromDrvCode(code){ const m=String(code||"").toUpperCase().match(/^([A-Z]{2,6}?)(CC)?DRV/); return m?m[1]:""; }
+function lpBad(lp){ const t=String(lp||"").trim(); return !t || !/[A-Za-z]/.test(t); }
+/* LP untuk plat tertentu kalau baris DCCP-nya berisi angka: dari kode driver di DCCP, akun driver (kode driver / plat shift ini), atau stall */
+function lpGuess(d, row){
+  try{
+    let v=lpFromDrvCode(row && row.drvCode); if(v) return v;
+    const k=normPlat(row && row.police), us=d.users||[];
+    if(row && row.drvCode){ const u=us.find(x=>x && x.role==="cc" && x.lp && String(x.drvCode||"").toUpperCase()===String(row.drvCode).toUpperCase()); if(u) return u.lp; }
+    const sp=(d.ccShiftPlat||[]).filter(x=>x && normPlat(x.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+    if(sp){ const u=us.find(x=>x && x.username===sp.u && x.role==="cc" && x.lp); if(u) return u.lp; }
+    return "";
+  }catch(e){ return ""; }
+}
+/* Perbaiki data yang sudah telanjur tersimpan dengan LP angka (DCCP aktif + simpanan, stall, waiting list, Parkir Luar, ILS yang belum masuk TLS). */
+function lpRepair(d){
+  let n=0; const fix={};
+  const doRows=rows=>(rows||[]).forEach(r=>{ if(r && lpBad(r.lp)){ const g=lpGuess(d,r); if(g){ r.lp=g; n++; } } if(r && !lpBad(r.lp)) fix[normPlat(r.police)]=r.lp; });
+  doRows(d.dccpSchedule); Object.values(d.dccpStore||{}).forEach(st=>{ if(st) doRows(st.rows); });
+  const fx=it=>{ if(it && lpBad(it.lp)){ const v=fix[normPlat(it.plat||it.ccPlat)]; if(v){ it.lp=v; n++; } } };
+  Object.values(d.cc||{}).forEach(fx); (d.queue||[]).forEach(fx); (d.hold||[]).forEach(fx);
+  (d.ils||[]).forEach(b=>{ if(b && b.status==="open" && !b.outTs && lpBad(b.lp)){ const v=fix[normPlat(b.ccPlat)]; if(v){ b.lp=v; n++; } } });
+  return n;
+}
+let _lpRepT=0;
+function lpRepairTick(){
+  try{
+    if(!currentUser || isViewer() || !["delivery","admin"].includes(currentUser.role)) return;
+    if(FBS.enabled && (_fbMode!=="full" || fbCurrentState()!=="online")) return;
+    const now=Date.now(); if(now-_lpRepT<20000) return; _lpRepT=now;
+    const c=JSON.parse(JSON.stringify(DB.get())); if(!lpRepair(c)) return;
+    DB.set(d=>{ lpRepair(d); });
+  }catch(e){}
+}
 function lpMine(lp){ const m=myKoordLP(); return !m || lpCanon(lp)===lpCanon(m); }
 /* ===== SATU HP KOORDINATOR PER LP PER SHIFT (17 Nov 2026, permintaan Khairul) =====
    Tiap LP hanya satu Koordinator tiap shift, dan hanya LP yang ada di Jadwal DCCP shift ini (termasuk Spot, Pengganti, Change Shift).
@@ -8129,13 +8163,25 @@ function parseDccpGrid(grid){
   const cDrvCode = H.findIndex(x=>/(kode|code).*(driver|drv)|(driver|drv).*(kode|code)/i.test(txt(x)));
   const cLoad = H.findIndex(x=>/^loading/i.test(txt(x)));
   const cTrip = H.findIndex(x=>/^trip$/i.test(txt(x)));
+  /* 17 Nov 2026: kolom LP dicari, tidak lagi selalu kolom B. File DCCP hari ini berisi angka (nomor urut) di kolom B sehingga LP terbaca "3".
+     Urutan: judul kolom LP/Transporter/Vendor/Ekspedisi (baris judul atau 1 baris di atasnya); kalau tidak ada, kolom di kiri Police No
+     yang paling banyak berisi tulisan berhuruf (bukan angka). */
+  const lpHdr=/^(lp|l\.p\.?|logistic|logistik|transporter|transport|vendor|ekspedisi|expedisi|mitra|partner|lsp)\b/i;
+  let cLp = H.findIndex(x=>lpHdr.test(txt(x)));
+  if(cLp<0 && hr>0) cLp = (grid[hr-1]||[]).findIndex(x=>lpHdr.test(txt(x)));
+  if(cLp<0){ let best=-1, bestN=0;
+    for(let c=0;c<cPol;c++){ if(c===cModel || c===cDriver || c===cDrvCode) continue; let n=0;
+      for(let r=hr+1;r<Math.min(grid.length,hr+200);r++){ const v=txt((grid[r]||[])[c]); if(v && /[A-Za-z]/.test(v) && v.length<=30 && !/TOTAL/i.test(v)) n++; }
+      if(n>bestN){ bestN=n; best=c; } }
+    cLp = best>=0 ? best : 1; }
+  const lpOf = v=>{ const t=txt(v); return (t && /[A-Za-z]/.test(t)) ? t : ""; };   /* angka saja (nomor urut) bukan nama LP */
   const timeCols = [];
   for(let c=Math.max(cLoad+1,0);c<H.length;c++){ const t=dccpTimeStr(H[c]); if(t) timeCols.push({c,t}); }
   const out = []; let lp = "";
   for(let r=hr+1;r<grid.length;r++){
     const row = grid[r]||[];
     if(row.some(c=>/TOTAL\s*DELIVERY/i.test(txt(c)))) break;
-    if(txt(row[1])) lp = txt(row[1]);
+    if(lpOf(row[cLp])) lp = lpOf(row[cLp]);
     const police = txt(row[cPol]);
     if(!police) continue;
     let sched="", dest=""; const trips=[];
@@ -8148,7 +8194,8 @@ function parseDccpGrid(grid){
     const nUnit = cLoad>=0 ? Number(row[cLoad]) : NaN;
     const planTrip = nTrip>0 ? nTrip : (trips.length||1);
     const planUnit = nUnit>0 ? nUnit : planTrip*6;
-    out.push({lp, police: platFmt(police), model: cModel>=0?txt(row[cModel]):"", driver: cDriver>=0?txt(row[cDriver]):"", drvCode: cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"", schedTime:sched, dest, trips, planTrip, planUnit});
+    const _dc = cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"";
+    out.push({lp: lp || lpFromDrvCode(_dc), police: platFmt(police), model: cModel>=0?txt(row[cModel]):"", driver: cDriver>=0?txt(row[cDriver]):"", drvCode: cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"", schedTime:sched, dest, trips, planTrip, planUnit});
   }
   return out;
 }
@@ -13979,7 +14026,7 @@ let _lastRaw = null, _lastMinute = -1;
 try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
 /* tiap pengecekan berdiri sendiri: satu error tidak boleh menghentikan yang lain (mis. popup giliran / dikeluarkan di HP driver) */
-const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>ccLastOutCheck(), ()=>ccLastOutBackstop(), ()=>spdAutoPrune(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck(), ()=>koSeatCheck(), ()=>ritNSync()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
+const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>ccLastOutCheck(), ()=>ccLastOutBackstop(), ()=>spdAutoPrune(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck(), ()=>koSeatCheck(), ()=>ritNSync(), ()=>lpRepairTick()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
 setInterval(()=>{ if(_koBlk){ try{ koSeatCheck(); }catch(e){} return; } _tick3.forEach(f=>{ try{ f(); }catch(e){} }); }, 3000);   /* Koordinator dijeda: tidak ada pengecekan lain */
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
