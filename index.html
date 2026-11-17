@@ -1635,7 +1635,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 15.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="17 Nov 2026 15.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4431,7 +4431,7 @@ function renderDelivery(){
     : `<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${nBelum} CC belum dibuatkan ILS · ${ccOptions.length-nBelum} sudah. Ketuk CC untuk memilih.</div>`+ccRowsSorted.map(n=>{
         const c=data.cc[n], b=ilsOfCC(n), sel=deliverySelCC==n, col=ccColor(c.plat), st=b?ilsStage(b):null;
         return `<div onclick="deliverySelCC='${n}';render()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;border:${sel?'3px':'1.5px'} solid ${sel?col:'var(--border)'};border-left:8px solid ${col};border-radius:12px;padding:9px 12px;margin-bottom:7px;${b&&!sel?'opacity:.8;':''}background:${sel?'var(--panel2)':'transparent'};">
-          <div><b style="background:${col};color:#fff;border-radius:6px;padding:1px 8px;font-weight:900;">${escH(c.plat)}</b> <span style="font-size:12px;color:var(--text-dim);">Stall ${ccLbl(n)} · ${escH(c.lp||"-")}</span>${(()=>{ const dn=ccDriverAny(c.plat); return dn?`<div style="font-size:13px;font-weight:800;margin-top:2px;">👤 ${escH(dn)}</div>`:""; })()}</div>
+          <div><b style="background:${col};color:#fff;border-radius:6px;padding:1px 8px;font-weight:900;">${escH(c.plat)}</b> <span style="font-size:12px;color:var(--text-dim);">Stall ${ccLbl(n)} · ${escH(c.lp||"-")}</span>${(()=>{ const dn=ccDriverAny(c.plat); return dn?`<div style="font-size:13px;font-weight:800;margin-top:2px;">👤 ${escH(dn)}</div>`:""; })()}${(()=>{ const o=ilsOrphanAt(data,n); return o?`<div style="font-size:12px;font-weight:800;color:#C0392B;margin-top:3px;">⚠ Stall ini masih terkunci ILS #${o.id} milik ${escH(o.ccPlat)} (${o.loadTs?"sudah loading selesai":"belum loading"}). Ketuk Buat ILS untuk menyelesaikannya.</div>`:""; })()}</div>
           <span style="font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;white-space:nowrap;${b?`background:${st.bg};color:${st.c};`:'background:#ffedd5;color:#b45309;'}">${b?`✔ ILS #${b.id} · ${b.units.length} unit`:"○ Belum ada ILS"}</span></div>`; }).join("");
 
   const loadingBatches = data.ils.filter(b=>b.status==="open");
@@ -4576,7 +4576,18 @@ function createILS(ccNum, slots){
   const _dupI=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===normPlat(ccInfo.plat));
   if(_dupI){ alert("Plat "+ccInfo.plat+" sudah punya ILS #"+_dupI.id+" yang masih aktif di Stall "+ccLbl(_dupI.ccNum)+(_dupI.mp?" (dibuat oleh "+_dupI.mp+")":"")+". Satu CC hanya boleh punya satu ILS aktif. Selesaikan atau batalkan ILS itu dulu."); return false; }
   { const _dupS=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum==ccNum);   // stall CC terkunci: 1 stall = 1 plat = 1 ILS aktif
-    if(_dupS){ alert("Stall "+ccLbl(ccNum)+" sudah terkunci untuk "+_dupS.ccPlat+" (ILS #"+_dupS.id+"). Satu stall CC hanya boleh satu plat / satu ILS aktif sampai CC itu berangkat (Delout)."); return false; } }
+    if(_dupS){
+      /* 17 Nov 2026: ILS "yatim" — plat pemilik ILS sudah tidak ada di stall ini (stall sudah diisi CC lain). Delivery/Admin langsung diberi jalan keluar. */
+      if(normPlat(_dupS.ccPlat)!==normPlat(ccInfo.plat) && canKeluarkanCC()){
+        const lb=ccLbl(ccNum), pl=_dupS.ccPlat, np=(_dupS.units||[]).length;
+        if(_dupS.loadTs){
+          if(confirm(`Stall ${lb} masih terkunci ILS #${_dupS.id} milik ${pl} yang SUDAH LOADING SELESAI, padahal ${pl} sudah tidak ada di stall ini.\n\nKalau ${pl} sudah berangkat membawa ${np} unitnya: tekan OK untuk DELOUT ILS itu (surat jalan & manifest tersimpan). Setelah itu ILS untuk ${ccInfo.plat} bisa dibuat.\n\nBatal = biarkan dulu.`)) delout(_dupS.id);
+        } else {
+          if(confirm(`Stall ${lb} masih terkunci ILS #${_dupS.id} milik ${pl}, padahal ${pl} sudah tidak ada di stall ini.\n\nKalau ${pl} tidak jadi muat: tekan OK lalu konfirmasi Batal ILS (${np} unit kembali ke stall). Setelah itu ILS untuk ${ccInfo.plat} bisa dibuat.\n\nBatal = biarkan dulu.`)) cancelILS(_dupS.id);
+        }
+        return false;
+      }
+      alert("Stall "+ccLbl(ccNum)+" sudah terkunci untuk "+_dupS.ccPlat+" (ILS #"+_dupS.id+"). Satu stall CC hanya boleh satu plat / satu ILS aktif sampai CC itu berangkat (Delout)."); return false; } }
   if(new Set(units.map(u=>u.batam)).size>1){ alert("ILS tidak boleh mencampur unit BATAM dan reguler."); return false; }
   if(ppbjHas(data)){ const np=units.filter(u=>u.batam && !ppbjOf(data,u.frame)); if(np.length && !confirm(np.length+" unit Batam BELUM ada di data PPBJ:\n"+np.map(u=>"• "+u.frame+" ("+u.model+")").join("\n")+"\n\nDokumen PPBJ unit ini belum keluar. Tetap buat ILS?")) return false; }
   { const bl=units.map(u=>({u, b:dfBlockOf(data,u.frame)})).filter(z=>z.b); if(bl.length){ alert("Unit defect tidak bisa dimasukkan ILS:\n"+bl.map(z=>"• "+z.u.frame+" ("+z.u.model+") — "+z.b.why).join("\n")+"\n\nPutuskan dulu di Konfirmasi Defect, atau pilih unit lain."); return false; } }
@@ -7397,6 +7408,8 @@ function mfPurgeOrphans(){
   }catch(e){}
 }
 setInterval(mfPurgeOrphans, 60000);
+/* ILS aktif di stall n yang platnya sudah tidak ada di stall itu (CC sudah diganti / keluar tanpa ILS ikut dibatalkan) */
+function ilsOrphanAt(d, n){ const c=(d.cc||{})[n]; return (d.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum==n && (!c || normPlat(c.plat)!==normPlat(b.ccPlat)))||null; }
 function cancelILS(id){
   const b=(DB.get().ils||[]).find(x=>x.id===id); if(!b) return;
   if(b.outTs || b.status==="done"){ if(canKeluarkanCC()){ ilsFixDo(id); return; } alert("ILS ini sudah Delout. Pembatalan hanya bisa oleh Delivery / Admin."); return; }   // sudah Delout: lewat koreksi (hapus ILS + surat jalan + manifest + ritase)
