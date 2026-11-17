@@ -1110,6 +1110,9 @@ let _mem = null;
 function cloneJ(o){ return JSON.parse(JSON.stringify(o)); }
 function dbKeys(d){ return Object.keys(d).filter(k=>LOCAL_ONLY.indexOf(k)<0); }
 /* Firebase membuang array/objek kosong & mengubah objek ber-kunci angka jadi array → kembalikan ke bentuk yang dipakai aplikasi */
+/* 17 Nov 21.45: daftar dari Firebase bisa "berlubang" (indeks hilang di tengah, mis. baris terhapus di server).
+   .some() melewati lubang, jadi lubang dulu lolos dan membuat find(x=>x.id) error "reading 'id'" → semua penyimpanan gagal. */
+function arrGappy(v){ if(!Array.isArray(v)) return false; let n=0; for(const k in v){ n++; } return n!==v.length || v.some(x=>x===null||x===undefined); }
 function normalizeData(raw){
   const seed = seedDB(), d = (raw && typeof raw==="object") ? raw : {};
   for(const k of Object.keys(seed)){ if(d[k]===undefined || d[k]===null) d[k] = seed[k]; }
@@ -1118,7 +1121,7 @@ function normalizeData(raw){
   });
   /* daftar tidak boleh berisi lubang kosong (null): bisa muncul kalau dua HP menulis baris berbeda bersamaan */
   ["manifest","queue","ils","defects","defectTypes","defectParts","lpList","dccpSchedule","users","regs","hold","absenLog","ccCalls","ccOutLog","speedAlerts","swapLog","queueMoveLog","takeLog","ilsFixLog","unitOutLog","csList","ccShiftPlat"].forEach(k=>{
-    const v=d[k]; if(Array.isArray(v)){ if(v.some(x=>x===null||x===undefined)) d[k]=v.filter(x=>x!==null&&x!==undefined); }
+    const v=d[k]; if(Array.isArray(v)){ if(arrGappy(v)) d[k]=v.filter(x=>x!==null&&x!==undefined); }
     else if(v && typeof v==="object" && k!=="queue") d[k]=Object.values(v).filter(x=>x!==null&&x!==undefined);
   });
   const toObj = v=>{ if(Array.isArray(v)){ const o={}; v.forEach((x,i)=>{ if(x!==null && x!==undefined) o[i]=x; }); return o; } return v || {}; };
@@ -1126,7 +1129,7 @@ function normalizeData(raw){
   d.ccOpen = toObj(d.ccOpen);
   d.units = d.units || {};
   for(const k of Object.keys(seed.units)){ if(d.units[k]===undefined) d.units[k] = null; }
-  (d.ils||[]).forEach(b=>{ if(b && !Array.isArray(b.units)) b.units = b.units ? Object.values(b.units) : []; if(b && b.units.some(u=>!u)) b.units=b.units.filter(Boolean); });
+  (d.ils||[]).forEach(b=>{ if(b && !Array.isArray(b.units)) b.units = b.units ? Object.values(b.units) : []; if(b && arrGappy(b.units)) b.units=b.units.filter(Boolean); if(b && Array.isArray(b.loadSnap) && arrGappy(b.loadSnap)) b.loadSnap=b.loadSnap.filter(Boolean); });
   /* 17 Nov 18.40: baris rusak (tipe salah / kolom wajib kosong) dirapikan di pintu masuk data, supaya satu baris tidak membuat layar / penyimpanan gagal */
   try{
     const S=v=>(v==null?"":String(v));
@@ -1144,7 +1147,9 @@ function normalizeData(raw){
     if(Array.isArray(d.ccShiftPlat)) d.ccShiftPlat=d.ccShiftPlat.filter(x=>x && x.u && x.plat);
   }catch(e){ try{ console.warn("normalizeData rapikan", e); }catch(_){} }
   if(d.unitLog && !Array.isArray(d.unitLog) && typeof d.unitLog==="object") d.unitLog=Object.values(d.unitLog);
-  if(Array.isArray(d.unitLog) && d.unitLog.some(e=>!e || typeof e!=="object")) d.unitLog=d.unitLog.filter(e=>e && typeof e==="object");
+  if(Array.isArray(d.unitLog) && (arrGappy(d.unitLog) || d.unitLog.some(e=>!e || typeof e!=="object"))) d.unitLog=d.unitLog.filter(e=>e && typeof e==="object");
+  /* semua daftar lain di tingkat atas juga dirapatkan (lubang / null dibuang) */
+  try{ Object.keys(d).forEach(k=>{ const v=d[k]; if(Array.isArray(v) && arrGappy(v)) d[k]=v.filter(x=>x!==null && x!==undefined); }); }catch(e){}
   return d;
 }
 /* Jalankan mutator dengan waktu & random yang DIBEKUKAN → hasil identik di setiap percobaan ulang transaction */
@@ -1725,7 +1730,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 21.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="17 Nov 2026 21.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1812,7 +1817,7 @@ const DB = {
     const pre = cloneJ(data);
     const T = Date.now(), seed = (T ^ 0x9e3779b9) >>> 0;
     try{ runMut(data, mutatorFn, T, seed); }
-    catch(e){ _mem = pre; fbErrNote("simpan", e); saveFailToast(e); throw e; }   /* 17 Nov: perubahan setengah jadi tidak boleh tertinggal di HP (dulu jadi ILS / Delout "hantu") */
+    catch(e){ _mem = pre; fbErrNote("simpan", e); if(Date.now()-_uAct<3000) saveFailToast(e); throw e; }   /* 17 Nov: perubahan setengah jadi tidak boleh tertinggal di HP (dulu jadi ILS / Delout "hantu") */
     const keys = dbKeys(data).filter(k=> JSON.stringify(data[k]) !== JSON.stringify(pre[k]));
     this.save(data);
     keys.forEach(k=>{ try{ fbPushSmart(k, pre, data, mutatorFn, T, seed); }catch(e){ fbErrNote("kirim "+k, e); } });
@@ -9088,7 +9093,7 @@ function syncUnitLog(d){
   try{ dfSync(d); }catch(e){}
   try{ pdiOpenSync(d); }catch(e){}
   d.unitLog = Array.isArray(d.unitLog) ? d.unitLog.filter(e=>e && typeof e==="object") : (d.unitLog && typeof d.unitLog==="object" ? Object.values(d.unitLog).filter(e=>e && typeof e==="object") : []);
-  if(Array.isArray(d.ils)) d.ils.forEach(b=>{ if(b && Array.isArray(b.units) && b.units.some(u=>!u)) b.units=b.units.filter(Boolean); });
+  if(Array.isArray(d.ils)){ if(arrGappy(d.ils)) d.ils=d.ils.filter(Boolean); d.ils.forEach(b=>{ if(b && Array.isArray(b.units) && arrGappy(b.units)) b.units=b.units.filter(Boolean); }); }
   const log = d.unitLog, now = Date.now();
   if(!d.migAvanzaBY){ d.migAvanzaBY = true; const a = d.models && d.models.AVANZA; if(a && Array.isArray(a.vin_codes) && !a.vin_codes.includes("BY")) a.vin_codes.push("BY"); }   // Avanza baru (W100RE) berkode BY
   { const a2 = d.models && d.models.AVANZA; if(a2 && /^#(2CA85B|1E9E5A)$/i.test(a2.color||"")) a2.color = "#8E5BD6"; }   // Avanza ungu (hijau = stall kosong)
