@@ -1634,7 +1634,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 14.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="17 Nov 2026 15.05";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3954,9 +3954,9 @@ function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut ja
 /* CC yang posisinya (data peta, segar < 5 menit) masih jauh dari yard tidak dilepas dari Parkir Luar ke stall, walau jadwalnya sudah dekat. Delivery/Admin tetap bisa melepas paksa. */
 /* Posisi terakhir CC dari peta. Kalau HP berhenti mengirim posisi (sinyal hilang / di NVDC) tapi posisi terakhirnya JAUH dan belum cukup waktu untuk kembali (±40 km/j), CC tetap dianggap jauh. */
 function ccLastPos(d, plat){
-  try{ const y=d.yardLocation||{}; if(y.lat==null) return null; const k=normPlat(plat), r=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+  try{ const y=d.yardLocation||{}; if(y.lat==null) return null; const k=normPlat(plat), r=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k && !trkCoarse(t)).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
     if(!r || typeof r.lat!=="number") return null; const age=Date.now()-(r.ts||0); let km=haversineKm(r.lat,r.lng,y.lat,y.lng);
-    Object.values(TRACK||{}).forEach(t=>{ if(t && typeof t.lat==="number" && normPlat(t.plat)===k && Date.now()-(t.ts||0)<=5*60000){ const kk=haversineKm(t.lat,t.lng,y.lat,y.lng); if(kk<km) km=kk; } });   // ada titik segar lain yang dekat: tidak dianggap jauh
+    Object.values(TRACK||{}).forEach(t=>{ if(t && typeof t.lat==="number" && normPlat(t.plat)===k && !trkCoarse(t) && Date.now()-(t.ts||0)<=5*60000){ const kk=haversineKm(t.lat,t.lng,y.lat,y.lng); if(kk<km) km=kk; } });   // ada titik segar lain yang dekat: tidak dianggap jauh
     return {km:km, age:age}; }catch(e){ return null; }
 }
 function ccDistNow(d, plat){   // jarak (km) CC ke yard; null = tidak diketahui
@@ -11998,11 +11998,19 @@ function nearNvdc(lat, lng, d){
     return haversineKm(lat,lng,nv.lat,nv.lng) < haversineKm(lat,lng,y.lat,y.lng);
   }catch(e){ return false; }
 }
+/* Posisi kasar: dari jaringan (APK v68 menandai prov:"net") atau akurasi > 150 m. Posisi BTS/Wi-Fi bisa meleset beberapa km
+   (truk di NVDC terbaca di EKY), jadi tidak dipakai untuk absen, tanda NVDC/menjauh, maupun jarak. Di peta, selama masih ada
+   posisi GPS yang segar (< 3 menit) dari truk itu, posisi GPS itulah yang ditampilkan. */
+function trkCoarse(r){ return !!r && (r.prov==="net" || (typeof r.acc==="number" && r.acc>150)); }
+const _trkFine={};
 function trkApply(){
   const out={}, hid=[], now=Date.now();
   Object.keys(TRACK_RAW||{}).forEach(k=>{ const r=TRACK_RAW[k]; if(!r || typeof r!=="object") return;
     let why=""; try{ why=trkSenderWhy(r); }catch(e){}
-    if(!why){ out[k]=r; _trkGood[k]=r; return; }
+    if(!why){
+      if(trkCoarse(r)){ const f=_trkFine[k]; let fw="x"; try{ fw=f?trkSenderWhy(f):"x"; }catch(e){} if(f && !fw && now-(f.ts||0)<180000){ out[k]=f; _trkGood[k]=f; return; } }
+      else if(typeof r.lat==="number") _trkFine[k]=r;
+      out[k]=r; _trkGood[k]=r; return; }
     if(typeof r.lat==="number" && now-(r.ts||0)<TRK_SHOW_MS) hid.push(Object.assign({k:k, why:why}, r));
     const g=_trkGood[k]; let gw="x"; try{ gw=g?trkSenderWhy(g):"x"; }catch(e){}
     if(g && !gw && now-(g.ts||0)<TRK_SHOW_MS) out[k]=g;   // posisi terakhir dari HP pemegang plat (kalau dua HP bergantian menimpa)
@@ -12226,7 +12234,7 @@ setInterval(()=>{ try{ const pl=window._cgPend; if(!pl||!currentUser||currentUse
 /* Arah CC dari data peta (segar < 5 menit): "out" = menuju NVDC, "back" = kembali ke ADM. null = tidak diketahui.
    Dipakai agar CC yang baru Delout dan sedang berjalan ke arah NVDC TIDAK absen lagi saat masih di sekitar ADM. */
 function ccDirNow(d, plat){
-  try{ const k=normPlat(plat), r=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+  try{ const k=normPlat(plat), r=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k && !trkCoarse(t)).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
     if(!r || typeof r.lat!=="number" || Date.now()-(r.ts||0)>5*60000) return null;
     const o=trkCompute(r, d.mapPoints||DB.get().mapPoints||{}); return (o&&o.dir)||null; }catch(e){ return null; }
 }
@@ -12279,7 +12287,7 @@ function ccOutbound(d, plat){   // true = baru keluar (≤4 jam) dan masih berja
   if(age<45*60000) return true;
   return ccDirNow(d, plat)==="out";
 }
-const MAPABS={hits:{}, out:{}};
+const MAPABS={hits:{}, out:{}, ts:{}};
 function ccLastLeft(d, plat){
   const k=normPlat(plat); let lo=((d.ccLeft||{})[k])||0;
   (d.ils||[]).forEach(x=>{ if(x && x.outTs && normPlat(x.ccPlat)===k && x.outTs>lo) lo=x.outTs; });
@@ -12310,6 +12318,7 @@ function mapAbsenTick(){
       if(now-(r.ts||0)>150000){ delete MAPABS.hits[k]; return; }   /* truk diam mengirim tiap 2 menit */
       if(typeof trkHasAccount==="function" && !trkHasAccount(r)) return;
       if(r.u && absenHolderWhy(r.u, r.plat)){ delete MAPABS.hits[k]; return; }   /* posisi dari HP driver yang bukan pemegang plat di shift ini: tidak dipakai */
+      if(trkCoarse(r)) return;   /* posisi kasar (jaringan/BTS, akurasi > 150 m): bisa meleset km-an — tidak dipakai absen / tanda NVDC */
       const km=haversineKm(r.lat,r.lng,y.lat,y.lng);
       if(km>rad+1) MAPABS.out[k]=now;
       try{ const nv=(d.mapPoints||{}).nvdc, lo0=ccLastDelout(d,r.plat);   /* tercatat tiba di NVDC (≤1 km) sesudah Delout → boleh absen lagi */
@@ -12321,6 +12330,8 @@ function mapAbsenTick(){
       if(lo && ccOutbound(d,r.plat)){ delete MAPABS.hits[k]; return; }   // baru Delout & menuju NVDC: bukan absen
       if(lo && (now-lo<ccReabsenMin(d)*60000 || (now-lo<90*60000 && !((MAPABS.out[k]||0)>lo)))){ delete MAPABS.hits[k]; return; }
       if(km<=rad && !nearNvdc(r.lat, r.lng, d)){
+        if(MAPABS.ts[k]===(r.ts||0)) return;   /* butuh 2 kiriman BERBEDA di dalam radius, bukan titik yang sama dibaca dua kali */
+        MAPABS.ts[k]=(r.ts||0);
         MAPABS.hits[k]=(MAPABS.hits[k]||0)+1;
         if(MAPABS.hits[k]>=2){ MAPABS.hits[k]=0; window._absenVia={via:"peta", su:r.u||""}; try{ registerCC(r.plat, r.lp||"", km, true, false, "Peta (otomatis)"); } finally { window._absenVia=null; } }
       } else delete MAPABS.hits[k];
