@@ -1450,9 +1450,9 @@ function fbMeterCardHtml(){
 /* Daftar HP Koordinator yang sedang dipakai (satu per LP per shift) */
 function koSeatsCardHtml(){
   const o=(DB.get().koSeats)||{}, sid=koShiftId(), hm=t=>t?new Date(t).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):"-";
-  const L=Object.keys(o).map(k=>Object.assign({k}, o[k]||{})).filter(x=>x.dev).sort((a,b)=>String(a.k).localeCompare(String(b.k)));
+  const L=[]; Object.keys(o).forEach(k=>koSeatList(k).forEach(x=>L.push(Object.assign({k}, x)))); L.sort((a,b)=>String(a.k).localeCompare(String(b.k)) || (+a.ts||0)-(+b.ts||0));
   return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12px;">
-    <div style="font-weight:800;margin-bottom:4px;">HP Koordinator aktif (1 HP per LP per shift)</div>
+    <div style="font-weight:800;margin-bottom:4px;">HP Koordinator aktif (${devLimit("koordinator")||"bebas"} HP per LP per shift)</div>
     <div style="color:var(--text-dim);margin-bottom:4px;">LP di Jadwal DCCP aktif (tulisan asli → dibaca sebagai): ${(()=>{ const m={}; (DB.get().dccpSchedule||[]).forEach(r=>{ const a=String((r&&r.lp)||"").trim(); if(a) m[a]=lpCanon(a); }); const k=Object.keys(m); return k.length?k.map(a=>escH(a)+" → <b>"+escH(m[a])+"</b>").join(" · "):"-"; })()}</div>
     ${L.length?`<table style="width:100%;font-size:12px;"><tr><th style="text-align:left;">LP</th><th style="text-align:left;">Dipakai</th><th style="text-align:left;">Sejak</th><th></th></tr>${L.map(x=>`<tr><td><b>${escH(x.k)}</b></td><td>${escH(x.n||x.u||"-")}${x.p?` <span style="color:var(--text-dim);">(${escH(x.p)})</span>`:""}</td><td>${hm(x.ts)}</td><td>${x.sh===sid?`<span style="color:#17803d;font-weight:700;">shift ini</span>`:`<span style="color:var(--text-dim);">shift lalu</span>`}</td></tr>`).join("")}</table>`
       :`<div style="color:var(--text-dim);">Belum ada.</div>`}</div>`;
@@ -1496,7 +1496,7 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim"];
+const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit"];
 const FB_LITE={
   cc:         { skip:["errDev","manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
   dispatcher: { skip:["errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
@@ -1734,7 +1734,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 22.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 00.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2590,6 +2590,7 @@ function ccLastOutBackstop(){
 function ccLastOutSave(){ const v=(document.getElementById("ccLastOutM")||{}).value; const n=Math.max(0,Math.min(240,Math.round(+v||0))); DB.set(d=>{ d.ccLastOutM=n; }); alert(n?("Driver CC otomatis keluar "+ccLastOutFmtM(n)+" sesudah Delout ritase terakhir (DCCP)."):"Keluar otomatis sesudah ritase terakhir dimatikan."); render(); }
 function doLogout(){
   try{ ilsSeatRelease(); }catch(e){}
+  try{ devSeatRelease(); }catch(e){}
   try{ koSeatRelease(); }catch(e){}   /* kursi Koordinator LP dilepas: HP berikutnya langsung bisa memakai */   /* kursi pembuat ILS dilepas supaya HP lain bisa memakai */
   try{ if(currentUser && currentUser.username){ const un=currentUser.username, t=Date.now(); DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===un) x.lo=t; }); }); } }catch(e){}   // tandai sudah logout: titik petanya tidak dianggap punya akun aktif
   ccPlatOk=false; try{ stopShare(true); }catch(e){}
@@ -4913,6 +4914,25 @@ const ILS_SEAT_MAX={delivery:2, admin:2}, ILS_SEAT_TTL=16*3600000, ILS_SEAT_REFR
 /* 17 Nov 22.00 (permintaan Khairul): jumlah HP per akun yang boleh membuat ILS diatur Admin (trial: 5, normal: 2). Tanpa upload versi baru. */
 const ILS_SEAT_DEF=5;
 function ilsSeatMax(r){ if(!ILS_SEAT_MAX[r]) return 0; const v=Number((DB.get()||{}).ilsSeatMax); return (isFinite(v) && v>=1 && v<=10) ? Math.floor(v) : ILS_SEAT_DEF; }
+function devLimitCardHtml(){
+  const row=(id,label,hint,val,min)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-top:1px dashed var(--border);"><div style="min-width:0;"><b style="font-size:13px;">${label}</b><div style="font-size:11px;color:var(--text-dim);">${hint}</div></div><input id="${id}" type="number" min="${min}" max="20" value="${val}" style="width:72px;text-align:center;"></div>`;
+  const R=[["dispatcher","Dispatcher"],["pdi","PDI"],["leader","Leader"],["viewer","Pengamat"],["cc","Driver CC"]];
+  return `<div class="card"><h3>📱 Batas HP per akun</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:4px;">Berapa HP yang boleh membuka satu akun bersamaan. <b>0 = bebas</b>. HP yang melebihi batas melihat layar "Akun ini sudah dibuka di HP lain" (bisa ambil alih). Berlaku tanpa upload versi baru.</div>
+    ${row("lim_ils","Delivery & Admin — membuat ILS","HP per akun yang boleh membuat ILS (1–10). Trial: 5, normal: 2.",ilsSeatMax("delivery"),1)}
+    ${row("lim_koordinator","Koordinator","HP per LP per shift. Normal: 1.",devLimit("koordinator"),0)}
+    ${R.map(([k,l])=>row("lim_"+k,l,"HP per akun.",devLimit(k),0)).join("")}
+    <button type="button" class="btn btn-primary btn-sm" style="width:auto;margin-top:8px;" onclick="devLimitSave()">💾 Simpan</button></div>`;
+}
+function devLimitSave(){
+  if(!(currentUser && currentUser.role==="admin")){ alert("Hanya Admin."); return; }
+  const g=id=>{ const el=document.getElementById(id); const n=Math.floor(Number(el&&el.value)); return isFinite(n)?n:NaN; };
+  const ils=g("lim_ils"); if(!(ils>=1 && ils<=10)){ alert("Delivery & Admin (membuat ILS): isi 1 sampai 10."); return; }
+  const o={}; for(const k of Object.keys(DEV_LIMIT_DEF)){ const n=g("lim_"+k); if(!(n>=0 && n<=20)){ alert("Isi angka 0 sampai 20."); return; } o[k]=n; }
+  DB.set(d=>{ d.ilsSeatMax=ils; d.devLimit=o; });
+  alert("Tersimpan.\n\nDelivery & Admin (ILS): "+ils+" HP\nKoordinator: "+(o.koordinator||"bebas")+" HP per LP per shift\n"+["dispatcher","pdi","leader","viewer","cc"].map(k=>({dispatcher:"Dispatcher",pdi:"PDI",leader:"Leader",viewer:"Pengamat",cc:"Driver CC"})[k]+": "+(o[k]||"bebas")).join("\n"));
+  render();
+}
 function ilsSeatMaxSave(){ if(!(currentUser && currentUser.role==="admin")){ alert("Hanya Admin."); return; }
   const el=document.getElementById("ilsSeatMaxIn"), n=Math.floor(Number(el&&el.value)); if(!(n>=1 && n<=10)){ alert("Isi angka 1 sampai 10."); return; }
   DB.set(d=>{ d.ilsSeatMax=n; }); alert("Tersimpan: maksimal "+n+" HP per akun Delivery / Admin untuk membuat ILS."); }
@@ -5502,6 +5522,12 @@ function lpMine(lp){ const m=myKoordLP(); return !m || lpCanon(lp)===lpCanon(m);
    Kursi shift lalu otomatis diambil HP yang membuka RADAR di shift baru. HP pemegang kursi shift lalu yang tidak dibuka 30 menit
    (dan sudah lewat 30 menit dari ganti shift) ikut dijeda, supaya HP yang terlupa di saku tidak terus memakai data. */
 const KO_IDLE_MS=30*60000;
+/* 18 Nov (permintaan Khairul): batas HP diatur Admin → User → "📱 Batas HP per akun". 0 = bebas (tidak dibatasi).
+   koordinator = HP per LP per shift (bawaan 1); dispatcher/pdi/leader/viewer/cc = HP per akun (bawaan 0 = bebas). */
+const DEV_LIMIT_DEF={koordinator:1, dispatcher:0, pdi:0, leader:0, viewer:0, cc:0};
+function devLimit(r){ const o=((DB.get()||{}).devLimit)||{}; let v=Number(o[r]); if(!isFinite(v) || v<0 || o[r]==null || o[r]==="") v=(r in DEV_LIMIT_DEF)?DEV_LIMIT_DEF[r]:0; return Math.min(20, Math.floor(v)); }
+function devKeyOf(v){ return String(v||"").replace(/[.#$\/\[\]]/g,"_").slice(0,60)||"x"; }
+function koSeatList(key, d){ const raw=(((d||DB.get()).koSeats)||{})[key]; if(!raw || typeof raw!=="object") return []; if(raw.dev) return [raw]; return Object.keys(raw).map(k=>raw[k]).filter(x=>x && x.dev); }
 let _koBlk=null, _koTake=false, _koHidSince=0, _koClaimT=0, _koWait=0;
 function koSeatRole(){ return !!(currentUser && currentUser.role==="koordinator" && !isViewer()); }
 function koSeatKey(){ const lp=myKoordLP(); return (lp && lpCanon(lp)) || "SEMUA"; }
@@ -5527,28 +5553,35 @@ function koSeatCheck(){
     const d=DB.get(), key=koSeatKey(), me=ilsDevId(), sid=koShiftId(now);
     /* (17 Nov 15.20) aturan "LP tidak ada di DCCP → Koordinator dijeda" DICABUT: salah menolak Koordinator LP TOP yang hari ini ada di DCCP
        (nama LP di kolom DCCP bisa berbeda tulisan). Yang tetap berlaku: satu HP per LP per shift. */
-    const s=((d.koSeats||{})[key])||null;
-    if(!s || !s.dev){ koClaim(key, sid); return; }
-    if(s.dev===me){
-      if(s.sh===sid) return;
-      if(koVisible()){ koClaim(key, sid); return; }   /* masih dipakai di shift baru (lembur): kursi ikut shift baru */
+    const N=devLimit("koordinator"), L=koSeatList(key, d), mine=L.find(x=>x.dev===me), cur=L.filter(x=>x.sh===sid && x.dev!==me).sort((a,b)=>(+a.ts||0)-(+b.ts||0));
+    if(N===0){ if(!mine || mine.sh!==sid) koClaim(key, sid); return; }   /* bebas: tetap dicatat, tidak pernah dijeda */
+    if(mine){
+      if(mine.sh===sid) return;
+      if(koVisible()){ if(cur.length<N || _koTake) koClaim(key, sid); else koBlock("taken", cur[0], cur); return; }   /* masih dipakai di shift baru (lembur) */
       if(_koHidSince && now-_koHidSince>=KO_IDLE_MS && now-koShiftStart(now)>=KO_IDLE_MS) koBlock("shiftend");
       return;
     }
-    if(s.sh!==sid || _koTake){ koClaim(key, sid); return; }   /* kursi shift lalu milik HP lain: langsung diambil */
-    koBlock("taken", s);
+    if(cur.length<N || _koTake){ koClaim(key, sid); return; }   /* masih ada kursi di shift ini (kursi shift lalu tidak dihitung) */
+    koBlock("taken", cur[0], cur);
   }catch(e){}
 }
 function koClaim(key, sid){
-  const now=Date.now(); if(now-_koClaimT<15000) return; _koClaimT=now; _koTake=false;
-  const me=ilsDevId(), who=(currentUser&&(currentUser.name||currentUser.username))||"-";
+  const now=Date.now(); if(now-_koClaimT<15000) return; _koClaimT=now; const take=_koTake; _koTake=false;
+  const me=ilsDevId(), who=(currentUser&&(currentUser.name||currentUser.username))||"-", N=devLimit("koordinator");
   DB.set(x=>{ const o=x.koSeats=(x.koSeats&&typeof x.koSeats==="object")?x.koSeats:{};
-    Object.keys(o).forEach(k=>{ if(!o[k] || now-(+o[k].ts||0)>48*3600000) delete o[k]; });
-    o[key]={dev:me, u:(currentUser&&currentUser.username)||"", n:who, sh:sid, ts:now, p:(window.AndroidTLS?"APK":"Web")}; });
+    /* format: koSeats[LP] = { <HP>: kursi }. Format lama (satu kursi per LP) diubah otomatis. */
+    Object.keys(o).forEach(k=>{ const v=o[k]; if(!v || typeof v!=="object"){ delete o[k]; return; } if(v.dev){ const m={}; m[devKeyOf(v.dev)]=v; o[k]=m; } });
+    Object.keys(o).forEach(k=>{ const m=o[k]; Object.keys(m).forEach(dk=>{ const z=m[dk]; if(!z || !z.dev || now-(+z.ts||0)>48*3600000 || (k===key && z.sh!==sid && z.dev!==me)) delete m[dk]; }); if(!Object.keys(m).length) delete o[k]; });
+    const m=o[key]=o[key]||{};
+    if(N>0){ const others=Object.keys(m).map(dk=>Object.assign({dk}, m[dk])).filter(z=>z.dev!==me && z.sh===sid).sort((a,b)=>(+a.ts||0)-(+b.ts||0));
+      if(others.length>=N){ if(!take) return; others.slice(0, others.length-N+1).forEach(z=>{ delete m[z.dk]; }); } }   /* "Pakai di HP ini": HP terlama diputus */
+    Object.keys(m).forEach(dk=>{ if(m[dk] && m[dk].dev===me) delete m[dk]; });
+    m[devKeyOf(me)]={dev:me, u:(currentUser&&currentUser.username)||"", n:who, sh:sid, ts:now, p:(window.AndroidTLS?"APK":"Web")}; });
 }
-function koSeatRelease(){ try{ if(!koSeatRole()) return; const key=koSeatKey(), me=ilsDevId(), s=(DB.get().koSeats||{})[key]; if(s && s.dev===me) DB.set(x=>{ if(x.koSeats && x.koSeats[key] && x.koSeats[key].dev===me) delete x.koSeats[key]; }); }catch(e){} }
-function koBlock(why, s){
-  _koBlk={why, s:s||null, key:koSeatKey(), ts:Date.now()};
+function koSeatRelease(){ try{ if(!koSeatRole()) return; const key=koSeatKey(), me=ilsDevId(); if(!koSeatList(key).some(x=>x.dev===me)) return;
+  DB.set(x=>{ const v=x.koSeats && x.koSeats[key]; if(!v) return; if(v.dev){ if(v.dev===me) delete x.koSeats[key]; return; } Object.keys(v).forEach(dk=>{ if(v[dk] && v[dk].dev===me) delete v[dk]; }); if(!Object.keys(v).length) delete x.koSeats[key]; }); }catch(e){} }
+function koBlock(why, s, all){
+  _koBlk={why, s:s||null, all:all||null, key:koSeatKey(), ts:Date.now()};
   try{ FBS.db.goOffline(); }catch(e){}   /* tidak mengunduh apa pun selama dijeda */
   koBlockShow();
 }
@@ -5571,9 +5604,9 @@ function koBlockShow(){
   const b=_koBlk, s=b.s||{}, lp=escH(b.key==="SEMUA"?"(tanpa LP)":b.key), hm=t=>t?new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):"-";
   const btn=(txt, fn, main)=>`<button type="button" onclick="${fn}" style="display:block;width:100%;margin-top:10px;border:0;border-radius:12px;padding:13px 16px;font-weight:800;font-size:14px;${main?"background:#E8B04B;color:#16213E;":"background:rgba(255,255,255,.12);color:#fff;"}">${txt}</button>`;
   let icon="📵", title="", body="", acts="";
-  if(b.why==="taken"){ title=`Koordinator LP ${lp} sedang aktif di HP lain`;
-    body=`Dipakai <b>${escH(s.n||"-")}</b> sejak ${hm(s.ts)}${s.p?" ("+escH(s.p)+")":""}.<br><br>Satu LP hanya satu HP Koordinator dalam satu shift, supaya pemakaian data RADAR tetap hemat. HP ini tidak mengunduh data selama layar ini tampil.`;
-    acts=btn("📲 Pakai di HP ini (HP lain diputus)","koTakeOver()",true)+btn("Keluar","koBlockExit()"); }
+  if(b.why==="taken"){ const N=devLimit("koordinator"), all=(b.all&&b.all.length)?b.all:[s]; title=`Koordinator LP ${lp} sudah aktif di ${all.length} HP lain`;
+    body=`Dipakai: ${all.map(z=>`<b>${escH(z.n||"-")}</b> sejak ${hm(z.ts)}${z.p?" ("+escH(z.p)+")":""}`).join("<br>")}<br><br>Satu LP maksimal <b>${N} HP</b> Koordinator dalam satu shift (diatur Admin). HP ini tidak mengunduh data selama layar ini tampil.`;
+    acts=btn(`📲 Pakai di HP ini (HP ${escH(all[0].n||"terlama")} diputus)`,"koTakeOver()",true)+btn("🔄 Coba lagi","koUnblock(false)")+btn("Keluar","koBlockExit()"); }
   else if(b.why==="nodccp"){ icon="📋"; title=`LP ${lp} tidak ada di Jadwal DCCP shift ini`;
     body=`Koordinator hanya online kalau LP-nya ada di jadwal shift ini (termasuk Spot Order, CC Pengganti, dan Change Shift) atau masih punya CC di stall, antrean, atau ILS yang belum Delout.<br><br>Kalau ada CC LP ${lp} yang jalan, minta Delivery menambahkannya ke Jadwal DCCP, lalu tekan Coba lagi.`;
     acts=btn("🔄 Coba lagi","koUnblock(false)",true)+btn("Keluar","koBlockExit()"); }
@@ -5586,6 +5619,48 @@ function koBlockShow(){
     <div style="font-size:13.5px;opacity:.88;line-height:1.55;">${body}</div>
     <div style="margin-top:18px;">${acts}</div>
     <div style="font-size:11px;opacity:.55;margin-top:14px;">${escH((currentUser&&currentUser.name)||"")} · Koordinator</div></div>`;
+}
+/* ===== Batas HP per akun untuk role lain (18 Nov). Kursi: /radar/devSeats/<akun>/<HP> = {dev,n,r,ts,c,p}.
+   Hanya dicatat kalau batas role itu > 0. Kursi hidup = diperbarui dalam 30 menit terakhir (HP aktif memperbarui tiap 10 menit). */
+const DEV_ROLES=["dispatcher","pdi","leader","viewer","cc"], DEV_TTL=30*60000, DEV_BEAT=10*60000;
+let _dvBlk=null, _dvTake=false, _dvWait=0;
+function devSeatList(u, d){ const m=((((d||DB.get()).devSeats)||{})[devKeyOf(u)]); if(!m || typeof m!=="object") return []; return Object.keys(m).map(k=>Object.assign({k}, m[k]||{})).filter(x=>x.dev); }
+function devSeatRef(u, dev){ return FBS.db.ref(FB_ROOT+"/devSeats/"+devKeyOf(u)+"/"+devKeyOf(dev)); }
+function devSeatWrite(u, c){ try{ devSeatRef(u, ilsDevId()).set({dev:ilsDevId(), n:(currentUser&&(currentUser.name||currentUser.username))||"-", r:(currentUser&&currentUser.role)||"", ts:Date.now(), c:c||Date.now(), p:(window.AndroidTLS?"APK":"Web")}).catch(()=>{}); }catch(e){} }
+function devSeatRelease(){ try{ const u=currentUser&&currentUser.username; if(!u || !FBS.enabled || !FBS.db) return; if(devSeatList(u).some(x=>x.dev===ilsDevId())) devSeatRef(u, ilsDevId()).remove().catch(()=>{}); }catch(e){} }
+function devSeatCheck(){
+  try{
+    const r=currentUser&&currentUser.role, u=currentUser&&currentUser.username;
+    if(!r || !u || DEV_ROLES.indexOf(r)<0){ if(_dvBlk) dvUnblock(false, true); return; }
+    const N=devLimit(r);
+    if(N===0){ if(_dvBlk) dvUnblock(false, true); return; }
+    if(_dvBlk || !FBS.enabled || !FBS.ready || !FBS.authed || !FBS.db) return;
+    const now=Date.now(); if(_dvWait && now<_dvWait) return; _dvWait=0;
+    const me=ilsDevId(), L=devSeatList(u), live=L.filter(x=>now-(+x.ts||0)<DEV_TTL), mine=live.find(x=>x.dev===me), others=live.filter(x=>x.dev!==me).sort((a,b)=>(+a.ts||0)-(+b.ts||0));
+    if(mine){ if(now-(+mine.ts||0)>DEV_BEAT && koVisible()) devSeatWrite(u, mine.c); return; }
+    if(others.length<N || _dvTake){
+      const take=_dvTake; _dvTake=false;
+      if(take && others.length>=N) others.slice(0, others.length-N+1).forEach(z=>{ try{ FBS.db.ref(FB_ROOT+"/devSeats/"+devKeyOf(u)+"/"+z.k).remove().catch(()=>{}); }catch(e){} });
+      L.filter(x=>now-(+x.ts||0)>4*DEV_TTL).forEach(z=>{ try{ FBS.db.ref(FB_ROOT+"/devSeats/"+devKeyOf(u)+"/"+z.k).remove().catch(()=>{}); }catch(e){} });   /* kursi mati dibersihkan */
+      devSeatWrite(u, now); _dvWait=now+15000; return;
+    }
+    dvBlock(others);
+  }catch(e){}
+}
+function dvBlock(others){ _dvBlk={others:others||[], ts:Date.now()}; try{ FBS.db.goOffline(); }catch(e){} dvBlockShow(); }
+function dvUnblock(take, silent){ _dvBlk=null; _dvTake=!!take; _dvWait=Date.now()+15000; const el=document.getElementById("dvBlock"); if(el) el.remove(); try{ FBS.db.goOnline(); }catch(e){} if(!silent){ try{ render(); }catch(e){} } }
+function dvTakeOver(){ const o=(_dvBlk&&_dvBlk.others)||[]; if(!confirm("Pakai akun ini di HP ini?"+(o[0]?"\n\nHP "+(o[0].n||"terlama")+" ("+(o[0].p||"")+") akan diputus dari RADAR.":""))) return; dvUnblock(true); }
+function dvBlockExit(){ dvUnblock(false, true); setTimeout(()=>{ try{ doLogout(); }catch(e){} }, 300); }
+function dvBlockShow(){
+  if(!_dvBlk) return; let el=document.getElementById("dvBlock"); if(!el){ el=document.createElement("div"); el.id="dvBlock"; document.body.appendChild(el); }
+  const o=_dvBlk.others||[], N=devLimit((currentUser&&currentUser.role)||""), hm=t=>t?new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):"-";
+  const btn=(txt, fn, main)=>`<button type="button" onclick="${fn}" style="display:block;width:100%;margin-top:10px;border:0;border-radius:12px;padding:13px 16px;font-weight:800;font-size:14px;${main?"background:#E8B04B;color:#16213E;":"background:rgba(255,255,255,.12);color:#fff;"}">${txt}</button>`;
+  el.style.cssText="position:fixed;inset:0;z-index:199000;background:#16213E;color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;font-family:Inter,Arial,sans-serif;overflow:auto;";
+  el.innerHTML=`<div style="max-width:360px;width:100%;text-align:center;"><div style="font-size:42px;margin-bottom:10px;">📵</div>
+    <div style="font-size:19px;font-weight:800;line-height:1.3;margin-bottom:10px;">Akun ini sudah dibuka di ${o.length} HP lain</div>
+    <div style="font-size:13.5px;opacity:.88;line-height:1.55;">${o.map(z=>`${escH(z.p||"HP")} · aktif ${hm(z.ts)}`).join("<br>")}<br><br>Satu akun maksimal <b>${N} HP</b> (diatur Admin). HP ini tidak mengunduh data selama layar ini tampil.</div>
+    <div style="margin-top:18px;">${btn("📲 Pakai di HP ini (HP terlama diputus)","dvTakeOver()",true)+btn("🔄 Coba lagi","dvUnblock(false)")+btn("Keluar","dvBlockExit()")}</div>
+    <div style="font-size:11px;opacity:.55;margin-top:14px;">${escH((currentUser&&currentUser.name)||"")}</div></div>`;
 }
 function koordStatusList(data){
   const out=[];
@@ -11962,11 +12037,7 @@ function renderAdmin(){
   if(adminTab==="users"){
     return `${tabsHtml}
       ${renderRegCard()}
-      <div class="card">
-        <h3>📱 HP per akun untuk membuat ILS</h3>
-        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Berlaku untuk akun Delivery dan Admin (satu akun dipakai di beberapa HP). Masa trial: 5. Kalau sudah lancar: 2. Sekarang: <b>${ilsSeatMax("delivery")} HP</b>.</div>
-        <div style="display:flex;gap:8px;align-items:center;"><input id="ilsSeatMaxIn" type="number" min="1" max="10" value="${ilsSeatMax("delivery")}" style="width:90px;"><button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="ilsSeatMaxSave()">💾 Simpan</button></div>
-      </div>
+      ${devLimitCardHtml()}
       <div class="card"><h3>⏱ Keluar otomatis Driver CC</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Driver CC yang lupa keluar dari aplikasi otomatis di-logout setelah sekian jam sejak login, sehingga posisinya berhenti dibagikan. Isi 0 untuk mematikan.</div>
         <div style="display:flex;gap:8px;align-items:center;"><input id="ccAutoOutH" type="number" min="0" max="48" value="${ccAutoOutHours()}" style="width:90px;"><span style="font-size:13px;">jam</span><button class="btn btn-primary btn-sm" style="width:auto;" onclick="ccAutoOutSave()">💾 Simpan</button></div>
         <div style="font-size:12px;color:var(--text-dim);margin:12px 0 8px;border-top:1px solid var(--border);padding-top:10px;">Sesudah <b>ritase terakhir</b> di DCCP selesai dan CC sudah <b>Delout</b>, HP driver otomatis keluar setelah sekian menit — peta & GPS berhenti. Change Shift tidak kena. Isi 0 untuk mematikan.</div>
@@ -14449,7 +14520,7 @@ try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
 /* tiap pengecekan berdiri sendiri: satu error tidak boleh menghentikan yang lain (mis. popup giliran / dikeluarkan di HP driver) */
 const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>ccLastOutCheck(), ()=>ccLastOutBackstop(), ()=>spdAutoPrune(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck(), ()=>koSeatCheck(), ()=>ritNSync(), ()=>lpRepairTick()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
-setInterval(()=>{ if(_koBlk){ try{ koSeatCheck(); }catch(e){} return; } _tick3.forEach(f=>{ try{ f(); }catch(e){} }); }, 3000);   /* Koordinator dijeda: tidak ada pengecekan lain */
+setInterval(()=>{ if(_koBlk || _dvBlk){ try{ koSeatCheck(); }catch(e){} try{ devSeatCheck(); }catch(e){} return; } _tick3.forEach(f=>{ try{ f(); }catch(e){} }); try{ devSeatCheck(); }catch(e){} }, 3000);   /* Koordinator dijeda: tidak ada pengecekan lain */
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
