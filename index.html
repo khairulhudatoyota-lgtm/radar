@@ -1126,7 +1126,9 @@ function normalizeData(raw){
   d.ccOpen = toObj(d.ccOpen);
   d.units = d.units || {};
   for(const k of Object.keys(seed.units)){ if(d.units[k]===undefined) d.units[k] = null; }
-  (d.ils||[]).forEach(b=>{ if(b && !Array.isArray(b.units)) b.units = b.units ? Object.values(b.units) : []; });
+  (d.ils||[]).forEach(b=>{ if(b && !Array.isArray(b.units)) b.units = b.units ? Object.values(b.units) : []; if(b && b.units.some(u=>!u)) b.units=b.units.filter(Boolean); });
+  if(d.unitLog && !Array.isArray(d.unitLog) && typeof d.unitLog==="object") d.unitLog=Object.values(d.unitLog);
+  if(Array.isArray(d.unitLog) && d.unitLog.some(e=>!e || typeof e!=="object")) d.unitLog=d.unitLog.filter(e=>e && typeof e==="object");
   return d;
 }
 /* Jalankan mutator dengan waktu & random yang DIBEKUKAN → hasil identik di setiap percobaan ulang transaction */
@@ -1134,7 +1136,7 @@ function runMut(d, fn, T, seed){
   const rn = Date.now, rr = Math.random; let s = seed>>>0;
   Date.now = ()=>T;
   Math.random = ()=>{ s=(s+0x6D2B79F5)>>>0; let t=s; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
-  try{ fn(d); syncUnitLog(d); } finally { Date.now = rn; Math.random = rr; }
+  try{ fn(d); try{ syncUnitLog(d); }catch(e){ fbErrNote("syncUnitLog", e); } } finally { Date.now = rn; Math.random = rr; }   /* 17 Nov: error log unit dulu membatalkan SEMUA perubahan (tombol Buat ILS diam) */
 }
 function fbState(s){
   const el = document.getElementById("syncBadge"); if(!el) return;
@@ -1155,7 +1157,7 @@ function fbPush(k, pre, fn, T, seed, retried){
     const v = cloneJ(nt[k]);
     return v===undefined ? null : v;
   }, (err,committed)=>{
-    if(err) console.warn("sync gagal:", k, err);
+    if(err){ console.warn("sync gagal:", k, err); fbErrNote("tulis "+k, err); }
     /* ditolak server (sesi Firebase hilang): login ulang lalu kirim ulang perubahan yang sama, supaya ILS / Delout tidak hanya tersimpan di HP ini */
     if(err && fbDenied(err)){
       if(!retried){ fbReauth().then(ok=>{ if(ok) fbPush(k, pre, fn, T, seed, true); else fbPushFailWarn(); }); }
@@ -1463,6 +1465,7 @@ const FB_LITE={
   dispatcher: { skip:["manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
   pdi:        { skip:["manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
 let _fbMode="", _fbRefs=[], _fbRaw={}, _fbGot=new Set(), _fbNeed=0, _fbWinKeys={}, _fbGen=0, _fbLiteOff=false;
+let _ilsNewId=0;
 let _fbFullGot=0, _fbRestTs=0, _fbRestBusy=false, _fbReAtt=[], _fbRestOk=0;   /* pengaman mode penuh (lihat fbFullWatch) */
 /* ===== ILS DRIVER HANYA MILIK PLATNYA (17 Nov 2026, permintaan Khairul: "driver harusnya cuma dapat surat jalan") =====
    HP Driver CC tidak lagi menerima 60 ILS terakhir semua CC. Yang diunduh hanya ILS dengan plat truknya sendiri (status, rit, surat jalan).
@@ -1512,6 +1515,7 @@ function fbDetachMain(){ _fbRefs.forEach(([r,cb])=>{ try{ r.off("value", cb); }c
 function fbListenErr(err){ console.warn("listener ditolak:", err); fbErrNote("listener", err); fbState("offline"); if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth(); }catch(e){} }, 1500); }
 /* data dari server sudah lengkap → simpan, kirim antrean perubahan, gambar ulang */
 let _fbAttachTs=0, _fbLastErr=null;
+try{ window.addEventListener("error", ev=>{ try{ if(!_fbLastErr || Date.now()-_fbLastErr.t>5000) _fbLastErr={t:Date.now(), where:"js", msg:String((ev&&(ev.message||ev.error))||"").slice(0,140)}; }catch(_){} }); }catch(e){}
 function fbErrNote(where, e){ _fbLastErr={t:Date.now(), where, msg:String((e&&(e.message||e))||e).slice(0,140)}; try{ console.error("RADAR "+where, e); }catch(_){} }
 function fbAfterData(d, local){
   LOCAL_ONLY.forEach(k=>{ if(local[k]!==undefined) d[k] = local[k]; });
@@ -1670,7 +1674,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 16.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="17 Nov 2026 16.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4619,6 +4623,17 @@ function ilsWaitOnline(retry){
   }, 500);
 }
 let _ilsRetry=null;
+/* 17 Nov 16.55: tombol Buat ILS tidak boleh "diam". Error apa pun ditampilkan, dan 12 dtk setelah dibuat dicek ILS-nya benar ada. */
+function ilsTry(fn){
+  try{ fn(); }catch(e){ fbErrNote("buat ILS", e); try{ console.error(e); }catch(_){}
+    alert("Gagal membuat ILS: "+String((e&&(e.message||e))||e).slice(0,160)+"\n\nKode: "+ilsFlags()+"\n\nFoto pesan ini dan kirim ke Khairul."); }
+}
+function ilsVerifyLater(id, plat){
+  setTimeout(()=>{ try{
+    const L=DB.get().ils||[]; if(L.some(b=>b && b.id===id)) return;
+    alert("ILS untuk "+plat+" TIDAK tersimpan di server (kemungkinan bentrok: stall / plat ini sudah punya ILS aktif dari HP lain). Cek daftar ILS Aktif, lalu coba lagi.\n\nKode: "+ilsFlags());
+  }catch(e){} }, 12000);
+}
 function createILS(ccNum, slots){
   /* sinyal putus / belum Online: perubahan antre di HP lalu terkirim ulang saat tersambung (bisa jadi ILS dobel) → tahan dulu */
   if(FBS.enabled && fbCurrentState()!=="online"){
@@ -4652,14 +4667,17 @@ function createILS(ccNum, slots){
   { const bl=units.map(u=>({u, b:dfBlockOf(data,u.frame)})).filter(z=>z.b); if(bl.length){ alert("Unit defect tidak bisa dimasukkan ILS:\n"+bl.map(z=>"• "+z.u.frame+" ("+z.u.model+") — "+z.b.why).join("\n")+"\n\nPutuskan dulu di Konfirmasi Defect, atau pilih unit lain."); return false; } }
   { const fr=new Set(units.map(u=>String(u.frame||"").toUpperCase())); const dupF=(data.ils||[]).find(b=>b && !b.outTs && b.status==="open" && (b.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())));
     if(dupF){ alert("Unit ini sudah ada di ILS #"+dupF.id+" (CC "+dupF.ccPlat+") yang masih aktif. Batalkan ILS itu dulu bila memang mau dibuat ulang, supaya tidak dobel."); return false; } }
+  _ilsNewId=0;
   DB.set(d=>{
     const id = Date.now();
     /* dicek ULANG di dalam transaksi (data server terbaru): kalau di saat yang sama orang lain sudah membuat ILS untuk plat ini, ILS ini TIDAK dibuat */
     if((d.ils||[]).some(b=>b && b.status==="open" && !b.outTs && (normPlat(b.ccPlat)===normPlat(ccInfo.plat) || b.ccNum==ccNum))) return;
+    _ilsNewId=id;
     d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), drvName: ccDriverAny(ccInfo.plat)||"", mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
     units.forEach(u=>{ if(d.units[u.slot] && !d.units[u.slot].ilsId) d.units[u.slot].ilsId = id; });
   });
   notifyILSCreated(ccInfo.plat, units.length);
+  if(_ilsNewId && FBS.enabled) ilsVerifyLater(_ilsNewId, platFmt(ccInfo.plat));
   return true;
 }
 /* Jaga-jaga tautan unit ↔ ILS (diperluas 13 Nov 2026). Dijalankan HP Delivery/Admin yang Online, tiap 8 detik; bertindak hanya
@@ -4775,7 +4793,8 @@ function ilsSeatBanner(data){
   return `<div class="card" style="border:1.5px solid #E8B04B;background:#FFF8E6;"><div style="font-size:13px;"><b>⛔ HP ini belum aktif membuat ILS.</b> Maksimal ${ILS_SEAT_MAX[r]} HP ${ilsSeatRoleTxt(r)}; yang aktif: ${L.map(x=>escH(x.n||x.u||"-")).join(", ")}.</div>
     <button class="btn btn-sm" style="width:auto;margin-top:8px;" onclick="ilsSeatModal()">Aktifkan HP ini…</button></div>`;
 }
-function generateILS(){
+function generateILS(){ ilsTry(generateILS0); }
+function generateILS0(){
   _ilsRetry=()=>generateILS();
   if(createILS(parseInt(deliverySelCC), deliverySelUnits.slice())){
     deliverySelUnits = [];
@@ -4852,7 +4871,8 @@ function draftOffToggle(n, k){
   draftOffOpen[n]=true; render();
 }
 function draftOffClear(n){ delete draftOff[n]; render(); }
-function draftGoMix(n){
+function draftGoMix(n){ ilsTry(()=>draftGoMix0(n)); }
+function draftGoMix0(n){
   draftSaveDrvInput(n);
   const d=DB.get(), p=ccProposals(d).find(x=>x.n===n); if(!p) return;
   const units=draftMixUnits(d,p); if(!units.length){ alert("Belum ada unit yang dipilih."); return; }
@@ -4862,9 +4882,13 @@ function draftGoMix(n){
 function draftSetDrv(n, v){ const c=DB.get().cc[n]; if(c) setDrvCode(c.plat, v, n); }
 function draftSaveDrvInput(n){ const el=document.getElementById("drvIn"+n); if(el) draftSetDrv(n, el.value); }
 function draftSetStall(n, v){ if(v) draftStall[n]=v; else delete draftStall[n]; render(); }
-function draftGo(n){ draftSaveDrvInput(n); const p = ccProposals(DB.get()).find(x=>x.n===n); _ilsRetry=()=>draftGo(n); if(p && p.ready && createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); } }
+function draftGo(n){ ilsTry(()=>{ draftSaveDrvInput(n); const p = ccProposals(DB.get()).find(x=>x.n===n); _ilsRetry=()=>draftGo(n);
+  if(!p){ alert("Draft ILS untuk stall CC ini sudah tidak ada (CC pindah / sudah dibuatkan ILS). Halaman dimuat ulang."); render(); return; }
+  if(!p.ready){ alert("Stall unit untuk CC "+p.plat+" belum penuh. Pakai tombol Tetap Buat ILS kalau mau kirim yang ada."); return; }
+  if(createILS(n, p.units)){ delete draftType[n]; delete draftStall[n]; delete draftOff[n]; render(); } }); }
 function draftWait(n){ DB.set(d=>{ if(d.cc[n]) d.cc[n].waiting = true; }); }
-function draftSendRest(n, noConfirm){
+function draftSendRest(n, noConfirm){ ilsTry(()=>draftSendRest0(n, noConfirm)); }
+function draftSendRest0(n, noConfirm){
   draftSaveDrvInput(n);
   const p = ccProposals(DB.get()).find(x=>x.n===n);
   if(!p || !p.units.length){ alert("Tidak ada unit tersisa untuk jenis ini."); return; }
@@ -8828,14 +8852,15 @@ function ilsExpAt(b){ const t=b.doneTs||b.ts||0; return Math.max(t+RETAIN_MS, b.
 function syncUnitLog(d){
   try{ dfSync(d); }catch(e){}
   try{ pdiOpenSync(d); }catch(e){}
-  d.unitLog = d.unitLog || [];
+  d.unitLog = Array.isArray(d.unitLog) ? d.unitLog.filter(e=>e && typeof e==="object") : (d.unitLog && typeof d.unitLog==="object" ? Object.values(d.unitLog).filter(e=>e && typeof e==="object") : []);
+  if(Array.isArray(d.ils)) d.ils.forEach(b=>{ if(b && Array.isArray(b.units) && b.units.some(u=>!u)) b.units=b.units.filter(Boolean); });
   const log = d.unitLog, now = Date.now();
   if(!d.migAvanzaBY){ d.migAvanzaBY = true; const a = d.models && d.models.AVANZA; if(a && Array.isArray(a.vin_codes) && !a.vin_codes.includes("BY")) a.vin_codes.push("BY"); }   // Avanza baru (W100RE) berkode BY
   { const a2 = d.models && d.models.AVANZA; if(a2 && /^#(2CA85B|1E9E5A)$/i.test(a2.color||"")) a2.color = "#8E5BD6"; }   // Avanza ungu (hijau = stall kosong)
   if(!d.unitLogMigrated){
     d.unitLogMigrated = true;
-    (d.ils||[]).filter(b=>b.status==="done").forEach(b=>{
-      b.units.forEach(u=>{
+    (d.ils||[]).filter(b=>b && b.status==="done").forEach(b=>{
+      (b.units||[]).forEach(u=>{ if(!u) return;
         log.push({frame:u.frame, model:u.model, parkedTs:null, parkedBy:"", slot:u.slot, status:"sent",
           ilsId:b.id, ilsTs:b.ts, sentTs:b.doneTs||b.ts, ccPlat:b.ccPlat, lp:b.lp});
       });
@@ -8847,14 +8872,14 @@ function syncUnitLog(d){
     let e = log.find(x=>x.parkedTs===u.ts && (x.status==="parked"||x.status==="ils"));
     if(!e){ e = {frame:u.frame, model:u.model, parkedTs:u.ts||now, parkedBy:u.driver||"", slot:slotText(slot,u), line:u.line||"", status:"parked"}; log.push(e); }
     e.frame = u.frame; e.model = u.model; e.slot = slotText(slot,u); e.line = u.line||e.line||""; e.batam = !!u.batam; e.prio = !!u.prio;
-    const b = u.ilsId ? (d.ils||[]).find(x=>x.id===u.ilsId) : null;
+    const b = u.ilsId ? (d.ils||[]).find(x=>x && x.id===u.ilsId) : null;
     if(b){ e.status="ils"; e.ilsId=b.id; e.ilsTs=b.ts; e.ccPlat=b.ccPlat; e.lp=b.lp; }
     else { e.status="parked"; delete e.ilsId; delete e.ilsTs; delete e.ccPlat; delete e.lp; }
     present.add(e);
   }
   for(const e of log){
     if((e.status==="parked"||e.status==="ils") && !present.has(e)){
-      const b = (d.ils||[]).find(x=>(x.status==="done"||x.loadTs) && x.units.some(u=>u.frame===e.frame));
+      const b = (d.ils||[]).find(x=>x && (x.status==="done"||x.loadTs) && (x.units||[]).some(u=>u && u.frame===e.frame));
       if(b){ e.status="sent"; e.sentTs=b.doneTs||b.loadTs||now; e.ilsId=b.id; e.ilsTs=b.ts; e.ccPlat=b.ccPlat; e.lp=b.lp; }
       else { e.status="removed"; e.removedTs=now; }
     }
