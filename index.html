@@ -1510,11 +1510,13 @@ function fbLiteSkip(k){ const c=fbLiteCfg(); return !!(c && c.skip.indexOf(k)>=0
 function fbDetachMain(){ _fbRefs.forEach(([r,cb])=>{ try{ r.off("value", cb); }catch(e){} }); _fbRefs=[]; }
 function fbListenErr(err){ console.warn("listener ditolak:", err); fbState("offline"); if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth(); }catch(e){} }, 1500); }
 /* data dari server sudah lengkap → simpan, kirim antrean perubahan, gambar ulang */
+let _fbAttachTs=0, _fbLastErr=null;
+function fbErrNote(where, e){ _fbLastErr={t:Date.now(), where, msg:String((e&&(e.message||e))||e).slice(0,140)}; try{ console.error("RADAR "+where, e); }catch(_){} }
 function fbAfterData(d, local){
   LOCAL_ONLY.forEach(k=>{ if(local[k]!==undefined) d[k] = local[k]; });
   try{ sigsAfterSnap(d, local); }catch(e){}
-  syncUnitLog(d);
-  DB.save(d);
+  try{ syncUnitLog(d); }catch(e){ fbErrNote("syncUnitLog", e); }   /* 17 Nov: error di sini dulu membuat HP tertahan "Menyambung" selamanya */
+  try{ DB.save(d); }catch(e){ fbErrNote("DB.save", e); }
   const wasReady = FBS.ready; FBS.ready = true; fbState(fbCurrentState());
   if(!wasReady && FBS.q.length){ const q = FBS.q; FBS.q = []; q.forEach(a=>fbPush.apply(null,a)); }
   fbRender();
@@ -1573,13 +1575,14 @@ function appBlock(newB){
     const tx=await (await fetch(url,{cache:"no-cache"})).text(), m=tx.match(_verRe); if(m && radarBuildTs(m[1])>radarBuildTs(RADAR_BUILD)){ try{ sessionStorage.removeItem("radar_blkreload"); }catch(e){} location.reload(); } }catch(e){} }, 60000);   /* server belum menyajikan versi baru: cek tiap menit */
 }
 function fbAttach(){
-  fbDetachMain();
+  fbDetachMain(); _fbAttachTs=Date.now();
   const gen=++_fbGen;
   _fbMode=fbModeWant(); _fbRaw={}; _fbGot=new Set(); _fbWinKeys={}; _fbIlsRef=null; _fbIlsCur="";
   if(_fbMode==="cc" && _fbIlsIdx!==true) setTimeout(()=>{ try{ fbIlsProbe(); }catch(e){} }, 1500);
   if(_fbMode==="full"){
     const ref = FBS.db.ref(FB_ROOT);
-    const cb = snap=>{
+    const cb = snap=>{ try{ cbIn(snap); }catch(e){ fbErrNote("data penuh", e); } };
+    const cbIn = snap=>{
       const v = snap.val(), local = DB.load();
       if(v === null){
         // database masih kosong → data perangkat ini jadi data awal
@@ -1627,7 +1630,7 @@ function fbLiteApply(){
   fbAfterData(normalizeData(raw), local);   /* bagian kantor tidak ikut: di HP ini kembali ke bawaan kosong */
 }
 /* login / logout / ganti role: pasang ulang listener kalau modenya berubah */
-function fbModeSync(){ try{ if(FBS.enabled && FBS.authed && FBS.db && fbModeWant()!==_fbMode){ FBS.ready=false; fbAttach(); } }catch(e){} }
+function fbModeSync(){ try{ if(FBS.enabled && FBS.authed && FBS.db && fbModeWant()!==_fbMode){ FBS.ready=false; fbState(fbCurrentState()); fbAttach(); } }catch(e){} }   /* tanda di pojok ikut "Menyambung…" selama data peran baru diunduh */
 function fbRender(){
   const mv = document.getElementById("mainView"); if(!mv || mv.classList.contains("hidden")) return;
   const a = document.activeElement, typing = a && (a.tagName==="INPUT" || a.tagName==="TEXTAREA" || a.tagName==="SELECT");
@@ -1635,7 +1638,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="17 Nov 2026 16.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="17 Nov 2026 16.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4566,7 +4569,7 @@ function notifyILSCreated(ccPlat, count){
 }
 /* 17 Nov 2026: HP tersambung tapi data / sesi server belum siap (status "connecting", sering hanya beberapa detik):
    jangan langsung ditolak — tunggu otomatis sampai Online (maks. 1 menit), lalu ILS dibuat sendiri. */
-function ilsFlags(){ return "a"+(FBS.authed?1:0)+" k"+(FBS.conn?1:0)+" r"+(FBS.ready?1:0)+" "+(_fbMode||"-"); }
+function ilsFlags(){ return "a"+(FBS.authed?1:0)+" k"+(FBS.conn?1:0)+" r"+(FBS.ready?1:0)+" "+(_fbMode||"-")+(_fbAttachTs?" "+Math.round((Date.now()-_fbAttachTs)/1000)+"dtk":"")+(_fbLastErr?" ERR "+_fbLastErr.where+": "+_fbLastErr.msg:""); }
 function miniToast(msg, ms){ try{ let t=document.getElementById("miniToast"); if(!t){ t=document.createElement("div"); t.id="miniToast"; document.body.appendChild(t); }
   t.style.cssText="position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:199500;background:#16213E;color:#fff;padding:12px 18px;border-radius:12px;font:600 14px Inter,Arial,sans-serif;max-width:88vw;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25);";
   t.textContent=msg; clearTimeout(t._h); t._h=setTimeout(()=>{ try{ t.remove(); }catch(e){} }, ms||4000); }catch(e){} }
@@ -4577,6 +4580,7 @@ function ilsWaitOnline(retry){
   const t0=Date.now(); _ilsWait={retry};
   miniToast("⏳ Menunggu data server siap… ILS dibuat otomatis.", 60000);
   const iv=setInterval(()=>{
+    try{ const t=document.getElementById("miniToast"); if(t) t.textContent="⏳ Menunggu data server siap… ("+Math.round((Date.now()-t0)/1000)+" dtk) ILS dibuat otomatis."; }catch(e){}
     if(fbCurrentState()==="online"){ clearInterval(iv); const f=_ilsWait&&_ilsWait.retry; _ilsWait=null; try{ const t=document.getElementById("miniToast"); if(t) t.remove(); }catch(e){} if(f) f(); return; }
     if(Date.now()-t0>60000){ clearInterval(iv); _ilsWait=null; try{ const t=document.getElementById("miniToast"); if(t) t.remove(); }catch(e){}
       alert("Data server belum siap setelah 1 menit (status: "+fbCurrentState()+" · "+ilsFlags()+"). ILS tidak dibuat supaya tidak dobel. Cek sinyal, lalu coba lagi. Kalau terus begini, kirim foto pesan ini."); }
