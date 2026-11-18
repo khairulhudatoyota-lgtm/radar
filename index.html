@@ -862,7 +862,7 @@ window.RSnd=(function(){
     [3.15,function(t){ bell(2093,t,0.1,0.9); bell(2637,t+0.08,0.08,0.9); }]
   ];
   function playFrom(elapsed){
-    if(played||!ctx||muted) return; played=true;
+    if(played||!ctx||muted||qv()) return; played=true;
     var base=ctx.currentTime-elapsed;
     EV.forEach(function(e){ if(e[0]>=elapsed-0.04) e[1](Math.max(base+e[0],ctx.currentTime)); });
   }
@@ -876,7 +876,8 @@ window.RSnd=(function(){
     var go=function(){ if(!played && !splashOn) chimeSmall(); };
     if(c.state==="running") go(); else { try{ c.resume().then(go).catch(function(){}); }catch(e){} }
   }
-  function chimeSmall(){ if(muted||!ctx||ctx.state!=="running") return; played=true; var t=ctx.currentTime+0.02; chord([523.25,659.25,783.99],t,0.1,0.9); bell(1046.5,t,0.2,1.1); }
+  function qv(){ try{ return !!(window.quietRole && window.quietRole()); }catch(e){ return false; } }   /* Pengamat yang baru login (tanpa muat ulang) juga senyap */
+  function chimeSmall(){ if(muted||qv()||!ctx||ctx.state!=="running") return; played=true; var t=ctx.currentTime+0.02; chord([523.25,659.25,783.99],t,0.1,0.9); bell(1046.5,t,0.2,1.1); }
   ["pointerdown","touchstart","keydown"].forEach(function(ev){ document.addEventListener(ev,function once(){ document.removeEventListener(ev,once,true); unlock(); },true); });
   function ready(){ var c=ac(); return !!(c&&!muted&&c.state==="running"); }
   function login(){   // sukses masuk: arpeggio naik yang menyemangati
@@ -1735,7 +1736,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 10.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 10.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2176,7 +2177,7 @@ function spdCloseOverlay(){ const o = document.getElementById("spdOv"); if(o) o.
 function spdDev(){ try{ let d=localStorage.getItem("radar_dev"); if(!d){ d=Math.random().toString(36).slice(2,10); localStorage.setItem("radar_dev",d); } return d; }catch(e){ return "x"; } }
 /* Notifikasi (tanpa sirene) untuk Leader / Admin / Delivery */
 let _spdToastT = null, _spdToastN = 0;
-function spdPing(){
+function spdPing(){ if(quietRole()) return;
   try{ spdUnlock(); const ctx = SPD.ac; if(!ctx) return; const t = ctx.currentTime+0.02;
     [[880,0],[1175,0.16]].forEach(([f,d])=>{ const o=ctx.createOscillator(), g=ctx.createGain(); o.type="sine"; o.frequency.value=f;
       g.gain.setValueAtTime(0.0001,t+d); g.gain.exponentialRampToValueAtTime(0.18,t+d+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+d+0.2);
