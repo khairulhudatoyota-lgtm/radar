@@ -1735,7 +1735,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 09.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 10.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1869,15 +1869,17 @@ function viewerClean(root){
   if(!isViewer()) return;
   try{
     (root||document).querySelectorAll('button,input,select,textarea,a[onclick],label[for],[onclick]').forEach(el=>{
-      if(el.closest("#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv,#chatCard")) return;
+      if(el.closest("#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv,#chatCard,.logoutBtn,#curUserRole")) return;   /* tombol Keluar & label role tetap ada untuk Pengamat */
       if(/chatSend|thrDraft|thrTxt|chatDraft|chatTag|chatTo\b|lapPick\(.(chat|thr)/.test((el.getAttribute("onclick")||"")+(el.getAttribute("oninput")||"")+(el.id||""))) return;   // Pengamat boleh chat/bertanya langsung
       const h=(el.getAttribute("onclick")||"")+" "+(el.getAttribute("onchange")||"")+" "+(el.getAttribute("oninput")||"");
       const tag=el.tagName, ty=(el.type||"").toLowerCase();
       let bad=VW_BAD.test(h) || ty==="file" || tag==="TEXTAREA" || el.getAttribute("type")==="submit" || (tag==="INPUT" && ["text","number","time","password","tel"].includes(ty) && !/ldrOnSearch|search|cari/i.test(h+(el.id||"")+(el.placeholder||"")));
-      if(bad){ el.style.setProperty("display","none","important"); el.setAttribute("data-vh","1"); }
+      if(bad){ if(!el.hasAttribute("data-vh")) el.setAttribute("data-vhd", el.style.getPropertyValue("display")||""); el.style.setProperty("display","none","important"); el.setAttribute("data-vh","1"); }
     });
   }catch(e){}
 }
+/* setelah Pengamat keluar lalu akun lain masuk di HP yang sama (tanpa muat ulang): kontrol yang tadi disembunyikan dimunculkan lagi */
+function viewerUnclean(){ try{ document.querySelectorAll("[data-vh]").forEach(el=>{ el.style.removeProperty("display"); const o=el.getAttribute("data-vhd"); if(o) el.style.display=o; el.removeAttribute("data-vh"); el.removeAttribute("data-vhd"); }); }catch(e){} }
 let _vcQ=0;
 function viewerCleanSoon(){ if(!isViewer()||_vcQ) return; _vcQ=1; requestAnimationFrame(()=>{ _vcQ=0; viewerClean(document.body); }); }
 try{ new MutationObserver(()=>viewerCleanSoon()).observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
@@ -1915,7 +1917,7 @@ function sessionAccountOk(){   // akun yang diingat harus masih ada (mis. belum 
   }catch(e){ return true; }
 }
 function shiftChangeOpen(){
-  if(!currentUser || currentUser.role==="display") return;
+  if(!currentUser || currentUser.role==="display" || isViewer()) return;
   showModal(`<h3 style="margin:0 0 6px;">Ganti Shift</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Shift saat ini: <b>${currentUser.shift?rsShift(currentUser.shift):"-"}</b>. Tidak perlu login ulang.</div>
     <div class="shiftrow"><button type="button" class="shiftchip red ${currentUser.shift==="red"?"on":""}" onclick="shiftChangeDo('red')">🔴 SHIFT RED</button><button type="button" class="shiftchip white ${currentUser.shift==="white"?"on":""}" onclick="shiftChangeDo('white')">⚪ SHIFT WHITE</button></div>`);
 }
@@ -2604,7 +2606,7 @@ function doLogout(){
   try{ ilsSeatRelease(); }catch(e){}
   try{ devSeatRelease(); }catch(e){}
   try{ koSeatRelease(); }catch(e){}   /* kursi Koordinator LP dilepas: HP berikutnya langsung bisa memakai */   /* kursi pembuat ILS dilepas supaya HP lain bisa memakai */
-  try{ if(currentUser && currentUser.username){ const un=currentUser.username, t=Date.now(); DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===un) x.lo=t; }); }); } }catch(e){}   // tandai sudah logout: titik petanya tidak dianggap punya akun aktif
+  try{ if(currentUser && currentUser.username && !isViewer()){ const un=currentUser.username, t=Date.now(); DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===un) x.lo=t; }); }); } }catch(e){}   // tandai sudah logout: titik petanya tidak dianggap punya akun aktif
   ccPlatOk=false; try{ stopShare(true); }catch(e){}
   spdStop(); spdCloseOverlay();
   geoStop();
@@ -2655,6 +2657,7 @@ function cleanPlatForUser(){
 }
 function enterApp(forceTab){
   fbModeSync();   /* hemat data: listener mengikuti role yang login */
+  if(!isViewer()) viewerUnclean();
   viewerGuardInstall(); viewerBadge(); cleanPlatForUser();
   syncCcProfileFromAccount();
   try{ if(window.AndroidTLS && AndroidTLS.keepAlive && currentUser && currentUser.role!=="display") AndroidTLS.keepAlive(); }catch(e){}
@@ -9519,6 +9522,8 @@ function renderLeaderDashboard(){
   const th = "text-align:left;padding:6px 8px;font-size:11px;color:var(--text-dim);white-space:nowrap;";
   const td = "padding:6px 8px;white-space:nowrap;";
   const totIn = R.slots.reduce((a,s)=>a+s.inp,0), totOut = R.slots.reduce((a,s)=>a+s.out,0);
+  const _wipU = {}; try{ Object.values(data.units||{}).forEach(u=>{ if(u && u.frame) _wipU[normVin(u.frame)]=u; }); }catch(e){}
+  const _wipB = (R.wipList||[]).filter(e=>ldrWipBatam(data,e,_wipU)).length;
   const tile = (lbl,val,col,sub)=>`<div style="flex:1;min-width:130px;background:var(--panel);border:1px solid var(--border);border-top:4px solid ${col};border-radius:12px;padding:12px 14px;">
       <div style="font-size:12px;color:var(--text-dim);">${lbl}</div><div style="font-size:30px;font-weight:800;line-height:1.1;">${val}</div>${sub?`<div style="font-size:11px;color:var(--text-dim);">${sub}</div>`:""}</div>`;
   const oldest = R.wipList[0];
@@ -9585,12 +9590,12 @@ function renderLeaderDashboard(){
     <div style="font-size:11px;color:var(--text-dim);">Bar atas = input, bar bawah hijau = delivery by unit.</div>
   </div>
 
-  <div class="card"><h3>📦 WIP — Unit Belum Terkirim (${R.wipTotal})</h3>
+  <div class="card"><h3>📦 WIP — Unit Belum Terkirim (${R.wipTotal})${_wipB?` <span style="display:inline-block;white-space:nowrap;background:#E8833A;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:800;vertical-align:2px;">${_wipB} BATAM</span>`:""}</h3>
     ${R.wip0?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">WIP awal ${R.wip0} unit (diisi Admin: ${PROD_LINES.map(l=>l+" "+((R.wipL&&R.wipL[l])||0)).join(", ")}) = input pagi yang bukan produksi; dikurangkan dari Input, bukan ditambah ke WIP.</div>`:""}${R.wipList.length===0 ? `<div class="emptystate">${R.wip0?"Tidak ada WIP dari input RADAR.":"Tidak ada WIP."}</div>` : `
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto;"><table style="font-size:13px;">
       <tr><th style="${th}">No. Rangka</th><th style="${th}">Model</th><th style="${th}">Stall</th><th style="${th}">Masuk</th><th style="${th}">Umur</th><th style="${th}">Status</th></tr>
       ${R.wipList.map(e=>{ const h=(Date.now()-(e.parkedTs||Date.now()))/3600000; const col=h>24?"#D64545":h>12?"#E8833A":"inherit";
-        return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${e.frame}</b></td><td style="${td}"><span style="color:${getModelColor(e.model,data)};font-weight:700;">${e.model}</span></td><td style="${td}">${e.slot}</td><td style="${td}">${ldrDT(e.parkedTs)}</td><td style="${td};color:${col};font-weight:700;">${ldrAge(e.parkedTs)}</td><td style="${td}">${e.status==="ils"?`ILS ${ldrHM(e.ilsTs)} · ${e.ccPlat||""}`:"Menunggu ILS"}</td></tr>`; }).join("")}
+        return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${e.frame}</b>${ldrWipBatam(data,e,_wipU)?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800;vertical-align:1px;">BATAM</span>`:""}</td><td style="${td}"><span style="color:${getModelColor(e.model,data)};font-weight:700;">${e.model}</span></td><td style="${td}">${e.slot}</td><td style="${td}">${ldrDT(e.parkedTs)}</td><td style="${td};color:${col};font-weight:700;">${ldrAge(e.parkedTs)}</td><td style="${td}">${e.status==="ils"?`ILS ${ldrHM(e.ilsTs)} · ${e.ccPlat||""}`:"Menunggu ILS"}</td></tr>`; }).join("")}
     </table></div>`}
   </div>
   <div class="footnote">Data dihitung dari log input Dispatcher & ILS Delivery. Data sebelum fitur ini aktif hanya memuat unit terkirim (tanpa jam masuk).</div>`;
@@ -9599,6 +9604,8 @@ function renderLeaderDashboard(){
 /* ======================================================================
    DASHBOARD PLANNING CAR CARRIER (plan DCCP vs aktual ritase)
 ====================================================================== */
+/* WIP: unit Batam (tanda di stall, log unit, daftar Batam / PPBJ) */
+function ldrWipBatam(data, e, U){ try{ const u=(U||{})[normVin(e.frame)]; if((u && u.batam) || e.batam) return true; const c=lookupUnitCat(data, e.frame); return !!(c && c.batam); }catch(x){ return false; } }
 function ccTimeToTs(hhmm, dayStart){ const [h,m]=hhmm.split(":").map(Number); return dayStart+(h*60+m)*60000+(h<SHIFT_START_H?86400000:0); }
 function ccplanCompute(data){
   const [rs,re] = ldrRange(); const now = Date.now();
@@ -9660,7 +9667,22 @@ function ccplanCompute(data){
       slots.push({a, label:ldrHM(a), plan: allTimes.filter(t=>t<=a).length, act: a<=now ? ilsPlan.filter(b=>b.ts<=a).length : null});
     }
   }
-  return {rows, unplanned, T, lp, slots};
+  /* per jam (18 Nov): plan = ritase yang dijadwalkan DCCP di jam itu, aktual = CC (plan DCCP) yang ILS-nya dibuat di jam itu */
+  const HR=3600000, hours=[], ilsT=ilsPlan.map(b=>b.ts).filter(t=>t>0);
+  if(allTimes.length || ilsT.length){
+    const pts=allTimes.concat(ilsT), lo=Math.floor(Math.min(...pts)/HR)*HR;
+    let hi=Math.floor(Math.max(...pts)/HR)*HR;
+    if(ldrPeriod!=="yesterday") hi=Math.max(hi, Math.min(Math.floor(now/HR)*HR, hi+2*HR));
+    let cp=0, ca=0;
+    for(let a=lo; a<=hi && hours.length<30; a+=HR){
+      const b=a+HR, plan=allTimes.filter(t=>t>=a && t<b).length, past=a<=now, act=past?ilsT.filter(t=>t>=a && t<b).length:null;
+      cp+=plan; if(act!=null) ca+=act;
+      hours.push({a, b, label:ldrHM(a), plan, act, cur:now>=a && now<b, cumPlan:cp, cumAct:act!=null?ca:null});
+    }
+  }
+  const hourAdj = T.act - ilsPlan.length;   /* koreksi manual ritase: tidak punya jam */
+  const hourNoTime = Math.max(0, T.planTrip - hours.reduce((q,h)=>q+h.plan,0));   /* ritase plan DCCP tanpa jam */
+  return {rows, unplanned, T, lp, slots, hours, hourAdj, hourNoTime};
 }
 
 /* ===== Koreksi ritase manual (Planning CC): Delivery / Admin. Hanya mengubah angka Aktual di Planning, bukan ILS ===== */
@@ -9723,6 +9745,45 @@ function ccplanChartSVG(slots){
   return `<div style="overflow-x:auto;"><svg viewBox="0 0 ${W} ${H}" style="min-width:${n>14?W:0}px;width:100%;height:auto;">${g}${gap}<path d="${pl}" fill="none" stroke="#16213E" stroke-width="2.5" stroke-dasharray="6 4"/><path d="${al}" fill="none" stroke="#1E9E5A" stroke-width="3"/>${ac.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="3" fill="#1E9E5A"/>`).join("")}${lbl}</svg></div>
   <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin-top:4px;"><span>┅ Plan kumulatif</span><span><b style="color:#1E9E5A;">━</b> Aktual kumulatif</span><span style="color:#D64545;">┃ selisih (minus)</span></div>`;
 }
+var _ccHourSL=null;   /* posisi geser grafik per jam: tetap saat data diperbarui; pertama kali dipusatkan ke jam sekarang */
+function ccHourScroll(){ try{ const w=document.getElementById("ccHourWrap"); if(!w || w.scrollWidth<=w.clientWidth) return; if(_ccHourSL!=null){ w.scrollLeft=_ccHourSL; return; } const c=+w.getAttribute("data-cx")||0; if(c) w.scrollLeft=Math.max(0, c-w.clientWidth/2); }catch(e){} }
+function ccplanHourSVG(H){
+  const n=H.length; if(!n) return `<div class="emptystate">Belum ada data jam jadwal. Upload ulang file DCCP agar jam tiap ritase terbaca.</div>`;
+  const GW=34, BW=12, L=26, R=8, T=18, B=24, W=Math.max(300, L+R+n*GW), Hh=190, ph=Hh-T-B;
+  const mx0=Math.max(1,...H.map(h=>Math.max(h.plan, h.act||0))), st=mx0<=5?1:mx0<=10?2:mx0<=20?5:10, mx=Math.ceil(mx0/st)*st;
+  const y=v=>T+ph-(v/mx)*ph;
+  const bar=(x,v,fill,op)=>{ if(!v) return ""; const yy=y(v), h=T+ph-yy, r=Math.min(4,h/2); return `<path d="M${x} ${T+ph}V${(yy+r).toFixed(1)}Q${x} ${yy.toFixed(1)} ${x+r} ${yy.toFixed(1)}H${x+BW-r}Q${x+BW} ${yy.toFixed(1)} ${x+BW} ${(yy+r).toFixed(1)}V${T+ph}Z" fill="${fill}" fill-opacity="${op}"/>`; };
+  let g=""; for(let v=0; v<=mx; v+=st){ const yy=y(v); g+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#E2E6ED"/><text x="${L-5}" y="${yy+3.5}" text-anchor="end" font-size="10" fill="#6B7686">${v}</text>`; }
+  const grp=H.map((h,i)=>{ const x0=L+i*GW, xp=x0+(GW-2*BW-2)/2, xa=xp+BW+2, fut=h.act==null, d=h.act==null?0:h.act-h.plan;
+    return `<g><title>${h.label}–${ldrHM(h.b)} · Plan ${h.plan} · Aktual ${fut?"belum":h.act}${fut?"":" ("+(d>0?"+":"")+d+")"}</title>`
+      + (h.cur?`<rect x="${x0+1}" y="${T-14}" width="${GW-2}" height="${ph+14}" rx="5" fill="#F5B800" fill-opacity=".14"/>`:"")
+      + `<rect x="${x0}" y="${T}" width="${GW}" height="${ph}" fill="transparent"/>`
+      + bar(xp, h.plan, "#16213E", fut?.35:1) + bar(xa, h.act||0, "#1E9E5A", 1)
+      + (!fut && d<0 && !h.cur?`<text x="${x0+GW/2}" y="${y(Math.max(h.plan,h.act))-4}" text-anchor="middle" font-size="10" font-weight="800" fill="#D64545">${d}</text>`:"")
+      + `<text x="${x0+GW/2}" y="${Hh-B+14}" text-anchor="middle" font-size="10" font-weight="${h.cur?800:400}" fill="${h.cur?"#16213E":"#6B7686"}">${h.label.slice(0,2)}</text></g>`; }).join("");
+  const ci=H.findIndex(h=>h.cur), cx=ci>=0?L+ci*GW+GW/2:0;
+  try{ requestAnimationFrame(ccHourScroll); }catch(e){}
+  return `<div id="ccHourWrap" data-cx="${cx}" style="overflow-x:auto;" onscroll="_ccHourSL=this.scrollLeft"><svg viewBox="0 0 ${W} ${Hh}" style="width:100%;min-width:${W}px;height:auto;display:block;" role="img" aria-label="Ritase CC per jam, plan dan aktual">${g}<line x1="${L}" x2="${W-R}" y1="${T+ph}" y2="${T+ph}" stroke="#B8C0CC"/>${grp}</svg></div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin-top:6px;align-items:center;">
+    <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#16213E;vertical-align:-1px;"></i> Plan (jadwal DCCP)</span>
+    <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#1E9E5A;vertical-align:-1px;"></i> Aktual (ILS dibuat)</span>
+    <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#16213E;opacity:.35;vertical-align:-1px;"></i> jam belum lewat</span>
+    <span style="color:#D64545;font-weight:700;">−2 = kurang dari plan</span></div>
+  <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Angka bawah = jam mulai (07 = 07:00–07:59). Kolom kuning = jam sekarang.</div>`;
+}
+function ccplanHourTable(H, adj){
+  if(!H.length) return "";
+  const th="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-dim);white-space:nowrap;position:sticky;top:0;background:var(--panel);", td="padding:6px 8px;white-space:nowrap;";
+  const sg=v=>v>0?"+"+v:(v<0?"−"+(-v):"0"), cl=v=>v<0?"#D64545":(v>0?"#1E9E5A":"inherit");
+  return `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:13px;font-weight:700;">📋 Rincian per jam</summary>
+    <div style="overflow-x:auto;max-height:340px;overflow-y:auto;margin-top:6px;"><table style="font-size:13px;">
+    <tr><th style="${th}">Jam</th><th style="${th}">Plan</th><th style="${th}">Aktual</th><th style="${th}">Selisih</th><th style="${th}line-height:1.25;">Total s.d. jam ini<br>(aktual / plan)</th></tr>
+    ${H.map(h=>{ const fut=h.act==null, d=fut?0:h.act-h.plan, dc=fut?0:h.cumAct-h.cumPlan;
+      return `<tr style="border-top:1px solid var(--border);${h.cur?"background:rgba(245,184,0,.14);":""}${fut?"color:var(--text-dim);":""}"><td style="${td}"><b>${h.label}–${ldrHM(h.b)}</b>${h.cur?` <span style="font-size:10px;font-weight:800;color:#8a6a00;">berjalan</span>`:""}</td><td style="${td}">${h.plan}</td><td style="${td}"><b>${fut?"–":h.act}</b></td><td style="${td};font-weight:800;color:${cl(d)};">${fut?"":sg(d)}</td><td style="${td}">${fut?"–":`${h.cumAct} / ${h.cumPlan} <b style="color:${cl(dc)};">(${sg(dc)})</b>`}</td></tr>`; }).join("")}
+    </table></div>
+    ${adj?`<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Koreksi ritase manual ${sg(adj)} rit tidak punya jam, jadi tidak masuk grafik per jam (tetap masuk angka Aktual di atas).</div>`:""}
+  </details>`;
+}
 function renderCCPlan(){
   const data = DB.get();
   const R = ccplanCompute(data), T = R.T;
@@ -9754,7 +9815,9 @@ function renderCCPlan(){
   ${T.spotAct?`<div class="msg info" style="margin-bottom:14px;">➕ Spot Order: <b>${T.spotAct}</b> ritase · ${T.spotUnit} unit. Tambahan di luar DCCP, tidak dihitung ke Plan maupun Aktual di atas.</div>`:""}
   ${worstLP&&worstLP.m>0?`<div class="msg info" style="margin-bottom:14px;">LP paling minus: <b>${worstLP.k}</b> (−${worstLP.m} ritase)</div>`:""}
 
-  <div class="card"><h3>Kurva Plan vs Aktual (kumulatif)</h3>${ccplanChartSVG(R.slots)}</div>
+  <div class="card"><h3>Ritase CC per Jam — Plan vs Aktual</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin:-4px 0 10px;line-height:1.5;"><b>Plan</b> = jumlah ritase yang dijadwalkan DCCP di jam itu. <b>Aktual</b> = jumlah CC yang ILS-nya dibuat di jam itu. Spot Order tidak dihitung.</div>
+    ${ccplanHourSVG(R.hours||[])}${R.hourNoTime?`<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">${R.hourNoTime} ritase plan di DCCP tidak punya jam, jadi tidak tampil di grafik (tetap dihitung di Plan Ritase).</div>`:""}${ccplanHourTable(R.hours||[], R.hourAdj||0)}</div>
 
   <div class="card"><h3>Per LP</h3><div style="overflow-x:auto;"><table style="font-size:13px;">
     <tr><th style="${th}">LP</th><th style="${th}">Plan</th><th style="${th}">Aktual</th><th style="${th}">Minus</th><th style="${th}">Unit (akt/plan)</th><th style="${th}">Progres</th></tr>
