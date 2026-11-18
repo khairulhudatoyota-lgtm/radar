@@ -1736,7 +1736,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 11.05";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 11.25";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1776,11 +1776,18 @@ var _va=null; try{ _va=JSON.parse(sessionStorage.getItem("radar_va")||"null"); i
 function vaOn(){ return isViewer() && !!(_va && _va.plat); }
 function vaLive(){ if(!vaOn()) return false; if(activeTab==="drvview") return true; try{ return activeTab==="ccmap" && !!ccFollow && normPlat(ccFollow)===normPlat(_va.plat); }catch(e){ return false; } }   /* popup driver hanya di Layar Driver, atau di Peta saat sedang mengikuti driver itu */
 /* 18 Nov (permintaan Khairul): akun PENGAMAT senyap total — tidak ada bunyi, suara, getar, maupun notifikasi apa pun dari menu role mana pun. */
+/* Pengamat senyap otomatis. Bunyi hanya kalau Pengamat sendiri menekan tombol contoh (lihat vwHear / vwDemoAct / sndTest): jalur paksa, bukan jendela waktu */
 function quietRole(){ return !!(currentUser && currentUser.role==="viewer"); }
+function vwVib(p){ try{ if(window.__rawVib) window.__rawVib(p); }catch(e){} }
 (function(){
-  try{ if(navigator.vibrate){ const v0=navigator.vibrate.bind(navigator); navigator.vibrate=function(p){ if(quietRole()) return false; return v0(p); }; } }catch(e){}
+  try{ if(navigator.vibrate){ const v0=navigator.vibrate.bind(navigator); window.__rawVib=v0; navigator.vibrate=function(p){ if(quietRole()) return false; return v0(p); }; } }catch(e){}
   try{ if(window.speechSynthesis && speechSynthesis.speak){ const s0=speechSynthesis.speak.bind(speechSynthesis); speechSynthesis.speak=function(u){ if(quietRole()) return; return s0(u); }; } }catch(e){}
-  try{ if("Notification" in window){ const N0=window.Notification; window.Notification=new Proxy(N0,{ construct(t,a){ if(quietRole()) return {close(){}, addEventListener(){}, onclick:null}; return new t(...a); } }); } }catch(e){}
+  /* Notification dijaga lewat getter/setter: APK menyuntik window.Notification sendiri (langsung ke notifikasi Android) setelah halaman dimuat,
+     jadi pengganti yang dipasang belakangan pun ikut dibungkus. Pengamat: tidak ada notifikasi. */
+  try{ const STUB=function(){}; STUB.permission="denied"; STUB.requestPermission=()=>Promise.resolve("denied");
+    const wrap=impl=>impl?new Proxy(impl,{ construct(t,a){ if(quietRole()) return {close(){}, addEventListener(){}, onclick:null}; return Reflect.construct(t,a); }, apply(t,th,a){ if(quietRole()) return; return Reflect.apply(t,th,a); } }):STUB;
+    let _raw=window.Notification, _nw=wrap(_raw); window.__rawNotif=()=>_raw;
+    Object.defineProperty(window,"Notification",{configurable:true, enumerable:true, get(){ return _nw; }, set(v){ _raw=v; _nw=wrap(v); }}); }catch(e){}
   try{ if(window.ServiceWorkerRegistration && ServiceWorkerRegistration.prototype.showNotification){ const sn=ServiceWorkerRegistration.prototype.showNotification; ServiceWorkerRegistration.prototype.showNotification=function(){ if(quietRole()) return Promise.resolve(); return sn.apply(this, arguments); }; } }catch(e){}
 })();
 /* ===== TANDA PENGAMAT (dipulihkan 17 Nov 2026 dari build 2 Nov; permintaan Khairul untuk trial) =====
@@ -1865,7 +1872,7 @@ function viewerGuardInstall(){
 }
 
 /* Akun Pengamat hanya melihat: semua tombol/isian yang mengubah data disembunyikan (penyimpanan juga diblokir di DB.set & Firebase) */
-const VW_BAD=/edit|save|simpan|hapus|delete|delout|tambah|\badd|spot|upload|kirim|send|submit|manual|absen|keluar|tukar|ganti|undo|konfirm|confirm|\back|generate|\bils|ILS|remove|clear|reset|mail|ringBg|ccCall|panggil|lapForm|lapPick|chat|defectForm|saveDefect|handle|toggle|\bhold|release|orderStall|pindah|\bmove|swap|accept|approve|reject|tolak|setuju|kosongkan|finish|selesai|revisi|ubah|change|rename|tls|excel|share|logout|masuk|ritEdit|sched|schedReq|plat|batal|bulk|import|restore|backup|admin|usr|reg[A-Z]|keluarkan|gantiPlat|pengganti|addRit|rit[A-Z]|drv|code|notes?\b|\.note|\.vin|\.text|\.type/i;
+const VW_BAD=/draft[A-Z]|edit|save|simpan|hapus|delete|delout|tambah|\badd|spot|upload|kirim|send|submit|manual|absen|keluar|tukar|ganti|undo|konfirm|confirm|\back|generate|\bils|ILS|remove|clear|reset|mail|ringBg|ccCall|panggil|lapForm|lapPick|chat|defectForm|saveDefect|handle|toggle|\bhold|release|orderStall|pindah|\bmove|swap|accept|approve|reject|tolak|setuju|kosongkan|finish|selesai|revisi|ubah|change|rename|tls|excel|share|logout|masuk|ritEdit|sched|schedReq|plat|batal|bulk|import|restore|backup|admin|usr|reg[A-Z]|keluarkan|gantiPlat|pengganti|addRit|rit[A-Z]|drv|code|notes?\b|\.note|\.vin|\.text|\.type/i;
 function viewerClean(root){
   if(!isViewer()) return;
   try{
@@ -1873,6 +1880,7 @@ function viewerClean(root){
       if(el.closest("#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv,#chatCard,.logoutBtn,#curUserRole")) return;   /* tombol Keluar & label role tetap ada untuk Pengamat */
       if(/chatSend|thrDraft|thrTxt|chatDraft|chatTag|chatTo\b|lapPick\(.(chat|thr)/.test((el.getAttribute("onclick")||"")+(el.getAttribute("oninput")||"")+(el.id||""))) return;   // Pengamat boleh chat/bertanya langsung
       const h=(el.getAttribute("onclick")||"")+" "+(el.getAttribute("onchange")||"")+" "+(el.getAttribute("oninput")||"");
+      if(VW_DEMO.test(h)){ el.setAttribute("data-vdemo","1"); return; }   /* tombol kerja contoh: tampil, ditekan hanya bunyi/notifikasi contoh */
       const tag=el.tagName, ty=(el.type||"").toLowerCase();
       let bad=VW_BAD.test(h) || ty==="file" || tag==="TEXTAREA" || el.getAttribute("type")==="submit" || (tag==="INPUT" && ["text","number","time","password","tel"].includes(ty) && !/ldrOnSearch|search|cari/i.test(h+(el.id||"")+(el.placeholder||"")));
       if(bad){ if(!el.hasAttribute("data-vh")) el.setAttribute("data-vhd", el.style.getPropertyValue("display")||""); el.style.setProperty("display","none","important"); el.setAttribute("data-vh","1"); }
@@ -1881,6 +1889,33 @@ function viewerClean(root){
 }
 /* setelah Pengamat keluar lalu akun lain masuk di HP yang sama (tanpa muat ulang): kontrol yang tadi disembunyikan dimunculkan lagi */
 function viewerUnclean(){ try{ document.querySelectorAll("[data-vh]").forEach(el=>{ el.style.removeProperty("display"); const o=el.getAttribute("data-vhd"); if(o) el.style.display=o; el.removeAttribute("data-vh"); el.removeAttribute("data-vhd"); }); }catch(e){} }
+/* ===== Pengamat: contoh bunyi saat ditekan (18 Nov, permintaan Khairul untuk review). Data tidak pernah berubah. ===== */
+const VW_DEMO=/^\s*(draftGo|draftGoMix|draftDismiss|draftWait|draftSetType|draftSetStall|keluarkanCC)\(/;
+function vwHearBtn(o, okSel){ try{ if(!isViewer()) return; const ok=o.querySelector(okSel); if(!ok) return; ok.insertAdjacentHTML("beforebegin", `<button type="button" class="okbtn" style="background:#fff;color:#16213E;border:2px solid #16213E;margin-bottom:8px;" onclick="vwHear(this)">🔊 Dengar bunyinya (contoh)</button>`); }catch(e){} }
+function vwHear(el){ const ov=el && el.closest && el.closest("#ccEvOv,#ccCallOv"), sk=(ov && ov.dataset.sk)||"giliran", t=sndTone(sk);
+  if(t!=="senyap") sndPlay(t,false,true); vwVib([400,150,400]); }
+function vwNotify(title, body){   /* notifikasi contoh untuk Pengamat (jalur asli, tidak lewat penjaga senyap) */
+  try{ if(window.AndroidTLS && AndroidTLS.notify){ AndroidTLS.notify(title, body); return true; } }catch(e){}
+  try{ const N=window.__rawNotif && window.__rawNotif(); if(N && N.permission==="granted"){ new N(title,{body}); return true; } }catch(e){}
+  return false; }
+function vwDemoAct(el){
+  const h=el.getAttribute("onclick")||el.getAttribute("onchange")||"", m=h.match(/\((\d+)/), n=m?+m[1]:null;
+  if(/^\s*draftGo/.test(h)){
+    let p=null; try{ p=ccProposals(DB.get()).find(x=>x.n===n); }catch(e){}
+    const plat=p?platFmt(p.plat):"", cnt=(p && p.units)?p.units.length:0;
+    const nat=vwNotify("🧾 ILS Baru Dibuat", cnt+" unit siap loading ke CC "+plat);
+    if(!(nat && window.AndroidTLS)){ const t=sndTone("draft"); if(t!=="senyap") sndPlay(t,false,true); }   /* APK: notifikasi Android sudah berbunyi sendiri */
+    vwVib([250,120,250]);
+    miniToast("👁 Contoh untuk Pengamat: di HP Delivery, ILS "+plat+" dibuat dan notifikasi ini muncul. Data tidak berubah.", 4500);
+  } else if(/^\s*keluarkanCC/.test(h)){
+    const plat=(((DB.get().cc)||{})[n]||{}).plat||"";
+    { const t=sndTone("keluar"); if(t!=="senyap") sndPlay(t,false,true); vwVib([400,150,400]); }
+    miniToast("👁 Contoh untuk Pengamat: driver "+plat+" akan mendapat popup DIKELUARKAN dengan bunyi ini. Data tidak berubah.", 4500);
+  } else miniToast("👁 Contoh untuk Pengamat: tombol ini tidak mengubah data.", 3000);
+}
+["click","change"].forEach(tp=>{ try{ document.addEventListener(tp, e=>{ try{ if(!isViewer()) return; const el=e.target && e.target.closest && e.target.closest("[data-vdemo]"); if(!el) return;
+  if(tp==="click" && el.tagName==="SELECT") return;
+  e.preventDefault(); e.stopImmediatePropagation(); vwDemoAct(el); }catch(x){} }, true); }catch(e){} });
 let _vcQ=0;
 function viewerCleanSoon(){ if(!isViewer()||_vcQ) return; _vcQ=1; requestAnimationFrame(()=>{ _vcQ=0; viewerClean(document.body); }); }
 try{ new MutationObserver(()=>viewerCleanSoon()).observe(document.documentElement,{childList:true,subtree:true}); }catch(e){}
@@ -3486,8 +3521,8 @@ function sndVolSet(v){ try{ localStorage.setItem("radar_tonevol",v); }catch(e){}
 function sndMap(){ try{ return JSON.parse(localStorage.getItem("radar_tones")||"{}")||{}; }catch(e){ return {}; } }
 function sndTone(ev){ const e=SND_EV.find(x=>x.k===ev), m=sndMap(), t=m[ev]; return (t && SND_TONES[t]) ? t : (e?e.def:"beep3"); }
 function sndToast(msg){ try{ let t=document.getElementById("sndToast"); if(!t){ t=document.createElement("div"); t.id="sndToast"; t.style.cssText="position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#B91C1C;color:#fff;padding:10px 16px;border-radius:12px;font:700 13px Inter,Arial,sans-serif;z-index:100002;max-width:88vw;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.3);"; document.body.appendChild(t); } t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.display="none"; },5000); }catch(e){} }
-function sndPlay(tone, quiet){
-  if(quietRole()) return;
+function sndPlay(tone, quiet, force){
+  if(quietRole() && !force) return;
   try{
     const T=SND_TONES[tone]||SND_TONES.beep3; spdUnlock();
     if(!SPD.ac){ if(!quiet) sndToast("Pemutar suara tidak tersedia di perangkat ini."); return; }
@@ -3529,7 +3564,7 @@ function sndBanner(ev, detail){
   clearTimeout(b._t); b._t=setTimeout(()=>{ try{ b.remove(); }catch(x){} }, 14000);
 }
 function sndSet(ev,t){ const m=sndMap(); if(t===(SND_EV.find(x=>x.k===ev)||{}).def) delete m[ev]; else m[ev]=t; try{ localStorage.setItem("radar_tones",JSON.stringify(m)); }catch(e){} sndTest(ev); }
-function sndTest(ev){ const t=sndTone(ev); if(t==="senyap"){ try{ navigator.vibrate && navigator.vibrate([200,100,200]); }catch(e){} return; } sndPlay(t); }
+function sndTest(ev){ const t=sndTone(ev); if(isViewer()){ if(t==="senyap") vwVib([200,100,200]); else sndPlay(t,false,true); return; } if(t==="senyap"){ try{ navigator.vibrate && navigator.vibrate([200,100,200]); }catch(e){} return; } sndPlay(t); }
 function sndReset(){ try{ localStorage.removeItem("radar_tones"); }catch(e){} sndOpen(); }
 function sndRow(e){
   const cur=sndTone(e.k);
@@ -4837,6 +4872,7 @@ function ilsVerifyLater(id, plat){
   }catch(e){} }, 12000);
 }
 function createILS(ccNum, slots){
+  if(isViewer()){ try{ viewerBlockedToast(); }catch(e){} return false; }   /* Pengamat: tidak membuat ILS (dan tidak memicu notifikasi) */
   /* sinyal putus / belum Online: perubahan antre di HP lalu terkirim ulang saat tersambung (bisa jadi ILS dobel) → tahan dulu */
   if(FBS.enabled && fbCurrentState()!=="online"){
     const rt=_ilsRetry; _ilsRetry=null;
@@ -7910,7 +7946,7 @@ function ccCallShow(c, viewer){
   ccCallClose(); _ccCallId=c.id; try{ ccEvClose(); }catch(e){}   // perintah masuk stall menggantikan kabar lain yang masih terbuka
   const o=document.createElement("div"); o.id="ccCallOv";
   o.innerHTML=`<div class="box"><div style="font-size:13px;font-weight:800;color:#1a7f3c;letter-spacing:.08em;">🅿️ GILIRAN KAMU PARKIR</div><div class="big">STALL ${ccLbl(c.stall)}</div><div class="row" style="font-size:17px;margin-top:10px;"><b>${escH(c.plat)}</b></div><div class="row">Segera masuk ke stall ${ccLbl(c.stall)}.<br>Alarm berbunyi sampai OK ditekan.</div><button type="button" class="okbtn" onclick="ccCallOk('${escH(c.id)}')">✔ OK, saya menuju stall</button></div>`;
-  document.body.appendChild(o);
+  document.body.appendChild(o); o.dataset.sk="giliran"; vwHearBtn(o, '[onclick^="ccCallOk"]');
   _ccCallFg=!appBg();
   /* Driver: APK selalu alarm native. Pengamat: alarm native hanya kalau aplikasinya di latar (seperti sebelumnya). */
   if(!((!viewer || !_ccCallFg) && ccCallNative(c))) soundEv('giliran');
@@ -8075,7 +8111,8 @@ function ccEvShow(ev, d){
   const o=document.createElement("div"); o.id="ccEvOv"; o.className=ev.kind==="out"?"out":wait?"in wait":"in"; o.dataset.kind=ev.kind; o.innerHTML=ccEvHtml(ev,d);
   document.body.appendChild(o);
   const tx=sel=>{ const e=o.querySelector(sel); return e?String(e.innerText||e.textContent||"").replace(/\s+/g," ").trim():""; };
-  const sk=ev.kind==="out"?"keluar":ev.kind==="abs"?"absen":"izinmasuk", txt=tx(".ttl")+" — "+tx(".big")+(ev.kind==="out"?". Alasan: "+tx(".why").replace(/^Alasan\s*/i,""):"")+(ev.where&&ev.where.queue?" — JANGAN MASUK KE STALL DULU, di dalam masih ada CC":"");
+  const sk=ev.kind==="out"?"keluar":ev.kind==="abs"?"absen":"izinmasuk"; o.dataset.sk=sk; vwHearBtn(o, '[onclick^="ccEvOk"]');
+  const txt=tx(".ttl")+" — "+tx(".big")+(ev.kind==="out"?". Alasan: "+tx(".why").replace(/^Alasan\s*/i,""):"")+(ev.where&&ev.where.queue?" — JANGAN MASUK KE STALL DULU, di dalam masih ada CC":"");
   soundEv(sk, txt); try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){}
   let n=(wait && ev.where.hold)?99:0; _ccEvTimer=setInterval(()=>{ if(!document.getElementById("ccEvOv") || ++n>6){ clearInterval(_ccEvTimer); _ccEvTimer=null; return; } soundEv(sk, txt); try{ navigator.vibrate && navigator.vibrate([400,150,400]); }catch(e){} }, 10000);
   try{ if(!window.AndroidTLS && 'Notification' in window && Notification.permission==='granted') new Notification(tx(".ttl"), {body:txt}); }catch(e){}
