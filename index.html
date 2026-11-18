@@ -438,10 +438,10 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
   .stallgroup{margin-bottom:8px;}
   .modal{border-radius:18px; align-self:center;}
   /* kartu mengalir 2 kolom untuk halaman data */
-  #viewport.v-dashboard,#viewport.v-ccplan,#viewport.v-admin,#viewport.v-koordinator,#viewport.v-orderstall,
+  #viewport.v-dashboard,#viewport.v-ccplan,#viewport.v-admin,#viewport.v-koordinator,#viewport.v-orderstall,#viewport.v-drvview,
   #viewport.v-batam,#viewport.v-prio,#viewport.v-dccp,#viewport.v-datadefect,#viewport.v-confirmdefect{
     display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; align-items:start; align-content:start;}
-  #viewport.v-dashboard>*,#viewport.v-ccplan>*,#viewport.v-admin>*,#viewport.v-koordinator>*,#viewport.v-orderstall>*,
+  #viewport.v-dashboard>*,#viewport.v-ccplan>*,#viewport.v-admin>*,#viewport.v-koordinator>*,#viewport.v-orderstall>*,#viewport.v-drvview>*,
   #viewport.v-batam>*,#viewport.v-prio>*,#viewport.v-dccp>*,#viewport.v-datadefect>*,#viewport.v-confirmdefect>*{margin-bottom:0 !important; min-width:0;}
   #viewport[class*="v-"]>:not(.card){grid-column:1/-1;}
   #viewport.v-dashboard>.card:has(table),#viewport.v-ccplan>.card:has(table),#viewport.v-admin>.card:has(table),
@@ -1735,7 +1735,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 08.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 09.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1770,6 +1770,10 @@ function verReload(){ try{ location.reload(); }catch(e){} }
 setInterval(()=>{ verCheck(); }, 5*60000); setTimeout(()=>{ verCheck(true); }, 15000);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") verCheck(); });
 function isViewer(){ return !!(currentUser && currentUser.role==="viewer"); }
+/* Pengamat → "Layar Driver": driver yang sedang dilihat (sessionStorage, hanya di HP Pengamat). var: dipakai sebelum baris ini jalan pun aman. */
+var _va=null; try{ _va=JSON.parse(sessionStorage.getItem("radar_va")||"null"); if(!_va || typeof _va!=="object" || !_va.plat) _va=null; }catch(e){ _va=null; }
+function vaOn(){ return isViewer() && !!(_va && _va.plat); }
+function vaLive(){ return vaOn() && (activeTab==="drvview" || activeTab==="ccmap"); }   /* popup driver hanya saat Pengamat membuka Layar Driver / Peta */
 /* 18 Nov (permintaan Khairul): akun PENGAMAT senyap total — tidak ada bunyi, suara, getar, maupun notifikasi apa pun dari menu role mana pun. */
 function quietRole(){ return !!(currentUser && currentUser.role==="viewer"); }
 (function(){
@@ -1843,8 +1847,7 @@ try{ document.addEventListener("click", ev=>{ try{
   const now=Date.now(); _wsTaps=_wsTaps.filter(t=>now-t<3000); _wsTaps.push(now);
   if(_wsTaps.length>=5){ _wsTaps=[]; if(currentUser && currentUser.role==="admin") showModal(watchCardHtml(DB.get())); }
 }catch(e){} }, true); }catch(e){}
-/* bersihkan data lama yang sudah tidak dipakai */
-setInterval(()=>{ try{ if(!FBS.enabled || fbCurrentState()!=="online" || isViewer()) return; const d=DB.get(); if(d.watchSim!==undefined) FBS.db.ref(FB_ROOT+"/watchSim").remove().catch(()=>{}); if(d.viewOn!==undefined) FBS.db.ref(FB_ROOT+"/viewOn").remove().catch(()=>{}); }catch(e){} }, 20000);
+/* 18 Nov 09.20: pembersih lama /radar/watchSim & /radar/viewOn dihapus — dulu menghapus pengaturan Tanda Pengamat tiap 20 detik */
 let _uiAt=0; ["click","keydown","touchend"].forEach(ev=>{ try{ window.addEventListener(ev,()=>{ _uiAt=Date.now(); },true); }catch(e){} });
 let _vbT=0;
 function viewerBlockedToast(){
@@ -1856,7 +1859,7 @@ function viewerGuardInstall(){
   try{
     if(window._vgDone || !window.firebase || !firebase.database || !firebase.database.Reference) return;
     const P=firebase.database.Reference.prototype; window._vgDone=true;
-    ["set","update","remove","transaction"].forEach(m=>{ const o=P[m]; if(!o) return; P[m]=function(){ if(isViewer() && !/\/(radar_chat|radar_foto)(\/|$)/.test(String(this))){ viewerBlockedToast(); return Promise.resolve(); } return o.apply(this,arguments); }; });
+    ["set","update","remove","transaction"].forEach(m=>{ const o=P[m]; if(!o) return; P[m]=function(){ if(isViewer() && !/\/(radar_chat|radar_foto)(\/|$)|\/radar\/(viewOn|devSeats|errDev)(\/|$)/.test(String(this))){ viewerBlockedToast(); return Promise.resolve(); } return o.apply(this,arguments); }; });
   }catch(e){}
 }
 
@@ -1991,7 +1994,7 @@ const TABS_BY_ROLE = {
   delivery:    [{key:"delivery", label:"Delivery"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
-  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"drvview", label:"Layar Driver"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
@@ -2729,6 +2732,7 @@ function renderInner(){
   vp.className = "view v-"+activeTab;
   if(activeTab==="dispatcher"){ setVP(vp, pdiCardSafe()+renderDispatcher()); if(_vpChanged && vinDraft) setTimeout(()=>{ if(document.getElementById("vinInput")) onVinInput(); },0); }
   else if(activeTab==="orderstall") setVP(vp, renderOrderStall());
+  else if(activeTab==="drvview") setVP(vp, renderDrvView());
   else if(activeTab==="delivery") setVP(vp, chgReqHtml()+schedReqHtml()+pdiCardSafe()+renderDelivery());
   else if(activeTab==="koordinator") setVP(vp, chgReqHtml()+schedReqHtml()+pdiCardSafe()+renderKoordinator());
   else if(activeTab==="defect"){ setVP(vp, renderDefectReport()); if(_vpChanged) setTimeout(init3DCarDiagram, 0); }
@@ -3845,14 +3849,15 @@ function renderOrderStall(){
       <div id="absenMsg"></div>
       <button class="btn btn-primary" onclick="absenManual()">✍ Absen Manual (cek lokasi)</button>
     </div>`;
-  const absenBlock = verifiedForm + profileCard + autoCard + manualCard;
+  const _va1 = vaOn();
+  const absenBlock = _va1 ? "" : verifiedForm + profileCard + autoCard + manualCard;
 
   return `
     ${dfCcCardHtml(data)}
-    ${sjBoxHtml("cc","Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah loading selesai. "+sjKeepTxt():"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
+    ${_va1 ? sjBoxHtml("cc","Surat Jalan Driver","Surat jalan rit driver ini, sama seperti di HP-nya. Muncul setelah loading selesai.") : sjBoxHtml("cc","Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah loading selesai. "+sjKeepTxt():"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
     ${ccMyPosHtml(data)}
     ${absenBlock}
-    ${shareCardHtml()}
+    ${_va1 ? "" : shareCardHtml()}
 
     ${holdCardHtml(data, true)}
     <div class="card">
@@ -4283,7 +4288,7 @@ function holdHm(ts){ const t=new Date(ts); return String(t.getHours()).padStart(
 /* Kartu "Urutan kamu" untuk Driver CC: posisi nyata di stall / waiting list / Parkir Luar */
 function ccMyPosHtml(data){
   try{
-    if(!currentUser || currentUser.role!=="cc") return "";
+    if(!currentUser || (currentUser.role!=="cc" && !vaOn())) return "";
     const k=myCcPlatKey(); if(!k) return "";
     const rule=`<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Urutan masuk mengikuti <b>jadwal DCCP</b>. Kecepatan dan jarak <b>tidak</b> mempengaruhi urutan, jadi tidak perlu mengebut atau menyalip.</div>`;
     const box=(col,bg,t,sub)=>`<div class="card" style="border:2px solid ${col};background:${bg};"><div style="font-size:12px;color:var(--text-dim);">Urutan kamu</div><div style="font-size:22px;font-weight:900;line-height:1.2;">${t}</div>${sub?`<div style="font-size:13px;margin-top:2px;">${sub}</div>`:""}${rule}</div>`;
@@ -6227,7 +6232,7 @@ function sjRowHtml(b, now){
    SELAMA akunnya memegang plat itu (sejak mengisi plat, sampai driver lain mengisi plat yang sama), atau ILS yang tercatat atas namanya. */
 function sjDrvPass(){
   const k=myCcPlatKey(); if(!k || !currentUser) return ()=>false;
-  const me=currentUser.username, nk=v=>String(v||"").toLowerCase().replace(/[^a-z]/g,""), myN=nk(currentUser.name);
+  const _v=vaOn(), me=_v?vaUserOf(k):currentUser.username, nk=v=>String(v||"").toLowerCase().replace(/[^a-z]/g,""), myN=nk(_v?(((DB.get().users||[]).find(u=>u.username===me)||{}).name||_va.name):currentUser.name);
   const L=(DB.get().ccShiftPlat||[]).filter(x=>x && normPlat(x.plat)===k);
   const mine=L.filter(x=>x.u===me).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0];
   let from=mine ? (+mine.ts||0)-10*60000 : null;
@@ -6332,7 +6337,7 @@ async function sjCleanup(){
   }catch(e){}
 }
 setInterval(sjCleanup, 600000); setTimeout(sjCleanup, 9000);
-function myCcPlatKey(){ try{ let k=normPlat((getCcProfile()||{}).plat||""); if(!k){ const o=JSON.parse(localStorage.getItem(CC_PLATDAY_KEY)||"null"); if(o&&o.plat) k=normPlat(o.plat); } return k; }catch(e){ return ""; } }
+function myCcPlatKey(){ try{ if(vaOn()) return normPlat(_va.plat); let k=normPlat((getCcProfile()||{}).plat||""); if(!k){ const o=JSON.parse(localStorage.getItem(CC_PLATDAY_KEY)||"null"); if(o&&o.plat) k=normPlat(o.plat); } return k; }catch(e){ return ""; } }
 
 /* ======================================================================
    MANIFEST DELIVERY OUT — unduh Excel (semua LP / per LP)
@@ -7956,6 +7961,13 @@ function ccWatchSync(){
   }catch(e){}
 }
 function ccCallCheck(){
+  if(vaLive()){   // Pengamat sedang melihat layar satu driver: hanya panggilan untuk driver itu, sama seperti HP-nya
+    const dv=DB.get(), pv=normPlat(_va.plat);
+    const cv=ccCallsList(dv).filter(x=>x && !x.ack && !_vwCallSeen.has(x.id) && normPlat(x.plat)===pv && Date.now()-x.ts<3*3600000).sort((a,b)=>b.ts-a.ts).find(x=>{ const cur=dv.cc[x.stall]; return cur && normPlat(cur.plat)===pv; });
+    if(!cv){ if(_ccCallId!==null) ccCallClose(); return; }
+    if(_ccCallId!==cv.id || !document.getElementById("ccCallOv")) ccCallShow(cv, true);
+    return;
+  }
   if(isViewer()){   // Pengamat ikut merasakan panggilan giliran parkir ke driver mana pun
     const dv=DB.get(), cv=ccCallsList(dv).filter(x=>x && !x.ack && !_vwCallSeen.has(x.id) && Date.now()-x.ts<10*60000).sort((a,b)=>b.ts-a.ts).find(x=>{ const cur=dv.cc[x.stall]; return cur && normPlat(cur.plat)===normPlat(x.plat); });
     if(!cv){ if(_ccCallId!==null) ccCallClose(); return; }
@@ -8022,7 +8034,7 @@ function ccNoEnterHtml(d, w){   // peringatan untuk CC di waiting list
   return `<div class="stop"><b>⛔ JANGAN MASUK KE STALL DULU</b>Di dalam masih ada CC lain: stall terisi <b>${f.used}/${f.tot}</b>${ahead?` · ${ahead} CC menunggu di depan kamu`:""}. Tunggu di waiting list sampai HP berbunyi <b>GILIRAN KAMU PARKIR</b>.</div>`;
 }
 function ccEvHtml(ev, d){
-  const hm=t=>holdHm(t), pl=escH(platFmt((getCcProfile()||{}).plat||ev.x.plat||""));
+  const hm=t=>holdHm(t), pl=escH(platFmt((vaOn()?_va.plat:(getCcProfile()||{}).plat)||ev.x.plat||""));
   if(ev.kind==="out"){
     const x=ev.x, sys=x.by==="Sistem", why=String(x.why||"").replace(/^otomatis:\s*/,"").replace(/\s*\((waiting list|Parkir Luar)\)$/,"");
     const from=x.ccNum?"STALL "+ccLbl(x.ccNum):/waiting list/i.test(x.why||"")?"WAITING LIST":/Parkir Luar/i.test(x.why||"")?"PARKIR LUAR":"ANTREAN";
@@ -8051,7 +8063,7 @@ function ccEvHtml(ev, d){
       ${ccNoEnterHtml(d,w)}<div class="row dim">${escH(src)} · jam ${hm(a.ts)}</div>
       <button type="button" class="okbtn" onclick="ccEvOk()">✔ OK, saya tunggu panggilan</button></div>`;
   }
-  const e=ev.x, du=ccNextDue(d,(getCcProfile()||{}).plat||""), y=d.yardLocation||{};
+  const e=ev.x, du=ccNextDue(d,(vaOn()?_va.plat:(getCcProfile()||{}).plat)||""), y=d.yardLocation||{};
   return `<div class="box"><div class="ttl">🔓 KAMU DIIZINKAN MASUK</div><div class="big" style="font-size:30px;">SEBELUM JADWAL</div><div class="row" style="font-size:17px;margin-top:8px;"><b>${pl}</b>${du!=null?` · jadwal ${hm(du)}`:""}</div>
     <div class="row">${ev.all?"Semua CC diizinkan":"Diizinkan"} oleh <b>${escH(e.by||"Delivery")}</b> · jam ${hm(e.ts)}</div>
     <div class="row">Silakan menuju yard. Absen otomatis jalan saat HP masuk radius ${escH(y.radiusKm!=null?y.radiusKm:"-")} km, atau tekan <b>Absen Manual</b>.</div>
@@ -8071,11 +8083,11 @@ function ccEvShow(ev, d){
 function ccEvOk(){
   const id=_ccEvId; ccEvClose(); if(!id) return; ccEvSeenAdd(id);
   const m=/^out\|(\d+)\|(.+)$/.exec(id);
-  if(m){ try{ DB.set(d=>{ const x=(d.ccOutLog||[]).find(y=>y && y.ts===+m[1] && normPlat(y.plat)===m[2]); if(x && !x.ack){ x.ack=Date.now(); x.ackBy=(currentUser&&currentUser.name)||""; } }); }catch(e){} }
+  if(m && !isViewer()){ try{ DB.set(d=>{ const x=(d.ccOutLog||[]).find(y=>y && y.ts===+m[1] && normPlat(y.plat)===m[2]); if(x && !x.ack){ x.ack=Date.now(); x.ackBy=(currentUser&&currentUser.name)||""; } }); }catch(e){} }
   setTimeout(ccEvCheck, 300);
 }
 function ccEvCheck(){
-  if(!currentUser || currentUser.role!=="cc" || isViewer()){ if(_ccEvId!==null) ccEvClose(); return; }
+  if(!currentUser || !((currentUser.role==="cc" && !isViewer()) || vaLive())){ if(_ccEvId!==null) ccEvClose(); return; }
   const k=myCcPlatKey(); if(!k) return;
   if(document.getElementById("ccCallOv")) return;   // panggilan giliran stall didahulukan
   const d=DB.get(), L=ccEvPending(d,k);
@@ -11778,12 +11790,12 @@ async function dfPhotoGet(x){
 let _dfCc={foto:null};
 function dfMyIls(d){ const k=myCcPlatKey(); if(!k) return null; return (d.ils||[]).find(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===k)||null; }
 function dfCcCardHtml(data){
-  if(!currentUser || currentUser.role!=="cc") return "";
-  const b=dfMyIls(data), k=myCcPlatKey(), ack=dfAckHtml(data);
+  if(!currentUser || (currentUser.role!=="cc" && !vaOn())) return "";
+  const _vw=vaOn(), b=dfMyIls(data), k=myCcPlatKey(), ack=_vw?"":dfAckHtml(data);
   const mine=dfList(data).filter(x=>k && normPlat(x.ccPlat)===k).sort((a,c)=>(c.ts||0)-(a.ts||0));
   return `${ack}<div class="card" style="border-left:4px solid #C0392B;">
     <h3>⚠ Unit Defect</h3>
-    ${b?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Temukan baret / penyok / cacat di unit yang akan kamu bawa? Laporkan <b>sebelum berangkat</b> supaya dicek Delivery dan kamu tidak disalahkan.</div>
+    ${_vw?`<div style="font-size:12px;color:var(--text-dim);">${b?"ILS truk ini sudah dibuat: driver bisa melapor unit defect sebelum berangkat.":"Tombol lapor muncul di HP driver setelah ILS truknya dibuat."}</div>`:b?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Temukan baret / penyok / cacat di unit yang akan kamu bawa? Laporkan <b>sebelum berangkat</b> supaya dicek Delivery dan kamu tidak disalahkan.</div>
       <button class="btn btn-danger" onclick="dfCcOpen()">⚠ Lapor Unit Defect</button>`:`<div style="font-size:12px;color:var(--text-dim);">Tombol lapor muncul setelah ILS untuk truk kamu dibuat.</div>`}
     ${mine.length?`<div style="margin-top:10px;">${mine.map(x=>dfRowHtml(x)).join("")}</div>`:""}
   </div>`;
@@ -12596,12 +12608,13 @@ const TRK_LIVE_ROLES=["delivery","display"];   /* hemat peta (14 Nov 2026): Koor
 function trkWantLive(){
   if(!currentUser) return false;
   if(activeTab==="ccmap") return true;
+  if(activeTab==="drvview" && vaOn()) return true;   /* Pengamat melihat layar driver: posisi driver realtime */
   try{ if(routeRec && routeRec.on) return true; }catch(e){}   /* Admin sedang merekam rute: butuh posisi realtime */
   if(activeTab==="admin" && typeof adminTab!=="undefined" && (adminTab==="titik"||adminTab==="rute")) return true;   /* Admin → Titik Lokasi */
   return TRK_LIVE_ROLES.includes(currentUser.role);
 }
 function trkLive(){ return !FBS.enabled || _trkMode==="live"; }   /* mode Lokal (tanpa server): tetap jalan seperti biasa */
-function trkOnSnap(snap){ TRACK_RAW = (snap && snap.val()) || {}; try{ trkApply(); }catch(e){ TRACK = TRACK_RAW; } TRKERR = ""; try{ routeRecTick(); }catch(e){} if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); }
+function trkOnSnap(snap){ TRACK_RAW = (snap && snap.val()) || {}; try{ trkApply(); }catch(e){ TRACK = TRACK_RAW; } TRKERR = ""; try{ routeRecTick(); }catch(e){} if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); vaPosUpdate(); }
 function trkOnErr(err){
   TRKERR = fbDenied(err) ? "Sambungan peta ke server terputus. Menyambung ulang…" : "Peta CC belum diizinkan oleh aturan Firebase (tambahkan node radar_track)."; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate();
   if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth().then(ok=>{ if(!ok){ TRKERR="Peta CC terputus dari server. Tutup lalu buka lagi RADAR."; if(activeTab==="ccmap") updateTrackUI(); } }); }catch(e){} }, 1500);   /* sesi hilang: login ulang lalu pasang ulang listener peta */
@@ -13306,7 +13319,7 @@ function updateTrackUI(){
   window._trkUnsched = unsched;
   const rows = allLive.filter(r=>trkHasAccount(r) && ccPlatRegistered(r.plat) && trkWorking(r.plat) && ccMapShiftOk(r.plat)).map(r=>trkCompute(r,mp)).sort((a,b)=>(a.t==null?0:a.t)-(b.t==null?0:b.t));
   window._trkGhosts = ghosts;
-  window._trkRows=rows; try{ chatTagUpdate(); ccProfRefresh(); }catch(e){}
+  window._trkRows=rows; try{ chatTagUpdate(); ccProfRefresh(); if(ccFollow) ccFollowBar(); }catch(e){}
   if(list){
     let h = "";
     if(TRKERR) h += `<div class="msg err">${escH(TRKERR)}</div>`;
@@ -13336,6 +13349,7 @@ function updateTrackUI(){
       const cl=ccColor(o.plat), pl=o.plat;
       L.marker([o.lat,o.lng],{icon:L.divIcon({className:"", html:`<div class="truckMk" style="background:${cl};${o.age>3*60000?'opacity:.6;':''}"><span style="display:inline-block;${(()=>{ const tg=(o.dir==="back"?mp.adm:mp.nvdc); return (tg&&tg.lng>o.lng)?'transform:scaleX(-1);':''; })()}">🚚</span><div class="truckRit">${(()=>{ const rt=trkRit(o.plat,o.dir); return rt?rt.txt:""; })()}</div><div class="truckLb" style="background:${cl};">${escH(o.plat)}</div></div>`, iconSize:[38,38], iconAnchor:[19,19]}), zIndexOffset:500}).on("click",()=>ccProfOpen(pl)).addTo(ccMapLayer);
     });
+    ccFollowTick(rows);
   }
 }
 setInterval(()=>{ if(activeTab==="ccmap") updateTrackUI(); }, 15000);
@@ -13555,12 +13569,97 @@ function ccProfRefresh(force){
           (o.acc>1000?`<div style="background:#FFF4D6;color:#8a6100;border-radius:8px;padding:6px 8px;font-size:12px;margin-top:4px;">⚠ Akurasi GPS kasar (±${(o.acc/1000).toFixed(1)} km). Posisi bisa meleset jauh; minta driver menyalakan Lokasi akurat / GPS.</div>`:""); })():""}
       ${o.dA!=null?`<div><b>Rute:</b> ${trkTxt(o)}${o.off!=null&&o.off>0.5?` <span style="color:#b91c1c;font-weight:700;">· ⚠ ${o.off.toFixed(1)} km di luar rute</span>`:""}</div>`:""}`:`<div style="color:var(--text-dim);">CC ini sudah tidak membagikan posisi.</div>`}
       ${last.length?`<div style="margin-top:6px;"><b>Chat terakhir:</b>${last.map(m=>`<div style="font-size:13px;background:var(--panel2,#f1f4f8);border-radius:8px;padding:4px 8px;margin-top:3px;">${escH(m.text||"📷 foto")} <span style="color:var(--text-dim);font-size:11px;">· ${lapAgo(m.ts)}</span></div>`).join("")}</div>`:""}
-      <div style="display:flex;gap:8px;margin-top:12px;">
-        <button class="btn btn-primary" style="flex:1;background:${c};border-color:${c};" onclick="ccProfChat()">💬 Ajak bicara</button>
-        ${o?`<button class="btn btn-outline" style="flex:1;" onclick="ccProfFocus()">📍 Lihat di peta</button>`:""}</div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        ${isViewer()?"":`<button class="btn btn-primary" style="flex:1;background:${c};border-color:${c};" onclick="ccProfChat()">💬 Ajak bicara</button>`}
+        ${o?`<button class="btn btn-outline" style="flex:1;" onclick="ccProfFocus()">📍 Lihat di peta</button><button class="btn btn-outline" style="flex:1;" onclick="ccFollowStart()">🎯 Ikuti terus</button>`:""}
+        ${isViewer()?`<button class="btn btn-outline" style="flex:1 1 100%;" onclick="vaFromMap()">📱 Lihat layar driver ini</button>`:""}</div>
       ${(currentUser&&["admin","delivery"].includes(currentUser.role))?`<button class="btn btn-outline" style="width:100%;margin-top:8px;color:#b91c1c;border-color:#b91c1c;" onclick="ccProfForceOut()">🚪 Keluarkan dari aplikasi</button>`:""}</div>`;
 }
+/* 18 Nov: "Ikuti terus" — peta tetap berpusat ke CC yang dipilih setiap posisinya diperbarui (untuk dipantau / ditunjukkan ke manajemen) */
+let ccFollow=null;
+function ccFollowStart(){ ccFollow=ccProfPlat; ccProfFocus(); ccFollowBar(); }
+function ccFollowStop(){ ccFollow=null; ccFollowBar(); }
+function ccFollowBar(){ try{ let el=document.getElementById("ccFollowBar"); const box=document.getElementById("ccmapMsg"); if(!box) return;
+  if(!ccFollow){ if(el) el.remove(); return; }
+  if(!el){ el=document.createElement("div"); el.id="ccFollowBar"; box.appendChild(el); }
+  const who=ccDriverAny(ccFollow)||"", has=(window._trkRows||[]).some(x=>normPlat(x.plat)===normPlat(ccFollow));
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:${ccColor(ccFollow)};color:#fff;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-weight:800;font-size:13px;"><span>🎯 Mengikuti ${escH(platFmt(ccFollow))}${who?" · "+escH(who):""}${has?"":`<br><span style="font-weight:600;font-size:12px;opacity:.9;">Posisi belum ada: HP driver belum membagikan lokasi (aplikasi tertutup / GPS mati / di luar jadwal).</span>`}</span><button type="button" onclick="ccFollowStop()" style="background:rgba(255,255,255,.25);color:#fff;border:0;border-radius:8px;padding:4px 10px;font-weight:800;">✕ Berhenti</button></div>`; }catch(e){} }
+let _ccFollowZoom=0;
+function ccFollowTick(rows){ try{ if(!ccFollow || !ccMapObj) return; if(ccMapObj.getContainer && ccMapObj.getContainer()!==document.getElementById("ccmap")) return; const o=(rows||window._trkRows||[]).find(x=>normPlat(x.plat)===normPlat(ccFollow)); if(o){ if(_ccFollowZoom){ _ccFollowZoom=0; ccMapObj.setView([o.lat,o.lng],15); } else ccMapObj.panTo([o.lat,o.lng]); } ccFollowBar(); }catch(e){} }
 function ccProfFocus(){ const o=(window._trkRows||[]).find(x=>normPlat(x.plat)===normPlat(ccProfPlat)); ccProfClose(); try{ if(o&&ccMapObj){ ccMapObj.setView([o.lat,o.lng],16); document.getElementById("ccmap").scrollIntoView({behavior:"smooth",block:"center"}); } }catch(e){} }
+/* ===== PENGAMAT: LAYAR DRIVER (18 Nov 2026, permintaan Khairul untuk dipamerkan ke manajemen) =====
+   Pengamat memilih satu driver, lalu melihat layar Order Stall HP driver itu: urutan / waiting list / Parkir Luar, surat jalan,
+   unit defect, dan popup yang sama (GILIRAN KAMU PARKIR, ABSEN TERCATAT, DIKELUARKAN, DIIZINKAN MASUK).
+   Hanya membaca: tidak menulis apa pun, tidak memakai GPS HP Pengamat, posisi/urutan driver tidak berubah, tanpa bunyi.
+   "Peta driver ini" membuka Peta CC yang terus berpusat ke posisi driver itu (dari HP driver), bukan posisi HP Pengamat. */
+let _vaList=[], _vaQ="";
+function vaSave(){ try{ if(_va) sessionStorage.setItem("radar_va", JSON.stringify(_va)); else sessionStorage.removeItem("radar_va"); }catch(e){} }
+function vaUserOf(k){   /* akun Driver CC terakhir yang memegang plat ini (bisa berganti di tengah shift) */
+  try{ const d=DB.get(), us=d.users||[]; k=normPlat(k);
+    const e=(d.ccShiftPlat||[]).filter(x=>x && normPlat(x.plat)===k && (us.find(y=>y.username===x.u)||{}).role==="cc").sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0];
+    return e?e.u:""; }catch(e){ return ""; }
+}
+function vaCands(d){
+  const M=new Map(), add=(plat,lp,st,ord)=>{ const k=normPlat(plat); if(!k) return; const o=M.get(k); if(o && o.ord<=ord){ if(!o.lp && lp) o.lp=lp; return; } M.set(k,{k, lp:lp||(o&&o.lp)||"", st, ord}); };
+  try{ Object.keys(d.cc||{}).forEach(n=>{ const x=d.cc[n]; if(x && x.plat) add(x.plat, x.lp, "Stall "+ccLbl(n), +n||0); }); }catch(e){}
+  try{ (d.queue||[]).forEach((q,i)=>{ if(q && q.plat) add(q.plat, q.lp, "Waiting list ke-"+(i+1), 100+i); }); }catch(e){}
+  try{ (d.hold||[]).slice().filter(Boolean).sort((a,b)=>ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts)).forEach((q,i)=>add(q.plat, q.lp, "Parkir Luar ke-"+(i+1), 300+i)); }catch(e){}
+  try{ Object.values(TRACK||{}).forEach(r=>{ if(r && r.plat && typeof r.lat==="number" && Date.now()-(r.ts||0)<TRK_SHOW_MS && ccPlatRegistered(r.plat)) add(r.plat, r.lp, "Di jalan", 500); }); }catch(e){}
+  try{ (d.dccpSchedule||[]).forEach(r=>{ if(!r || !r.police) return; let st="Jadwal DCCP"; try{ const n=dccpTripList(r).length, dn=dccpDoneCount(r,d); if(n) st=dn>=n?"Rit selesai ("+dn+"/"+n+")":"Rit "+dn+"/"+n; }catch(e){} add(r.police, r.lp, st, 600); }); }catch(e){}
+  return [...M.values()].sort((a,b)=>a.ord-b.ord || a.k.localeCompare(b.k)).map(o=>Object.assign(o,{plat:platFmt(o.k)||o.k, name:(()=>{ try{ return ccDriverAny(o.k)||""; }catch(e){ return ""; } })()}));
+}
+function vaListHtml(){
+  const q=String(_vaQ||"").toLowerCase().replace(/\s+/g,""), L=_vaList.map((o,i)=>({o,i})).filter(({o})=>!q || (o.plat+o.name+o.lp).toLowerCase().replace(/\s+/g,"").includes(q));
+  if(!L.length) return `<div class="emptystate">${_vaList.length?"Tidak ada yang cocok.":"Belum ada driver di stall, waiting list, Parkir Luar, peta, atau Jadwal DCCP."}</div>`;
+  const MAX=80, col=st=>/^Stall/.test(st)?"#1E9E5A":/^Waiting/.test(st)?"#2F6FB5":/^Parkir/.test(st)?"#E8833A":/^Di jalan/.test(st)?"#7C3AED":"#64748B";
+  return L.slice(0,MAX).map(({o,i})=>`<div onclick="vaSel(${i})" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--border);border-left:7px solid ${ccColor(o.plat)};border-radius:12px;padding:9px 12px;margin-bottom:8px;">
+      <div style="min-width:0;"><b style="background:${ccColor(o.plat)};color:#fff;border-radius:7px;padding:2px 9px;font-weight:900;">${escH(o.plat)}</b> <b>${escH(o.name||"(nama belum ada)")}</b><div style="font-size:11px;color:var(--text-dim);margin-top:3px;">LP ${escH(o.lp||"-")}</div></div>
+      <span style="flex:none;font-size:11px;font-weight:800;color:#fff;background:${col(o.st)};border-radius:999px;padding:3px 9px;">${escH(o.st)}</span></div>`).join("")
+    + (L.length>MAX?`<div style="font-size:12px;color:var(--text-dim);">+${L.length-MAX} lagi. Ketik plat / nama untuk mencari.</div>`:"");
+}
+function vaFind(v){ _vaQ=v||""; const el=document.getElementById("vaList"); if(el) el.innerHTML=vaListHtml(); }
+function vaPick(plat, lp, name){
+  const k=normPlat(plat); if(!k || !isViewer()) return;
+  _va={plat:k, lp:lp||"", name:name||(()=>{ try{ return ccDriverAny(k)||""; }catch(e){ return ""; } })()}; vaSave(); _vaQ="";
+  try{ ccEvClose(); }catch(e){} try{ ccCallClose(); }catch(e){}   /* popup driver sebelumnya ditutup */
+}
+function vaSel(i){ const o=_vaList[i]; if(!o) return; vaPick(o.k, o.lp, o.name); render(); try{ window.scrollTo(0,0); }catch(e){} setTimeout(()=>{ try{ ccCallCheck(); ccEvCheck(); }catch(e){} }, 300); }
+function vaGo(){ _va=null; vaSave(); try{ ccEvClose(); }catch(e){} try{ ccCallClose(); }catch(e){} if(ccFollow) ccFollow=null; render(); }
+function vaMap(){ if(!vaOn()) return; ccFollow=normPlat(_va.plat); _ccFollowZoom=1; switchTab("ccmap"); try{ ccFollowBar(); }catch(e){} }
+function vaFromMap(){ const p=ccProfPlat; if(!p) return; vaPick(p); ccProfClose(); switchTab("drvview"); try{ window.scrollTo(0,0); }catch(e){} setTimeout(()=>{ try{ ccCallCheck(); ccEvCheck(); }catch(e){} }, 300); }
+function vaPosHtml(d){
+  try{
+    const k=normPlat(_va.plat), mp=d.mapPoints||{};
+    const r=Object.values(TRACK||{}).filter(x=>x && typeof x.lat==="number" && normPlat(x.plat)===k).sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+    if(!r || Date.now()-(r.ts||0)>TRK_SHOW_MS) return `<div style="font-size:12px;margin-top:8px;color:var(--text-dim);">📍 Posisi driver belum ada: HP driver belum membagikan lokasi${r&&r.ts?" (terakhir "+escH(lapAgo(r.ts))+")":""}.</div>`;
+    const o=trkCompute(r,mp), m=Math.max(0,Math.round((Date.now()-(r.ts||0))/60000));
+    return `<div style="font-size:13px;margin-top:8px;">📍 ${o && o.dA!=null?trkTxt(o):"Posisi terkirim"} <span style="color:var(--text-dim);font-size:11px;">· ${m?m+" mnt lalu":"barusan"}</span></div>`;
+  }catch(e){ return ""; }
+}
+function vaPosUpdate(){ try{ if(activeTab!=="drvview" || !vaOn()) return; const el=document.getElementById("vaPos"); if(el) el.innerHTML=vaPosHtml(DB.get()); }catch(e){} }
+function renderDrvView(){
+  if(!isViewer()) return `<div class="card" style="grid-column:1/-1;"><div class="emptystate">Menu ini khusus akun Pengamat.</div></div>`;
+  const d=DB.get();
+  if(!vaOn()){
+    _vaList=vaCands(d);
+    return `<div class="card" style="grid-column:1/-1;"><h3>📱 Lihat Layar Driver</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Pilih driver untuk melihat layar HP-nya: urutan waiting list / Parkir Luar / stall, surat jalan, dan popup yang muncul di HP driver (giliran parkir, absen tercatat, dikeluarkan, diizinkan masuk). <b>Hanya melihat</b>: tidak mengubah data atau posisi driver, tanpa bunyi.</div>
+      <div class="field" style="margin-bottom:0;"><input id="vaCari" type="search" placeholder="🔎 Cari plat / nama driver / LP…" value="${escH(_vaQ)}" oninput="vaFind(this.value)" autocomplete="off" style="width:100%;font-size:16px;"></div>
+      <div id="vaList" style="margin-top:10px;">${vaListHtml()}</div></div>`;
+  }
+  const k=normPlat(_va.plat), pl=platFmt(k)||k, c=ccColor(pl), nm=(()=>{ try{ return ccDriverAny(k)||_va.name||""; }catch(e){ return _va.name||""; } })();
+  const lp=_va.lp || (((d.dccpSchedule||[]).find(r=>r && normPlat(r.police)===k))||{}).lp || "";
+  return `<div class="card" style="grid-column:1/-1;border:2px solid ${c};">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div style="min-width:0;"><div style="font-size:12px;color:var(--text-dim);font-weight:700;">👁 LAYAR HP DRIVER · hanya melihat</div>
+          <div style="font-size:18px;font-weight:900;margin-top:4px;"><span style="background:${c};color:#fff;border-radius:7px;padding:2px 10px;">${escH(pl)}</span> ${escH(nm||"(nama belum ada)")}</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">LP ${escH(lp||"-")} · popup driver ikut tampil di sini, tanpa bunyi</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="btn btn-primary btn-sm" style="width:auto;background:${c};border-color:${c};" onclick="vaMap()">🗺 Peta driver ini</button><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="vaGo()">🔄 Pilih driver lain</button></div>
+      </div>
+      <div id="vaPos">${vaPosHtml(d)}</div>
+    </div>
+    ${renderOrderStall()}`;
+}
 function ccProfChat(){
   const pl=platFmt(ccProfPlat); if(!chatTo.some(x=>normPlat(x)===normPlat(pl))) chatTo.push(pl);
   ccProfClose(); chatTagUpdate();
