@@ -1736,7 +1736,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 11.25";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 16.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3574,7 +3574,7 @@ function sndRow(e){
 }
 function sndOpen(){
   const rl=currentUser?currentUser.role:"", mine=SND_EV.filter(e=>e.roles.includes(rl)), other=SND_EV.filter(e=>!e.roles.includes(rl));
-  showModal(`<h3 style="margin:0 0 4px;">🔔 Nada Suara <span style="font-size:10px;font-weight:600;color:var(--text-dim);float:right;margin-top:4px;">build ${RADAR_BUILD}</span></h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Pilih nada untuk tiap kejadian supaya langsung tahu itu bunyi apa, termasuk saat di jalan. Pengaturan ini hanya di HP ini. Saat aplikasi di latar belakang atau layar mati, dering memakai nada sistem aplikasi Android. <b>Tidak terdengar?</b> Naikkan volume <b>media</b> HP (bukan volume dering) lalu tekan ▶ Coba lagi.</div>
+  showModal(`<h3 style="margin:0 0 4px;">🔔 Nada Suara <span style="font-size:10px;font-weight:600;color:var(--text-dim);float:right;margin-top:4px;">build ${RADAR_BUILD}</span></h3><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#16213E;color:#fff;border-radius:10px;padding:8px 12px;margin:6px 0 10px;"><span style="font-size:12px;opacity:.85;">📱 Kode HP ini</span><b style="font-size:20px;letter-spacing:2px;">#${devCode()}</b><span style="font-size:11px;opacity:.8;">${escH(devPlat())}</span></div><div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Pilih nada untuk tiap kejadian supaya langsung tahu itu bunyi apa, termasuk saat di jalan. Pengaturan ini hanya di HP ini. Saat aplikasi di latar belakang atau layar mati, dering memakai nada sistem aplikasi Android. <b>Tidak terdengar?</b> Naikkan volume <b>media</b> HP (bukan volume dering) lalu tekan ▶ Coba lagi.</div>
     <div style="display:flex;gap:8px;align-items:center;margin:2px 0 6px;"><b style="font-size:12px;">🔊 Volume</b><select onchange="sndVolSet(this.value)" style="flex:1;">${Object.keys(SND_VOL).map(k=>`<option value="${k}" ${k===sndVolKey()?"selected":""}>${SND_VOL[k].n}</option>`).join("")}</select></div>
     <div style="max-height:55vh;overflow:auto;">${mine.length?`<div style="font-size:12px;font-weight:800;color:#0F2A4A;margin-top:6px;">Untuk peran kamu</div>${mine.map(sndRow).join("")}`:""}
     ${other.length?`<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;font-weight:800;">Nada lainnya (${other.length})</summary>${other.map(sndRow).join("")}</details>`:""}</div>
@@ -4689,7 +4689,7 @@ function renderDelivery(){
       ${(()=>{ const dn=b.drvName||ccDriverAny(b.ccPlat,b.ts); let lpn=b.lp||""; if(!lpn){ try{ lpn=(Object.values(DB.get().cc||{}).filter(Boolean).find(c=>normPlat(c.plat)===normPlat(b.ccPlat))||{}).lp||(ccPlatRow(b.ccPlat)||{}).lp||""; }catch(e){} } const lb=lpn?`<span style="background:var(--gold);color:#fff;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:900;margin-left:6px;vertical-align:2px;">LP ${escH(lpn)}</span>`:""; return (dn||lb)?`<div style="font-size:15px;font-weight:800;margin:-2px 0 6px;">${dn?"👤 "+escH(dn):""}${lb}</div>`:""; })()}
       <div style="margin:0 0 8px;"><span style="font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;background:${ilsStage(b).bg};color:${ilsStage(b).c};">${ilsStage(b).t}</span></div>
       ${(()=>{ const fr=new Set((b.units||[]).map(u=>String(u.frame||"").toUpperCase())); const o=(data.ils||[]).find(x=>x && x.id!==b.id && !x.outTs && x.status==="open" && (x.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase()))); if(!o) return ""; const lama=b.id<o.id; return `<div style="background:#fdeaea;border:1px solid #e0a0a0;border-radius:8px;padding:8px 10px;margin:0 0 8px;font-size:12px;color:#991b1b;"><b>⚠ DOBEL</b>: ada ILS #${o.id} dengan unit yang sama. ${lama?"ILS ini <b>yang lebih lama</b>, biasanya yang dibatalkan. Cek dulu ILS mana yang dipakai di TLS.":"ILS ini yang lebih baru."}</div>`; })()}
-      <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">${b.units.length} unit · dibuat ${new Date(b.ts).toLocaleString('id-ID')}</p>
+      <p style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">${b.units.length} unit · dibuat ${new Date(b.ts).toLocaleString('id-ID')}${ilsByTxt(b)}</p>
       <table><thead><tr><th>QR</th><th>No. Rangka</th><th>Model</th><th>Stall</th></tr></thead><tbody>
         ${b.units.map(u=>`<tr><td style="width:84px;">${qrCellHtml(u.frame)}</td><td><b>${u.frame}</b>${unitTagsHtml(u,true)}</td><td>${u.model}</td><td>${u.loc?"Luar stall: "+u.loc:u.slot}</td></tr>`).join("")}
       </tbody></table>
@@ -4843,14 +4843,14 @@ function ilsWaitOnline(retry){
       alert("Data server belum siap setelah 1 menit (status: "+fbCurrentState()+" · "+ilsFlags()+"). ILS tidak dibuat supaya tidak dobel. Cek sinyal, lalu coba lagi. Kalau terus begini, kirim foto pesan ini."); }
   }, 500);
 }
-let _ilsRetry=null;
+let _ilsRetry=null, _ilsVia="";
 /* Coba-ulang sesudah menunggu server: SELALU ditanyakan dulu dengan plat yang dimaksud, dan dibatalkan kalau stall sudah diisi CC lain */
 function ilsRetryFor(n, fn){
   const c=(DB.get().cc||{})[n], k=c?normPlat(c.plat):"", pf=c?c.plat:"";
   const r=()=>{ const c2=(DB.get().cc||{})[n];
     if(!c2 || normPlat(c2.plat)!==k){ alert("ILS untuk "+pf+" TIDAK dibuat: Stall "+ccLbl(n)+" sekarang "+(c2?"diisi "+c2.plat:"kosong")+"."); return; }
     if(!confirm("Server sudah siap.\n\nBuat ILS untuk "+pf+" (Stall "+ccLbl(n)+") sekarang?")) return;
-    fn(); };
+    _ilsVia="tunda"; try{ fn(); } finally{ _ilsVia=""; } };
   r.plat=pf; return r;
 }
 /* 17 Nov 19.30: tombol ILS terikat ke PLAT yang tampil di kartu, bukan hanya nomor stall. Kalau stall sudah diisi CC lain (layar belum segar), ILS TIDAK dibuat. */
@@ -4913,7 +4913,8 @@ function createILS(ccNum, slots){
     /* dicek ULANG di dalam transaksi (data server terbaru): kalau di saat yang sama orang lain sudah membuat ILS untuk plat ini, ILS ini TIDAK dibuat */
     if((d.ils||[]).some(b=>b && b.status==="open" && !b.outTs && (normPlat(b.ccPlat)===normPlat(ccInfo.plat) || b.ccNum==ccNum))) return;
     _ilsNewId=id;
-    d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), drvName: ccDriverAny(ccInfo.plat)||"", mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open"});
+    d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), drvName: ccDriverAny(ccInfo.plat)||"", mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open", dv: devCode(), dp: devPlat()});
+    if(_ilsVia) d.ils[d.ils.length-1].via=_ilsVia;
     units.forEach(u=>{ if(d.units[u.slot] && !d.units[u.slot].ilsId) d.units[u.slot].ilsId = id; });
   });
   notifyILSCreated(ccInfo.plat, units.length);
@@ -4994,6 +4995,12 @@ function ilsSeatMaxSave(){ if(!(currentUser && currentUser.role==="admin")){ ale
   const el=document.getElementById("ilsSeatMaxIn"), n=Math.floor(Number(el&&el.value)); if(!(n>=1 && n<=10)){ alert("Isi angka 1 sampai 10."); return; }
   DB.set(d=>{ d.ilsSeatMax=n; }); alert("Tersimpan: maksimal "+n+" HP per akun Delivery / Admin untuk membuat ILS."); }
 function ilsDevId(){ try{ let v=localStorage.getItem("radar_devid"); if(!v){ v=Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem("radar_devid",v); } return v; }catch(e){ return "x"; } }
+/* 18 Nov 16.55: jejak HP pembuat ILS. Kode HP = kode acak RADAR yang tersimpan di HP itu (beda tiap HP walau merk & tipe sama), tampil di menu 🔔 Nada. */
+function devCode(){ try{ const t=String(ilsDevId()); let h=7; for(let k=0;k<t.length;k++) h=(h*31+t.charCodeAt(k))>>>0; return h.toString(36).toUpperCase().slice(-4).padStart(4,"0"); }catch(e){ return "----"; } }
+function devModel(){ try{ const c=localStorage.getItem("radar_devmodel"); if(c) return c; const m=(navigator.userAgent||"").match(/Android [^;)]*;\s*([^;)]+?)(?:\s+Build\/|\)|;)/); return (m && m[1] && m[1].trim()!=="K")?m[1].trim().slice(0,24):""; }catch(e){ return ""; } }
+try{ if(navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) navigator.userAgentData.getHighEntropyValues(["model"]).then(r=>{ try{ if(r && r.model) localStorage.setItem("radar_devmodel", String(r.model).slice(0,24)); }catch(e){} }).catch(()=>{}); }catch(e){}
+function devPlat(){ return (window.AndroidTLS?"APK":"Web")+(devModel()?" "+devModel():""); }
+function ilsByTxt(b){ try{ const a=[]; if(b.mp) a.push("oleh "+escH(b.mp)); if(b.dv) a.push("HP #"+escH(b.dv)+(b.dp?" "+escH(b.dp):"")); if(b.via==="tunda") a.push("⏳ lewat konfirmasi \"Server sudah siap\""); return a.length?" · "+a.join(" · "):""; }catch(e){ return ""; } }
 function ilsSeatRole(){ return (currentUser && !isViewer() && ILS_SEAT_MAX[currentUser.role]) ? currentUser.role : ""; }
 function ilsSeatRoleTxt(r){ return r==="admin" ? "Admin" : "Delivery"; }
 function ilsSeatsLive(d, role){
@@ -5009,8 +5016,8 @@ function ilsSeatClaim(kick){
     const o=d.ilsSeats=(d.ilsSeats&&typeof d.ilsSeats==="object")?d.ilsSeats:{}, now=Date.now();
     Object.keys(o).forEach(k=>{ if(!o[k] || now-(o[k].ts||0)>=ILS_SEAT_TTL) delete o[k]; });
     if(kick && kick!==me && o[kick] && o[kick].r===r && !o[kick].off) o[kick]={r, off:1, by:who, ts:now};   /* HP itu diberi tahu saat dibuka */
-    if(o[me] && o[me].r===r && !o[me].off){ o[me].ts=now; o[me].u=currentUser.username; o[me].n=who; ok=true; return; }
-    if(ilsSeatsLive(d,r).length < ilsSeatMax(r)){ o[me]={r, u:currentUser.username, n:who, p:(window.AndroidTLS?"APK":"Web"), since:now, ts:now}; ok=true; }
+    if(o[me] && o[me].r===r && !o[me].off){ o[me].ts=now; o[me].u=currentUser.username; o[me].n=who; o[me].cd=devCode(); ok=true; return; }
+    if(ilsSeatsLive(d,r).length < ilsSeatMax(r)){ o[me]={r, u:currentUser.username, n:who, p:(window.AndroidTLS?"APK":"Web"), cd:devCode(), since:now, ts:now}; ok=true; }
   });
   return ok;
 }
@@ -5028,7 +5035,7 @@ function ilsSeatModal(){
   const L=ilsSeatsLive(DB.get(), r), hm=t=>new Date(t).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"});
   showModal(`<h3 style="margin:0 0 6px;">⛔ ILS hanya dari ${ilsSeatMax(r)} HP ${ilsSeatRoleTxt(r)}</h3>
     <div style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">Sudah ada ${L.length} HP ${ilsSeatRoleTxt(r)} yang aktif membuat ILS. Supaya HP ini bisa membuat ILS, <b>nonaktifkan salah satu</b> (mis. HP yang sudah tidak dipakai / ketinggalan login).</div>
-    ${L.map(x=>`<div class="kitem" style="display:flex;align-items:center;gap:10px;margin-top:8px;"><div style="flex:1;min-width:0;"><b>${escH(x.n||x.u||"-")}</b> <span style="font-size:11px;color:var(--text-dim);">(${escH(x.u||"-")} · ${escH(x.p||"")})</span><div style="font-size:11px;color:var(--text-dim);">aktif sejak ${hm(x.since||x.ts)} · terakhir ${hm(x.ts)}</div></div><button class="btn btn-sm" style="width:auto;" onclick="ilsSeatKick('${escH(x.dev)}')">Nonaktifkan</button></div>`).join("")}
+    ${L.map(x=>`<div class="kitem" style="display:flex;align-items:center;gap:10px;margin-top:8px;"><div style="flex:1;min-width:0;"><b>${escH(x.n||x.u||"-")}</b> <span style="font-size:11px;color:var(--text-dim);">(${escH(x.u||"-")} · ${escH(x.p||"")}${x.cd?" · HP #"+escH(x.cd):""})</span><div style="font-size:11px;color:var(--text-dim);">aktif sejak ${hm(x.since||x.ts)} · terakhir ${hm(x.ts)}</div></div><button class="btn btn-sm" style="width:auto;" onclick="ilsSeatKick('${escH(x.dev)}')">Nonaktifkan</button></div>`).join("")}
     <button class="btn btn-outline btn-sm" style="width:100%;margin-top:12px;" onclick="closeModal()">Batal</button>`);
 }
 function ilsSeatKick(dev){
@@ -5508,7 +5515,7 @@ function printILS(id){
     <html><head><title>ILS #${b.id}</title></head><body style="font-family:sans-serif;padding:20px;">
     <h2>Instruksi Loading System (ILS)</h2>
     <p><b>No. Polisi CC:</b> ${b.ccPlat} &nbsp; | &nbsp; <b>LP:</b> ${b.lp} &nbsp; | &nbsp; <b>Stall CC:</b> ${ccLbl(b.ccNum)}</p>
-    <p><b>MP Delivery:</b> ${b.mp} &nbsp; | &nbsp; <b>Waktu:</b> ${new Date(b.ts).toLocaleString('id-ID')}</p>
+    <p><b>MP Delivery:</b> ${b.mp} &nbsp; | &nbsp; <b>Waktu:</b> ${new Date(b.ts).toLocaleString('id-ID')}${b.dv?` &nbsp; | &nbsp; <b>HP:</b> #${escH(b.dv)} ${escH(b.dp||"")}`:""}</p>
     <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%; margin-top:12px;">
     <tr><th>No</th><th>QR</th><th>No. Rangka</th><th>Model</th><th>Asal Stall</th></tr>
     ${b.units.map((u,i)=>`<tr><td>${i+1}</td><td>${qrSvg(u.frame,96)}</td><td style="font-size:16px;font-weight:700;">${u.frame}</td><td>${u.model}</td><td>${u.loc?"Luar stall: "+u.loc:u.slot}</td></tr>`).join("")}
