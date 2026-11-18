@@ -1743,7 +1743,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 21.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 21.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -5007,7 +5007,7 @@ function devCode(){ try{ const t=String(ilsDevId()); let h=7; for(let k=0;k<t.le
 function devModel(){ try{ const c=localStorage.getItem("radar_devmodel"); if(c) return c; const m=(navigator.userAgent||"").match(/Android [^;)]*;\s*([^;)]+?)(?:\s+Build\/|\)|;)/); return (m && m[1] && m[1].trim()!=="K")?m[1].trim().slice(0,24):""; }catch(e){ return ""; } }
 try{ if(navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) navigator.userAgentData.getHighEntropyValues(["model"]).then(r=>{ try{ if(r && r.model) localStorage.setItem("radar_devmodel", String(r.model).slice(0,24)); }catch(e){} }).catch(()=>{}); }catch(e){}
 function devPlat(){ return (window.AndroidTLS?"APK":"Web")+(devModel()?" "+devModel():""); }
-function sjByTxt(b){ try{ const j=b && b.sj; if(!j) return ""; const a=[]; if(j.ts) a.push("disimpan "+holdHm(j.ts)); if(j.by) a.push("oleh "+escH(j.by)); if(j.dv) a.push("HP #"+escH(j.dv)+(j.dp?" "+escH(j.dp):"")); return a.join(" · "); }catch(e){ return ""; } }   /* jejak HP penyimpan surat jalan (18 Nov 21.40) */
+function sjByTxt(b){ try{ const j=b && b.sj; if(!j) return ""; const a=[]; if(j.ts) a.push("disimpan "+holdHm(j.ts)); if(j.by) a.push("oleh "+escH(j.by)); if(j.dv) a.push("HP #"+escH(j.dv)+(j.dp?" "+escH(j.dp):"")); else a.push("kode HP belum tercatat (disimpan sebelum update 18 Nov 21.40)"); return a.join(" · "); }catch(e){ return ""; } }   /* jejak HP penyimpan surat jalan (18 Nov 21.40) */
 function ilsByTxt(b){ try{ const a=[]; if(b.mp) a.push("oleh "+escH(b.mp)); if(b.dv) a.push("HP #"+escH(b.dv)+(b.dp?" "+escH(b.dp):"")); if(b.via==="tunda") a.push("⏳ lewat konfirmasi \"Server sudah siap\""); return a.length?" · "+a.join(" · "):""; }catch(e){ return ""; } }
 function ilsSeatRole(){ return (currentUser && !isViewer() && ILS_SEAT_MAX[currentUser.role]) ? currentUser.role : ""; }
 function ilsSeatRoleTxt(r){ return r==="admin" ? "Admin" : "Delivery"; }
