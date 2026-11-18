@@ -824,6 +824,7 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 window.RSnd=(function(){
   var ctx=null, master=null, muted=false, t0=performance.now(), played=false, splashOn=true, rideTimer=null;
   try{ muted=localStorage.getItem("radar_mute")==="1"; }catch(e){}
+  try{ var _ss=JSON.parse(localStorage.getItem("apcc_session_v1")||"null"); if(_ss && _ss.role==="viewer") muted=true; }catch(e){}   /* Pengamat: senyap, termasuk suara pembuka */
   function ac(){
     if(ctx) return ctx;
     var C=window.AudioContext||window.webkitAudioContext; if(!C) return null;
@@ -1734,7 +1735,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 00.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 08.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1769,6 +1770,14 @@ function verReload(){ try{ location.reload(); }catch(e){} }
 setInterval(()=>{ verCheck(); }, 5*60000); setTimeout(()=>{ verCheck(true); }, 15000);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") verCheck(); });
 function isViewer(){ return !!(currentUser && currentUser.role==="viewer"); }
+/* 18 Nov (permintaan Khairul): akun PENGAMAT senyap total — tidak ada bunyi, suara, getar, maupun notifikasi apa pun dari menu role mana pun. */
+function quietRole(){ return !!(currentUser && currentUser.role==="viewer"); }
+(function(){
+  try{ if(navigator.vibrate){ const v0=navigator.vibrate.bind(navigator); navigator.vibrate=function(p){ if(quietRole()) return false; return v0(p); }; } }catch(e){}
+  try{ if(window.speechSynthesis && speechSynthesis.speak){ const s0=speechSynthesis.speak.bind(speechSynthesis); speechSynthesis.speak=function(u){ if(quietRole()) return; return s0(u); }; } }catch(e){}
+  try{ if("Notification" in window){ const N0=window.Notification; window.Notification=new Proxy(N0,{ construct(t,a){ if(quietRole()) return {close(){}, addEventListener(){}, onclick:null}; return new t(...a); } }); } }catch(e){}
+  try{ if(window.ServiceWorkerRegistration && ServiceWorkerRegistration.prototype.showNotification){ const sn=ServiceWorkerRegistration.prototype.showNotification; ServiceWorkerRegistration.prototype.showNotification=function(){ if(quietRole()) return Promise.resolve(); return sn.apply(this, arguments); }; } }catch(e){}
+})();
 /* ===== TANDA PENGAMAT (dipulihkan 17 Nov 2026 dari build 2 Nov; permintaan Khairul untuk trial) =====
    - Asli: saat akun Pengamat membuka RADAR, semua role lain melihat tanda "👁 Dipantau Pengamat". Akun Pengamat sendiri TIDAK melihat tanda ini.
    - Mode acak (Admin, ada batas tanggal): tanda muncul acak seakan-akan Pengamat memantau. Jadwal acaknya sama di semua perangkat. */
@@ -1981,9 +1990,9 @@ const TABS_BY_ROLE = {
   cc:          [{key:"orderstall", label:"Order Stall"}, {key:"ccmap", label:"Peta & Chat"}, {key:"display", label:"Display"}],
   delivery:    [{key:"delivery", label:"Delivery"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
-  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
-  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
-  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
+  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
+  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
 let selectedRole = null;
@@ -2057,7 +2066,7 @@ function spdUnlock(){
   try{ const C = window.AudioContext||window.webkitAudioContext; if(!C) return; if(!SPD.ac) SPD.ac = new C(); if(SPD.ac.state==="suspended") SPD.ac.resume(); }catch(e){}
 }
 ["pointerdown","touchstart","touchend","click","keydown"].forEach(ev=>{ try{ document.addEventListener(ev, spdUnlock, {passive:true, capture:true}); }catch(e){} });
-function spdSiren(times){
+function spdSiren(times){ if(quietRole()) return;
   try{
     spdUnlock(); const ctx = SPD.ac; if(!ctx) return;
     let t = ctx.currentTime + 0.05;
@@ -3400,7 +3409,7 @@ let autoWatchId = null;
 
 /* Saat layar terkunci / aplikasi di latar belakang, bunyi web (AudioContext) dibisukan HP. Di APK, dering dibunyikan oleh aplikasi native (alarm + getar, berhenti saat aplikasi dibuka). */
 function appBg(){ try{ if(window.AndroidTLS && AndroidTLS.isFg) return !AndroidTLS.isFg(); }catch(e){} return false; }
-function ringBg(title, body){ try{ if(appBg() && window.AndroidTLS && AndroidTLS.notify){ if(Date.now()-(_nativeRing._any||0)<3000) return true; /* soundEv barusan sudah bunyi native: jangan dobel */ AndroidTLS.notify(String(title), String(body||"")); return true; } }catch(e){} return false; }
+function ringBg(title, body){ if(quietRole()) return false; try{ if(appBg() && window.AndroidTLS && AndroidTLS.notify){ if(Date.now()-(_nativeRing._any||0)<3000) return true; /* soundEv barusan sudah bunyi native: jangan dobel */ AndroidTLS.notify(String(title), String(body||"")); return true; } }catch(e){} return false; }
 
 /* ===== NADA SUARA: tiap jenis kejadian punya nada sendiri yang bisa dipilih (disimpan per HP). Getar tetap ikut. ===== */
 const SND_EV=[
@@ -3469,6 +3478,7 @@ function sndMap(){ try{ return JSON.parse(localStorage.getItem("radar_tones")||"
 function sndTone(ev){ const e=SND_EV.find(x=>x.k===ev), m=sndMap(), t=m[ev]; return (t && SND_TONES[t]) ? t : (e?e.def:"beep3"); }
 function sndToast(msg){ try{ let t=document.getElementById("sndToast"); if(!t){ t=document.createElement("div"); t.id="sndToast"; t.style.cssText="position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#B91C1C;color:#fff;padding:10px 16px;border-radius:12px;font:700 13px Inter,Arial,sans-serif;z-index:100002;max-width:88vw;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.3);"; document.body.appendChild(t); } t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.display="none"; },5000); }catch(e){} }
 function sndPlay(tone, quiet){
+  if(quietRole()) return;
   try{
     const T=SND_TONES[tone]||SND_TONES.beep3; spdUnlock();
     if(!SPD.ac){ if(!quiet) sndToast("Pemutar suara tidak tersedia di perangkat ini."); return; }
@@ -3486,7 +3496,7 @@ function sndPlay(tone, quiet){
 }
 /* Satu kejadian = SATU suara. Aplikasi terbuka: hanya nada pilihanmu. Aplikasi di background / layar mati: hanya dering alarm bawaan APK (nada web tidak ikut bunyi). */
 const _nativeRing={};
-function soundEv(ev, detail){ const t=sndTone(ev);
+function soundEv(ev, detail){ if(quietRole()) return; const t=sndTone(ev);
   let viaNative=false;
   try{
     if(appBg() && window.AndroidTLS && AndroidTLS.notify){
@@ -3527,6 +3537,7 @@ function sndOpen(){
     <div style="display:flex;gap:8px;margin-top:10px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="sndReset()">↺ Semua bawaan</button><button type="button" class="btn btn-primary" style="flex:1;" onclick="closeModal()">Selesai</button></div>`);
 }
 function playAlarmSound(){
+  if(quietRole()) return;
   try{
     const ctx = new (window.AudioContext||window.webkitAudioContext)();
     for(let i=0;i<3;i++){
@@ -7863,11 +7874,12 @@ let _ccCallTimer=null, _ccCallId=null, _ccCallNat=0, _ccCallFg=true, _ccCallWn=0
 /* APK: dering alarm bawaan HP (jalur ALARM, volume penuh + getar), baik aplikasi terbuka, di latar, maupun layar mati.
    Dulu alarm ini hanya dipakai kalau aplikasi sedang di latar saat dipanggil; kalau saat itu RADAR terbuka lalu layar dikunci, atau volume MEDIA HP kecil, driver tidak mendengar apa-apa. */
 function ccCallNative(c){
-  try{ if(window.AndroidTLS && AndroidTLS.alarmStart){ AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), platFmt(c.plat)+": segera masuk ke stall "+ccLbl(c.stall)+". Buka RADAR lalu tekan OK."); _ccCallNat=Date.now(); return true; } }catch(e){}
+  try{ if(!quietRole() && window.AndroidTLS && AndroidTLS.alarmStart){ AndroidTLS.alarmStart("🅿️ Giliran parkir — Stall "+ccLbl(c.stall), platFmt(c.plat)+": segera masuk ke stall "+ccLbl(c.stall)+". Buka RADAR lalu tekan OK."); _ccCallNat=Date.now(); return true; } }catch(e){}
   return false;
 }
 /* Web (Chrome, tanpa APK): new Notification() tidak jalan di Chrome Android; notifikasi harus lewat service worker. Getar diulang selama halaman di latar. */
 function ccCallWebNotify(c, close){
+  if(quietRole() && !close) return;
   try{
     if(window.AndroidTLS || !("serviceWorker" in navigator) || !("Notification" in window)) return;
     if(!close && Notification.permission!=="granted") return;
@@ -13423,7 +13435,7 @@ function lapPrevUpdate(){
 function lapDropFoto(id){ if(id==="lapPrev") lapDraft.foto=null; else if(id==="thrPrev") thrDraft.foto=null; else chatDraft.foto=null; lapPrevUpdate(); }
 function lapRulesMsg(e){ return "Gagal: "+(e&&e.message||e)+"\nPastikan aturan (Rules) Firebase sudah memuat node radar_lapor, radar_chat dan radar_foto."; }
 /* --- kirim laporan --- */
-function lapFormOpen(){
+function lapFormOpen(){ if(isViewer()){ alert("Mode Pengamat: hanya membaca."); return; }
   if(!FBS.enabled||!FBS.db){ alert("Laporan titik butuh koneksi Firebase (mode online)."); return; }
   lapDraft={type:"macet",text:"",foto:null};
   const ov=lapOv(); 
@@ -13436,7 +13448,7 @@ function lapFormOpen(){
     <div style="display:flex;gap:8px;"><button class="btn btn-outline" style="flex:1;" onclick="lapOvClose()">Batal</button><button class="btn btn-primary" style="flex:2;" id="lapSendBtn" onclick="lapSend()">Kirim laporan</button></div></div>`;
 }
 function lapSetType(k){ lapDraft.type=k; document.querySelectorAll("#lapTypes button").forEach(b=>{ b.className="btn btn-sm "+(b.dataset.k===k?"btn-primary":"btn-outline"); }); }
-async function lapSend(){
+async function lapSend(){ if(isViewer()) return;
   const btn=document.getElementById("lapSendBtn"), msg=document.getElementById("lapMsg");
   if(!lapDraft.text.trim() && !lapDraft.foto && lapDraft.type==="lain"){ msg.innerHTML=`<div class="msg err">Isi keterangan atau tambah foto.</div>`; return; }
   btn.disabled=true; msg.innerHTML=`<div class="msg info">Mengambil posisi GPS…</div>`;
@@ -13455,7 +13467,7 @@ async function lapDone(id){
   try{ await FBS.db.ref(LAP_PATH+"/"+id).update({done:true, doneBy:(currentUser&&currentUser.name)||"-", doneTs:Date.now()}); lapOvClose(); }catch(e){ alert(lapRulesMsg(e)); }
 }
 /* --- chat --- */
-async function chatSend(lapId){
+async function chatSend(lapId){ if(isViewer()){ alert("Mode Pengamat: hanya membaca."); return; }
   const thr=!!lapId, D=thr?thrDraft:chatDraft, inp=document.getElementById(thr?"thrTxt":"chatTxt");
   const text=((inp&&inp.value)||D.text||"").trim();
   if(!text && !D.foto) return;
@@ -13608,18 +13620,18 @@ function lapListHtml(){
 }
 function lapListUpdate(){ const el=document.getElementById("lapList"); if(el) el.innerHTML=lapListHtml(); }
 function lapChatCardsHtml(){
-  return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">⚠ Laporan di jalan</h3><button class="btn btn-primary btn-sm" onclick="lapFormOpen()">＋ Lapor macet / kecelakaan</button></div>
+  return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">⚠ Laporan di jalan</h3>${isViewer()?"":`<button class="btn btn-primary btn-sm" onclick="lapFormOpen()">＋ Lapor macet / kecelakaan</button>`}</div>
       <div style="font-size:11px;color:var(--text-dim);margin:6px 0 8px;">Titik laporan muncul di peta (ikon warna). Ketuk titik atau tombol Buka untuk balas dan melihat foto. Tersimpan 12 jam.</div>
       <div id="lapList">${lapListHtml()}</div></div>
     <div class="card" id="chatCard"><h3>💬 Chat CC</h3>
       <div id="chatBox" style="max-height:300px;overflow-y:auto;padding:2px 2px 6px;">${chatBoxHtml()}</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Tandai CC yang diajak bicara (HP-nya akan berdering):</div>
+      ${isViewer()?`<div style="font-size:12px;color:var(--text-dim);margin-top:8px;">👁 Mode Pengamat: hanya membaca.</div>`:`<div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Tandai CC yang diajak bicara (HP-nya akan berdering):</div>
       <div id="chatTagRow" style="margin-top:4px;">${chatTagHtml()}</div>
       <div style="display:flex;gap:6px;margin-top:2px;align-items:center;"><button class="btn btn-outline btn-sm" onclick="lapPick('chat')">📷</button>
         <input id="chatTxt" type="text" maxlength="300" placeholder="Tulis pesan…" value="${escH(chatDraft.text)}" oninput="chatDraft.text=this.value" onkeydown="if(event.key==='Enter')chatSend()" style="flex:1;min-width:0;padding:10px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:15px;background:var(--panel3,#fff);color:var(--text);">
         <button class="btn btn-primary btn-sm" onclick="chatSend()">Kirim</button></div>
       <div id="chatPrev" style="margin-top:6px;">${chatDraft.foto?`<img src="${chatDraft.foto}" style="height:54px;border-radius:8px;border:1px solid var(--border);vertical-align:middle;"> <button class="btn btn-outline btn-sm" onclick="lapDropFoto('chatPrev')">✕</button>`:""}</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Semua role bisa membaca chat ini. Jangan mengetik sambil menyetir. Pesan tersimpan 24 jam.</div></div>`;
+      `}<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Semua role bisa membaca chat ini. Jangan mengetik sambil menyetir. Pesan tersimpan 24 jam.</div></div>`;
 }
 /* --- marker di peta --- */
 function lapDrawMarkers(){
