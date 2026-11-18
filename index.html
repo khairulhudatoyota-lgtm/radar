@@ -1743,7 +1743,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 22.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="19 Nov 2026 00.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -14915,12 +14915,16 @@ function pdiPut(rec){
   const o = pdiOutbox(); o[rec.id] = rec; pdiOutboxSave(o);
   pdiFlush(); try{ pdiUi(); }catch(e){}
 }
+/* 19 Nov: radar_pdi belum diaktifkan di aturan Firebase (PDI "coming soon"). Kalau ditolak server, jangan coba lagi tiap 4 detik
+   (dulu jadi puluhan ribu "Denies" dari HP Admin / Leader): tunggu 30 menit sebelum mencoba lagi. Data PDI tetap aman di HP/PC ini. */
+let _pdiDenyUntil = 0;
+function pdiDenied(e){ try{ if(fbDenied(e)) _pdiDenyUntil = Date.now()+30*60000; }catch(x){} }
 function pdiFlush(){
-  if(!FBS.db || !FBS.authed) return;
+  if(!FBS.db || !FBS.authed || Date.now()<_pdiDenyUntil) return;
   Object.keys(pdiDelQ()).forEach(id=>{
     if(_pdiSending["del|"+id]) return; _pdiSending["del|"+id] = 1;
     let p; try{ p = FBS.db.ref(PDI_PATH+"/"+id).remove(); }catch(e){ delete _pdiSending["del|"+id]; return; }
-    p.then(()=>{ delete _pdiSending["del|"+id]; delete PDI_REC[id]; const q = pdiDelQ(); delete q[id]; pdiDelQSave(q); }).catch(()=>{ delete _pdiSending["del|"+id]; });
+    p.then(()=>{ delete _pdiSending["del|"+id]; delete PDI_REC[id]; const q = pdiDelQ(); delete q[id]; pdiDelQSave(q); }).catch(e=>{ delete _pdiSending["del|"+id]; pdiDenied(e); });
   });
   Object.values(pdiOutbox()).forEach(r=>{
     if(!r || !r.id || _pdiSending[r.id]===r.up) return;
@@ -14931,20 +14935,20 @@ function pdiFlush(){
       const o2 = pdiOutbox(); if(o2[r.id] && (o2[r.id].up||0) <= (r.up||0)){ delete o2[r.id]; pdiOutboxSave(o2); }
       if(PDI_ERR && !Object.keys(pdiOutbox()).length){ PDI_ERR = ""; } try{ pdiUi(); }catch(e){}
     }).catch(e=>{
-      delete _pdiSending[r.id];
+      delete _pdiSending[r.id]; pdiDenied(e);
       PDI_ERR = fbDenied(e) ? "Data PDI belum bisa dikirim ke server: aturan Firebase belum memuat node radar_pdi (minta Admin menambahkan). Data aman tersimpan di PC ini dan dikirim otomatis nanti." : "Data PDI menunggu sinyal (tersimpan di PC ini).";
       try{ pdiUi(); }catch(e2){}
     });
   });
 }
 function pdiAttach(){
-  if(_pdiAtt || !FBS.db || !FBS.authed || !pdiNeedRec()) return;
+  if(_pdiAtt || !FBS.db || !FBS.authed || !pdiNeedRec() || Date.now()<_pdiDenyUntil) return;
   _pdiAtt = true;
   FBS.db.ref(PDI_PATH).orderByChild("ts").startAt(Date.now()-8*86400000).on("value", snap=>{
     PDI_REC = snap.val() || {}; if(PDI_ERR && /radar_pdi/.test(PDI_ERR) && !Object.keys(pdiOutbox()).length) PDI_ERR = "";
     try{ pdiUi(); }catch(e){} if(["pdiDash"].includes(activeTab)) fbRender();
   }, err=>{
-    _pdiAtt = false;
+    _pdiAtt = false; pdiDenied(err);
     PDI_ERR = fbDenied(err) ? "Riwayat PDI belum bisa dibaca: aturan Firebase belum memuat node radar_pdi. Minta Admin menambahkan (lihat Admin → PDI)." : "Riwayat PDI terputus dari server.";
     try{ pdiUi(); }catch(e){}
   });
