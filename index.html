@@ -1736,7 +1736,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 10.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 11.05";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1774,7 +1774,7 @@ function isViewer(){ return !!(currentUser && currentUser.role==="viewer"); }
 /* Pengamat → "Layar Driver": driver yang sedang dilihat (sessionStorage, hanya di HP Pengamat). var: dipakai sebelum baris ini jalan pun aman. */
 var _va=null; try{ _va=JSON.parse(sessionStorage.getItem("radar_va")||"null"); if(!_va || typeof _va!=="object" || !_va.plat) _va=null; }catch(e){ _va=null; }
 function vaOn(){ return isViewer() && !!(_va && _va.plat); }
-function vaLive(){ return vaOn() && (activeTab==="drvview" || activeTab==="ccmap"); }   /* popup driver hanya saat Pengamat membuka Layar Driver / Peta */
+function vaLive(){ if(!vaOn()) return false; if(activeTab==="drvview") return true; try{ return activeTab==="ccmap" && !!ccFollow && normPlat(ccFollow)===normPlat(_va.plat); }catch(e){ return false; } }   /* popup driver hanya di Layar Driver, atau di Peta saat sedang mengikuti driver itu */
 /* 18 Nov (permintaan Khairul): akun PENGAMAT senyap total — tidak ada bunyi, suara, getar, maupun notifikasi apa pun dari menu role mana pun. */
 function quietRole(){ return !!(currentUser && currentUser.role==="viewer"); }
 (function(){
@@ -2659,6 +2659,7 @@ function cleanPlatForUser(){
 function enterApp(forceTab){
   fbModeSync();   /* hemat data: listener mengikuti role yang login */
   if(!isViewer()) viewerUnclean();
+  else { try{ if(window.AndroidTLS){ if(AndroidTLS.alarmStop) AndroidTLS.alarmStop(); if(AndroidTLS.ccWatch) AndroidTLS.ccWatch(false,"","",0); } }catch(e){} }   /* Pengamat: matikan alarm / pantauan giliran native sisa sesi akun lain di HP ini */
   viewerGuardInstall(); viewerBadge(); cleanPlatForUser();
   syncCcProfileFromAccount();
   try{ if(window.AndroidTLS && AndroidTLS.keepAlive && currentUser && currentUser.role!=="display") AndroidTLS.keepAlive(); }catch(e){}
@@ -7972,12 +7973,7 @@ function ccCallCheck(){
     if(_ccCallId!==cv.id || !document.getElementById("ccCallOv")) ccCallShow(cv, true);
     return;
   }
-  if(isViewer()){   // Pengamat ikut merasakan panggilan giliran parkir ke driver mana pun
-    const dv=DB.get(), cv=ccCallsList(dv).filter(x=>x && !x.ack && !_vwCallSeen.has(x.id) && Date.now()-x.ts<10*60000).sort((a,b)=>b.ts-a.ts).find(x=>{ const cur=dv.cc[x.stall]; return cur && normPlat(cur.plat)===normPlat(x.plat); });
-    if(!cv){ if(_ccCallId!==null) ccCallClose(); return; }
-    if(_ccCallId!==cv.id || !document.getElementById("ccCallOv")) ccCallShow(cv, true);
-    return;
-  }
+  if(isViewer()){ if(_ccCallId!==null) ccCallClose(); return; }   /* 18 Nov: Pengamat hanya melihat popup giliran di menu Layar Driver / Peta untuk driver yang dipilih (permintaan Khairul) */
   if(!currentUser || currentUser.role!=="cc"){ if(_ccCallId!==null) ccCallClose(); return; }
   const d=DB.get(), pl=myCcPlatKey(); if(!pl) return;
   const c=ccCallsList(d).filter(x=>x && !x.ack && normPlat(x.plat)===pl && Date.now()-x.ts<3*3600000).sort((a,b)=>b.ts-a.ts)
