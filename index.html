@@ -1224,8 +1224,8 @@ function fbStart(){
     firebase.initializeApp(FB_CONFIG);
     try{ fbMeterBoot(); }catch(e){}
     FBS.db = firebase.database(); FBS.enabled = true; fbState("connecting");
-    FBS.db.ref(".info/connected").on("value", s=>{ FBS.conn = !!s.val(); if(FBS.conn) _fbDownSince=0; else if(!_fbDownSince) _fbDownSince=Date.now(); fbState(fbCurrentState()); try{ fbDownBar(); }catch(e){} });
-    firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); trackAttach(); })
+    FBS.db.ref(".info/connected").on("value", s=>{ FBS.conn = !!s.val(); if(FBS.conn) _fbDownSince=0; else if(!_fbDownSince) _fbDownSince=Date.now(); fbState(fbCurrentState()); try{ fbDownBar(); }catch(e){} try{ if(FBS.conn) presenceOn(true); }catch(e){} });
+    firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); trackAttach(); try{ presenceOn(true); }catch(e){} })
       .catch(e=>{ console.warn("login anonim gagal", e); fbState("offline"); });
     /* Sesi Firebase hilang di tengah jalan (mis. penyimpanan WebView terhapus saat Logout penuh TLS): login ulang otomatis lalu pasang ulang semua listener */
     firebase.auth().onAuthStateChanged(u=>{ if(!u && FBS.authed){ FBS.authed=false; fbState(fbCurrentState()); fbReauth(); } });
@@ -1507,9 +1507,9 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
 const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit"];
 const FB_LITE={
-  cc:         { skip:["errDev","manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
-  dispatcher: { skip:["errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
-  pdi:        { skip:["errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
+  cc:         { skip:["online","errDev","manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
+  dispatcher: { skip:["online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
+  pdi:        { skip:["online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
 let _fbMode="", _fbRefs=[], _fbRaw={}, _fbGot=new Set(), _fbNeed=0, _fbWinKeys={}, _fbGen=0, _fbLiteOff=false;
 let _ilsNewId=0;
 let _fbFullGot=0, _fbRestTs=0, _fbRestBusy=false, _fbReAtt=[], _fbRestOk=0;   /* pengaman mode penuh (lihat fbFullWatch) */
@@ -1743,7 +1743,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="19 Nov 2026 00.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="19 Nov 2026 00.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1874,7 +1874,7 @@ function viewerGuardInstall(){
   try{
     if(window._vgDone || !window.firebase || !firebase.database || !firebase.database.Reference) return;
     const P=firebase.database.Reference.prototype; window._vgDone=true;
-    ["set","update","remove","transaction"].forEach(m=>{ const o=P[m]; if(!o) return; P[m]=function(){ if(isViewer() && !/\/(radar_chat|radar_foto)(\/|$)|\/radar\/(viewOn|devSeats|errDev)(\/|$)/.test(String(this))){ viewerBlockedToast(); return Promise.resolve(); } return o.apply(this,arguments); }; });
+    ["set","update","remove","transaction"].forEach(m=>{ const o=P[m]; if(!o) return; P[m]=function(){ if(isViewer() && !/\/(radar_chat|radar_foto)(\/|$)|\/radar\/(viewOn|devSeats|errDev|online)(\/|$)/.test(String(this))){ viewerBlockedToast(); return Promise.resolve(); } return o.apply(this,arguments); }; });
   }catch(e){}
 }
 
@@ -1884,7 +1884,7 @@ function viewerClean(root){
   if(!isViewer()) return;
   try{
     (root||document).querySelectorAll('button,input,select,textarea,a[onclick],label[for],[onclick]').forEach(el=>{
-      if(el.closest("#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv,#chatCard,.logoutBtn,#curUserRole")) return;   /* tombol Keluar & label role tetap ada untuk Pengamat */
+      if(el.closest("#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv,#chatCard,.logoutBtn,#curUserRole,#roleSelectScreen,#credScreen")) return;   /* layar login tidak pernah disembunyikan */   /* tombol Keluar & label role tetap ada untuk Pengamat */
       if(/chatSend|thrDraft|thrTxt|chatDraft|chatTag|chatTo\b|lapPick\(.(chat|thr)/.test((el.getAttribute("onclick")||"")+(el.getAttribute("oninput")||"")+(el.id||""))) return;   // Pengamat boleh chat/bertanya langsung
       const h=(el.getAttribute("onclick")||"")+" "+(el.getAttribute("onchange")||"")+" "+(el.getAttribute("oninput")||"");
       if(VW_DEMO.test(h)){ el.setAttribute("data-vdemo","1"); return; }   /* tombol kerja contoh: tampil, ditekan hanya bunyi/notifikasi contoh */
@@ -2525,6 +2525,7 @@ async function doLogin(){
   catch(e){ msgEl.innerHTML = `<div class="msg err">${xlEsc(e.message||e)}</div>`; return; }
   if(!ok.length && _bioFlow){ try{ AndroidTLS.bioForget(); }catch(e){} bioRefresh(); msgEl.innerHTML=`<div class="msg err">Password akun berubah. Login ketik sekali lagi, lalu aktifkan sidik jari lagi.</div>`; try{RSnd.err();}catch(e){} return; }
   if(!ok.length){ savePass(""); msgEl.innerHTML = `<div class="msg err">Password salah.</div>`; try{RSnd.err();}catch(e){} return; }
+  { const on=ok.filter(x=>!x.off); if(!on.length){ msgEl.innerHTML = `<div class="msg err">⛔ Akun ini <b>dinonaktifkan Admin</b>. Hubungi Admin untuk mengaktifkan lagi.</div>`; try{RSnd.err();}catch(e){} return; } ok.length=0; on.forEach(x=>ok.push(x)); }
   msgEl.innerHTML = "";
   _loginOk = {p, ok};
   pwUpgrade(ok, p);
@@ -2564,6 +2565,95 @@ function switchToRole(r){
 }
 /* Keluar paksa & keluar otomatis (driver CC lupa keluar dari aplikasi sehingga posisi terus dibagikan) */
 function ccAutoOutHours(){ const v=DB.get().ccAutoOutH; return (v==null||v==="")?12:Math.max(0,+v||0); }
+/* ===== USER AKTIF & NONAKTIFKAN AKUN (19 Nov, permintaan Khairul) =====
+   Tiap HP yang login mencatat diri di /radar/online/<akun>/<HP> dan otomatis terhapus saat HP putus (onDisconnect server Firebase).
+   Daftar ini TIDAK ikut disinkron ke semua HP: hanya didengar HP Admin saat kartu "User Aktif" terbuka (hemat kuota).
+   Admin bisa: ⏏ mengeluarkan SATU HP (akun yang sama di HP lain tetap jalan) · ⛔ menonaktifkan akun (tidak bisa login sampai diaktifkan lagi). */
+let _onRef=null, _onKick=null, _onKey="", _onList=null, _onListRef=null;
+function presenceOn(force){
+  try{
+    if(!FBS.enabled || !FBS.db || !FBS.authed || !FBS.conn) return;
+    const u=currentUser && currentUser.username;
+    if(!u){ presenceOff(); return; }
+    const key=devKeyOf(u)+"/"+devKeyOf(ilsDevId());
+    if(key!==_onKey) presenceOff();
+    else if(!force) return;
+    const ref=FBS.db.ref(FB_ROOT+"/online/"+key), since=+currentUser.ts||Date.now();
+    const rec={u, n:String(currentUser.name||u).slice(0,40), r:currentUser.role||"", p:(window.AndroidTLS?"APK":"Web"), cd:devCode(), b:RADAR_BUILD, since, ts:Date.now()};
+    const m=devModel(); if(m) rec.m=m; if(currentUser.lp) rec.lp=String(currentUser.lp).slice(0,12);
+    ref.onDisconnect().remove().catch(()=>{});
+    ref.set(rec).catch(()=>{});
+    if(!_onKick || key!==_onKey){
+      _onKick=ref.child("kick");
+      _onKick.on("value", s=>{ const k=+s.val()||0; if(k && k>since && currentUser && currentUser.username===u){ presenceOff(); doLogout(); setTimeout(()=>{ try{ alert("HP ini dikeluarkan dari RADAR oleh Admin. Login lagi kalau masih bertugas."); }catch(e){} },300); } }, ()=>{});
+    }
+    _onRef=ref; _onKey=key;
+  }catch(e){}
+}
+function presenceOff(){
+  try{ if(_onKick){ _onKick.off(); _onKick=null; } }catch(e){}
+  try{ if(_onRef){ _onRef.onDisconnect().cancel().catch(()=>{}); _onRef.remove().catch(()=>{}); } }catch(e){}
+  _onRef=null; _onKey="";
+}
+setInterval(()=>{ try{ presenceOn(false); onlineWatchTick(); }catch(e){} }, 30000);
+function onlineWatchTick(){
+  const want=!!(currentUser && currentUser.role==="admin" && activeTab==="admin" && adminTab==="users" && FBS.db && FBS.authed);
+  if(want && !_onListRef){ _onListRef=FBS.db.ref(FB_ROOT+"/online"); _onListRef.on("value", s=>{ _onList=s.val()||{}; onlineCardRefresh(); }, ()=>{ _onList=null; }); }
+  else if(!want && _onListRef){ try{ _onListRef.off(); }catch(e){} _onListRef=null; _onList=null; }
+}
+function onlineRows(){
+  const L=[], now=Date.now(); const o=_onList||{};
+  Object.keys(o).forEach(ak=>{ const m=o[ak]; if(!m || typeof m!=="object") return; Object.keys(m).forEach(dk=>{ const x=m[dk]; if(x && x.u) L.push(Object.assign({ak, dk}, x)); }); });
+  const ord={admin:0, delivery:1, koordinator:2, leader:3, dispatcher:4, pdi:5, viewer:6, display:7, cc:8};
+  return L.sort((a,b)=>((ord[a.r]??9)-(ord[b.r]??9)) || String(a.n).localeCompare(String(b.n)) || ((+a.since||0)-(+b.since||0)));
+}
+function onlineCardRefresh(){ try{ const el=document.getElementById("onlineCard"); if(el) el.outerHTML=onlineCardHtml(); }catch(e){} }
+function onlineCardHtml(){
+  if(!currentUser || currentUser.role!=="admin") return "";
+  setTimeout(()=>{ try{ onlineWatchTick(); }catch(e){} }, 0);
+  const d=DB.get(), rows=onlineRows(), _offSeen=new Set(), off=(d.users||[]).filter(u=>u && u.off && !_offSeen.has(u.username) && _offSeen.add(u.username)), me=ilsDevId();
+  const roleLbl=r=>(((ROLES||[]).find(x=>x.key===r)||{}).label)||r||"-";
+  const hm=t=>t?new Date(+t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):"-";
+  const accN=new Set(rows.map(x=>x.u)).size;
+  const body = _onList===null ? `<div class="emptystate">Memuat daftar…</div>`
+    : !rows.length ? `<div class="emptystate">Belum ada HP tercatat aktif.</div>`
+    : rows.map(x=>{ const self=x.dk===devKeyOf(me) && x.u===currentUser.username;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--border);padding:8px 0;">
+          <div style="min-width:0;"><b>${escH(x.n||x.u)}</b> <span class="badge gold">${escH(roleLbl(x.r))}</span>${x.lp?` <span class="badge">LP ${escH(x.lp)}</span>`:""}${self?` <span class="badge" style="background:#E7F6EC;color:#17803d;">HP ini</span>`:""}
+            <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">${escH(x.u)} · HP #${escH(x.cd||"-")} · ${escH(x.p||"")}${x.m?" "+escH(x.m):""} · login ${hm(x.since)}${x.b?" · build "+escH(String(x.b).replace(/^\d+ \w+ \d+ /,"")):""}</div></div>
+          ${self?"":`<div style="display:flex;gap:6px;flex:none;"><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="onlineKick('${escH(x.ak)}','${escH(x.dk)}')">⏏ Keluarkan</button><button type="button" class="btn btn-outline btn-sm" style="width:auto;color:#B91C1C;border-color:#F3B4B4;" onclick="userOffToggle(${JSON.stringify(x.u).replace(/"/g,"&quot;")})">⛔</button></div>`}
+        </div>`; }).join("");
+  return `<div class="card" id="onlineCard"><h3>🟢 User Aktif Sekarang <span style="font-size:13px;font-weight:600;color:var(--text-dim);">${rows.length} HP · ${accN} akun</span></h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">HP yang sedang membuka RADAR (versi 19 Nov ke atas), langsung hilang dari daftar saat HP putus atau logout. <b>⏏ Keluarkan</b> = hanya HP itu yang logout (bisa login lagi). <b>⛔</b> = nonaktifkan akun: semua HP akun itu keluar dan tidak bisa login sampai diaktifkan lagi.</div>
+    ${body}
+    ${off.length?`<div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--border);"><div style="font-weight:800;font-size:13px;margin-bottom:4px;">⛔ Akun nonaktif (${off.length})</div>${off.map(u=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;"><div style="min-width:0;"><b>${escH(u.name||u.username)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(u.username)} · ${escH(roleLbl(u.role))}${+u.off>1?" · sejak "+new Date(+u.off).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):""}</span></div><button type="button" class="btn btn-outline btn-sm" style="width:auto;color:#17803d;" onclick="userOffToggle(${JSON.stringify(u.username).replace(/"/g,"&quot;")})">✅ Aktifkan</button></div>`).join("")}</div>`:""}
+  </div>`;
+}
+function onlineKick(ak, dk){
+  if(!currentUser || currentUser.role!=="admin") return;
+  const x=onlineRows().find(r=>r.ak===ak && r.dk===dk); if(!x) return;
+  if(!confirm("Keluarkan HP #"+(x.cd||"-")+" ("+(x.n||x.u)+") dari RADAR?\n\nHanya HP ini yang logout. HP lain dengan akun yang sama tetap jalan. Dia bisa login lagi.")) return;
+  try{ FBS.db.ref(FB_ROOT+"/online/"+ak+"/"+dk+"/kick").set(Date.now()).then(()=>miniToast("Perintah keluar dikirim ke HP #"+(x.cd||"-")+".", 3000)).catch(e=>alert("Gagal: "+(e&&e.message||e))); }catch(e){ alert("Gagal: "+(e&&e.message||e)); }
+}
+function userOffToggle(un){
+  if(!currentUser || currentUser.role!=="admin"){ alert("Hanya Admin."); return; }
+  if(!un || un===currentUser.username){ alert("Tidak bisa menonaktifkan akun yang sedang kamu pakai."); return; }
+  const d=DB.get(), us=(d.users||[]).filter(x=>x && x.username===un); if(!us.length) return;
+  const nm=us[0].name||un, isOff=us.every(x=>x.off);
+  if(!isOff){
+    if(us.some(x=>x.role==="admin") && (d.users||[]).filter(x=>x && x.role==="admin" && !x.off && x.username!==un).length===0){ alert("Ini Admin terakhir yang aktif. Tidak bisa dinonaktifkan."); return; }
+    if(!confirm("Nonaktifkan akun "+nm+" ("+un+")?\n\n• Semua HP dengan akun ini langsung keluar dari RADAR\n• Akun ini tidak bisa login sampai kamu aktifkan lagi\n• Data dan riwayatnya tetap tersimpan")) return;
+    const now=Date.now();
+    DB.set(dd=>{ (dd.users||[]).forEach(x=>{ if(x && x.username===un){ x.off=now; x.offBy=currentUser.name||currentUser.username; } }); const o=dd.forceOut||{}; o[un]=now; dd.forceOut=o; });
+    try{ const ak=devKeyOf(un), m=(_onList||{})[ak]||{}; Object.keys(m).forEach(dk=>{ FBS.db.ref(FB_ROOT+"/online/"+ak+"/"+dk+"/kick").set(now).catch(()=>{}); }); }catch(e){}
+    miniToast("⛔ Akun "+nm+" dinonaktifkan.", 3500);
+  } else {
+    if(!confirm("Aktifkan lagi akun "+nm+" ("+un+")?")) return;
+    DB.set(dd=>{ (dd.users||[]).forEach(x=>{ if(x && x.username===un){ delete x.off; delete x.offBy; } }); });
+    miniToast("✅ Akun "+nm+" aktif lagi.", 3000);
+  }
+  render();
+}
 function forceOutUser(un, label){
   if(!un) return;
   if(!currentUser || !["admin","delivery"].includes(currentUser.role)){ alert("Hanya Admin dan Delivery yang bisa mengeluarkan user."); return; }
@@ -2581,6 +2671,7 @@ function ccProfForceOut(){ const _o=(window._trkRows||[]).find(x=>normPlat(x.pla
 function ccForceOutCheck(){
   if(!currentUser || currentUser.role==="display" || !currentUser.username) return;
   const d=DB.get(), un=currentUser.username, vk=+((d.verKick||{}).ts)||0, fo0=+((d.forceOut||{})[un])||0, fo=(vk && fo0===vk) ? 0 : fo0;   /* logout massal untuk HP versi lama: build ini tidak ikut keluar */
+  { const me=(d.users||[]).filter(x=>x && x.username===un); if(me.length && me.every(x=>x.off)){ doLogout(); setTimeout(()=>{ try{ alert("Akun kamu dinonaktifkan Admin. Hubungi Admin untuk mengaktifkan lagi."); }catch(e){} },300); return; } }
   let ack=0; try{ ack=+localStorage.getItem("radar_forceack_"+un)||0; }catch(e){}
   const lt=+currentUser.ts||0;
   if(fo && fo>ack && Date.now()-fo<24*3600000 && !(lt && lt>fo)){
@@ -2646,6 +2737,7 @@ function ccLastOutBackstop(){
 }
 function ccLastOutSave(){ const v=(document.getElementById("ccLastOutM")||{}).value; const n=Math.max(0,Math.min(240,Math.round(+v||0))); DB.set(d=>{ d.ccLastOutM=n; }); alert(n?("Driver CC otomatis keluar "+ccLastOutFmtM(n)+" sesudah Delout ritase terakhir (DCCP)."):"Keluar otomatis sesudah ritase terakhir dimatikan."); render(); }
 function doLogout(){
+  try{ presenceOff(); }catch(e){}
   try{ ilsSeatRelease(); }catch(e){}
   try{ devSeatRelease(); }catch(e){}
   try{ koSeatRelease(); }catch(e){}   /* kursi Koordinator LP dilepas: HP berikutnya langsung bisa memakai */   /* kursi pembuat ILS dilepas supaya HP lain bisa memakai */
@@ -2662,6 +2754,7 @@ function doLogout(){
   clearSession();
   currentUser = null;
   selectedRole = null;
+  try{ viewerUnclean(); viewerBadge(); }catch(e){}   /* keluar dari akun Pengamat: kolom login & tombol yang tadi disembunyikan muncul lagi, label Pengamat hilang */
   fbModeSync();
   document.getElementById("mainView").classList.add("hidden");
   document.getElementById("credScreen").classList.add("hidden");
@@ -12131,13 +12224,14 @@ function usrRender(){
   const esc=t=>String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;");
   el.innerHTML=(show.map(([u,i])=>`<div style="border-top:1px solid var(--line,#e5e7eb);padding:10px 0;">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
-      <div style="min-width:0;"><b>${esc(u.name)}</b><div style="font-size:12px;color:var(--text-dim);word-break:break-all;">${esc(u.username)}</div></div>
+      <div style="min-width:0;"><b>${esc(u.name)}</b>${u.off?` <span class="badge" style="background:#FDE2E2;color:#B91C1C;">⛔ NONAKTIF</span>`:""}<div style="font-size:12px;color:var(--text-dim);word-break:break-all;">${esc(u.username)}</div></div>
       <div style="text-align:right;"><span class="badge gold">${esc(u.role)}</span>${u.lp?` <span class="badge">LP ${esc(u.lp)}</span>`:''}${u.area?` <span class="badge">${esc(u.area)}</span>`:''}${u.vendor?` <span class="badge">${esc(u.vendor)}</span>`:''}${u.drvCode?` <span class="badge">${esc(u.drvCode)}</span>`:''}${String(u.username).toLowerCase()==="user"?` <span class="badge" style="background:#1a7f3c;color:#fff;">BEBAS PLAT</span>`:''}</div>
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;">
       <button class="btn-outline btn btn-sm" onclick="pwResetOpen(${i})">🔑 Reset</button>
       <button class="btn-outline btn btn-sm" onclick="editUser(${i})">Edit</button>
       ${currentUser&&u.username!==currentUser.username?`<button class="btn-outline btn btn-sm" onclick="forceOutUser(${JSON.stringify(u.username).replace(/"/g,"&quot;")},${JSON.stringify(u.name||u.username).replace(/"/g,"&quot;")})">🚪 Keluarkan</button>`:""}
+      ${currentUser&&currentUser.role==="admin"&&u.username!==currentUser.username?`<button class="btn-outline btn btn-sm" onclick="userOffToggle(${JSON.stringify(u.username).replace(/"/g,"&quot;")})">${u.off?"✅ Aktifkan":"⛔ Nonaktifkan"}</button>`:""}
       <button class="btn-danger btn btn-sm" onclick="deleteUser(${i})">Hapus</button>
     </div></div>`).join(""))
     + (hit.length===0?`<div style="padding:14px 0;color:var(--text-dim);font-size:13px;">Tidak ada user yang cocok.</div>`:"")
@@ -12173,6 +12267,7 @@ function renderAdmin(){
   if(adminTab==="gs") return tabsHtml + renderAdminGs();
   if(adminTab==="users"){
     return `${tabsHtml}
+      ${onlineCardHtml()}
       ${renderRegCard()}
       ${devLimitCardHtml()}
       <div class="card"><h3>⏱ Keluar otomatis Driver CC</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Driver CC yang lupa keluar dari aplikasi otomatis di-logout setelah sekian jam sejak login, sehingga posisinya berhenti dibagikan. Isi 0 untuk mematikan.</div>
