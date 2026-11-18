@@ -1743,7 +1743,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 20.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 21.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4718,7 +4718,7 @@ function renderDelivery(){
     return `<div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};padding:10px 12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
         <div style="min-width:0;"><b style="font-size:15px;">🚚 ${escH(b.ccPlat)}</b> <span style="font-size:12px;color:var(--text-dim);">· LP ${escH(b.lp||"-")} · Stall ${ccLbl(b.ccNum)} · ${b.units.length} unit${b.batam?" · BATAM":""}</span>
-          <div style="margin-top:4px;font-size:11px;"><span style="font-weight:800;border-radius:999px;padding:2px 8px;background:${st.bg};color:${st.c};">${st.t}</span> <span style="font-weight:800;color:#17803d;">📄 Surat jalan ✓</span>${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 6px;font-weight:800;">${escH(b.sjkb)}</span>`:""}</div></div>
+          <div style="margin-top:4px;font-size:11px;"><span style="font-weight:800;border-radius:999px;padding:2px 8px;background:${st.bg};color:${st.c};">${st.t}</span> <span style="font-weight:800;color:#17803d;">📄 Surat jalan ✓</span>${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 6px;font-weight:800;">${escH(b.sjkb)}</span>`:""}</div>${sjByTxt(b)?`<div style="margin-top:3px;font-size:11px;color:var(--text-dim);">💾 SJ ${sjByTxt(b)}</div>`:""}</div>
         <button class="btn btn-green btn-sm" style="width:auto;min-width:120px;" onclick="delout(${b.id})">✔ Delout</button>
       </div>
       <details ${op?"open":""} ontoggle="dlIlsOpen[${b.id}]=this.open" style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:var(--text-dim);">Lihat detail (No. Rangka, cetak, batal)</summary>${ilsInner(b)}</details>
@@ -5007,6 +5007,7 @@ function devCode(){ try{ const t=String(ilsDevId()); let h=7; for(let k=0;k<t.le
 function devModel(){ try{ const c=localStorage.getItem("radar_devmodel"); if(c) return c; const m=(navigator.userAgent||"").match(/Android [^;)]*;\s*([^;)]+?)(?:\s+Build\/|\)|;)/); return (m && m[1] && m[1].trim()!=="K")?m[1].trim().slice(0,24):""; }catch(e){ return ""; } }
 try{ if(navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) navigator.userAgentData.getHighEntropyValues(["model"]).then(r=>{ try{ if(r && r.model) localStorage.setItem("radar_devmodel", String(r.model).slice(0,24)); }catch(e){} }).catch(()=>{}); }catch(e){}
 function devPlat(){ return (window.AndroidTLS?"APK":"Web")+(devModel()?" "+devModel():""); }
+function sjByTxt(b){ try{ const j=b && b.sj; if(!j) return ""; const a=[]; if(j.ts) a.push("disimpan "+holdHm(j.ts)); if(j.by) a.push("oleh "+escH(j.by)); if(j.dv) a.push("HP #"+escH(j.dv)+(j.dp?" "+escH(j.dp):"")); return a.join(" · "); }catch(e){ return ""; } }   /* jejak HP penyimpan surat jalan (18 Nov 21.40) */
 function ilsByTxt(b){ try{ const a=[]; if(b.mp) a.push("oleh "+escH(b.mp)); if(b.dv) a.push("HP #"+escH(b.dv)+(b.dp?" "+escH(b.dp):"")); if(b.via==="tunda") a.push("⏳ lewat konfirmasi \"Server sudah siap\""); return a.length?" · "+a.join(" · "):""; }catch(e){ return ""; } }
 function ilsSeatRole(){ return (currentUser && !isViewer() && ILS_SEAT_MAX[currentUser.role]) ? currentUser.role : ""; }
 function ilsSeatRoleTxt(r){ return r==="admin" ? "Admin" : "Delivery"; }
@@ -5875,7 +5876,7 @@ function sjActionsHtml(b){
   else h+=btn('btn-green','🚪 Delout','delout');
   h+=`</div>`;
   if(b.valStartTs){
-    h+=`<div style="margin-top:8px;font-size:12px;">${b.sj?`<span style="color:#17803d;font-weight:700;">📄 Surat jalan tersimpan (terlihat oleh CC sejak Loading selesai)</span>${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;font-weight:800;">SJKB ${escH(b.sjkb)}</span>`:""}${canKeluarkanCC()?` <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjView(${b.id})">👁 Lihat PDF</button> <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjDownload(${b.id})">⬇ Unduh</button>`:""}`:`<span style="color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</span>`} <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjUploadPick(${b.id})">${b.sj?'Ganti':'Unggah'} PDF</button></div>`;
+    h+=`<div style="margin-top:8px;font-size:12px;">${b.sj?`<span style="color:#17803d;font-weight:700;">📄 Surat jalan tersimpan (terlihat oleh CC sejak Loading selesai)</span>${sjByTxt(b)?`<div style="font-size:11px;color:var(--text-dim);margin:2px 0 4px;">💾 ${sjByTxt(b)}</div>`:""}${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;font-weight:800;">SJKB ${escH(b.sjkb)}</span>`:""}${canKeluarkanCC()?` <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjView(${b.id})">👁 Lihat PDF</button> <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjDownload(${b.id})">⬇ Unduh</button>`:""}`:`<span style="color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</span>`} <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjUploadPick(${b.id})">${b.sj?'Ganti':'Unggah'} PDF</button></div>`;
   }
   return h;
 }
@@ -6118,7 +6119,7 @@ async function sjStore(id,name,b64,mime){
     if(err){ alert("Gagal menyimpan PDF: "+(err&&err.message||err)+(fbDenied(err)?"\nSesi RADAR ke server terputus. Tutup lalu buka lagi aplikasi RADAR, kemudian simpan ulang PDF ini.":"")); return false; }
   }
   const _ck=window._sjChk||""; window._sjChk="";
-  DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.sj={name:name||"surat-jalan.pdf", size, ts}; if(_ck) b.sj.chk=_ck; if(!b.tlsTs){ b.tlsTs=ts; b.tlsBy=((currentUser&&currentUser.name)||"")+" (otomatis, PDF masuk)"; } } });   // PDF dari TLS sudah ada = ILS sudah di TLS
+  DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b){ b.sj={name:name||"surat-jalan.pdf", size, ts, dv:devCode(), dp:devPlat()}; if(currentUser && currentUser.name) b.sj.by=String(currentUser.name); if(_ck) b.sj.chk=_ck; if(!b.tlsTs){ b.tlsTs=ts; b.tlsBy=((currentUser&&currentUser.name)||"")+" (otomatis, PDF masuk)"; } } });   // PDF dari TLS sudah ada = ILS sudah di TLS
   sjIndex(id,b64);   // baca No. SJKB & Cabang di latar belakang (untuk manifest)
   return true;
 }
@@ -6280,7 +6281,7 @@ function sjRowHtml(b, now){
   const exp=sjFmt(sjT(b)+sjPdfKeepMs()), sh=String(b.shift||"").toUpperCase();
   const _un=!arc && sjUnread(b);
   return `<div class="kitem ${_un?"sjNew":""}" style="margin-top:8px;border-left:6px solid ${_un?"#E8590C":ccColor(b.ccPlat)};${_un?"background:#FFF3E6;":""}">${_un?`<span class="sjNewTag">🆕 BARU · belum dibuka</span>`:""}<b>📄 ${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")}${sh?` · <span class="badge">${sh}</span>`:""}
-      <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${b.units.length} unit · ${sjWhen(b)}${arc?` · <span class="badge">arsip</span>`:""}${b.sj?` · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${b.units.length} unit · ${sjWhen(b)}${arc?` · <span class="badge">arsip</span>`:""}${b.sj?` · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}${(b.sj && currentUser && currentUser.role!=="cc" && sjByTxt(b))?`<br>💾 ${sjByTxt(b)}`:""}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:arc?`<div style="font-size:12px;color:var(--text-dim);">PDF surat jalan tidak tersimpan untuk ILS ini.</div>`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>${sjCanUp?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="sjUploadPick(${b.id})">⬆ Unggah PDF validasi</button>`:""}`}${(sjCanUp && (b.sj||b.sjkb) && !b.batam)?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjUploadPick(${b.id})">⬆ Ganti PDF</button>`:""}${(!arc&&b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
 }
 /* 17 Nov 19.30: plat bisa dipakai banyak driver (beda shift / beda hari). Driver hanya melihat surat jalan rit yang dibuat
