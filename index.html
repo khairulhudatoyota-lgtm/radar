@@ -1743,7 +1743,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="18 Nov 2026 21.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="18 Nov 2026 22.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3656,7 +3656,7 @@ function saveCcProfile(){
   const lp = (document.getElementById("ccpLP").value||"").trim();
   const drvCode = getCcProfile().drvCode||"";
   if(!plat || !lp){ alert("Isi nomor polisi dan LP dulu."); return; }
-  if(currentUser && currentUser.role==="cc" && !ccPlatRegistered(plat)){ alert(plat+" belum terdaftar di Jadwal DCCP, Spot Order, atau CC Pengganti. Minta Koordinator atau Delivery menambahkannya."); return; }
+  if(currentUser && currentUser.role==="cc" && !ccPlatGateOk(plat)){ alert(plat+" belum terdaftar di Jadwal DCCP, Spot Order, atau CC Pengganti. Minta Koordinator atau Delivery menambahkannya."); return; }
   try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode})); }catch(e){}
   if(currentUser && currentUser.role==="cc"){ ccPlatOk=true; try{ ccPlatRememberSave(plat); ccShiftPlatSave(plat); }catch(e){} try{ ccAutoTrack(); }catch(e){} }
   render();
@@ -6292,6 +6292,7 @@ function sjDrvPass(){
   const L=(DB.get().ccShiftPlat||[]).filter(x=>x && normPlat(x.plat)===k);
   const mine=L.filter(x=>x.u===me).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0];
   let from=mine ? (+mine.ts||0)-10*60000 : null;
+  if(mine && +mine.since && +mine.since<+mine.ts && !L.some(x=>x.u!==me && (+x.ts||0)>+mine.since && (+x.ts||0)<+mine.ts)) from=+mine.since-10*60000;   /* login ulang: tetap sejak awal pegang plat (kalau tidak ada driver lain di antaranya) */
   const until=mine ? Math.min(9e15, ...L.filter(x=>x.u!==me && (+x.ts||0)>(+mine.ts||0)).map(x=>+x.ts||9e15)) : 9e15;
   if(!mine){ /* catatan pegang plat akun ini tidak ada (mis. gagal tersimpan): pakai rit shift ini saja, sesudah driver lain terakhir mengisi plat ini */
     try{ const st=shiftWindow(prodDayStart(Date.now()), currentShift())[0];
@@ -12840,11 +12841,16 @@ function ccPlatRememberedOk(){
     if(trkKey(pr.plat)!==trkKey(o.plat)) return false;
     if((o.shift||"")!==(loginShift||"")) return false;
     if((o.slot||"")!==currentShift()) return false;   // pergantian shift (07.00 / 20.00): isi plat lagi seperti awal shift
-    return o.day===prodDayStart(Date.now()) && ccPlatRegistered(pr.plat);
+    return o.day===prodDayStart(Date.now()) && ccPlatGateOk(pr.plat);
   }catch(e){ return false; }
 }
 /* Plat WAJIB terdaftar di Jadwal DCCP (termasuk Spot Order dan CC Pengganti yang ditambah / diedit Koordinator atau Delivery). */
 function ccPlatRegistered(plat){ const k=normPlat(plat); return !!k && ((DB.get().dccpSchedule||[]).some(r=>normPlat(r.police)===k) || !!csActive(DB.get(),plat)); }
+/* 18 Nov 22.20: plat yang sudah jalan rit di shift ini (mis. CC Change Shift yang sudah Delout) tetap boleh LOGIN untuk melihat surat jalan / status.
+   Absen tetap memakai ccPlatRegistered (jadwal DCCP / Change Shift / Spot Order), jadi tidak bisa masuk antrean tanpa jadwal. */
+function ccPlatRecentRit(plat){ try{ const k=normPlat(plat); if(!k) return false; const st=shiftWindow(prodDayStart(Date.now()), currentShift())[0]-3600000;
+  return (DB.get().ils||[]).some(b=>b && normPlat(b.ccPlat)===k && (b.status==="open" || (+b.ts||0)>=st || (+b.outTs||0)>=st)); }catch(e){ return false; } }
+function ccPlatGateOk(plat){ return ccPlatRegistered(plat) || ccPlatRecentRit(plat); }
 function ccPlatRow(plat){ const k=normPlat(plat); return (DB.get().dccpSchedule||[]).find(r=>normPlat(r.police)===k)||null; }
 /* Plat diingat per AKUN selama SATU shift di hari produksi yang sama (di database, jadi berlaku juga di HP lain). Login lagi dengan akun sama di shift itu tidak ditanya plat lagi. */
 function ccShiftPlatSave(plat){
@@ -12856,7 +12862,10 @@ function ccShiftPlatSave(plat){
       (d.ccShiftPlat||[]).forEach(x=>{ if(x.u!==un && !x.lo && (ccPlatNorm(x.plat)||x.plat)===k && (x.day!==day || (x.slot||"")!==slot)){ x.lo=Date.now(); d.forceOut=d.forceOut||{}; d.forceOut[x.u]=Date.now(); } });
       /* plat ini sebelumnya dipakai akun lain: HP lamanya (termasuk layanan latar belakang APK) diperintah berhenti mengirim posisi. HP ini menyalakan ulang pengirimannya sendiri (ccAutoTrack). */
       if((d.ccShiftPlat||[]).some(x=>x.u!==un && (ccPlatNorm(x.plat)||x.plat)===k)){ const tk=trkKey(k), now=Date.now(); d.trkKill=d.trkKill||{}; d.trkKill[tk]=now; Object.keys(d.trkKill).forEach(x=>{ if(now-d.trkKill[x]>7*86400000) delete d.trkKill[x]; }); }
-      const a=(d.ccShiftPlat||[]).filter(x=>x.u!==un && x.day>=day-2*86400000); a.push({u:un, plat:ccPlatNorm(plat)||plat, shift:sh, day, slot:currentShift(), ts:Date.now()}); d.ccShiftPlat=a; });
+      const prev=(d.ccShiftPlat||[]).filter(x=>x.u===un && (ccPlatNorm(x.plat)||x.plat)===k && x.day===day && (x.slot||"")===slot).sort((p,q)=>(+p.ts||0)-(+q.ts||0))[0];
+      const a=(d.ccShiftPlat||[]).filter(x=>x.u!==un && x.day>=day-2*86400000); const ne={u:un, plat:ccPlatNorm(plat)||plat, shift:sh, day, slot, ts:Date.now()};
+      if(prev) ne.since=+prev.since||+prev.ts||ne.ts;   /* login ulang di shift yang sama: surat jalan sejak awal pegang plat tetap terlihat */
+      a.push(ne); d.ccShiftPlat=a; });
   }catch(e){}
 }
 /* Plat diingat dari HP (shift yang sama): pastikan akun ini tercatat sebagai pemegang plat di server.
@@ -12877,7 +12886,7 @@ function ccPlatDbOk(){
   try{
     if(!currentUser || currentUser.role!=="cc") return false;
     const e=(DB.get().ccShiftPlat||[]).find(x=>x.u===currentUser.username && (x.shift||"")===(loginShift||"") && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift());
-    if(!e || !ccPlatRegistered(e.plat)) return false;
+    if(!e || !ccPlatGateOk(e.plat)) return false;
     if(e.lo){ const eu=e.u, et=e.ts; DB.set(d=>{ const x=(d.ccShiftPlat||[]).find(y=>y.u===eu && y.ts===et); if(x) delete x.lo; }); }
     const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), row=ccPlatRow(e.plat), pr=getCcProfile();
     const lp=(acc&&acc.lp)||(row&&row.lp)||pr.lp||""; if(!lp) return false;
@@ -12906,7 +12915,7 @@ function ccShiftWatch(){
 function ccPlatRelock(){ try{ if(shareTrk.on) stopShare(true); }catch(e){} ccPlatOk=false; try{ render(); }catch(e){} setTimeout(ccPlatGateCheck,60); }
 setInterval(ccShiftWatch, 30000);
 /* Plat tadi ditolak (belum di DCCP): begitu Koordinator/Delivery menambahkan, lanjut sendiri supaya absen otomatis langsung jalan */
-setInterval(()=>{ try{ const pl=window._cgPend; if(!pl||!currentUser||currentUser.role!=="cc") return; const i=document.getElementById("cgPlat"); if(!i){ window._cgPend=null; return; } if(ccPlatRegistered(pl)){ try{ ringBg("Plat sudah terdaftar", pl+" sudah ada di jadwal. Buka RADAR untuk masuk."); }catch(e){} try{ RSnd.login(); }catch(e){} i.value=pl; ccPlatGateSave(); } }catch(e){} }, 2000);
+setInterval(()=>{ try{ const pl=window._cgPend; if(!pl||!currentUser||currentUser.role!=="cc") return; const i=document.getElementById("cgPlat"); if(!i){ window._cgPend=null; return; } if(ccPlatGateOk(pl)){ try{ ringBg("Plat sudah terdaftar", pl+" sudah ada di jadwal. Buka RADAR untuk masuk."); }catch(e){} try{ RSnd.login(); }catch(e){} i.value=pl; ccPlatGateSave(); } }catch(e){} }, 2000);
 /* ===== ABSEN BERBASIS PETA =====
    SUMBER ABSEN UTAMA: peta. CC yang posisinya terlihat di peta (HP/APK-nya membagikan lokasi) dan sudah di dalam radius yard tapi BELUM tercatat, dicatat otomatis oleh perangkat Delivery/Admin yang sedang terbuka.
    Jadi CC yang dekat tetap terrecord walau absen otomatis di HP-nya belum jalan. Satu CC tetap satu catatan (cek dobel di registerCC).
@@ -13184,7 +13193,7 @@ function ccPlatGateSave(){
   const plat=ccPlatNorm((document.getElementById("cgPlat")||{}).value), lp=((document.getElementById("cgLp")||{}).value||"").trim(), msg=document.getElementById("cgMsg");
   if(!plat){ msg.innerHTML=`<div class="msg err">Format plat tidak dikenali. Contoh: B 9660 TEJ</div>`; return; }
   if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
-  if(!ccPlatRegistered(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="nsPop"><div class="nsRoad"><span class="nsTruck">🚛</span><i></i></div><div class="nsBell">🔔</div><div class="nsTit">Maaf, plat ${xlEsc(plat)} belum ada jadwal</div><div class="nsSub">Kamu tetap login, tapi belum tampil di peta dan belum bisa absen<span class="nsDots"><b>.</b><b>.</b><b>.</b></span></div><button type="button" class="btn btn-primary nsBtn" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal<small>bunyi di Koordinator</small></button><button type="button" class="btn btn-outline nsBtn" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update?<small>ingatkan Delivery</small></button><div id="cgReqMsg"></div><div class="nsFoot">⏳ Layar ini menunggu dan otomatis lanjut begitu plat terdaftar.</div></div>`; return; }
+  if(!ccPlatGateOk(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="nsPop"><div class="nsRoad"><span class="nsTruck">🚛</span><i></i></div><div class="nsBell">🔔</div><div class="nsTit">Maaf, plat ${xlEsc(plat)} belum ada jadwal</div><div class="nsSub">Kamu tetap login, tapi belum tampil di peta dan belum bisa absen<span class="nsDots"><b>.</b><b>.</b><b>.</b></span></div><button type="button" class="btn btn-primary nsBtn" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal<small>bunyi di Koordinator</small></button><button type="button" class="btn btn-outline nsBtn" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update?<small>ingatkan Delivery</small></button><div id="cgReqMsg"></div><div class="nsFoot">⏳ Layar ini menunggu dan otomatis lanjut begitu plat terdaftar.</div></div>`; return; }
   { const oth=ccTakeOther(plat), k=normPlat(plat), me=currentUser.username, q=(DB.get().takeReq||{})[k], fresh=q&&q.to===me&&Date.now()-q.ts<30*60000;
     const _tk = oth ? ccDccpTakeOk(DB.get(), plat, (currentUser&&currentUser.name)||"") : {ok:false};
     if(oth && _tk.ok){   /* nama akun sesuai DCCP plat ini & sudah ≤1 jam sebelum rit pertamanya: ambil alih otomatis, akun lama dikeluarkan */
