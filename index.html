@@ -1743,7 +1743,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="19 Nov 2026 01.05";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="19 Nov 2026 06.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3990,9 +3990,12 @@ function renderOrderStall(){
       <button class="btn btn-primary" onclick="absenManual()">✍ Absen Manual (cek lokasi)</button>
     </div>`;
   const _va1 = vaOn();
+  const _gp = (()=>{ try{ const k=myCcPlatKey(); if(!k || ccPlatRegistered(k) || !ccPlatRecentRit(k)) return ""; const u=ccSjGraceUntil(k);
+    return `<div class="card" style="grid-column:1/-1;border:2px solid #17803d;background:#ECFDF3;"><div style="font-weight:800;color:#17803d;">✅ Rit kamu sudah selesai</div><div style="font-size:13px;margin-top:4px;">Plat ini tidak ada di jadwal shift sekarang, jadi belum bisa absen. Surat jalan tetap bisa dibuka${u?` sampai <b>${new Date(u).toLocaleString('id-ID',{weekday:'short',hour:'2-digit',minute:'2-digit'})}</b>`:""}.</div></div>`; }catch(e){ return ""; } })();
   const absenBlock = _va1 ? "" : verifiedForm + profileCard + autoCard + manualCard;
 
   return `
+    ${_gp}
     ${dfCcCardHtml(data)}
     ${_va1 ? sjBoxHtml("cc","Surat Jalan Driver","Surat jalan rit driver ini, sama seperti di HP-nya. Muncul setelah loading selesai.") : sjBoxHtml("cc","Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah loading selesai. "+sjKeepTxt():"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
     ${ccMyPosHtml(data)}
@@ -12955,8 +12958,11 @@ function ccPlatRememberedOk(){
 function ccPlatRegistered(plat){ const k=normPlat(plat); return !!k && ((DB.get().dccpSchedule||[]).some(r=>normPlat(r.police)===k) || !!csActive(DB.get(),plat)); }
 /* 18 Nov 22.20: plat yang sudah jalan rit di shift ini (mis. CC Change Shift yang sudah Delout) tetap boleh LOGIN untuk melihat surat jalan / status.
    Absen tetap memakai ccPlatRegistered (jadwal DCCP / Change Shift / Spot Order), jadi tidak bisa masuk antrean tanpa jadwal. */
-function ccPlatRecentRit(plat){ try{ const k=normPlat(plat); if(!k) return false; const st=shiftWindow(prodDayStart(Date.now()), currentShift())[0]-3600000;
-  return (DB.get().ils||[]).some(b=>b && normPlat(b.ccPlat)===k && (b.status==="open" || (+b.ts||0)>=st || (+b.outTs||0)>=st)); }catch(e){ return false; } }
+/* 19 Nov: rit terakhir / Change Shift yang sudah Delout tetap boleh membuka surat jalan sampai 12 jam setelah Delout, walau shift sudah berganti dan DCCP baru tidak memuat platnya. */
+const SJ_GRACE_MS = 12*3600000;
+function ccPlatRecentRit(plat){ try{ const k=normPlat(plat); if(!k) return false; const st=shiftWindow(prodDayStart(Date.now()), currentShift())[0]-3600000, g=Date.now()-SJ_GRACE_MS;
+  return (DB.get().ils||[]).some(b=>b && normPlat(b.ccPlat)===k && (b.status==="open" || (+b.ts||0)>=st || (+b.outTs||0)>=st || (+b.outTs||0)>=g || (+b.loadTs||0)>=g)); }catch(e){ return false; } }
+function ccSjGraceUntil(plat){ try{ const k=normPlat(plat); let t=0; (DB.get().ils||[]).forEach(b=>{ if(b && normPlat(b.ccPlat)===k) t=Math.max(t, +b.outTs||0, +b.loadTs||0); }); return t?t+SJ_GRACE_MS:0; }catch(e){ return 0; } }
 function ccPlatGateOk(plat){ return ccPlatRegistered(plat) || ccPlatRecentRit(plat); }
 function ccPlatRow(plat){ const k=normPlat(plat); return (DB.get().dccpSchedule||[]).find(r=>normPlat(r.police)===k)||null; }
 /* Plat diingat per AKUN selama SATU shift di hari produksi yang sama (di database, jadi berlaku juga di HP lain). Login lagi dengan akun sama di shift itu tidak ditanya plat lagi. */
@@ -12969,9 +12975,9 @@ function ccShiftPlatSave(plat){
       (d.ccShiftPlat||[]).forEach(x=>{ if(x.u!==un && !x.lo && (ccPlatNorm(x.plat)||x.plat)===k && (x.day!==day || (x.slot||"")!==slot)){ x.lo=Date.now(); d.forceOut=d.forceOut||{}; d.forceOut[x.u]=Date.now(); } });
       /* plat ini sebelumnya dipakai akun lain: HP lamanya (termasuk layanan latar belakang APK) diperintah berhenti mengirim posisi. HP ini menyalakan ulang pengirimannya sendiri (ccAutoTrack). */
       if((d.ccShiftPlat||[]).some(x=>x.u!==un && (ccPlatNorm(x.plat)||x.plat)===k)){ const tk=trkKey(k), now=Date.now(); d.trkKill=d.trkKill||{}; d.trkKill[tk]=now; Object.keys(d.trkKill).forEach(x=>{ if(now-d.trkKill[x]>7*86400000) delete d.trkKill[x]; }); }
-      const prev=(d.ccShiftPlat||[]).filter(x=>x.u===un && (ccPlatNorm(x.plat)||x.plat)===k && x.day===day && (x.slot||"")===slot).sort((p,q)=>(+p.ts||0)-(+q.ts||0))[0];
+      const prev=(d.ccShiftPlat||[]).filter(x=>x.u===un && (ccPlatNorm(x.plat)||x.plat)===k && ((x.day===day && (x.slot||"")===slot) || Date.now()-(+x.ts||0)<14*3600000)).sort((p,q)=>(+p.ts||0)-(+q.ts||0))[0];
       const a=(d.ccShiftPlat||[]).filter(x=>x.u!==un && x.day>=day-2*86400000); const ne={u:un, plat:ccPlatNorm(plat)||plat, shift:sh, day, slot, ts:Date.now()};
-      if(prev) ne.since=+prev.since||+prev.ts||ne.ts;   /* login ulang di shift yang sama: surat jalan sejak awal pegang plat tetap terlihat */
+      if(prev) ne.since=+prev.since||+prev.ts||ne.ts;   /* login ulang (shift sama, atau shift berikutnya ≤14 jam): surat jalan sejak awal pegang plat tetap terlihat */
       a.push(ne); d.ccShiftPlat=a; });
   }catch(e){}
 }
@@ -12992,7 +12998,12 @@ function ccShiftPlatEnsure(){
 function ccPlatDbOk(){
   try{
     if(!currentUser || currentUser.role!=="cc") return false;
-    const e=(DB.get().ccShiftPlat||[]).find(x=>x.u===currentUser.username && (x.shift||"")===(loginShift||"") && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift());
+    let e=(DB.get().ccShiftPlat||[]).find(x=>x.u===currentUser.username && (x.shift||"")===(loginShift||"") && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift());
+    if(!e){   /* shift baru: plat yang tidak ada di jadwal baru tapi baru selesai rit (≤12 jam) tetap dipegang supaya surat jalannya bisa dibuka */
+      const now=Date.now(), dd=DB.get(), slot=currentShift(), day=prodDayStart(now);
+      const pv=(dd.ccShiftPlat||[]).filter(x=>x && x.u===currentUser.username && now-(+x.ts||0)<14*3600000).sort((p,q)=>(+q.ts||0)-(+p.ts||0))[0];
+      if(pv && !ccPlatRegistered(pv.plat) && ccPlatRecentRit(pv.plat) && !(dd.ccShiftPlat||[]).some(x=>x && x.u!==currentUser.username && !x.lo && normPlat(x.plat)===normPlat(pv.plat) && x.day===day && (x.slot||"")===slot)) e=pv;
+    }
     if(!e || !ccPlatGateOk(e.plat)) return false;
     if(e.lo){ const eu=e.u, et=e.ts; DB.set(d=>{ const x=(d.ccShiftPlat||[]).find(y=>y.u===eu && y.ts===et); if(x) delete x.lo; }); }
     const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), row=ccPlatRow(e.plat), pr=getCcProfile();
