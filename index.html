@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="19 Nov 2026 21.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="19 Nov 2026 22.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4143,15 +4143,19 @@ function earlyRowsHtml(){
   const inHold=k=>(d.hold||[]).some(x=>normPlat(x.plat)===k);
   const inIn=k=>Object.keys(d.cc||{}).some(n=>d.cc[n]&&normPlat(d.cc[n].plat)===k)||(d.queue||[]).some(x=>normPlat(x.plat)===k);
   let L=[];
-  (d.dccpSchedule||[]).forEach(r=>{ const k=normPlat(r.police); if(!k) return; const due=ccNextDue(d,r.police); if(due==null) return;
+  const csK=new Set();
+  csArr(d).forEach(x=>{ if(!x) return; const e=csBusy(d, x.plat); if(!e || e.ts!==x.ts) return; const k=normPlat(x.plat); if(!k || csK.has(k)) return; csK.add(k);
+    const busy=(d.ils||[]).some(b=>b && normPlat(b.ccPlat)===k && b.status==="open");
+    L.push({k, plat:platFmt(x.plat), lp:x.lp||"", drv:csOwnerName(d, x.plat, e)||x.driver||"", due:0, cs:true, held:inHold(k), inside:inIn(k)||busy, allowed:true}); });   /* Change Shift: prioritas, jadwal DCCP-nya belum aktif */
+  (d.dccpSchedule||[]).forEach(r=>{ const k=normPlat(r.police); if(!k || csK.has(k)) return; const due=ccNextDue(d,r.police); if(due==null) return;
     const e=(d.earlyOk||{})[k]; L.push({k, plat:r.police, lp:r.lp||"", drv:r.driver||"", due, held:inHold(k), inside:inIn(k), allowed:!!(e&&e.ts>=from)}); });
   if(qn) L=L.filter(x=>(x.k+" "+String(x.lp)+" "+String(x.drv)).toLowerCase().replace(/[^a-z0-9 ]/g,"").replace(/ /g,"").includes(qn)||String(x.drv).toLowerCase().includes(q));
   L.sort((a,b)=>(b.held-a.held)||(a.due-b.due));
   if(!L.length) return `<div style="font-size:12px;color:var(--text-dim);padding:6px 0;">Tidak ada CC terjadwal yang cocok.</div>`;
   const n=window.earlyN||12, sh=L.slice(0,n);
   return sh.map(x=>`<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;">
-    <div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">${xlEsc(x.lp)} ${x.drv?"· "+xlEsc(x.drv):""}</span><br><span style="font-size:11px;color:var(--text-dim);">Jadwal ${holdHm(x.due)} ${x.held?"· <b style='color:#E8833A'>⏳ menunggu di luar</b>":x.inside?"· sudah di stall/antrian":"· belum absen"}</span></div>
-    <div style="display:flex;gap:6px;flex-shrink:0;">${!x.held&&!x.inside?`<button class="btn btn-outline btn-sm" onclick="absenkanCC('${xlEsc(x.plat)}','${xlEsc(x.lp)}')">✍ Absenkan</button>`:""}${x.inside&&!x.allowed?`<span style="font-size:11px;color:var(--text-dim);">-</span>`:`<button class="btn ${x.allowed?"btn-danger":"btn-primary"} btn-sm" onclick="earlyOne('${xlEsc(x.k)}',${x.allowed?"false":"true"})">${x.allowed?"Cabut":"Izinkan"}</button>`}</div>
+    <div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">${xlEsc(x.lp)} ${x.drv?"· "+xlEsc(x.drv):""}</span><br><span style="font-size:11px;color:var(--text-dim);">${x.cs?`<b style="color:#6D28D9;">🔁 Change Shift · prioritas</b>`:`Jadwal ${holdHm(x.due)}`} ${x.held?"· <b style='color:#E8833A'>⏳ menunggu di luar</b>":x.inside?"· sudah di stall/antrian":"· belum absen"}</span></div>
+    <div style="display:flex;gap:6px;flex-shrink:0;">${!x.held&&!x.inside?`<button class="btn btn-outline btn-sm" onclick="absenkanCC('${xlEsc(x.plat)}','${xlEsc(x.lp)}')">✍ Absenkan</button>`:""}${x.cs?"":x.inside&&!x.allowed?`<span style="font-size:11px;color:var(--text-dim);">-</span>`:`<button class="btn ${x.allowed?"btn-danger":"btn-primary"} btn-sm" onclick="earlyOne('${xlEsc(x.k)}',${x.allowed?"false":"true"})">${x.allowed?"Cabut":"Izinkan"}</button>`}</div>
   </div>`).join("")+(L.length>n?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:6px;" onclick="earlyN=(window.earlyN||12)+12;document.getElementById('earlyList').innerHTML=earlyRowsHtml();">Tampilkan lagi (${L.length-n})</button>`:"");
 }
 function earlyCardHtml(data){
@@ -4216,6 +4220,8 @@ function csBlockMe(plat){
     return {u:o, name:csOwnerName(d, plat, e), hold:csOwnerHold(d, plat, e)};
   }catch(err){ return null; }
 }
+/* 19 Nov 22.20: driver Change Shift tidak perlu mengisi plat lagi saat ganti shift — rit-nya memang dilanjutkan. Pegangan plat dari shift sebelumnya tetap sah. */
+function csHoldCarry(d, plat, u){ try{ const e=csBusy(d, plat); return !!(e && u && csOwnerU(d, plat, e)===u); }catch(err){ return false; } }
 function csRowPaused(d, plat){ return !!csBusy(d||DB.get(), plat); }
 function csPausedBadge(d, plat){ const e=csBusy(d, plat); if(!e) return "";
   return `<div title="Jadwal DCCP plat ini aktif setelah rit Change Shift Delout atau Change Shift dibatalkan" style="margin-top:4px;display:inline-block;background:#F5F3FF;border:1px solid #C4B5FD;color:#6D28D9;border-radius:8px;padding:2px 7px;font-size:11px;line-height:1.35;"><b style="white-space:nowrap;">⏸ Belum aktif</b><br><span style="white-space:nowrap;">🔁 Change Shift</span><br>${xlEsc(csOwnerName(d, plat, e)||"driver shift lalu")}</div>`; }
@@ -4246,13 +4252,22 @@ function csSave(){
 }
 function csCancel(k){ if(!canCS()) return; { const x=csArr(DB.get()).find(y=>y && normPlat(y.plat)===k); if(x && !csLpOk(x.lp)) return; } if(!confirm("Batalkan status Change Shift untuk CC ini?")) return;
   DB.set(d=>{ d.csList=csArr(d).filter(x=>x && normPlat(x.plat)!==k); }); render(); }
+function csWhere(d, plat, e){
+  const k=normPlat(plat);
+  const st=Object.keys(d.cc||{}).find(n=>d.cc[n] && normPlat(d.cc[n].plat)===k); if(st) return {txt:"Di Stall "+ccLbl(st), in:true, c:"#1E9E5A"};
+  if((d.queue||[]).some(q=>q && normPlat(q.plat)===k)) return {txt:"Di waiting list (prioritas)", in:true, c:"#2F6FB5"};
+  if((d.hold||[]).some(q=>q && normPlat(q.plat)===k)) return {txt:"Parkir Luar", in:true, c:"#E8833A"};
+  if((d.ils||[]).some(y=>y && normPlat(y.ccPlat)===k && (+y.ts||0)>=(+(e&&e.ts)||0) && y.status==="open")) return {txt:"ILS dibuat · menunggu Delout", in:true, c:"#6D28D9"};
+  const a=(d.absenLog||[]).slice().reverse().find(x=>x && normPlat(x.plat)===k && Date.now()-(+x.ts||0)<45*60000), why=!a?"":a.holder?"absen HP ditolak: "+(a.why||"bukan pemegang plat"):(a.nvdc||a.outbound)?"absen otomatis dikunci: sesudah Delout terakhir dianggap masih perjalanan ke NVDC":a.loaded?"dianggap masih bawa muatan dekat ADM":a.noDccp?"DCCP shift ini belum diupload":a.notDccp?"tidak terbaca di jadwal":a.driverBusy?"driver tercatat membawa truk lain":"";
+  return {txt:"Belum absen"+(why?" — "+why:""), in:false, c:"#B42318"};
+}
 function csCardHtml(data){
   if(!canCS()) return "";
   const L=csArr(data).filter(x=>x && (csActive(data,x.plat) || (csBusy(data,x.plat)||{}).ts===x.ts) && csLpOk(x.lp)), hm=t=>holdHm(t);
   return `<div class="card" style="border-left:5px solid #7B4FD0;"><h3>🔁 CC Change Shift${L.length?` (${L.length})`:""}</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">CC yang minus di shift ini dan dilanjutkan di shift berikutnya. Setelah DCCP baru diupload, CC ini diprioritaskan masuk, jam berapa pun hadir. Selama rit Change Shift belum Delout, jadwal plat yang sama di DCCP baru <b>belum aktif</b> dan plat tetap atas nama driver Change Shift.</div>
     <button class="btn btn-primary" style="width:100%;" onclick="csOpen()">➕ Pilih CC Change Shift</button>
-    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:space-between;gap:8px;align-items:center;"><div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.lp||"-")} · 👤 ${xlEsc(csOwnerName(data, x.plat, x)||x.driver||"-")}</span>${(()=>{ const k=normPlat(x.plat), b=(data.ils||[]).filter(y=>y && normPlat(y.ccPlat)===k && (+y.ts||0)>=(+x.ts||0) && y.status==="open")[0]; return b?` <span style="font-size:11px;background:#F5F3FF;color:#6D28D9;border-radius:6px;padding:1px 6px;font-weight:700;">ILS dibuat · menunggu Delout</span>`:""; })()}<br><span style="font-size:12px;">Dilanjutkan ${x.n||1} rit (${(x.sisa||[]).map(xlEsc).join(", ")}) · ${xlEsc(x.why||"")} · ${xlEsc(x.by||"-")} ${hm(x.ts)}</span></div><button class="btn btn-outline btn-sm" onclick="csCancel('${xlEsc(normPlat(x.plat))}')">✕</button></div>`).join("")}
+    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:space-between;gap:8px;align-items:center;"><div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.lp||"-")} · 👤 ${xlEsc(csOwnerName(data, x.plat, x)||x.driver||"-")}</span><br><span style="font-size:12px;">Dilanjutkan ${x.n||1} rit (${(x.sisa||[]).map(xlEsc).join(", ")}) · ${xlEsc(x.why||"")} · ${xlEsc(x.by||"-")} ${hm(x.ts)}</span>${(()=>{ const w=csWhere(data, x.plat, x); return `<div style="margin-top:4px;font-size:12px;font-weight:700;color:${w.c};">● ${xlEsc(w.txt)}</div>${(!w.in && canKeluarkanCC())?`<button class="btn btn-primary btn-sm" style="width:auto;margin-top:6px;padding:5px 12px;" onclick="absenkanCC('${xlEsc(platFmt(x.plat))}','${xlEsc(x.lp||"")}')">✍ Absenkan sekarang</button>`:""}`; })()}</div><button class="btn btn-outline btn-sm" onclick="csCancel('${xlEsc(normPlat(x.plat))}')">✕</button></div>`).join("")}
   </div>`;
 }
 /* BATCH PERTAMA shift = 3 CC PERTAMA di DCCP (urut jam rit pertama, sama jam -> urutan baris DCCP), yang belum jalan satu rit pun di shift ini.
@@ -13000,7 +13015,7 @@ function trkSenderWhy(r){
   if(hold && hold.u!==r.u) return "plat sudah dipegang "+nm(hold.u);
   if(!hold) return L.some(x=>x.u===r.u) ? "akun ini sudah dilepas dari plat" : "akun ini tidak memegang plat";
   const now=Date.now(), sh=currentShift(), pd=prodDayStart(now), st=shiftWindow(pd, sh)[0];
-  if(!(hold.day===pd && (hold.slot||"")===sh) && (hold.ts||0) < st-TRK_PRELOGIN_MS && now-st > TRK_GRACE_MS) return "plat diisi di shift sebelumnya, belum diisi lagi di shift ini";
+  if(!(hold.day===pd && (hold.slot||"")===sh) && (hold.ts||0) < st-TRK_PRELOGIN_MS && now-st > TRK_GRACE_MS && !csHoldCarry(d, r.plat, hold.u)) return "plat diisi di shift sebelumnya, belum diisi lagi di shift ini";
   return "";
 }
 /* ===== ABSEN HANYA DARI HP DRIVER PEMEGANG PLAT DI SHIFT INI (17 Nov 2026) =====
@@ -13018,7 +13033,7 @@ function absenHolderWhy(u, plat){
     if(!hold) return L.some(x=>x.u===u) ? "akun ini sudah dilepas dari plat "+pf : "akun ini tidak memegang plat "+pf;
     if(hold.u!==u) return "plat "+pf+" sedang dipegang "+nm(hold.u);
     const now=Date.now(), sh=currentShift(), pd=prodDayStart(now), st=shiftWindow(pd, sh)[0];
-    if(!(hold.day===pd && (hold.slot||"")===sh) && (hold.ts||0) < st-TRK_PRELOGIN_MS) return "plat "+pf+" belum diisi lagi di shift ini";
+    if(!(hold.day===pd && (hold.slot||"")===sh) && (hold.ts||0) < st-TRK_PRELOGIN_MS && !csHoldCarry(d, plat, hold.u)) return "plat "+pf+" belum diisi lagi di shift ini";
     return "";
   }catch(e){ return ""; }
 }
@@ -13978,7 +13993,10 @@ function ccShiftWatch(){
   try{
     if(!currentUser || currentUser.role!=="cc" || !ccPlatOk || document.getElementById("cgPlat")) return;
     const o=JSON.parse(localStorage.getItem(CC_PLATDAY_KEY)||"null");
-    if(o && o.slot && o.slot!==currentShift()){ ccPlatRelock(); }
+    if(o && o.slot && o.slot!==currentShift()){
+      const pl=(o.plat)||getCcProfile().plat||"";
+      if(pl && csMine(DB.get(), pl, currentUser.username, currentUser.name)){ ccPlatRememberSave(pl); ccShiftPlatSave(pl); try{ startAutoAbsen(true); }catch(e){} try{ ccAutoTrack(); }catch(e){} return; }   /* driver Change Shift: lanjut tanpa isi plat */
+      ccPlatRelock(); }
   }catch(e){}
 }
 function ccPlatRelock(){ try{ if(shareTrk.on) stopShare(true); }catch(e){} ccPlatOk=false; try{ render(); }catch(e){} setTimeout(ccPlatGateCheck,60); }
