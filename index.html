@@ -127,6 +127,7 @@ html,body{max-width:100%; overflow-x:hidden;}
 @keyframes nsPopIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
 @keyframes nsBlink{0%,100%{opacity:.6}50%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.nsPop *,.nsPop{animation:none!important}}
+.nsStatic,.nsStatic .nsTit,.nsStatic .nsSub,.nsStatic .nsBtn{animation:none}   /* layar Menunggu Jadwal di-render ulang tiap ada data baru: tanpa animasi masuk */
 @keyframes ringPulse{from{transform:scale(1)}to{transform:scale(1.025)}}
 #verBar{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:10050;display:flex;align-items:center;gap:10px;background:#0F2A4A;color:#fff;border-radius:14px;padding:10px 12px;box-shadow:0 8px 28px rgba(0,0,0,.35);font-size:13px;max-width:560px;margin:0 auto;}
 #ccProf{position:fixed;left:0;right:0;bottom:0;z-index:9998;background:var(--panel,#fff);color:var(--text);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.4);padding:0 0 14px;max-height:75vh;overflow:auto;}
@@ -1743,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="19 Nov 2026 06.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="19 Nov 2026 07.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2742,7 +2743,7 @@ function doLogout(){
   try{ devSeatRelease(); }catch(e){}
   try{ koSeatRelease(); }catch(e){}   /* kursi Koordinator LP dilepas: HP berikutnya langsung bisa memakai */   /* kursi pembuat ILS dilepas supaya HP lain bisa memakai */
   try{ if(currentUser && currentUser.username && !isViewer()){ const un=currentUser.username, t=Date.now(); DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===un) x.lo=t; }); }); } }catch(e){}   // tandai sudah logout: titik petanya tidak dianggap punya akun aktif
-  ccPlatOk=false; try{ stopShare(true); }catch(e){}
+  ccPlatOk=false; try{ stopShare(true); }catch(e){} try{ ccWaitClear(); }catch(e){}
   spdStop(); spdCloseOverlay();
   geoStop();
   stopScanner();
@@ -2865,6 +2866,7 @@ function setVP(vp, html){
   vp.innerHTML = html;
 }
 function renderInner(){
+  ccTabbarSync();
   document.querySelectorAll(".tabbtn").forEach(b=>{
     b.classList.toggle("active", b.dataset.tab===activeTab);
   });
@@ -3946,6 +3948,7 @@ function checkAbsenLocation(){
 }
 
 function renderOrderStall(){
+  if(ccWaitOn()) return renderCcWait();
   const data = DB.get();
   const ccCards = ccCardsHtml(data);
   const queueCards = data.queue.map((q,idx)=>`
@@ -12971,26 +12974,101 @@ function gateSjPick(plat, list){
       .sort((a,b)=>t(b)-t(a))[0]||null;
   }catch(e){ return null; }
 }
-function gateSjShow(plat, b){
-  const el=document.getElementById("nsSj"); if(!el) return;
-  if(!b){ el.innerHTML=""; return; }
+function gateSjHtml(b){
+  if(!b) return "";
   const t=Math.max(+b.outTs||0, +b.loadTs||0), hm=x=>new Date(x).toLocaleString('id-ID',{weekday:'short',hour:'2-digit',minute:'2-digit'});
-  el.innerHTML=`<div style="border:2px solid #17803d;background:#ECFDF3;border-radius:14px;padding:12px;margin:10px 0;text-align:center;">
+  return `<div style="border:2px solid #17803d;background:#ECFDF3;border-radius:14px;padding:12px;margin:10px 0;text-align:center;">
     <div style="font-weight:800;color:#17803d;">📄 Surat jalan terakhir</div>
     <div style="font-size:13px;margin:4px 0 8px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${(b.units||[]).length} unit · ${b.outTs?"Delout":"Loading selesai"} ${hm(t)}</div>
     <button type="button" class="btn btn-primary nsBtn" style="background:#17803d;border-color:#17803d;" onclick="sjView(${+b.id})">📄 Buka surat jalan</button>
     <div style="font-size:12px;color:var(--text-dim);margin-top:6px;">Anda hanya bisa melihat surat jalan terakhir (sampai ${hm(t+SJ_GRACE_MS)}).</div></div>`;
 }
+function gateSjShow(plat, b){ const el=document.getElementById("nsSj"); if(el) el.innerHTML=gateSjHtml(b); }
 function gateSjLoad(plat){
   try{
     const loc=gateSjPick(plat, DB.get().ils||[]); gateSjShow(plat, loc);
     if(!FBS.db || !FBS.authed || _fbIlsIdx!==true) return;   /* tanpa index Firebase query ini mengunduh SEMUA ILS — cukup data lokal */
     FBS.db.ref(FB_ROOT+"/ils").orderByChild("ccPlat").equalTo(platFmt(normPlat(plat))||plat).limitToLast(10).once("value").then(s=>{
-      const v=s.val()||{}, L=Array.isArray(v)?v:Object.values(v);
+      const v=s.val()||{}, L=(Array.isArray(v)?v:Object.values(v)).filter(Boolean); window._gateSjL=L; window._gateSjP=normPlat(plat);
       const b=gateSjPick(plat, L.concat(DB.get().ils||[])); if(document.getElementById("nsSj")) gateSjShow(plat, b);
     }).catch(()=>{});
   }catch(e){}
 }
+/* ===== MENUNGGU JADWAL (19 Nov 2026 07.20, permintaan Khairul) =====
+   Plat belum ada di Jadwal DCCP (mis. DCCP shift baru belum diupload): driver tetap MASUK aplikasi dalam mode "Menunggu Jadwal".
+   Isinya status DCCP, kondisi stall CC / antrean sekarang, surat jalan terakhir, tombol Jadwalkan / Ingatkan Delivery, dan tab Display
+   (sama dengan Display tanpa login) — driver bisa memantau dari rumah. Selama menunggu: tidak tampil di peta, tidak mengirim posisi,
+   tidak absen. Begitu plat masuk jadwal → HP berbunyi + notifikasi dan otomatis masuk normal (absen otomatis aktif). */
+const CC_WAIT_KEY="radar_ccwait", CC_WAIT_TTL=16*3600000;
+function ccWaitGet(){ try{ const o=JSON.parse(localStorage.getItem(CC_WAIT_KEY)||"null"); if(!o || !o.plat || !currentUser || o.u!==currentUser.username || Date.now()-(+o.ts||0)>CC_WAIT_TTL) return null; return o; }catch(e){ return null; } }
+function ccWaitOn(){ return !!(currentUser && currentUser.role==="cc" && !ccPlatOk && !noPlatUser() && ccWaitGet()); }
+function ccWaitSet(o){ try{ localStorage.setItem(CC_WAIT_KEY, JSON.stringify(o)); }catch(e){} }
+function ccWaitClear(){ try{ localStorage.removeItem(CC_WAIT_KEY); }catch(e){} }
+function ccWaitEnter(plat, lp){
+  const P=platFmt(normPlat(plat))||plat, old=ccWaitGet();
+  ccWaitSet({u:currentUser.username, plat:P, lp:lp||"", ts:(old && normPlat(old.plat)===normPlat(P))?old.ts:Date.now(), dccpOk:dccpCurrentOk()});
+  ccPlatOk=false; window._cgPend=null; if(window._gateSjP!==normPlat(P)){ window._gateSjL=null; window._gateSjAt=0; }
+  try{ if(shareTrk.on) stopShare(true); }catch(e){} try{ stopAutoAbsen(true); }catch(e){}
+  try{ closeModal(); }catch(e){}
+  activeTab="orderstall"; render();
+}
+/* plat sudah masuk jadwal: jalankan pengisian plat seperti biasa (ambil alih, pemegang plat, absen otomatis) */
+function ccWaitCommit(){
+  const w=ccWaitGet(); if(!w) return;
+  ccPlatGateOpen();
+  const i=document.getElementById("cgPlat"); if(i) i.value=w.plat;
+  const l=document.getElementById("cgLp"); if(l && l.tagName==="SELECT" && w.lp && !l.value){ l.value=w.lp; }
+  ccPlatGateSave();
+}
+function ccWaitDccpInfo(d){
+  const m=d.dccpMeta||{}, ok=dccpCurrentOk(d), shNow=dccpShiftNow()==="day"?"Day":"Night", sh=m.shift==="day"?"Day":m.shift==="night"?"Night":"";
+  const up=m.uploadedAt?new Date(m.uploadedAt).toLocaleString('id-ID',{weekday:'short',hour:'2-digit',minute:'2-digit'}):"";
+  if(!ok) return {ok:false, tit:`DCCP shift ${shNow} belum diupload`, sub:(d.dccpSchedule||[]).length?`Yang masih aktif: DCCP ${sh?"shift "+sh:"sebelumnya"}${up?" (diupload "+up+")":""}. Cek Display: kalau stall CC masih terisi, proses shift sebelumnya masih berjalan.`:`Belum ada DCCP yang aktif.`};
+  return {ok:true, tit:`DCCP sudah diupload, plat kamu belum ada`, sub:`DCCP ${sh?"shift "+sh:"shift ini"}${up?" diupload "+up:""}. Minta Koordinator / Delivery menambahkan (Spot Order / CC Pengganti), atau tekan Jadwalkan di bawah.`};
+}
+function renderCcWait(){
+  const w=ccWaitGet(), d=DB.get(); if(!w) return "";
+  const inf=ccWaitDccpInfo(d), now=Date.now();
+  const st=Object.keys(d.cc||{}).filter(k=>d.cc[k] && d.cc[k].plat).sort((a,b)=>ccLbl(a)-ccLbl(b));
+  const chips=st.map(k=>`<span style="display:inline-block;border:1px solid var(--border);border-radius:999px;padding:3px 9px;margin:2px;font-size:12px;"><b>S${ccLbl(k)}</b> ${xlEsc(platFmt(d.cc[k].plat))}</span>`).join("");
+  const nq=(d.queue||[]).length, nh=(d.hold||[]).length;
+  if(!window._gateSjAt || now-window._gateSjAt>5*60000){ window._gateSjAt=now; setTimeout(()=>{ try{ gateSjLoad(w.plat); }catch(e){} },0); }
+  const sjB=gateSjPick(w.plat, ((window._gateSjP===normPlat(w.plat) && window._gateSjL)||[]).concat(d.ils||[]));
+  return `<div class="nsPop nsStatic" style="margin-bottom:12px;">
+    <div class="nsRoad"><span class="nsTruck">🚛</span><i></i></div>
+    <div class="nsBell">⏳</div>
+    <div class="nsTit">Menunggu jadwal · ${xlEsc(w.plat)}${w.lp?` <span style="font-size:13px;color:var(--text-dim);">LP ${xlEsc(w.lp)}</span>`:""}</div>
+    <div style="margin:8px 0;padding:10px;border-radius:12px;background:${inf.ok?"#FFF7ED":"#EFF6FF"};border:1px solid ${inf.ok?"#F59E0B":"#93C5FD"};text-align:left;">
+      <div style="font-weight:800;">${inf.ok?"⚠":"🕒"} ${xlEsc(inf.tit)}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">${xlEsc(inf.sub)}</div></div>
+    <div style="text-align:left;margin:8px 0;">
+      <div style="font-size:12px;font-weight:800;margin-bottom:4px;">Kondisi sekarang</div>
+      <div style="font-size:13px;">🚚 Stall CC terisi <b>${st.length}/${CONFIG.CC_TOTAL}</b> · ⏳ Antrian <b>${nq}</b>${nh?` · 🅿 Parkir Luar <b>${nh}</b>`:""}</div>
+      ${chips?`<div style="margin-top:4px;">${chips}</div>`:""}
+      <button type="button" class="btn btn-outline nsBtn" style="margin-top:8px;" onclick="switchTab('display')">📺 Lihat Display<small>stall CC · antrian · peta stall unit · jadwal</small></button>
+    </div>
+    <div id="nsSj">${gateSjHtml(sjB)}</div>
+    <button type="button" class="btn btn-primary nsBtn" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal<small>bunyi di Koordinator</small></button>
+    <button type="button" class="btn btn-outline nsBtn" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update?<small>ingatkan Delivery</small></button>
+    <div id="cgReqMsg">${(window._sreqMsg && now-window._sreqMsg.t<120000)?window._sreqMsg.h.replace("nsOk",""):""}</div>
+    <button type="button" class="btn btn-outline nsBtn" onclick="ccPlatGateOpen(true)">✏️ Ganti plat</button>
+    <div class="nsFoot">Belum tampil di peta dan belum bisa absen. Begitu plat kamu masuk jadwal, HP berbunyi dan RADAR otomatis masuk normal (absen otomatis aktif). Biarkan RADAR terbuka atau di-minimize, jangan ditutup.</div>
+  </div>`;
+}
+function ccTabbarSync(){
+  try{ if(!currentUser || currentUser.role!=="cc") return; const w=ccWaitOn();
+    if(w && activeTab==="ccmap") activeTab="orderstall";
+    document.querySelectorAll('#tabbar .tabbtn').forEach(b=>{ if(b.dataset.tab==="ccmap") b.style.display=w?"none":""; if(b.dataset.tab==="orderstall"){ const t=w?"⏳ Menunggu Jadwal":"Order Stall"; if(b.textContent!==t) b.textContent=t; } });
+  }catch(e){}
+}
+/* pantau: plat masuk jadwal → bunyi + masuk normal; DCCP baru diupload tapi plat belum ada → bunyi sekali */
+setInterval(()=>{ try{
+  if(!ccWaitOn() || document.getElementById("cgPlat")) return;
+  const w=ccWaitGet(), d=DB.get(), al=(tit,txt)=>{ try{ soundEv('jadwal',txt); }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([300,150,300]); }catch(e){} try{ ringBg(tit, txt); }catch(e){} try{ if('Notification' in window && Notification.permission==='granted') new Notification(tit,{body:txt}); }catch(e){} };
+  if(ccPlatGateOk(w.plat)){ al("✅ Jadwal sudah masuk", w.plat+" sudah ada di jadwal. RADAR masuk normal, absen otomatis aktif."); ccWaitCommit(); return; }
+  const ok=dccpCurrentOk(d);
+  if(ok!==!!w.dccpOk){ w.dccpOk=ok; ccWaitSet(w); if(ok) al("⚠ DCCP sudah diupload", "DCCP shift ini sudah diupload, tapi "+w.plat+" belum ada di jadwal. Tekan Jadwalkan atau hubungi Koordinator."); if(activeTab==="orderstall") render(); }
+}catch(e){} }, 3000);
 function ccSjGraceUntil(plat){ try{ const k=normPlat(plat); let t=0; (DB.get().ils||[]).forEach(b=>{ if(b && normPlat(b.ccPlat)===k) t=Math.max(t, +b.outTs||0, +b.loadTs||0); }); return t?t+SJ_GRACE_MS:0; }catch(e){ return 0; } }
 function ccPlatGateOk(plat){ return ccPlatRegistered(plat); }   /* 19 Nov 06.40: kembali seperti semula (permintaan Khairul) — tanpa jadwal tetap tertahan; surat jalan terakhir dibuka dari layar itu */
 function ccPlatRow(plat){ const k=normPlat(plat); return (DB.get().dccpSchedule||[]).find(r=>normPlat(r.police)===k)||null; }
@@ -13199,6 +13277,7 @@ function ccPlatGateCheck(){
       try{ ccAutoTrack(); }catch(e){}
       return;
     }
+    { const w=ccWaitGet(); if(w){ if(ccPlatGateOk(w.plat)) ccWaitCommit(); else { activeTab="orderstall"; render(); } return; } }   /* masih Menunggu Jadwal (buka ulang aplikasi): langsung ke layar menunggu */
     ccPlatGateOpen();
   }
 }
@@ -13253,10 +13332,65 @@ function ccDccpTakeOk(d, plat, name){
   return {ok:false};
 }
 function ccTakeOther(plat){ const k=normPlat(plat), me=currentUser&&currentUser.username; return (DB.get().ccShiftPlat||[]).find(x=>normPlat(x.plat)===k && x.u!==me && !x.lo && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift())||null; }
+/* ===== SERAH TERIMA PLAT (19 Nov 2026 06.55, permintaan Khairul) =====
+   Kasus: CC 24 jam (batangan). Driver malam belum logout, driver pagi mengisi plat yang sama sebelum 07.00 dan namanya belum ada di DCCP
+   (DCCP belum di-update) → dulu hanya bisa menunggu Delivery, sementara HP driver lama tetap mengirim posisi & absen atas plat itu.
+   Sekarang: (1) HP driver lama dapat popup "Serahkan?" — Serahkan = driver lama keluar, driver baru langsung lanjut; Bukan = ditolak.
+   (2) Delivery tetap bisa Setujui / Tolak. (3) Jam ganti shift (05.00–07.59 & 18.00–20.59): 5 menit tanpa jawaban → diambil alih otomatis,
+   asal driver lama sudah memegang plat ≥ 2 jam (driver yang baru mengambil alih tidak bisa direbut balik otomatis). */
+const TAKE_AUTO_MIN = 5, TAKE_OLD_H = 2;
+function takeWindow(t){ const d=new Date(t==null?Date.now():t), m=d.getHours()*60+d.getMinutes(); return [SHIFT_START_H, SHIFT2_START_H].some(h=>m>=h*60-120 && m<h*60+60); }
+function takeHolderEntry(k, u){ return (DB.get().ccShiftPlat||[]).filter(x=>x && x.u===u && normPlat(x.plat)===k && !x.lo).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0]||null; }
+function takeAutoAt(q, holder){ try{ if(!q || q.status!=="wait" || !holder) return 0; if(Date.now()-(+(holder.since||holder.ts)||0) < TAKE_OLD_H*3600000) return 0; const at=(+q.ts||0)+TAKE_AUTO_MIN*60000; return takeWindow(at) ? at : 0; }catch(e){ return 0; } }
+function takeGaveTo(k, from, to){ const now=Date.now(); return (DB.get().takeLog||[]).some(x=>x && normPlat(x.plat)===k && x.from===from && x.to===to && now-(+x.ts||0)<14*3600000); }
+function takeHm(t){ return new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}); }
+/* HP driver lama: popup konfirmasi serah terima */
+function ccTakeAskCheck(){
+  try{
+    let el=document.getElementById("takeAsk");
+    if(!currentUser || currentUser.role!=="cc"){ if(el) el.remove(); return; }
+    const me=currentUser.username, R=DB.get().takeReq||{}, now=Date.now();
+    const k=Object.keys(R).find(x=>{ const q=R[x]; return q && q.from===me && q.status==="wait" && now-(+q.ts||0)<30*60000; });
+    if(!k){ if(el) el.remove(); return; }
+    const q=R[k], key=k+"|"+q.ts, at=takeAutoAt(q, takeHolderEntry(k, me));
+    if(el && el.dataset.key===key) return;
+    if(el) el.remove();
+    el=document.createElement("div"); el.id="takeAsk"; el.dataset.key=key; el.className="modal-bg"; el.style.zIndex="9998";
+    el.innerHTML=`<div class="modal" style="position:relative;text-align:center;max-width:420px;">
+      <div style="font-size:40px;line-height:1;">🔑</div>
+      <h3 style="margin:6px 0 4px;">Serah terima plat</h3>
+      <div style="font-size:14px;margin-bottom:10px;"><b>${xlEsc(q.toName||q.to||"")}</b> minta memakai plat <b>${xlEsc(q.plat||k)}</b>.</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Kalau kunci truk sudah kamu serahkan, tekan <b>Serahkan</b>. Kamu keluar dari RADAR dan posisi truk diambil dari HP ${xlEsc(q.toName||"driver baru")}.</div>
+      <button type="button" class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="takeHandover(${JSON.stringify(k).replace(/"/g,"&quot;")},true)">✔ Serahkan ke ${xlEsc(q.toName||"driver baru")}</button>
+      <button type="button" class="btn btn-outline" style="width:100%;" onclick="takeHandover(${JSON.stringify(k).replace(/"/g,"&quot;")},false)">✕ Bukan, truk masih saya bawa</button>
+      ${at?`<div style="font-size:12px;color:var(--text-dim);margin-top:10px;">Tidak dijawab sampai <b>${takeHm(at)}</b> → otomatis diserahkan (jam ganti shift).</div>`:`<div style="font-size:12px;color:var(--text-dim);margin-top:10px;">Delivery juga bisa menyetujui / menolak permintaan ini.</div>`}
+    </div>`;
+    document.body.appendChild(el);
+    const txt=(q.toName||q.to)+" minta memakai plat "+(q.plat||k)+". Serahkan kalau kunci truk sudah diberikan.";
+    try{ soundEv('ambilalih', txt); }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([250,120,250,120,250]); }catch(e){}
+    try{ ringBg("🔑 Serah terima plat", txt); }catch(e){}
+    try{ if('Notification' in window && Notification.permission==='granted') new Notification("🔑 Serah terima plat",{body:txt}); }catch(e){}
+  }catch(e){}
+}
+setInterval(ccTakeAskCheck, 3000);
+function takeHandover(k, ok){
+  if(!currentUser || currentUser.role!=="cc") return;
+  const me=currentUser.username, myN=currentUser.name||me, now=Date.now(); let q0=null;
+  DB.set(d=>{ const q=(d.takeReq||{})[k]; if(!q || q.from!==me || q.status!=="wait") return; q0=Object.assign({}, q);
+    if(ok){ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===me && normPlat(x.plat)===k && !x.lo) x.lo=now; }); q.status="ok"; d.forceOut=d.forceOut||{}; d.forceOut[me]=now;
+      d.takeLog=capLog((Array.isArray(d.takeLog)?d.takeLog:[]).concat([{ts:now, plat:q.plat, from:me, fromName:myN, to:q.to, toName:q.toName, auto:"serah"}]),50); }
+    else q.status="no";
+    q.self=true; q.by=myN; q.ts=now; });
+  try{ const el=document.getElementById("takeAsk"); if(el) el.remove(); }catch(e){}
+  if(!q0){ alert("Permintaan ini sudah tidak berlaku."); return; }
+  if(ok){ try{ localStorage.setItem("radar_forceack_"+me, String(now)); }catch(e){} doLogout(); setTimeout(()=>{ try{ alert("✔ Plat "+q0.plat+" sudah diserahkan ke "+(q0.toName||q0.to)+". Kamu keluar dari RADAR."); }catch(e){} },300); }
+  else alert("Permintaan "+(q0.toName||q0.to)+" ditolak. Plat "+q0.plat+" tetap atas nama kamu.");
+}
 function takeDecide(k, ok){
   if(!canKeluarkanCC()) return;
   DB.set(d=>{ const q=(d.takeReq||{})[k]; if(!q) return;
-    if(ok){ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===q.from && normPlat(x.plat)===k && !x.lo) x.lo=Date.now(); }); d.forceOut=d.forceOut||{}; d.forceOut[q.from]=Date.now(); q.status="ok"; }
+    if(ok){ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===q.from && normPlat(x.plat)===k && !x.lo) x.lo=Date.now(); }); d.forceOut=d.forceOut||{}; d.forceOut[q.from]=Date.now(); q.status="ok";
+      d.takeLog=capLog((Array.isArray(d.takeLog)?d.takeLog:[]).concat([{ts:Date.now(), plat:q.plat, from:q.from, fromName:q.fromName, to:q.to, toName:q.toName, auto:"delivery", by:(currentUser&&currentUser.name)||""}]),50); }
     else q.status="no";
     q.by=(currentUser&&currentUser.name)||""; q.ts=Date.now(); });
   render();
@@ -13266,7 +13400,7 @@ function takeCardHtml(data){
   const L=Object.keys(data.takeReq||{}).map(k=>({k,q:data.takeReq[k]})).filter(x=>x.q.status==="wait" && Date.now()-x.q.ts<30*60000);
   if(!L.length) return "";
   return `<div class="card" style="border-left:5px solid #E8833A;"><h3>🔁 Minta Ambil Alih Plat (${L.length})</h3>
-    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);"><div style="font-size:13px;"><b>${xlEsc(x.q.plat)}</b> masih login atas nama <b>${xlEsc(x.q.fromName)}</b>.<br><b>${xlEsc(x.q.toName)}</b> minta memakai plat ini (pergantian driver). Kalau disetujui, ${xlEsc(x.q.fromName)} otomatis dikeluarkan dari aplikasi.</div>
+    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);"><div style="font-size:13px;"><b>${xlEsc(x.q.plat)}</b> masih login atas nama <b>${xlEsc(x.q.fromName)}</b>.<br><b>${xlEsc(x.q.toName)}</b> minta memakai plat ini (pergantian driver). Kalau disetujui, ${xlEsc(x.q.fromName)} otomatis dikeluarkan dari aplikasi.<br><span style="font-size:12px;color:var(--text-dim);">HP ${xlEsc(x.q.fromName)} juga ditanya (bisa langsung menyerahkan).${(()=>{ const at=takeAutoAt(x.q, takeHolderEntry(x.k, x.q.from)); return at?` Tidak dijawab sampai <b>${takeHm(at)}</b> → otomatis disetujui (jam ganti shift).`:""; })()}</span></div>
       <div style="display:flex;gap:8px;margin-top:6px;"><button class="btn btn-primary btn-sm" onclick="takeDecide('${xlEsc(x.k)}',true)">✔ Setujui</button><button class="btn btn-outline btn-sm" onclick="takeDecide('${xlEsc(x.k)}',false)">✕ Tolak</button></div></div>`).join("")}
   </div>`;
 }
@@ -13278,12 +13412,14 @@ function takeCardHtml(data){
 const SREQ_COOL=3*60000, SREQ_TTL=3*3600000;
 const _sreqSeen=new Set();
 function schedReqSend(kind){
-  const plat=window._cgPend||ccPlatNorm((document.getElementById("cgPlat")||{}).value), lp=((document.getElementById("cgLp")||{}).value||"").trim(), out=document.getElementById("cgReqMsg");
+  const _w=ccWaitOn()?ccWaitGet():null;
+  const plat=window._cgPend||ccPlatNorm((document.getElementById("cgPlat")||{}).value)||(_w&&_w.plat), lp=((document.getElementById("cgLp")||{}).value||"").trim()||(_w&&_w.lp)||"", out=document.getElementById("cgReqMsg");
   if(!plat||!currentUser) return;
   const k=normPlat(plat), cur=((DB.get().schedReq||{})[k]||{}), last=((cur.kinds||{})[kind])||0;
-  if(Date.now()-last<SREQ_COOL){ if(out) out.innerHTML=`<div class="msg info">Sudah dikirim ${Math.max(1,Math.round((Date.now()-last)/60000))} menit lalu. Bisa diingatkan lagi ${Math.ceil((SREQ_COOL-(Date.now()-last))/60000)} menit lagi.</div>`; return; }
+  const put=h=>{ window._sreqMsg={h, t:Date.now()}; const o=document.getElementById("cgReqMsg")||out; if(o) o.innerHTML=h; };   /* disimpan: layar Menunggu Jadwal di-render ulang tiap ada data baru */
+  if(Date.now()-last<SREQ_COOL){ put(`<div class="msg info">Sudah dikirim ${Math.max(1,Math.round((Date.now()-last)/60000))} menit lalu. Bisa diingatkan lagi ${Math.ceil((SREQ_COOL-(Date.now()-last))/60000)} menit lagi.</div>`); return; }
   DB.set(d=>{ d.schedReq=d.schedReq||{}; const r=d.schedReq[k]||{plat:platFmt(plat), kinds:{}}; r.plat=platFmt(plat); r.lp=lp||r.lp||""; r.user=currentUser.username; r.name=currentUser.name||currentUser.username; r.kinds=r.kinds||{}; r.kinds[kind]=Date.now(); r.ts=Date.now(); d.schedReq[k]=r; });
-  if(out) out.innerHTML=`<div class="msg ok nsOk">✔ ${kind==="edit"?"Permintaan jadwal terkirim ke Koordinator"+(lp?" LP "+xlEsc(lp):""):"Pengingat update DCCP terkirim ke Delivery"}. Layar ini otomatis lanjut begitu plat terdaftar.</div>`;
+  put(`<div class="msg ok nsOk">✔ ${kind==="edit"?"Permintaan jadwal terkirim ke Koordinator"+(lp?" LP "+xlEsc(lp):""):"Pengingat update DCCP terkirim ke Delivery"}. Layar ini otomatis lanjut begitu plat terdaftar.</div>`);
 }
 function schedReqList(d){
   const now=Date.now(); return Object.keys(d.schedReq||{}).map(k=>Object.assign({k},d.schedReq[k])).filter(r=>r && r.plat && now-(r.ts||0)<SREQ_TTL && !ccPlatRegistered(r.plat));
@@ -13335,9 +13471,11 @@ function ccPlatGateSave(){
   const plat=ccPlatNorm((document.getElementById("cgPlat")||{}).value), lp=((document.getElementById("cgLp")||{}).value||"").trim(), msg=document.getElementById("cgMsg");
   if(!plat){ msg.innerHTML=`<div class="msg err">Format plat tidak dikenali. Contoh: B 9660 TEJ</div>`; return; }
   if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
+  if(!ccPlatGateOk(plat) && !ccPlatOk){ ccWaitEnter(plat, lp); return; }   /* belum masuk aplikasi: masuk mode Menunggu Jadwal (lihat Display dari rumah) */
   if(!ccPlatGateOk(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="nsPop"><div class="nsRoad"><span class="nsTruck">🚛</span><i></i></div><div class="nsBell">🔔</div><div class="nsTit">Maaf, plat ${xlEsc(plat)} belum ada jadwal</div><div class="nsSub">Kamu tetap login, tapi belum tampil di peta dan belum bisa absen<span class="nsDots"><b>.</b><b>.</b><b>.</b></span></div><div id="nsSj"></div><button type="button" class="btn btn-primary nsBtn" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal<small>bunyi di Koordinator</small></button><button type="button" class="btn btn-outline nsBtn" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update?<small>ingatkan Delivery</small></button><div id="cgReqMsg"></div><div class="nsFoot">⏳ Layar ini menunggu dan otomatis lanjut begitu plat terdaftar.</div></div>`; gateSjLoad(plat); return; }
   { const oth=ccTakeOther(plat), k=normPlat(plat), me=currentUser.username, q=(DB.get().takeReq||{})[k], fresh=q&&q.to===me&&Date.now()-q.ts<30*60000;
-    const _tk = oth ? ccDccpTakeOk(DB.get(), plat, (currentUser&&currentUser.name)||"") : {ok:false};
+    let _tk = oth ? ccDccpTakeOk(DB.get(), plat, (currentUser&&currentUser.name)||"") : {ok:false};
+    if(_tk.ok && takeGaveTo(k, me, oth.u)) _tk={ok:false};   /* plat ini sudah kamu serahkan ke dia (≤14 jam): nama di DCCP lama tidak boleh merebut balik otomatis */
     if(oth && _tk.ok){   /* nama akun sesuai DCCP plat ini & sudah ≤1 jam sebelum rit pertamanya: ambil alih otomatis, akun lama dikeluarkan */
       const on=(()=>{ const u=(DB.get().users||[]).find(y=>y.username===oth.u); return (u&&u.name)||oth.u; })(), now=Date.now();
       DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===oth.u && normPlat(x.plat)===k && !x.lo) x.lo=now; }); d.forceOut=d.forceOut||{}; d.forceOut[oth.u]=now;
@@ -13345,21 +13483,30 @@ function ccPlatGateSave(){
         d.takeLog=capLog((Array.isArray(d.takeLog)?d.takeLog:[]).concat([{ts:now, plat:platFmt(plat), from:oth.u, fromName:on, to:me, toName:(currentUser.name||me), auto:"dccp"}]),50); });
       window._takeAutoMsg="Plat "+platFmt(plat)+" diambil alih otomatis dari "+on+" karena nama kamu sesuai Jadwal DCCP ("+_tk.driver+"). Akun "+on+" dikeluarkan dan posisi truk sekarang dari HP kamu.";
     }
+    else if(oth && fresh && q.status==="wait" && (()=>{ const at=takeAutoAt(q, oth); return at && Date.now()>=at && takeWindow(); })()){   /* jam ganti shift, 5 menit tanpa jawaban dari driver lama / Delivery: ambil alih otomatis */
+      const on=(()=>{ const u=(DB.get().users||[]).find(y=>y.username===oth.u); return (u&&u.name)||oth.u; })(), now=Date.now();
+      DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===oth.u && normPlat(x.plat)===k && !x.lo) x.lo=now; }); d.forceOut=d.forceOut||{}; d.forceOut[oth.u]=now;
+        if(d.takeReq) delete d.takeReq[k];
+        d.takeLog=capLog((Array.isArray(d.takeLog)?d.takeLog:[]).concat([{ts:now, plat:platFmt(plat), from:oth.u, fromName:on, to:me, toName:(currentUser.name||me), auto:"timeout"}]),50); });
+      window._takeAutoMsg="Plat "+platFmt(plat)+" diambil alih otomatis dari "+on+": tidak ada jawaban "+TAKE_AUTO_MIN+" menit di jam ganti shift. Akun "+on+" dikeluarkan dan posisi truk sekarang dari HP kamu.";
+    }
     else if(oth){
       const on=(()=>{ const u=(DB.get().users||[]).find(y=>y.username===oth.u); return (u&&u.name)||oth.u; })();
-      if(fresh && q.status==="no"){ DB.set(d=>{ if(d.takeReq) delete d.takeReq[k]; }); window._cgPend=null; msg.innerHTML=`<div class="msg err">Delivery menolak pengambilalihan <b>${xlEsc(plat)}</b> dari ${xlEsc(on)}. Cek plat yang benar, atau hubungi Delivery.</div>`; return; }
+      if(fresh && q.status==="no"){ DB.set(d=>{ if(d.takeReq) delete d.takeReq[k]; }); window._cgPend=null; msg.innerHTML=q.self?`<div class="msg err"><b>${xlEsc(on)}</b> menjawab plat <b>${xlEsc(plat)}</b> masih dia bawa. Cek plat yang benar, atau minta Delivery menyetujui.</div>`:`<div class="msg err">Delivery menolak pengambilalihan <b>${xlEsc(plat)}</b> dari ${xlEsc(on)}. Cek plat yang benar, atau hubungi Delivery.</div>`; return; }
       window._cgPend=plat;
-      if(!fresh){ DB.set(d=>{ d.takeReq=d.takeReq||{}; d.takeReq[k]={plat:platFmt(plat), from:oth.u, fromName:on, to:me, toName:(currentUser.name||me), lp, ts:Date.now(), status:"wait"}; }); }
-      msg.innerHTML=`<div class="msg info">⏳ Plat <b>${xlEsc(plat)}</b> sedang dipakai <b>${xlEsc(on)}</b>. Menunggu konfirmasi Delivery. Layar ini lanjut sendiri setelah disetujui.</div>`; return;
+      let qq=fresh?q:null;
+      if(!fresh){ qq={plat:platFmt(plat), from:oth.u, fromName:on, to:me, toName:(currentUser.name||me), lp, ts:Date.now(), status:"wait"}; const nq=qq; DB.set(d=>{ d.takeReq=d.takeReq||{}; d.takeReq[k]=nq; }); }
+      const at=takeAutoAt(qq, oth);
+      msg.innerHTML=`<div class="msg info">⏳ Plat <b>${xlEsc(plat)}</b> masih login atas nama <b>${xlEsc(on)}</b>.<br>HP ${xlEsc(on)} diminta konfirmasi serah terima, Delivery juga diberi tahu. Layar ini lanjut sendiri setelah diserahkan / disetujui.${at?`<br><b>Kalau tidak ada jawaban, otomatis diambil alih jam ${takeHm(at)}</b> (jam ganti shift).`:""}</div>`; return;
     }
-    if(q && q.to===me){ DB.set(d=>{ if(d.takeReq) delete d.takeReq[k]; }); }
+    if(q && q.to===me){ if(q.status==="ok" && Date.now()-(+q.ts||0)<30*60000) window._takeAutoMsg=q.self?("Plat "+(q.plat||platFmt(plat))+" sudah diserahkan oleh "+(q.fromName||q.from)+". Posisi truk sekarang dari HP kamu."):("Delivery menyetujui: plat "+(q.plat||platFmt(plat))+" sekarang atas nama kamu."); DB.set(d=>{ if(d.takeReq) delete d.takeReq[k]; }); }
   }
   window._cgPend=null;
   const pr=getCcProfile();
   if(shareTrk.on && trkKey(pr.plat)!==trkKey(plat)) stopShare(true);
   try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:pr.drvCode||""})); }catch(e){}
   try{ const r=[plat].concat(ccRecentPlats().filter(p=>p!==plat)).slice(0,4); localStorage.setItem(CC_PLATS_KEY, JSON.stringify(r)); }catch(e){}
-  ccPlatOk=true; closeModal();
+  ccPlatOk=true; closeModal(); ccWaitClear();
   ccPlatRememberSave(plat); ccShiftPlatSave(plat);
   if(window._takeAutoMsg){ const m=window._takeAutoMsg; window._takeAutoMsg=null; setTimeout(()=>{ try{ alert("✔ "+m); }catch(e){} },300); }
   try{ syncCcProfileFromAccount(); }catch(e){}
