@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="19 Nov 2026 22.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="20 Nov 2026 02.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -11763,11 +11763,28 @@ function handleCatFile(evt, kind){
   rd.readAsArrayBuffer(f);
 }
 function cancelCatPreview(kind){ catPreviews[kind]=null; render(); }
+/* 20 Nov 2026 (Khairul): upload daftar unit Batam / Prioritas MENIMPA daftar lama.
+   • No. Rangka lama yang unitnya BELUM masuk yard → hilang (diganti isi file baru).
+   • Unit yang SUDAH di yard (stall, luar stall, ILS yang belum Delout) → tanda Batam / Prioritas-nya tetap, sampai Delout.
+   Batam dan Prioritas terpisah: upload Batam tidak mengubah tanda Prioritas, dan sebaliknya. */
+function catYardSet(d){
+  const yard=new Set();
+  Object.values(d.units||{}).forEach(u=>{ if(u && u.frame) yard.add(normVin(u.frame)); });
+  (d.ils||[]).forEach(b=>{ if(b && b.status==="open") (b.units||[]).forEach(u=>{ if(u && u.frame) yard.add(normVin(u.frame)); }); });
+  return yard;
+}
 function saveCatList(kind){
   const p = catPreviews[kind]; if(!p) return;
-  const def = batamDefaultCat;
+  const def = batamDefaultCat, R={baru:0, hapus:0, tetap:0};
   DB.set(d=>{
     d.unitCat = d.unitCat || {};
+    /* 1. timpa daftar lama: tanda <kind> untuk unit yang belum di yard & tidak ada di file baru dihapus */
+    const yard=catYardSet(d), inFile=new Set(p.rows.filter(r=> kind==="batam" ? (r.explicit ? r.batam : def==="batam") : true).map(r=>r.vin));
+    Object.keys(d.unitCat).forEach(k=>{ const e=d.unitCat[k]; if(!e || !e[kind] || inFile.has(k)) return;
+      if(yard.has(k)){ R.tetap++; return; }
+      e[kind]=false; R.hapus++; if(!e.batam && !e.prio) delete d.unitCat[k]; });
+    R.baru=inFile.size;
+    /* 2. isi file baru */
     p.rows.forEach(r=>{
       const old = d.unitCat[r.vin] || {};
       const e = {...old, src:"upload", file:p.fileName, by:(currentUser&&currentUser.name)||"", ts:Date.now()};
@@ -11784,7 +11801,9 @@ function saveCatList(kind){
     // unit yang SUDAH terparkir ikut diperbarui statusnya
     Object.values(d.units).forEach(u=>{ if(!u) return; const c=lookupUnitCat(d,u.frame); if(c){ if(kind==="batam") u.batam=!!c.batam; else u.prio=!!c.prio; } });
   });
-  catPreviews[kind] = null; render();
+  catPreviews[kind] = null; render(); window._catSaveRes=R;
+  const nm = kind==="batam" ? "Batam" : "Prioritas";
+  setTimeout(()=>alert("Daftar unit "+nm+" diperbarui.\n\n• Dari file baru: "+R.baru+" No. Rangka\n• Data lama dihapus (unit belum masuk yard): "+R.hapus+"\n• Unit yang sudah di yard tetap "+nm+" sampai Delout: "+R.tetap), 50);
 }
 function clearCatList(kind){
   const nm = kind==="batam" ? "Batam" : "Prioritas";
@@ -11972,7 +11991,7 @@ function renderCatPage(kind){
     <p style="font-size:13px;color:var(--text-dim);margin:6px 0 12px;">${isB
       ? `Pilih file Excel/CSV daftar unit Batam (mis. ekstrak <b>MDP Batam</b>). Kolom <b>No. Rangka / FrameNumber / VIN</b> dibaca otomatis; tujuan diambil dari kolom <b>BranchName</b>/dealer jika ada.`
       : `Pilih file Excel/CSV daftar unit <b>prioritas</b>. Kolom <b>No. Rangka / FrameNumber / VIN</b> dibaca otomatis; semua unit di file ini ditandai prioritas. Daftar ini terpisah dari daftar Batam.`}
-      Data ditambahkan ke daftar yang sudah ada.</p>
+      File baru <b>menggantikan</b> daftar lama. Unit yang sudah di yard (stall, luar stall, ILS belum Delout) tetap ${isB?"Batam":"Prioritas"} sampai Delout walaupun tidak ada di file baru.</p>
     <input type="file" accept=".xlsx,.xls,.csv" onchange="handleCatFile(event,'${kind}')">
     <div id="catMsg_${kind}" style="margin-top:10px;"></div>
     ${pv?`<div style="margin-top:12px;">
@@ -11985,7 +12004,7 @@ function renderCatPage(kind){
       <div style="overflow-x:auto;margin-top:8px;max-height:200px;overflow-y:auto;"><table style="font-size:12px;">
         ${pv.rows.slice(0,8).map(r=>`<tr style="border-top:1px solid var(--border);"><td style="padding:4px 8px;font-family:monospace;">${r.vin}</td><td style="padding:4px 8px;">${isB?(r.batam?"Batam":"<span style='color:var(--text-dim)'>(default)</span>"):"⭐ Prioritas"}${isB&&r.dest?` <span style="color:var(--text-dim);">· ${r.dest}</span>`:""}</td></tr>`).join("")}
       </table></div>
-      <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-primary" onclick="saveCatList('${kind}')">✔ Tambahkan ke Daftar</button><button class="btn btn-sm" onclick="cancelCatPreview('${kind}')">Batal</button></div>
+      <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-primary" onclick="saveCatList('${kind}')">✔ Simpan (ganti daftar lama)</button><button class="btn btn-sm" onclick="cancelCatPreview('${kind}')">Batal</button></div>
     </div>`:""}
   </div>
 
@@ -13539,43 +13558,89 @@ function funVideoAdminHtml(){
     <button class="btn btn-primary btn-sm" style="width:auto;margin-top:6px;" onclick="funVideoSave()">💾 Simpan</button> <span style="font-size:12px;color:var(--text-dim);">${funVideoList().length} video terbaca</span>
 </div>`;
 }
-/* ---------- GAME: PARKIR CC ---------- */
-const PCC_W=360, PCC_H=540, PCC_TL=92, PCC_TW=26, PCC_WB=58;
-const PCC_LV=[
-  {n:"Masuk stall", par:12, s:{x:180,y:470,a:0}, t:{x:150,y:30,w:60,h:120},
-    o:[{x:70,y:30,w:34,h:110,k:"cc"},{x:110,y:30,w:34,h:110,k:"cc"},{x:216,y:30,w:34,h:110,k:"cc"},{x:256,y:30,w:34,h:110,k:"cc"}]},
-  {n:"Belok ke stall", par:18, s:{x:60,y:470,a:0}, t:{x:270,y:30,w:60,h:120},
-    o:[{x:120,y:200,w:120,h:40,k:"wall"},{x:228,y:30,w:34,h:110,k:"cc"},{x:0,y:30,w:200,h:24,k:"wall"},{x:150,y:330,w:20,h:20,k:"cone"},{x:210,y:330,w:20,h:20,k:"cone"}]},
-  {n:"Mundur ke stall", par:22, dir:0, s:{x:180,y:110,a:Math.PI/2}, t:{x:150,y:390,w:60,h:125},
-    o:[{x:106,y:390,w:36,h:120,k:"cc"},{x:218,y:390,w:36,h:120,k:"cc"},{x:60,y:390,w:36,h:120,k:"cc"},{x:264,y:390,w:36,h:120,k:"cc"},{x:0,y:0,w:360,h:22,k:"wall"}]},
-  {n:"Stall sempit", par:20, s:{x:300,y:470,a:0}, t:{x:158,y:30,w:44,h:118},
-    o:[{x:114,y:30,w:38,h:112,k:"cc"},{x:208,y:30,w:38,h:112,k:"cc"},{x:70,y:30,w:38,h:112,k:"cc"},{x:252,y:30,w:38,h:112,k:"cc"},{x:0,y:250,w:150,h:30,k:"wall"},{x:250,y:330,w:20,h:20,k:"cone"}]},
-  {n:"Parkir sejajar", par:28, s:{x:60,y:250,a:Math.PI/2}, t:{x:112,y:466,w:142,h:50},
-    o:[{x:4,y:472,w:100,h:38,k:"cc"},{x:262,y:472,w:96,h:38,k:"cc"},{x:0,y:522,w:360,h:18,k:"wall"},{x:150,y:120,w:60,h:40,k:"wall"}]},
-];
+/* ---------- GAME: PARKIR CC v2 — kepala truk (tractor) + rak semi-trailer (20 Nov 2026, permintaan Khairul) ----------
+   Fisika: kepala = sepeda kinematik (roda depan berbelok, poros belakang); rak = semi-trailer yang ditarik di fifth wheel.
+   Rak mengikuti titik gandeng (kingpin) secara non-holonomik, jadi saat MUNDUR rak "melawan" seperti truk sungguhan
+   (sudut kepala–rak lebih dari ±75° = jackknife). Semua satuan piksel layar permainan 360×540. */
+const PCC_W=360, PCC_H=540;
+const PCC_WB=26, PCC_HOFF=2, PCC_CF=30, PCC_CB=10, PCC_CW=24;        // kepala: jarak sumbu roda, fifth wheel, depan, belakang, lebar
+const PCC_L2=70, PCC_TF=8, PCC_TB=16, PCC_TW=26;                     // rak: kingpin→poros rak, juntai depan, juntai belakang, lebar
+const PCC_SMAX=0.62, PCC_VF=70, PCC_VR=-38, PCC_JK=1.31;
+function pccDir(a){ return [Math.sin(a), -Math.cos(a)]; }
+function pccWrap(a){ a=((a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI); return a-Math.PI; }
+function pccRig(x,y,a){ const [dx,dy]=pccDir(a), hx=x+dx*PCC_HOFF, hy=y+dy*PCC_HOFF; return {x, y, a, b:a, tx:hx-dx*PCC_L2, ty:hy-dy*PCC_L2, v:0, st:0}; }
+function pccHitch(g){ const [dx,dy]=pccDir(g.a); return [g.x+dx*PCC_HOFF, g.y+dy*PCC_HOFF]; }
+/* kunci: {L,R,U,D} → satu langkah fisika (dt kecil) */
+function pccPhys(g,k,dt){
+  if(k.U) g.v=Math.min(PCC_VF, g.v+(g.v<0?260:100)*dt); else if(k.D) g.v=Math.max(PCC_VR, g.v-(g.v>0?260:80)*dt); else { const dr=150*dt; g.v=Math.abs(g.v)<=dr?0:g.v-Math.sign(g.v)*dr; }
+  if(k.L) g.st=Math.max(-PCC_SMAX, g.st-2.4*dt); else if(k.R) g.st=Math.min(PCC_SMAX, g.st+2.4*dt); else { const r=3*dt; g.st=Math.abs(g.st)<=r?0:g.st-Math.sign(g.st)*r; }
+  g.a+=g.v/PCC_WB*Math.tan(g.st)*dt; const [dx,dy]=pccDir(g.a); g.x+=dx*g.v*dt; g.y+=dy*g.v*dt;
+  const [hx,hy]=pccHitch(g), ux=hx-g.tx, uy=hy-g.ty; g.b=Math.atan2(ux,-uy); const [bx,by]=pccDir(g.b); g.tx=hx-bx*PCC_L2; g.ty=hy-by*PCC_L2;
+}
+/* kotak kepala & rak: [cx,cy,sudut,panjang,lebar] */
+function pccBoxes(g){
+  const [ax,ay]=pccDir(g.a), [bx,by]=pccDir(g.b), [hx,hy]=pccHitch(g), co=(PCC_CF-PCC_CB)/2, to=(PCC_TF-(PCC_L2+PCC_TB))/2;
+  return [[g.x+ax*co, g.y+ay*co, g.a, PCC_CF+PCC_CB, PCC_CW], [hx+bx*to, hy+by*to, g.b, PCC_TF+PCC_L2+PCC_TB, PCC_TW]];
+}
+function pccCorners(B){ const [cx,cy,a,l,w]=B, [fx,fy]=pccDir(a), rx=-fy, ry=fx, P=[];
+  for(const [f,r] of [[.5,-.5],[.5,.5],[-.5,.5],[-.5,-.5]]) P.push([cx+fx*f*l+rx*r*w, cy+fy*f*l+ry*r*w]); return P; }
+/* tabrakan kotak miring vs persegi (SAT) */
+function pccSat(B,o){
+  const P=pccCorners(B), Q=[[o.x,o.y],[o.x+o.w,o.y],[o.x+o.w,o.y+o.h],[o.x,o.y+o.h]], [fx,fy]=pccDir(B[2]);
+  for(const [ax,ay] of [[1,0],[0,1],[fx,fy],[-fy,fx]]){
+    let a0=1e9,a1=-1e9,b0=1e9,b1=-1e9; for(const [x,y] of P){ const p=x*ax+y*ay; if(p<a0)a0=p; if(p>a1)a1=p; } for(const [x,y] of Q){ const p=x*ax+y*ay; if(p<b0)b0=p; if(p>b1)b1=p; }
+    if(a1<=b0 || b1<=a0) return false; }
+  return true;
+}
+function pccHitWhy(g,obs){
+  if(Math.abs(pccWrap(g.a-g.b))>PCC_JK) return "Jackknife! Sudut kepala dan rak terlalu tajam";
+  const BX=pccBoxes(g);
+  for(const B of BX) for(const [x,y] of pccCorners(B)) if(x<0||y<0||x>PCC_W||y>PCC_H) return "Keluar area";
+  for(const o of obs||[]) for(const B of BX) if(pccSat(B,o)) return o.k==="cc"?"Menabrak CC lain":o.k==="cone"?"Menabrak cone":"Menabrak tembok";
+  return "";
+}
+function pccInTarget(g,t,dir){
+  for(const B of pccBoxes(g)) for(const [x,y] of pccCorners(B)) if(x<t.x-1||x>t.x+t.w+1||y<t.y-1||y>t.y+t.h+1) return false;
+  return Math.abs(pccWrap(g.a-dir))<0.2 && Math.abs(pccWrap(g.b-dir))<0.2;
+}
+
+const PCC_LV=[["Maju ke stall",11,[252.1,94.80000000000001,-3.1416],-3.1416,[221,337,62,150],[[181,356,32,112,1],[291,356,32,112,1],[112,225,18,18,2]]],["Maju ke stall",10,[160.6,417.7,0],0,[130,71,62,150],[[17,185,18,18,2]]],["Maju ke stall",11,[197,413.6,0],0,[167,42,60,148],[[136,152,18,18,2],[241,259,18,18,2],[122,215,18,18,2]]],["Maju ke stall",12,[176.2,107.89999999999998,-3.1416],-3.1416,[146,379,60,148],[[214,397,32,112,1],[106,397,32,112,1],[219,206,18,18,2],[115,67,18,44,3],[27,102,18,18,2],[31,38,18,18,2]]],["Maju ke stall",11,[203.8,434.4,0],0,[175,50,58,146],[[135,67,32,112,1],[237,67,32,112,1],[317,326,16,62,3]]],["Maju ke stall",11,[213.5,108.39999999999998,-3.1416],-3.1416,[184,353,58,146],[[320,270,32,112,1]]],["Maju ke stall",11,[78.6,445,0],0,[51,71,56,144],[[120,297,18,18,2],[117,176,18,18,2],[194,410,18,18,2]]],["Maju ke stall",11,[278.5,107.19999999999999,-3.1416],-3.1416,[250,330,56,144],[[221,35,18,18,2],[221,83,18,18,2],[337,367,18,18,2],[61,355,112,32,1]]],["Maju ke stall",12,[166.4,435.9,0],0,[139,16,54,142],[[19,188,98,16,3]]],["Maju ke stall",10,[101.7,421.2,0],0,[75,60,54,142],[[330,112,16,89,3],[220,98,32,112,1]]],["Belok ke stall",13,[119.8,419.4,1.5708],0,[245,64,60,146],[[209,81,32,112,1],[309,81,32,112,1],[71,459,18,18,2],[211,239,18,44,3],[157,19,112,32,1]]],["Belok ke stall",13,[250.8,382.3,-1.5708],0,[92,17,59,146],[[62,108,14,99,3],[173,265,18,18,2],[279,109,18,18,2],[158,451,16,87,3]]],["Belok ke stall",15,[96.6,431.9,1.5708],0,[263,27,57,144],[[223,43,32,112,1],[324,43,32,112,1],[167,372,18,18,2],[232,169,18,44,3],[105,96,32,112,1]]],["Belok ke stall",12,[103.4,387,1.5708],0,[211,48,58,144],[[163,299,18,18,2],[117,328,18,18,2],[27,426,18,18,2],[293,282,18,18,2],[22,157,18,18,2]]],["Belok ke stall",14,[102.4,448.9,1.5708],0,[207,41,57,144],[[171,57,32,112,1],[272,57,32,112,1],[2,486,102,14,3],[172,309,18,18,2],[336,89,16,75,3]]],["Belok ke stall",13,[122.6,417.6,1.5708],0,[215,36,55,142],[[175,51,32,112,1],[278,51,32,112,1],[86,354,84,14,3],[80,455,18,18,2],[122,456,18,18,2],[100,278,18,18,2],[311,223,18,18,2],[133,171,16,78,3]]],["Belok ke stall",14,[101.2,428.6,1.5708],0,[255,42,55,142],[[124,375,60,14,3],[99,467,18,18,2],[62,467,18,18,2],[130,37,32,112,1],[316,428,16,70,3]]],["Belok ke stall",14,[105.6,424.9,1.5708],0,[255,62,55,142],[[215,77,32,112,1],[318,77,32,112,1],[209,336,18,18,2],[219,295,18,18,2],[87,470,18,18,2],[18,157,16,74,3]]],["Belok ke stall",13,[100.9,404.7,1.5708],0,[220,38,53,140],[[180,52,32,112,1],[277,52,32,112,1],[187,226,18,18,2],[72,351,18,18,2],[142,270,16,77,3],[42,202,18,18,2],[305,353,32,112,1]]],["Belok ke stall",13,[112.2,409,1.5708],0,[209,34,53,140],[[173,48,32,112,1],[270,48,32,112,1],[49,443,68,14,3],[124,355,18,18,2],[17,170,89,16,3],[145,171,16,63,3]]],["Slalom ke stall",12,[271,432.9,0],0,[158,25,59,145],[[225,42,32,112,1],[118,42,32,112,1],[311,401,14,96,3],[232,175,18,18,2],[202,368,18,18,2],[213,434,18,18,2],[242,220,18,18,2],[54,471,112,32,1]]],["Slalom ke stall",13,[248.8,445.3,0],0,[103,14,60,145],[[171,31,32,112,1],[63,31,32,112,1],[286,405,14,105,3],[195,409,14,90,3],[175,369,18,18,2],[187,202,18,18,2],[280,205,18,18,2],[79,273,18,18,2],[221,133,18,18,2]]],["Slalom ke stall",12,[87.2,443,0],0,[147,33,59,143],[[107,49,32,112,1],[218,49,32,112,1],[124,406,14,97,3],[151,337,18,18,2],[32,386,18,18,2],[32,431,18,18,2],[32,491,18,18,2],[336,423,18,18,2]]],["Slalom ke stall",12,[251,438.1,0],0,[147,37,57,143],[[120,98,14,106,3],[291,405,14,108,3],[175,353,18,18,2],[198,436,18,44,3],[51,482,18,18,2],[321,180,18,18,2]]],["Slalom ke stall",12,[164.2,440.6,0],0,[239,27,60,143],[[199,43,32,112,1],[311,43,32,112,1],[201,419,14,111,3],[113,394,14,98,3],[211,368,18,18,2],[200,201,18,18,2],[76,71,18,18,2],[292,299,18,18,2],[30,422,32,112,1]]],["Slalom ke stall",12,[169.5,442.8,0],0,[205,35,55,141],[[165,50,32,112,1],[268,50,32,112,1],[121,404,14,87,3],[167,230,18,18,2],[209,384,18,18,2],[201,482,18,18,2],[108,106,18,18,2]]],["Slalom ke stall",12,[206.7,440.5,0],0,[71,23,59,141],[[138,38,32,112,1],[31,38,32,112,1],[241,440,14,73,3],[146,354,14,100,3],[155,480,18,18,2],[244,416,18,18,2],[145,161,18,18,2],[149,183,18,18,2],[50,356,32,112,1]]],["Slalom ke stall",12,[94.8,446.5,0],0,[142,21,54,141],[[102,36,32,112,1],[204,36,32,112,1],[47,392,14,127,3],[126,434,14,82,3],[170,313,18,18,2],[138,375,18,18,2],[133,404,18,18,2],[212,196,32,112,1],[240,9,16,79,3]]],["Slalom ke stall",12,[121.6,442.9,0],0,[171,23,52,139],[[131,37,32,112,1],[231,37,32,112,1],[153,426,14,112,3],[70,444,18,18,2],[163,385,18,18,2],[70,501,18,18,2],[117,212,18,18,2]]],["Slalom ke stall",12,[86.4,440.5,0],0,[157,37,55,139],[[120,422,14,62,3],[127,388,18,18,2],[34,436,18,44,3],[108,20,18,18,2],[313,23,18,18,2],[235,328,16,55,3]]],["Mundur lurus",17,[225.3,58.7,0],0,[196,364,58,146],[[262,381,32,112,1],[160,381,32,112,1],[171,100,14,129,3],[265,223,14,112,3],[168,268,18,44,3],[265,195,18,18,2],[292,150,18,18,2],[139,343,16,67,3]]],["Mundur lurus",13,[288.3,446.8,-3.1416],-3.1416,[259,105,58,146],[[237,197,14,64,3],[325,183,14,97,3],[230,343,18,44,3],[232,150,18,18,2],[199,411,32,112,1]]],["Mundur lurus",18,[189.9,53.3,0],0,[162,380,56,144],[[226,396,32,112,1],[122,396,32,112,1],[227,196,14,128,3],[139,95,14,123,3],[229,114,18,18,2],[135,269,18,44,3],[228,145,18,44,3],[15,343,18,18,2],[60,337,18,18,2]]],["Mundur lurus",16,[280.4,486.2,-3.1416],-3.1416,[252,64,56,144],[[316,80,32,112,1],[216,80,32,112,1],[317,246,14,69,3],[232,241,14,61,3],[317,386,18,18,2],[227,358,18,18,2],[108,449,112,32,1],[3,40,83,16,3]]],["Mundur lurus",15,[216.2,74.5,0],0,[189,321,54,142],[[149,336,32,112,1],[251,336,32,112,1],[165,132,14,60,3],[252,281,18,18,2],[253,185,18,44,3],[6,355,52,16,3],[34,124,32,112,1],[304,40,18,18,2]]],["Mundur lurus",14,[284.5,459.4,-3.1416],-3.1416,[257,88,54,142],[[319,103,32,112,1],[217,103,32,112,1],[321,281,14,80,3],[229,252,18,18,2],[1,139,16,68,3]]],["Mundur lurus",14,[147,81.7,0],0,[121,318,52,140],[[81,332,32,112,1],[177,332,32,112,1],[181,154,14,66,3],[95,155,18,44,3],[95,222,18,44,3],[181,282,18,44,3],[182,476,18,18,2],[235,402,112,32,1]]],["Mundur lurus",16,[95.89999999999998,85.7,0],0,[70,366,52,140],[[130,292,14,127,3],[45,339,18,18,2],[132,192,18,18,2],[296,139,32,112,1],[161,176,112,32,1],[236,108,18,18,2]]],["Mundur lurus",14,[167.1,477.2,-3.1416],-3.1416,[142,97,50,138],[[102,110,32,112,1],[200,110,32,112,1],[119,356,14,68,3],[203,321,18,44,3],[333,324,18,18,2]]],["Mundur lurus",15,[70.8,470.7,-3.1416],-3.1416,[46,65,50,138],[[6,78,32,112,1],[100,78,32,112,1],[23,338,14,63,3],[104,241,18,18,2],[232,512,18,18,2],[261,251,18,18,2]]],["Belok ke stall",13,[262.5,412.8,-1.5708],0,[95,24,53,140],[[152,38,32,112,1],[55,38,32,112,1],[214,447,102,14,3],[226,362,110,14,3],[157,179,18,18,2],[68,200,18,18,2],[164,271,18,18,2],[251,163,16,101,3],[248,518,18,18,2],[244,30,18,18,2]]],["Maju ke stall",11,[250,448.5,0],0,[224,58,52,140],[[280,72,32,112,1],[188,72,32,112,1],[0,407,219,14,3],[284,350,14,91,3],[284,245,14,85,3],[197,430,18,18,2],[197,214,18,44,3],[198,482,18,44,3],[285,507,18,18,2],[325,2,18,18,2],[66,52,32,112,1]]],["Maju ke stall",11,[175.7,434.9,0],0,[150,52,52,140],[[114,66,32,112,1],[206,66,32,112,1],[207,345,153,14,3],[128,290,14,67,3],[128,185,14,66,3],[125,461,18,44,3],[211,433,18,18,2],[229,221,112,32,1],[278,87,32,112,1]]],["Maju ke stall",11,[266.2,448.2,0],0,[241,63,50,138],[[201,76,32,112,1],[299,76,32,112,1],[218,451,14,67,3],[218,252,14,104,3],[300,400,18,44,3],[302,368,18,18,2],[94,433,69,16,3],[89,263,112,32,1]]],["Maju ke stall",10,[70.10000000000002,115.30000000000001,-3.1416],-3.1416,[45,340,50,138],[[103,353,32,112,1],[9,353,32,112,1],[25,191,14,123,3],[18,34,18,44,3],[20,146,18,18,2],[105,50,18,18,2],[104,194,18,18,2],[245,9,32,112,1],[212,213,105,16,3]]],["Belok ke stall",14,[107,446.3,1.5708],0,[224,49,51,138],[[184,62,32,112,1],[279,62,32,112,1],[42,398,112,14,3],[112,481,18,18,2],[66,480,18,18,2],[196,238,18,18,2],[142,507,18,18,2],[104,205,32,112,1]]],["Maju ke stall",10,[256.8,425,0],0,[232,65,50,138],[[192,78,32,112,1],[286,78,32,112,1],[0,286,227,14,3],[286,286,74,14,3],[285,410,14,121,3],[212,204,14,61,3],[289,346,18,44,3],[206,320,18,18,2],[204,450,18,18,2],[72,15,32,112,1],[4,474,18,18,2]]],["Maju ke stall",12,[102,115.39999999999998,-3.1416],-3.1416,[78,390,48,136],[[0,233,72,14,3],[133,86,14,91,3],[133,363,14,90,3],[134,61,18,18,2],[54,116,18,44,3],[53,34,18,44,3],[296,239,18,18,2],[4,43,32,112,1],[343,105,16,94,3]]],["Belok ke stall",12,[247.8,382.3,-1.5708],0,[64,61,50,136],[[122,73,32,112,1],[24,73,32,112,1],[263,337,87,14,3],[226,332,18,18,2],[306,413,18,18,2],[122,194,18,18,2],[300,118,53,16,3],[65,491,112,32,1],[17,258,16,60,3]]],["Maju ke stall",12,[93,108,-3.1416],-3.1416,[69,390,48,136],[[125,402,32,112,1],[29,402,32,112,1],[124,28,14,95,3],[124,321,14,76,3],[127,147,18,44,3],[43,212,18,18,2],[286,420,32,112,1],[178,92,112,32,1],[9,292,18,18,2]]],["Geser lalu mundur",24,[87.6,444.7,0],0,[165,319,54,142],[[227,334,32,112,1],[122,381,14,85,3],[125,472,18,44,3],[226,267,18,18,2],[2,371,18,18,2],[270,390,32,112,1],[303,6,32,112,1]]],["Geser lalu mundur",25,[84,433.4,0],0,[201,295,54,142],[[157,310,32,112,1],[263,310,32,112,1],[36,444,14,74,3],[127,313,14,91,3],[119,433,18,18,2],[30,377,18,18,2],[30,130,105,16,3],[6,90,18,18,2],[239,472,112,32,1]]],["Geser lalu mundur",26,[262.2,449.1,0],0,[55,286,52,140],[[123,300,32,112,1],[19,300,32,112,1],[296,392,14,113,3],[217,407,14,91,3],[209,375,18,18,2],[211,507,18,18,2],[192,304,18,18,2],[298,340,18,44,3],[250,173,63,16,3],[124,496,18,18,2]]],["Geser lalu mundur",26,[280.1,449.3,0],0,[74,298,52,140],[[134,312,32,112,1],[38,312,32,112,1],[235,466,14,70,3],[221,330,18,18,2],[201,286,18,18,2],[226,408,18,44,3],[314,361,18,44,3],[25,128,18,18,2],[198,483,18,18,2]]],["Geser lalu mundur",25,[289.9,428.5,0],0,[148,335,52,140],[[208,349,32,112,1],[112,349,32,112,1],[327,319,14,127,3],[126,157,14,77,3],[236,487,18,18,2],[228,314,18,18,2],[120,320,18,18,2],[48,207,32,112,1],[254,70,32,112,1],[338,103,16,79,3]]],["Geser lalu mundur",26,[291.7,439.1,0],0,[93,289,51,139],[[160,303,32,112,1],[57,303,32,112,1],[305,152,14,92,3],[239,357,18,18,2],[243,412,18,18,2],[250,51,18,18,2],[61,36,16,108,3],[328,520,18,18,2]]],["Geser lalu mundur",26,[265.4,448.1,0],0,[82,306,50,138],[[140,319,32,112,1],[46,319,32,112,1],[277,125,14,124,3],[219,463,18,18,2],[299,417,18,44,3],[170,53,112,32,1],[24,75,16,59,3]]],["Geser lalu mundur",25,[62.3,433.5,0],0,[150,352,50,138],[[114,365,32,112,1],[204,365,32,112,1],[17,360,14,116,3],[204,279,18,44,3],[125,287,18,18,2],[124,314,18,44,3],[304,288,18,18,2],[3,189,18,18,2],[316,207,18,18,2]]],["Geser lalu mundur",26,[78.9,447.5,0],0,[209,337,48,136],[[165,349,32,112,1],[265,349,32,112,1],[31,438,14,77,3],[110,370,14,82,3],[216,193,18,18,2],[111,460,18,18,2],[15,86,32,112,1],[127,340,18,18,2],[319,294,18,18,2]]],["Geser lalu mundur",27,[279,430.4,0],0,[78,353,48,136],[[134,365,32,112,1],[38,365,32,112,1],[310,345,14,79,3],[73,159,14,99,3],[229,444,18,44,3],[228,414,18,18,2],[211,40,32,112,1],[49,485,18,18,2]]],["Belok ke stall",14,[114.5,438.5,1.5708],0,[245,32,49,136],[[205,44,32,112,1],[302,44,32,112,1],[90,391,89,14,3],[100,470,87,14,3],[307,211,14,93,3],[213,283,18,18,2],[50,470,18,18,2],[200,353,18,18,2],[220,187,18,18,2],[216,261,18,18,2],[190,164,16,94,3],[209,15,18,18,2],[11,285,32,112,1]]],["Slalom ke stall",12,[274.8,445.2,0],0,[157,20,51,137],[[216,33,32,112,1],[113,33,32,112,1],[227,405,14,101,3],[306,476,14,64,3],[309,402,14,62,3],[220,171,18,18,2],[207,358,18,18,2],[219,383,18,18,2],[180,315,18,18,2],[63,205,56,16,3],[50,79,32,112,1]]],["Slalom ke stall",12,[247.6,437.4,0],0,[141,44,52,137],[[201,57,32,112,1],[97,57,32,112,1],[203,439,14,94,3],[282,378,14,121,3],[156,316,18,18,2],[168,339,18,18,2],[202,186,18,18,2],[13,201,32,112,1],[63,290,32,112,1],[144,373,32,112,1],[256,164,32,112,1]]],["Slalom ke stall",13,[81.9,442.7,0],0,[160,17,49,135],[[120,29,32,112,1],[217,29,32,112,1],[116,412,14,107,3],[34,399,14,87,3],[122,387,18,18,2],[131,170,18,18,2],[131,145,18,18,2],[148,336,18,18,2],[277,124,32,112,1],[47,6,32,112,1],[156,434,18,18,2]]],["Belok ke stall",13,[111.4,381,1.5708],0,[242,22,47,134],[[202,33,32,112,1],[297,33,32,112,1],[53,409,75,14,3],[218,172,14,66,3],[82,324,117,14,3],[210,251,18,18,2],[294,168,18,18,2],[36,334,18,18,2],[99,118,32,112,1],[297,502,18,18,2]]],["Slalom ke stall",11,[201.8,431.8,0],0,[110,46,50,135],[[168,58,32,112,1],[70,58,32,112,1],[160,406,14,104,3],[230,366,14,128,3],[171,192,18,18,2],[175,222,18,18,2],[146,369,18,18,2],[115,299,18,18,2],[262,221,18,18,2],[76,311,32,112,1]]],["Slalom ke stall",12,[160.9,439.4,0],0,[233,21,51,135],[[193,33,32,112,1],[292,33,32,112,1],[186,424,174,14,3],[119,470,14,60,3],[186,450,14,64,3],[112,411,18,18,2],[116,379,18,18,2],[203,170,18,18,2],[74,446,18,18,2],[68,83,112,32,1],[7,353,32,112,1],[56,28,18,18,2]]],["Slalom ke stall",12,[258.8,446.7,0],0,[160,24,45,132],[[213,34,32,112,1],[120,34,32,112,1],[287,446,14,83,3],[214,405,14,125,3],[177,335,18,18,2],[215,163,18,44,3],[220,216,18,18,2],[336,74,18,18,2],[96,151,32,112,1],[321,353,18,18,2],[328,326,18,18,2]]],["Slalom ke stall",11,[85.1,437.2,0],0,[110,42,46,133],[[70,53,32,112,1],[164,53,32,112,1],[111,424,249,14,3],[40,427,14,75,3],[113,446,14,75,3],[116,391,18,18,2],[83,191,18,18,2],[79,227,18,18,2],[120,366,18,18,2],[40,372,18,18,2],[234,358,112,32,1],[247,470,112,32,1],[247,161,16,62,3],[208,166,32,112,1]]],["Belok ke stall",13,[241.9,399.6,-1.5708],0,[90,20,45,132],[[143,30,32,112,1],[50,30,32,112,1],[260,355,66,14,3],[64,148,14,120,3],[143,199,18,18,2],[251,428,18,18,2],[293,426,18,18,2],[244,71,97,16,3],[237,239,32,112,1],[90,485,112,32,1],[243,20,112,32,1]]],["Putar balik lalu mundur",25,[107,433.5,0],-3.1416,[224,18,50,138],[[282,31,32,112,1],[59,298,14,109,3],[132,11,14,99,3],[138,326,14,100,3],[146,233,18,18,2],[162,207,18,18,2],[56,246,18,44,3],[195,59,18,18,2],[159,66,18,18,2],[0,30,16,71,3]]],["Putar balik lalu mundur",26,[97.5,445.4,0],-3.1416,[203,28,50,138],[[261,41,32,112,1],[75,63,14,71,3],[269,191,14,118,3],[126,437,14,96,3],[45,423,18,44,3],[131,255,18,18,2],[176,37,18,44,3],[300,494,18,18,2],[35,266,18,18,2],[147,321,16,77,3],[290,449,18,18,2]]],["Geser lalu mundur",25,[279.1,432.8,0],0,[87,287,50,138],[[145,300,32,112,1],[47,300,32,112,1],[231,348,14,65,3],[310,406,18,18,2],[231,491,18,18,2],[231,447,18,18,2],[310,483,18,18,2],[265,147,18,18,2],[61,479,18,18,2],[5,109,16,57,3],[277,0,32,112,1]]],["Geser lalu mundur",28,[269.9,448.6,0],0,[70,353,48,136],[[130,365,32,112,1],[30,365,32,112,1],[225,440,14,85,3],[301,355,14,114,3],[286,174,14,88,3],[218,376,18,18,2],[301,481,18,18,2],[96,192,18,18,2],[32,17,18,18,2],[200,119,18,18,2],[172,324,32,112,1]]],["Geser lalu mundur",23,[254.9,447.6,0],0,[120,296,48,136],[[80,308,32,112,1],[95,151,14,86,3],[201,355,18,18,2],[206,406,18,44,3],[177,319,18,18,2],[287,387,18,44,3],[323,364,32,112,1],[36,303,32,112,1],[28,124,16,69,3],[295,198,32,112,1]]],["Geser lalu mundur",26,[67.8,431.5,0],0,[217,316,48,136],[[169,328,32,112,1],[273,328,32,112,1],[258,156,14,108,3],[96,392,14,111,3],[23,420,14,88,3],[102,338,18,18,2],[20,360,18,44,3],[317,333,32,112,1],[21,126,32,112,1],[213,492,112,32,1]]],["Geser lalu mundur",26,[290.8,444.1,0],0,[162,378,48,136],[[218,390,32,112,1],[122,390,32,112,1],[322,410,14,114,3],[322,278,14,70,3],[138,260,18,44,3],[217,293,18,44,3],[219,354,18,18,2],[138,316,18,44,3],[31,11,18,18,2],[41,137,18,18,2],[315,38,32,112,1]]],["Geser lalu mundur",27,[107.1,437.5,0],0,[221,379,46,134],[[185,390,32,112,1],[271,390,32,112,1],[135,393,14,126,3],[65,456,14,82,3],[272,327,18,44,3],[137,356,18,18,2],[16,79,18,18,2],[41,102,32,112,1],[307,272,32,112,1],[4,397,16,70,3]]],["Putar balik lalu mundur",27,[252.6,450.1,0],-3.1416,[92,14,46,134],[[56,25,32,112,1],[281,343,14,119,3],[211,448,14,71,3],[148,46,18,18,2],[201,215,18,18,2],[280,486,18,44,3],[77,412,112,32,1],[315,298,32,112,1],[329,34,18,18,2]]],["Putar balik lalu mundur",28,[247.8,448.6,0],-3.1416,[65,13,46,134],[[25,24,32,112,1],[279,244,14,104,3],[276,362,14,103,3],[119,36,18,18,2],[203,273,18,18,2],[202,484,18,44,3],[201,396,18,18,2],[335,469,18,18,2],[150,15,18,18,2],[152,354,32,112,1]]],["Maju ke stall",11,[144.7,438.7,0],0,[122,76,46,134],[[172,87,32,112,1],[82,87,32,112,1],[103,330,14,115,3],[173,359,14,65,3],[173,482,18,18,2],[176,260,18,18,2],[176,439,18,18,2],[96,253,18,18,2],[173,292,18,44,3],[176,226,18,18,2],[63,412,16,93,3],[91,450,18,18,2]]],["Maju ke stall",11,[235.8,437.4,0],0,[213,47,46,134],[[263,58,32,112,1],[177,58,32,112,1],[0,389,210,14,3],[264,411,14,79,3],[264,234,14,65,3],[194,238,14,119,3],[263,208,18,18,2],[187,474,18,18,2],[189,207,18,18,2],[189,362,18,18,2],[265,314,18,18,2],[266,372,18,18,2],[134,188,32,112,1],[34,472,89,16,3],[99,19,18,18,2]]],["Belok ke stall",13,[260.4,397.3,-1.5708],0,[52,75,48,134],[[104,86,32,112,1],[12,86,32,112,1],[293,425,64,14,3],[203,425,79,14,3],[174,427,18,18,2],[221,353,18,18,2],[299,349,18,18,2],[121,304,18,18,2],[226,183,16,94,3],[259,496,18,18,2],[286,25,32,112,1],[139,19,86,16,3]]],["Belok ke stall",13,[260.7,382.6,-1.5708],0,[58,34,46,132],[[112,44,32,112,1],[22,44,32,112,1],[264,341,94,14,3],[172,338,60,14,3],[320,413,18,18,2],[115,214,18,18,2],[113,175,18,18,2],[261,411,18,18,2],[195,64,83,16,3],[268,86,76,16,3],[29,486,112,32,1],[156,279,112,32,1]]],["Mundur lurus",14,[186.3,71.6,0],0,[164,305,44,132],[[124,315,32,112,1],[216,315,32,112,1],[144,108,14,65,3],[214,124,14,97,3],[144,197,14,76,3],[215,248,18,44,3],[138,290,18,18,2],[216,226,18,18,2],[273,469,70,16,3],[58,492,92,16,3],[33,214,32,112,1]]],["Mundur lurus",16,[241.2,62.1,0],0,[219,349,44,132],[[183,359,32,112,1],[267,359,32,112,1],[199,237,14,66,3],[269,133,14,62,3],[199,122,14,98,3],[269,204,18,44,3],[272,277,18,18,2],[267,311,18,18,2],[268,252,18,18,2],[196,322,18,18,2],[29,199,56,16,3],[148,28,61,16,3],[189,78,18,18,2],[336,257,16,83,3]]],["Maju ke stall",11,[131.7,410.3,0],0,[110,17,44,132],[[70,27,32,112,1],[162,27,32,112,1],[160,270,14,89,3],[90,373,14,105,3],[86,260,18,18,2],[160,467,18,18,2],[159,407,18,18,2],[84,312,18,18,2],[187,227,58,16,3],[278,358,32,112,1],[316,69,32,112,1],[23,44,32,112,1]]],["Slalom ke stall",12,[150.6,440.8,0],0,[180,36,42,130],[[140,45,32,112,1],[234,45,32,112,1],[191,375,14,117,3],[106,456,14,79,3],[155,169,14,62,3],[180,496,18,18,2],[142,275,18,18,2],[231,170,18,18,2],[214,309,18,18,2],[203,342,18,18,2],[278,332,18,18,2],[16,252,32,112,1],[323,286,18,18,2],[341,51,18,18,2]]],["Maju ke stall",11,[239.6,120.69999999999999,-3.1416],-3.1416,[219,364,42,130],[[179,373,32,112,1],[269,373,32,112,1],[198,148,14,77,3],[268,10,14,96,3],[268,127,14,78,3],[194,260,18,18,2],[268,259,18,18,2],[191,48,18,18,2],[268,292,18,18,2],[110,81,18,18,2],[332,20,16,94,3]]],["Slalom ke stall",12,[219,437.5,0],0,[118,17,44,131],[[170,27,32,112,1],[74,27,32,112,1],[247,421,14,119,3],[177,460,14,80,3],[177,200,18,18,2],[172,156,18,18,2],[148,336,18,18,2],[170,386,18,44,3],[247,392,18,18,2],[261,268,18,18,2],[296,358,18,18,2]]],["Mundur lurus",14,[210.6,68.6,0],0,[189,303,44,132],[[241,313,32,112,1],[149,313,32,112,1],[239,154,14,104,3],[169,206,14,63,3],[169,85,14,106,3],[238,265,18,18,2],[239,128,18,18,2],[33,42,18,18,2],[107,326,18,18,2],[26,226,32,112,1],[281,217,18,18,2]]],["Putar balik lalu mundur",27,[264,431.2,0],-3.1416,[109,27,44,132],[[73,37,32,112,1],[289,302,71,14,3],[0,302,104,14,3],[289,199,14,93,3],[225,391,14,119,3],[225,277,14,87,3],[289,331,14,63,3],[166,288,18,18,2],[289,488,18,18,2],[218,225,18,18,2],[169,247,18,18,2],[293,427,18,18,2],[291,449,18,18,2],[196,186,18,18,2],[36,41,32,112,1],[26,177,32,112,1],[322,137,32,112,1],[302,52,16,99,3],[118,435,18,18,2]]],["Slalom ke stall",12,[282,448.8,0],0,[187,29,46,133],[[237,40,32,112,1],[147,40,32,112,1],[307,420,53,14,3],[0,420,257,14,3],[307,460,14,72,3],[243,464,14,62,3],[308,396,18,18,2],[239,441,18,18,2],[241,172,18,18,2],[246,218,18,18,2],[221,357,18,18,2],[285,20,18,18,2],[64,324,18,18,2],[14,157,16,71,3],[113,10,16,62,3]]],["Slalom ke stall",12,[265.2,450.1,0],0,[189,43,43,130],[[236,52,32,112,1],[149,52,32,112,1],[289,440,71,14,3],[0,440,239,14,3],[229,468,14,62,3],[290,463,14,64,3],[292,413,18,18,2],[245,242,18,18,2],[216,404,18,18,2],[192,333,18,18,2],[78,521,18,18,2],[154,245,18,18,2],[306,199,32,112,1]]],["Geser lalu mundur",24,[105.3,436.6,0],0,[206,300,42,130],[[170,309,32,112,1],[252,309,32,112,1],[258,116,14,109,3],[66,457,14,61,3],[133,366,14,70,3],[64,345,14,76,3],[134,482,18,44,3],[253,253,18,18,2],[130,440,18,18,2],[62,427,18,18,2],[295,301,32,112,1],[8,126,18,18,2],[325,16,18,18,2],[73,39,18,18,2]]],["Mundur lurus",15,[75,87,0],0,[54,337,42,130],[[18,346,32,112,1],[100,346,32,112,1],[99,256,261,14,3],[36,164,14,68,3],[100,139,14,72,3],[30,249,18,18,2],[28,291,18,18,2],[100,309,18,18,2],[100,278,18,18,2],[194,286,68,16,3],[159,306,16,104,3],[271,380,18,18,2]]],["Mundur lurus",18,[187.3,53.3,0],0,[166,390,42,130],[[130,399,32,112,1],[212,399,32,112,1],[212,99,14,78,3],[148,101,14,88,3],[212,187,14,67,3],[148,215,14,67,3],[141,307,18,44,3],[210,308,18,44,3],[211,276,18,18,2],[211,363,18,18,2],[275,7,32,112,1],[4,254,112,32,1],[282,192,32,112,1]]],["Putar balik lalu mundur",27,[254,449.5,0],-3.1416,[78,14,40,128],[[38,22,32,112,1],[0,247,69,14,3],[215,436,14,61,3],[144,193,14,70,3],[215,247,14,98,3],[279,454,14,70,3],[280,264,18,44,3],[278,423,18,18,2],[167,157,18,18,2],[281,198,18,44,3],[313,52,32,112,1],[123,471,18,18,2],[35,382,32,112,1]]],["Putar balik lalu mundur",25,[255.7,448.1,0],-3.1416,[102,28,40,128],[[66,36,32,112,1],[280,222,14,78,3],[281,418,14,71,3],[217,280,14,95,3],[75,185,14,91,3],[213,439,18,18,2],[190,201,18,18,2],[213,497,18,18,2],[283,363,18,44,3],[325,54,16,84,3],[166,432,18,18,2],[294,154,18,18,2],[326,281,32,112,1]]],["Mundur lurus",17,[116,478.6,-3.1416],-3.1416,[96,31,40,128],[[144,39,32,112,1],[60,39,32,112,1],[77,171,14,70,3],[77,319,14,81,3],[144,337,14,79,3],[74,263,18,18,2],[143,269,18,18,2],[144,180,18,44,3],[144,295,18,18,2],[144,246,18,18,2],[17,504,18,18,2],[281,493,18,18,2],[216,320,63,16,3],[248,474,16,61,3]]]];
+/* 100 level dibuat otomatis oleh "sopir hantu" dengan fisika yang sama (pcc2/gen.js): setiap level sudah dibuktikan bisa
+   diselesaikan, stall tujuan = posisi akhir rute, rintangan hanya di luar jalur + jarak aman yang makin sempit tiap level.
+   Format: [nama, par detik, [x,y,arah mulai], arah parkir, [x,y,w,h stall], [[x,y,w,h,jenis 1=CC 2=cone 3=tembok],...]] */
+const PCC_GROUPS=["Pemanasan · maju ke stall","Belokan","Slalom","Mundur lurus","Gerbang & belokan","Geser lalu mundur","Belokan sempit","Putar balik & mundur","Campuran","Ahli"];
+function pccLevel(i){ const r=PCC_LV[i]; if(!r) return null; const K={1:"cc",2:"cone",3:"wall"};
+  return {n:r[0], par:r[1], s:{x:r[2][0],y:r[2][1],a:r[2][2]}, dir:r[3], t:{x:r[4][0],y:r[4][1],w:r[4][2],h:r[4][3]}, o:r[5].map(q=>({x:q[0],y:q[1],w:q[2],h:q[3],k:K[q[4]]}))}; }
 let _pcc=null;
-function pccBest(){ try{ return JSON.parse(localStorage.getItem("radar_pcc")||"{}")||{}; }catch(e){ return {}; } }
+function pccBest(){ try{ return JSON.parse(localStorage.getItem("radar_pcc2")||"{}")||{}; }catch(e){ return {}; } }
+function pccStars(i,t){ const L=PCC_LV[i]; if(!L||!t) return 0; const p=L[1]; return t<=p?3:t<=p*1.6?2:1; }
 function pccOpen(el){
   if(!el) return; pccStop();
-  const B=pccBest(), un=Math.min(PCC_LV.length-1, +B.u||0);
-  el.innerHTML=`<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">Parkirkan car carrier ke kotak hijau tanpa menabrak. Tekan ◀ ▶ untuk belok, ▲ maju, ▼ mundur.</div>
-    ${PCC_LV.map((L,i)=>{ const b=B["l"+i]; const ok=i<=un; return `<button type="button" ${ok?`onclick="pccPlay(${i})"`:"disabled"} style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:${ok?"var(--card,#fff)":"#f3f4f6"};border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:6px;color:inherit;opacity:${ok?1:.55};">
-      <b style="font-size:18px;width:28px;">${i+1}</b><span style="flex:1;"><b>${L.n}</b><br><small style="color:var(--text-dim);">${b?("Terbaik "+b.toFixed(1)+" dtk · "+"⭐".repeat(pccStars(i,b))):(ok?"Belum dimainkan":"🔒 Selesaikan level sebelumnya")}</small></span></button>`; }).join("")}`;
+  const B=pccBest(), un=Math.min(PCC_LV.length-1, +B.u||0); let tot=0; for(let i=0;i<PCC_LV.length;i++) tot+=pccStars(i,B["l"+i]);
+  let h=`<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">Parkirkan car carrier (kepala + rak gandeng) ke kotak hijau tanpa menabrak. ◀ ▶ belok, ▲ maju, ▼ mundur. Saat mundur, rak berbelok berlawanan arah setir — awas <b>jackknife</b>.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;"><b>⭐ ${tot} / ${PCC_LV.length*3}</b><span style="color:var(--text-dim);">Terbuka ${un+1} / ${PCC_LV.length}</span></div>`;
+  for(let gI=0; gI*10<PCC_LV.length; gI++){
+    h+=`<div style="font-size:12px;font-weight:800;margin:10px 0 6px;color:var(--text-dim);">${gI*10+1}–${Math.min(PCC_LV.length,gI*10+10)} · ${PCC_GROUPS[gI]||""}</div><div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">`;
+    for(let i=gI*10;i<Math.min(PCC_LV.length,gI*10+10);i++){ const b=B["l"+i], ok=i<=un, st=pccStars(i,b);
+      h+=`<button type="button" ${ok?`onclick="pccPlay(${i})"`:"disabled"} title="${xlEsc(PCC_LV[i][0])}${b?" · terbaik "+b.toFixed(1)+" dtk":""}" style="border:1px solid ${i===un&&!b?"#F59E0B":"var(--border)"};border-radius:10px;padding:8px 2px;background:${ok?(b?"#F0FDF4":"var(--card,#fff)"):"#f3f4f6"};color:inherit;opacity:${ok?1:.5};">
+        <div style="font-size:16px;font-weight:800;line-height:1.1;">${ok?i+1:"🔒"}</div><div style="font-size:10px;letter-spacing:-1px;color:#F59E0B;min-height:13px;">${b?"★".repeat(st)+"☆".repeat(3-st):ok?"":""}</div></button>`; }
+    h+=`</div>`;
+  }
+  el.innerHTML=h;
 }
-function pccStars(i,t){ const p=PCC_LV[i].par; return t<=p?3:t<=p*1.8?2:1; }
 function pccPlay(i){
   const el=document.getElementById("funBody"); if(!el) return; pccStop();
-  const L=PCC_LV[i];
-  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px;"><b>Level ${i+1} · ${L.n}</b><span id="pccHud">0.0 dtk</span></div>
+  const L=pccLevel(i); if(!L) return;
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px;gap:8px;"><b>Level ${i+1} · ${xlEsc(L.n)}</b><span id="pccHud" style="white-space:nowrap;">0.0 dtk</span></div>
     <div style="position:relative;"><canvas id="pccCv" style="width:100%;max-width:420px;display:block;margin:0 auto;border-radius:12px;touch-action:none;background:#3a3f47;"></canvas>
       <div id="pccMsg" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;"></div></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:10px;user-select:none;-webkit-user-select:none;">
       ${[["L","◀"],["R","▶"],["D","▼ Mundur"],["U","▲ Maju"]].map(([k,t])=>`<button type="button" data-k="${k}" class="btn ${k==="U"?"btn-primary":"btn-outline"}" style="padding:16px 4px;font-size:16px;touch-action:none;">${t}</button>`).join("")}
     </div>
-    <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="pccOpen(document.getElementById('funBody'))">☰ Pilih level</button>`;
+    <div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn btn-outline btn-sm" onclick="pccOpen(document.getElementById('funBody'))">☰ Pilih level</button><button type="button" class="btn btn-outline btn-sm" onclick="pccPlay(${i})">↻ Ulang</button></div>`;
   const cv=document.getElementById("pccCv"), dpr=Math.min(2, window.devicePixelRatio||1);
   cv.width=PCC_W*dpr; cv.height=PCC_H*dpr; const ctx=cv.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
-  const g={i, L, ctx, k:{}, x:L.s.x, y:L.s.y, a:L.s.a, v:0, st:0, t:0, ok:0, end:false, raf:0, last:0, crash:null};
+  const g=Object.assign(pccRig(L.s.x,L.s.y,L.s.a), {i, L, ctx, k:{}, t:0, ok:0, end:false, raf:0, last:0, crash:null, cars:pccCarCols(i)});
   el.querySelectorAll("[data-k]").forEach(b=>{ const k=b.dataset.k;
     const on=e=>{ e.preventDefault(); g.k[k]=true; }, off=e=>{ e.preventDefault(); g.k[k]=false; };
     b.addEventListener("pointerdown",on); b.addEventListener("pointerup",off); b.addEventListener("pointerleave",off); b.addEventListener("pointercancel",off); b.addEventListener("contextmenu",e=>e.preventDefault()); });
@@ -13585,73 +13650,89 @@ function pccPlay(i){
   _pcc=g; g.last=performance.now(); const loop=ts=>{ if(_pcc!==g) return; const dt=Math.min(0.05,(ts-g.last)/1000); g.last=ts; pccStep(g,dt); pccDraw(g); g.raf=requestAnimationFrame(loop); }; g.raf=requestAnimationFrame(loop);
 }
 function pccStop(){ const g=_pcc; if(!g) return; _pcc=null; try{ cancelAnimationFrame(g.raf); }catch(e){} try{ window.removeEventListener("keydown",g.kd); window.removeEventListener("keyup",g.ku); }catch(e){} }
-function pccCorners(x,y,a,l,w){ const c=Math.cos(a), s=Math.sin(a), fx=s, fy=-c, rx=c, ry=s, P=[];
-  for(const [f,r] of [[.5,-.5],[.5,.5],[-.5,.5],[-.5,-.5],[.5,0],[-.5,0],[.17,-.5],[.17,.5],[-.17,-.5],[-.17,.5]]) P.push([x+fx*f*l+rx*r*w, y+fy*f*l+ry*r*w]);
-  return P; }
-function pccInOBB(px,py,g){ const c=Math.cos(g.a), s=Math.sin(g.a), dx=px-g.x, dy=py-g.y; const f=dx*s-dy*c, r=dx*c+dy*s; return Math.abs(f)<=PCC_TL/2 && Math.abs(r)<=PCC_TW/2; }
-function pccHit(g){
-  const P=pccCorners(g.x,g.y,g.a,PCC_TL,PCC_TW);
-  for(const [px,py] of P){ if(px<0||py<0||px>PCC_W||py>PCC_H) return "Keluar area"; }
-  for(const o of g.L.o){
-    for(const [px,py] of P) if(px>o.x && px<o.x+o.w && py>o.y && py<o.y+o.h) return o.k==="cc"?"Menabrak CC lain":o.k==="cone"?"Menabrak cone":"Menabrak tembok";
-    for(const [px,py] of [[o.x,o.y],[o.x+o.w,o.y],[o.x,o.y+o.h],[o.x+o.w,o.y+o.h]]) if(pccInOBB(px,py,g)) return o.k==="cc"?"Menabrak CC lain":o.k==="cone"?"Menabrak cone":"Menabrak tembok";
-  }
-  return "";
-}
-function pccParked(g){
-  const t=g.L.t, P=pccCorners(g.x,g.y,g.a,PCC_TL,PCC_TW).slice(0,4);
-  if(!P.every(([px,py])=>px>=t.x-1 && px<=t.x+t.w+1 && py>=t.y-1 && py<=t.y+t.h+1)) return false;
-  const want=t.w>t.h?Math.PI/2:0, d=a=>{ let x=((a%(2*Math.PI))+2*Math.PI)%(2*Math.PI); return Math.min(x, 2*Math.PI-x); };
-  if(g.L.dir!=null) return d(g.a-g.L.dir)<0.22;
-  return Math.min(d(g.a-want), d(g.a-want-Math.PI))<0.22;
-}
+function pccCarCols(i){ const P=["#F8FAFC","#B91C1C","#9CA3AF","#111827","#2563EB","#F59E0B","#E5E7EB","#16A34A"], out=[]; let s=(i+1)*2654435761>>>0; for(let j=0;j<5;j++){ s=(Math.imul(s,1103515245)+12345)>>>0; out.push(P[(s>>>16)%P.length]); } return out; }
 function pccStep(g,dt){
   if(g.end) return;
-  const k=g.k; g.t+=dt;
-  if(k.U) g.v=Math.min(85, g.v+(g.v<0?260:110)*dt); else if(k.D) g.v=Math.max(-45, g.v-(g.v>0?260:90)*dt); else { const dr=150*dt; g.v=Math.abs(g.v)<=dr?0:g.v-Math.sign(g.v)*dr; }
-  const sm=0.62; if(k.L) g.st=Math.max(-sm, g.st-2.4*dt); else if(k.R) g.st=Math.min(sm, g.st+2.4*dt); else { const r=3*dt; g.st=Math.abs(g.st)<=r?0:g.st-Math.sign(g.st)*r; }
-  g.a+=g.v/PCC_WB*Math.tan(g.st)*dt; g.x+=Math.sin(g.a)*g.v*dt; g.y-=Math.cos(g.a)*g.v*dt;
-  const h=pccHit(g); if(h){ g.end=true; g.crash=h; pccMsg(g,false,h); return; }
-  if(pccParked(g) && Math.abs(g.v)<6){ g.ok+=dt; if(g.ok>=0.8){ g.end=true; pccWin(g); } } else g.ok=0;
-  const hud=document.getElementById("pccHud"); if(hud) hud.textContent=g.t.toFixed(1)+" dtk";
+  g.t+=dt; g.acc=(g.acc||0)+dt;   /* langkah tetap 1/60 detik — sama persis dengan sopir hantu pembuat level */
+  while(g.acc>=1/60-1e-9){ g.acc-=1/60; pccPhys(g,g.k,1/60); const w=pccHitWhy(g,g.L.o); if(w){ g.end=true; g.crash=w; pccMsg(g,false,w); return; } }
+  if(pccInTarget(g,g.L.t,g.L.dir) && Math.abs(g.v)<6){ g.ok+=dt; if(g.ok>=0.8){ g.end=true; pccWin(g); } } else g.ok=0;
+  const hud=document.getElementById("pccHud"); if(hud){ const ph=Math.round(Math.abs(pccWrap(g.a-g.b))*180/Math.PI); hud.innerHTML=`<span style="color:${ph>55?"#DC2626":ph>35?"#D97706":"var(--text-dim)"};font-size:12px;">sudut rak ${ph}°</span> · ${g.t.toFixed(1)} dtk`; }
 }
 function pccWin(g){
   const B=pccBest(), key="l"+g.i, best=!B[key] || g.t<B[key];
-  if(best) B[key]=+g.t.toFixed(1); B.u=Math.max(+B.u||0, Math.min(PCC_LV.length-1, g.i+1)); try{ localStorage.setItem("radar_pcc", JSON.stringify(B)); }catch(e){}
+  if(best) B[key]=+g.t.toFixed(1); B.u=Math.max(+B.u||0, Math.min(PCC_LV.length-1, g.i+1)); try{ localStorage.setItem("radar_pcc2", JSON.stringify(B)); }catch(e){}
   pccMsg(g,true,(best?"Rekor baru! ":"")+g.t.toFixed(1)+" dtk "+"⭐".repeat(pccStars(g.i,g.t)));
 }
 function pccMsg(g,ok,txt){
   const m=document.getElementById("pccMsg"); if(!m) return; m.style.display="flex";
   const nx=ok && g.i<PCC_LV.length-1;
-  m.innerHTML=`<div style="background:rgba(255,255,255,.96);border-radius:16px;padding:16px 18px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:80%;">
-    <div style="font-size:36px;">${ok?"🅿️":"💥"}</div><div style="font-weight:800;font-size:18px;margin:4px 0;">${ok?"Parkir rapi!":"Nabrak!"}</div><div style="font-size:13px;color:#4b5563;">${xlEsc(txt)}</div>
-    <div style="display:flex;gap:8px;margin-top:12px;"><button type="button" class="btn btn-outline" onclick="pccPlay(${g.i})">↻ Ulang</button>${nx?`<button type="button" class="btn btn-primary" onclick="pccPlay(${g.i+1})">Lanjut ▶</button>`:""}</div></div>`;
+  m.innerHTML=`<div style="background:rgba(255,255,255,.96);border-radius:16px;padding:16px 18px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:82%;">
+    <div style="font-size:36px;">${ok?"🅿️":"💥"}</div><div style="font-weight:800;font-size:18px;margin:4px 0;">${ok?"Parkir rapi!":"Gagal!"}</div><div style="font-size:13px;color:#4b5563;">${xlEsc(txt)}</div>
+    <div style="display:flex;gap:8px;margin-top:12px;justify-content:center;"><button type="button" class="btn btn-outline" onclick="pccPlay(${g.i})">↻ Ulang</button>${nx?`<button type="button" class="btn btn-primary" onclick="pccPlay(${g.i+1})">Lanjut ▶</button>`:ok?`<button type="button" class="btn btn-primary" onclick="pccOpen(document.getElementById('funBody'))">🏆 Selesai</button>`:""}</div></div>`;
+}
+/* ---------- gambar (tampak atas) ---------- */
+function pccRR(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function pccDrawCar(c,x,y,w,l,col){ pccRR(c,x,y,w,l,3); c.fillStyle=col; c.fill(); c.fillStyle="rgba(15,23,42,.55)"; c.fillRect(x+2,y+3,w-4,4); c.fillRect(x+2,y+l-6,w-4,3); c.fillStyle="rgba(255,255,255,.18)"; c.fillRect(x+2,y+8,w-4,l-15); }
+/* rak semi-trailer: titik asal = kingpin, depan = −y */
+function pccDrawTrailer(c,cols){
+  const w=PCC_TW, y0=-PCC_TF, y1=PCC_L2+PCC_TB;
+  c.fillStyle="#111"; for(const yy of [PCC_L2-8,PCC_L2+4]){ c.fillRect(-w/2-3,yy-4,4,9); c.fillRect(w/2-1,yy-4,4,9); }
+  c.fillStyle="#4B5563"; c.fillRect(-w/2,y0,w,y1-y0); c.fillStyle="#9CA3AF"; c.fillRect(-w/2,y0,3,y1-y0); c.fillRect(w/2-3,y0,3,y1-y0);
+  const n=4, sp=(y1-y0-6)/n; for(let j=0;j<n;j++) pccDrawCar(c,-w/2+4, y0+3+j*sp, w-8, sp-4, cols[j%cols.length]);
+  c.fillStyle="#EF4444"; c.fillRect(-w/2+1,y1-2,5,2); c.fillRect(w/2-6,y1-2,5,2);
+}
+/* kepala truk: titik asal = poros belakang, depan = −y. Bagian bawah (roda, sasis, fifth wheel) digambar sebelum rak, kabin sesudahnya */
+function pccDrawTractorBase(c,st){
+  const w=PCC_CW;
+  c.fillStyle="#111"; c.fillRect(-w/2-2,-5,4,10); c.fillRect(w/2-2,-5,4,10);
+  for(const sx of [-1,1]){ c.save(); c.translate(sx*(w/2-1),-PCC_WB); c.rotate(st); c.fillRect(-2,-5,4,10); c.restore(); }
+  c.fillStyle="#374151"; c.fillRect(-8,-PCC_WB+4,16,PCC_WB+PCC_CB-4);
+  c.fillStyle="#1F2937"; c.beginPath(); c.arc(0,-PCC_HOFF,6,0,Math.PI*2); c.fill();
+}
+function pccDrawCab(c,col){
+  const w=PCC_CW;
+  pccRR(c,-w/2,-PCC_CF,w,21,4); c.fillStyle=col; c.fill();
+  c.fillStyle="#BFDBFE"; c.fillRect(-w/2+3,-PCC_CF+2,w-6,5); c.fillStyle="rgba(0,0,0,.18)"; c.fillRect(-w/2+3,-PCC_CF+12,w-6,7);
+  c.fillStyle="#111"; c.fillRect(-w/2-3,-PCC_CF+7,3,3); c.fillRect(w/2,-PCC_CF+7,3,3);
+  c.fillStyle="#FBBF24"; for(const xx of [-7,-2.5,2,6.5]) c.fillRect(xx,-PCC_CF+9,2,2);
+}
+function pccDrawRig(c,g,cols,cab){
+  const [hx,hy]=pccHitch(g);
+  c.save(); c.translate(g.x,g.y); c.rotate(g.a); pccDrawTractorBase(c,g.st); c.restore();
+  c.save(); c.translate(hx,hy); c.rotate(g.b); c.fillStyle="rgba(0,0,0,.28)"; c.fillRect(-PCC_TW/2+3,-PCC_TF+4,PCC_TW,PCC_TF+PCC_L2+PCC_TB); pccDrawTrailer(c,cols); c.restore();
+  c.save(); c.translate(g.x,g.y); c.rotate(g.a); pccDrawCab(c,cab); c.restore();
+}
+function pccDrawParked(c,o,idx){
+  const vert=o.h>=o.w, len=vert?o.h:o.w, wid=vert?o.w:o.h, flip=((o.x+o.y)%2)?1:0;
+  c.save(); c.translate(o.x+o.w/2, o.y+o.h/2); c.rotate((vert?0:Math.PI/2)+(flip?Math.PI:0)); const s=Math.min(wid/28, len/(PCC_CF+PCC_HOFF+PCC_L2+PCC_TB)); c.scale(s,s);
+  const tot=PCC_CF+PCC_HOFF+PCC_L2+PCC_TB, y0=-tot/2+PCC_CF;   // poros belakang kepala
+  c.save(); c.translate(0,y0); pccDrawTractorBase(c,0); c.restore();
+  c.save(); c.translate(0,y0-PCC_HOFF); pccDrawTrailer(c,pccCarCols(idx+7)); c.restore();
+  c.save(); c.translate(0,y0); pccDrawCab(c,["#2563EB","#16A34A","#F59E0B","#7C3AED"][idx%4]); c.restore();
+  c.restore();
 }
 function pccDraw(g){
   const c=g.ctx, L=g.L;
   c.fillStyle="#3a3f47"; c.fillRect(0,0,PCC_W,PCC_H);
-  c.strokeStyle="rgba(255,255,255,.12)"; c.lineWidth=2; c.setLineDash([14,12]); c.beginPath(); c.moveTo(PCC_W/2,170); c.lineTo(PCC_W/2,PCC_H-20); c.stroke(); c.setLineDash([]);
-  const t=L.t; c.fillStyle=g.ok>0?"rgba(34,197,94,.45)":"rgba(34,197,94,.22)"; c.fillRect(t.x,t.y,t.w,t.h);
+  c.strokeStyle="rgba(255,255,255,.06)"; c.lineWidth=1; for(let x=30;x<PCC_W;x+=60){ c.beginPath(); c.moveTo(x,0); c.lineTo(x,PCC_H); c.stroke(); }
+  const t=L.t; c.fillStyle=g.ok>0?"rgba(34,197,94,.45)":"rgba(34,197,94,.20)"; c.fillRect(t.x,t.y,t.w,t.h);
   c.strokeStyle="#22c55e"; c.lineWidth=3; c.setLineDash([8,6]); c.strokeRect(t.x,t.y,t.w,t.h); c.setLineDash([]);
-  c.fillStyle="rgba(255,255,255,.85)"; c.font="800 22px Inter,Arial,sans-serif"; c.textAlign="center"; c.textBaseline="middle"; c.fillText("P", t.x+t.w/2, t.y+t.h/2);
-  if(L.dir!=null){ c.font="700 10px Inter,Arial,sans-serif"; c.fillText("hadap ke atas", t.x+t.w/2, t.y+t.h/2+18); }
-  for(const o of L.o){
-    if(o.k==="cc"){ c.fillStyle="#9ca3af"; c.fillRect(o.x,o.y,o.w,o.h); const vert=o.h>o.w, n=3; const cols=["#ef4444","#f8fafc","#3b82f6","#111827"];
-      for(let j=0;j<n;j++){ c.fillStyle=cols[(j+o.x)%cols.length]; if(vert) c.fillRect(o.x+5, o.y+8+j*(o.h-16)/n, o.w-10, (o.h-16)/n-6); else c.fillRect(o.x+8+j*(o.w-16)/n, o.y+5, (o.w-16)/n-6, o.h-10); }
-      c.strokeStyle="#4b5563"; c.lineWidth=1.5; c.strokeRect(o.x,o.y,o.w,o.h); }
+  { const cx=t.x+t.w/2, cy=t.y+t.h/2, [dx,dy]=pccDir(L.dir), ln=Math.min(34,Math.max(t.w,t.h)/2-12);
+    c.strokeStyle="rgba(255,255,255,.75)"; c.fillStyle="rgba(255,255,255,.75)"; c.lineWidth=3; c.beginPath(); c.moveTo(cx-dx*ln,cy-dy*ln); c.lineTo(cx+dx*ln,cy+dy*ln); c.stroke();
+    const px=-dy, py=dx; c.beginPath(); c.moveTo(cx+dx*(ln+8),cy+dy*(ln+8)); c.lineTo(cx+dx*ln+px*7,cy+dy*ln+py*7); c.lineTo(cx+dx*ln-px*7,cy+dy*ln-py*7); c.closePath(); c.fill();
+    c.font="800 18px Inter,Arial,sans-serif"; c.textAlign="center"; c.textBaseline="middle"; c.fillText("P", cx-dx*(ln+14)+(Math.abs(dx)>0.5?0:0), cy-dy*(ln+14)); }
+  L.o.forEach((o,idx)=>{
+    if(o.k==="cc") pccDrawParked(c,o,idx);
     else if(o.k==="cone"){ c.fillStyle="#f97316"; c.beginPath(); c.arc(o.x+o.w/2,o.y+o.h/2,o.w/2,0,Math.PI*2); c.fill(); c.fillStyle="#fff"; c.beginPath(); c.arc(o.x+o.w/2,o.y+o.h/2,o.w/5,0,Math.PI*2); c.fill(); }
     else { c.fillStyle="#d1d5db"; c.fillRect(o.x,o.y,o.w,o.h); c.save(); c.beginPath(); c.rect(o.x,o.y,o.w,o.h); c.clip(); c.strokeStyle="#f59e0b"; c.lineWidth=6; for(let z=-o.h;z<o.w;z+=16){ c.beginPath(); c.moveTo(o.x+z,o.y+o.h); c.lineTo(o.x+z+o.h,o.y); c.stroke(); } c.restore(); }
-  }
-  c.save(); c.translate(g.x,g.y); c.rotate(g.a);
-  const l=PCC_TL, w=PCC_TW;
-  c.fillStyle="rgba(0,0,0,.35)"; c.fillRect(-w/2+3,-l/2+4,w,l);
-  c.fillStyle="#111"; for(const yy of [-l/2+10,-l/2+30,l/2-28,l/2-14]){ c.fillRect(-w/2-3,yy,4,9); c.fillRect(w/2-1,yy,4,9); }
-  c.fillStyle="#6b7280"; c.fillRect(-w/2,-l/2+20,w,l-20);
-  const cc=["#f8fafc","#ef4444","#3b82f6"]; for(let j=0;j<3;j++){ c.fillStyle=cc[j]; c.fillRect(-w/2+4,-l/2+26+j*22,w-8,17); c.fillStyle="rgba(0,0,0,.25)"; c.fillRect(-w/2+6,-l/2+30+j*22,w-12,5); }
-  c.fillStyle="#E60012"; c.fillRect(-w/2+1,-l/2,w-2,20); c.fillStyle="#bfdbfe"; c.fillRect(-w/2+4,-l/2+3,w-8,6);
-  c.restore();
-  if(g.k.U||g.k.D){ /* indikator kecepatan */ }
+  });
+  pccDrawRig(c,g,g.cars,"#E60012");
+  if(!g.end && g.t<3.5){   /* petunjuk singkat di awal level */
+    const n=L.n||"", tip=/^Mundur/.test(n)?"▼ MUNDUR pelan · rak belok kebalikan setir":/mundur/i.test(n)?"Maju dulu, lalu ▼ MUNDUR ke kotak P":"Tahan ▲ MAJU, ikuti panah ke kotak P";
+    c.globalAlpha=Math.min(1,(3.5-g.t)/0.6); pccRR(c,20,10,PCC_W-40,30,10); c.fillStyle="rgba(15,23,42,.78)"; c.fill();
+    c.fillStyle="#fff"; c.font="700 12px Inter,Arial,sans-serif"; c.textAlign="center"; c.textBaseline="middle"; c.fillText(tip,PCC_W/2,25,PCC_W-56); c.globalAlpha=1; }
 }
+
 /* ===== GAME BALAP TOL — "Surya Cipta → KIIC" (19 Nov 2026, permintaan Khairul) =====
    Start GT Karawang Timur (KM 54, kawasan Surya Cipta), finish GT Karawang Barat (KM 47, kawasan KIIC): ±7 km arah Jakarta.
    19 Nov 09.00 — TANPA SERVER: tidak memakai Firebase sama sekali dan tidak memakai server lain.
