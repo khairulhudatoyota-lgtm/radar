@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="20 Nov 2026 02.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="20 Nov 2026 05.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4006,6 +4006,7 @@ function checkAbsenLocation(){
 }
 
 function renderOrderStall(){
+  if(ccGateView()) return renderCcGatePage();
   if(ccWaitOn()) return renderCcWait();
   const data = DB.get();
   const ccCards = ccCardsHtml(data);
@@ -13389,7 +13390,11 @@ function csAskTake(){
   render();
 }
 function ccTabbarSync(){
-  try{ if(!currentUser || currentUser.role!=="cc") return; const w=ccWaitOn();
+  try{ if(!currentUser || currentUser.role!=="cc") return;
+    if(ccGateView()){ if(activeTab!=="orderstall"){ activeTab="orderstall"; setTimeout(()=>{ try{ render(); }catch(e){} },0); }
+      document.querySelectorAll('#tabbar .tabbtn').forEach(b=>{ if(b.dataset.tab==="orderstall"){ b.style.display=""; b.textContent="🚚 Isi Plat"; } else b.style.display="none"; }); return; }
+    document.querySelectorAll('#tabbar .tabbtn').forEach(b=>{ if(b.dataset.tab==="display") b.style.display=""; });
+    const w=ccWaitOn();
     if(w && activeTab==="ccmap") activeTab="orderstall";
     document.querySelectorAll('#tabbar .tabbtn').forEach(b=>{ if(b.dataset.tab==="ccmap") b.style.display=w?"none":""; if(b.dataset.tab==="orderstall"){ const t=w?((ccWaitGet()||{}).mode==="serah"?"🔑 Diserahkan":(ccWaitGet()||{}).mode==="cs"?"🔁 Change Shift":"⏳ Menunggu Jadwal"):"Order Stall"; if(b.textContent!==t) b.textContent=t; } });
   }catch(e){}
@@ -14244,7 +14249,32 @@ function ccPlatCands(acc){
   });
   return out.sort((a,b)=>(b.me-a.me)||a.plat.localeCompare(b.plat)).slice(0,10);
 }
+/* 20 Nov 2026 05.10 (Khairul): sesudah login / dikeluarkan sistem / ganti shift, Driver CC hanya melihat SATU layar: isi plat truk.
+   Kolom plat paling atas (tidak perlu scroll), menu lain (Peta, Display, surat jalan, hiburan) muncul setelah plat diisi. */
+function ccGateView(){ return !!(currentUser && currentUser.role==="cc" && !ccPlatOk && !noPlatUser() && !ccWaitOn()); }
+function renderCcGatePage(){
+  const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), pr=getCcProfile();
+  const accLp=(acc&&acc.lp)||"", rec=ccRecentPlats(), C=ccPlatCands(acc), nm=(acc&&acc.name)||currentUser.name||currentUser.username;
+  const chip=(p,hl,sub)=>`<button type="button" class="btn ${hl?"btn-primary":"btn-outline"} btn-sm" style="width:auto;padding:8px 12px;font-weight:800;" onclick="window._cgDraft='${xlEsc(p)}';document.getElementById('cgPlat').value='${xlEsc(p)}';document.getElementById('cgPlat').focus();">${xlEsc(p)}${sub?`<span style="display:block;font-size:10px;font-weight:600;opacity:.8;">${xlEsc(sub)}</span>`:""}</button>`;
+  return `<div class="card" style="border:2px solid var(--navy,#0f213e);">
+    <h3 style="margin:0 0 2px;">🚚 Masukkan plat truk</h3>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Isi dulu plat truk yang kamu bawa sekarang. Surat jalan, peta, display, dan menu lain muncul setelah plat diisi.</div>
+    <div style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:#F1F5F9;margin-bottom:12px;">
+      <div style="font-size:26px;">👤</div><div style="flex:1;min-width:0;"><div style="font-size:11px;color:var(--text-dim);">Nama driver</div><div style="font-weight:800;font-size:16px;">${xlEsc(nm)}</div>${accLp?`<div style="font-size:12px;color:var(--text-dim);">LP ${xlEsc(accLp)}</div>`:""}</div>
+    </div>
+    <div class="field"><label>Nomor polisi truk</label><input id="cgPlat" type="text" placeholder="B 1234 ABC" autocapitalize="characters" autocomplete="off" value="${xlEsc(window._cgDraft||"")}" oninput="window._cgDraft=this.value" style="text-transform:uppercase;font-size:22px;font-weight:800;letter-spacing:1px;" onkeydown="if(event.key==='Enter')ccPlatGateSave()"></div>
+    ${accLp?`<input type="hidden" id="cgLp" value="${xlEsc(accLp)}">`:`<div class="field"><label>LP</label><select id="cgLp" onchange="window._cgLpDraft=this.value"><option value="">-- pilih LP --</option>${(d.lpList||[]).map(l=>`<option value="${xlEsc(l)}" ${(window._cgLpDraft||pr.lp)===l?"selected":""}>${xlEsc(l)}</option>`).join("")}</select></div>`}
+    <div id="cgMsg"></div>
+    <button type="button" class="btn btn-primary" style="font-size:17px;padding:14px;" onclick="ccPlatGateSave()">✔ Lanjut</button>
+    ${C.length?`<div style="font-size:12px;margin:14px 0 6px;color:var(--text-dim);">Atau ketuk plat dari Jadwal DCCP${accLp?" LP "+xlEsc(accLp):""}:</div><div style="display:flex;gap:8px;flex-wrap:wrap;">${C.map(x=>chip(x.plat,x.me,x.me?"nama kamu":"")).join("")}</div>`:""}
+    ${rec.length?`<div style="font-size:12px;margin:12px 0 6px;color:var(--text-dim);">Pernah dipakai di HP ini:</div><div style="display:flex;gap:8px;flex-wrap:wrap;">${rec.map(p=>chip(p,false,"")).join("")}</div>`:""}
+    <div style="text-align:center;margin-top:16px;"><button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="doLogout()">Bukan saya · Keluar</button></div>
+  </div>`;
+}
 function ccPlatGateOpen(cancelable){
+  if(!cancelable && currentUser && currentUser.role==="cc" && !ccPlatOk && !ccWaitOn()){   /* layar penuh, bukan modal (dari layar tunggu: tetap modal sesaat, langsung diisi otomatis) */
+    try{ closeModal(); }catch(e){} activeTab="orderstall"; render();
+    setTimeout(()=>{ try{ const i=document.getElementById("cgPlat"); if(i && !i.value) i.focus(); }catch(e){} },120); return; }
   const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), pr=getCcProfile();
   const accLp=(acc&&acc.lp)||"", rec=ccRecentPlats();
   showModal(`<h3 style="margin:0 0 4px;">🚚 Plat truk hari ini</h3>
@@ -14498,7 +14528,7 @@ function ccPlatGateSave(){
   if(shareTrk.on && trkKey(pr.plat)!==trkKey(plat)) stopShare(true);
   try{ localStorage.setItem(CCP_KEY, JSON.stringify({plat, lp, drvCode:pr.drvCode||""})); }catch(e){}
   try{ const r=[plat].concat(ccRecentPlats().filter(p=>p!==plat)).slice(0,4); localStorage.setItem(CC_PLATS_KEY, JSON.stringify(r)); }catch(e){}
-  ccPlatOk=true; closeModal(); ccWaitClear();
+  ccPlatOk=true; closeModal(); ccWaitClear(); window._cgDraft=""; window._cgLpDraft="";
   ccPlatRememberSave(plat); ccShiftPlatSave(plat);
   if(window._takeAutoMsg){ const m=window._takeAutoMsg; window._takeAutoMsg=null; setTimeout(()=>{ try{ alert("✔ "+m); }catch(e){} },300); }
   try{ syncCcProfileFromAccount(); }catch(e){}
