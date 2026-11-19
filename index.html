@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="19 Nov 2026 10.35";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="19 Nov 2026 10.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4864,7 +4864,7 @@ function renderDelivery(){
 
     <div class="dl-right"><div class="dlbatches" id="dlSecAktif">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
-    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}${dfLettersCardHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest, rekap unit)</summary><div style="margin-top:10px;">${absenLogCardHtml(data)}${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}${rkCardHtml()}${inputXlCardHtml(data,'batam')}</div></details></div>
+    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}${dfLettersCardHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${absenLogCardHtml(data)}${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}${inputXlCardHtml(data,'batam')}</div></details></div>
   `;
 }
 let dlUnitOpen={};
@@ -7924,7 +7924,7 @@ function inputXlCardHtml(data, defKind){
     </div>
     <div class="field"><label>Jenis unit</label><select id="ixKind"><option value="batam" ${kind==="batam"?"selected":""}>Batam saja</option><option value="all" ${kind==="all"?"selected":""}>Semua unit</option><option value="reg" ${kind==="reg"?"selected":""}>Reguler saja</option></select></div>
     <button class="btn btn-primary" onclick="ixDownload()">⬇ Download Excel</button>
-    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Unit yang sudah terkirim / dikeluarkan tersimpan ±26 jam. Untuk rekap yang lebih lama, download tiap shift.</div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Unit yang sudah terkirim / dikeluarkan tersimpan ±2×24 jam. Untuk rekap yang lebih lama, download tiap hari.</div>
   </div>`;
 }
 
@@ -7968,7 +7968,7 @@ function rkCollect(data, from, to){
   rows.sort((a,b)=>(a.pTs||a.iTs||0)-(b.pTs||b.iTs||0));
   return rows;
 }
-const RK_HEAD=["No. Rangka","Model","Jenis","Status","Parkir · jam","Parkir · oleh","Area (KAP)","Stall unit","ILS dibuat · jam","ILS dibuat · oleh","Plat CC","LP","Driver CC","Stall CC","CC absen · jam","CC masuk stall · jam","Loading selesai · jam","Loading selesai · oleh","Validasi mulai · jam","Validasi mulai · oleh","Validasi selesai · jam","Validasi selesai · oleh","No. SJKB","Surat jalan disimpan · jam","Surat jalan disimpan · oleh","Delout · jam","Delout · oleh","Shift Delout","Parkir → ILS (menit)","ILS → Loading selesai (menit)","Loading → Delout (menit)","Total Parkir → Delout (menit)","ID ILS"];
+const RK_HEAD=["No. Rangka","Model","Jenis","Status","Input driver · jam","Input driver · oleh","Area (KAP)","Stall unit","ILS dibuat · jam","ILS dibuat · oleh","Plat CC","LP","Driver CC","Stall CC","CC absen · jam","CC masuk stall · jam","Loading selesai · jam","Loading selesai · oleh","Validasi mulai · jam","Validasi mulai · oleh","Validasi selesai · jam","Validasi selesai · oleh","No. SJKB","Surat jalan disimpan · jam","Surat jalan disimpan · oleh","Delout · jam","Delout · oleh","Shift Delout","Input → ILS (menit)","ILS → Loading selesai (menit)","Loading → Delout (menit)","Total Input → Delout (menit)","ID ILS"];
 const RK_W=[20,12,12,15,16,16,10,12,16,16,13,10,16,8,16,16,16,16,16,16,16,16,26,16,16,16,16,9,11,11,11,12,15];
 function rkSheetRows(R){
   const D=t=>t?rkSerial(t):"";
@@ -7978,16 +7978,16 @@ function rkSheetRows(R){
 }
 function rkSummary(R, label){
   const avg=a=>{ const v=a.filter(x=>typeof x==="number"); return v.length?Math.round(v.reduce((s,x)=>s+x,0)/v.length):""; };
-  const cnt=st=>R.filter(r=>r.st===st).length, out=[["Rekap Kerja Unit RADAR EKY",""],["Periode",label],["Dibuat",new Date().toLocaleString("id-ID")+" oleh "+((currentUser&&currentUser.name)||"")],["",""],
-    ["Total unit",R.length],["Sudah Delout",cnt("Delout")],["Masih proses ILS / loading / validasi",R.filter(r=>/ILS|Loading|Validasi/.test(r.st)).length],["Masih parkir (belum ILS)",cnt("Parkir")],["Dikeluarkan tanpa ILS",cnt("Dikeluarkan")],
-    ["Rata-rata Parkir → Delout (menit)",avg(R.filter(r=>r.st==="Delout").map(r=>rkMin(r.pTs,r.oTs)))],["Rata-rata ILS → Delout (menit)",avg(R.filter(r=>r.st==="Delout").map(r=>rkMin(r.iTs,r.oTs)))],["",""]];
+  const cnt=st=>R.filter(r=>r.st===st).length, out=[["Rekap Data Unit RADAR EKY (Input Driver → Delout)",""],["Periode",label],["Dibuat",new Date().toLocaleString("id-ID")+" oleh "+((currentUser&&currentUser.name)||"")],["",""],
+    ["Total unit",R.length],["Sudah Delout",cnt("Delout")],["Masih proses ILS / loading / validasi",R.filter(r=>/ILS|Loading|Validasi/.test(r.st)).length],["Masih di yard (belum ILS)",cnt("Parkir")],["Dikeluarkan tanpa ILS",cnt("Dikeluarkan")],
+    ["Rata-rata Input → Delout (menit)",avg(R.filter(r=>r.st==="Delout").map(r=>rkMin(r.pTs,r.oTs)))],["Rata-rata ILS → Delout (menit)",avg(R.filter(r=>r.st==="Delout").map(r=>rkMin(r.iTs,r.oTs)))],["",""]];
   const grp=(key)=>{ const m={}; R.forEach(r=>{ const k=r[key]||"(kosong)"; (m[k]=m[k]||[]).push(r); }); return Object.keys(m).sort((a,b)=>m[b].length-m[a].length).map(k=>[k,m[k]]); };
-  out.push(["Per model","Unit","Sudah Delout","Rata-rata Parkir → Delout (menit)"]); grp("model").forEach(([k,L])=>out.push([k,L.length,L.filter(r=>r.st==="Delout").length,avg(L.filter(r=>r.st==="Delout").map(r=>rkMin(r.pTs,r.oTs)))])); out.push(["",""]);
+  out.push(["Per model","Unit","Sudah Delout","Rata-rata Input → Delout (menit)"]); grp("model").forEach(([k,L])=>out.push([k,L.length,L.filter(r=>r.st==="Delout").length,avg(L.filter(r=>r.st==="Delout").map(r=>rkMin(r.pTs,r.oTs)))])); out.push(["",""]);
   { const m={}; R.forEach(r=>{ const k=rkArea(r.line)||"(tidak tercatat)"; m[k]=(m[k]||0)+1; }); out.push(["Per area (KAP)","Unit"]); Object.keys(m).sort().forEach(k=>out.push([k,m[k]])); out.push(["",""]); }
   out.push(["Per LP","Unit diangkut","Rit (ILS)","Rata-rata ILS → Delout (menit)"]); grp("lp").filter(([k])=>k!=="(kosong)").forEach(([k,L])=>out.push([k,L.length,new Set(L.map(r=>r.ils)).size,avg(L.filter(r=>r.st==="Delout").map(r=>rkMin(r.iTs,r.oTs)))])); out.push(["",""]);
-  out.push(["Diparkir oleh (dispatcher)","Unit"]); grp("pBy").forEach(([k,L])=>out.push([k==="(kosong)"?"(tidak tercatat)":k,L.length])); out.push(["",""]);
+  out.push(["Diinput oleh (driver)","Unit"]); grp("pBy").forEach(([k,L])=>out.push([k==="(kosong)"?"(tidak tercatat)":k,L.length])); out.push(["",""]);
   out.push(["ILS dibuat oleh (Delivery)","Unit","ILS"]); grp("iBy").filter(([k])=>k!=="(kosong)").forEach(([k,L])=>out.push([k,L.length,new Set(L.map(r=>r.ils)).size])); out.push(["",""]);
-  out.push(["Catatan",""]); out.push(["Sumber: data yang tersimpan di RADAR (ILS ±7 hari selama surat jalan tersimpan). Jam CC absen / masuk stall dan nama dispatcher di ILS mulai tercatat sejak 19 Nov 2026.",""]);
+  out.push(["Catatan",""]); out.push(["Sumber: data yang tersimpan di RADAR, 2×24 jam ke belakang. Jam CC absen / masuk stall dan nama dispatcher di ILS mulai tercatat sejak 19 Nov 2026.",""]);
   return out;
 }
 function rkDownload(btn){
@@ -7996,13 +7996,13 @@ function rkDownload(btn){
   const label=ds+(shf?" shift "+shf:" (Day + Night)")+" · "+new Date(from).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})+" – "+new Date(to-60000).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
   const msg=document.getElementById("rkMsg");
   if(!R.length){ if(msg) msg.innerHTML=`<div class="msg info">Tidak ada unit di periode ini.</div>`; return; }
-  mfSave("Rekap-Unit-EKY-"+ds+(shf?"-"+shf:"")+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx([{name:"Rekap Unit", rows:rkSheetRows(R)},{name:"Ringkasan", rows:rkSummary(R,label)}], RK_W));
+  mfSave("Rekap-Data-Unit-EKY-"+ds+(shf?"-"+shf:"")+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx([{name:"Rekap Unit", rows:rkSheetRows(R)},{name:"Ringkasan", rows:rkSummary(R,label)}], RK_W));
   if(msg) msg.innerHTML=`<div class="msg ok">✔ ${R.length} unit (${R.filter(r=>r.st==="Delout").length} sudah Delout) diunduh.</div>`;
 }
 function rkCardHtml(){
-  const today=mfDateStr(prodDayStart()), min=mfDateStr(prodDayStart()-7*86400000);
-  return `<div class="card"><h3>📥 Rekap Kerja Unit (Parkir → Delout)</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Satu baris per unit: No. Rangka, model, diparkir siapa di stall berapa jam berapa, ILS dibuat siapa, CC / LP / driver, loading, validasi, surat jalan, Delout siapa jam berapa, plus lama tiap tahap. Data tersimpan ±7 hari.</div>
+  const today=mfDateStr(prodDayStart()), min=mfDateStr(prodDayStart(Date.now()-ULOG_RETAIN_MS));
+  return `<div class="card" id="rkCard"><h3>📥 Downloader Rekap Data Unit (Input Driver → Delout)</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Satu baris per unit: No. Rangka, model, diinput driver siapa di stall berapa jam berapa, ILS dibuat siapa, CC / LP / driver CC, loading, validasi, surat jalan, Delout siapa jam berapa, plus lama tiap tahap. Bisa diunduh untuk <b>2×24 jam</b> ke belakang.</div>
     <div class="field"><label>Tanggal (hari produksi)</label><input id="rkDate" type="date" value="${today}" min="${min}" max="${today}"></div>
     <div class="field"><label>Shift</label><select id="rkShift"><option value="">Semua shift (Day + Night: 07:00 – 06:59 besok)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 – 06:59 besok)</option></select></div>
     <button class="btn btn-primary" onclick="rkDownload(this)">⬇ Download Rekap Excel</button><div id="rkMsg" style="margin-top:6px;"></div></div>`;
@@ -9503,6 +9503,7 @@ function renderDccpUpload(){
    status: parked → ils (ILS dibuat) → sent (ILS selesai) | removed (dikeluarkan)
 ====================================================================== */
 const RETAIN_MS = 26*3600*1000;   // lama simpan data unit terkirim (jam)
+const ULOG_RETAIN_MS = 48*3600*1000;   /* 19 Nov 10.45: log unit (hanya di HP, tidak lewat Firebase) disimpan 2×24 jam untuk Rekap Kerja Unit. ILS tetap aturan lama. */
 const ILS_PRUNE_N=40, ILS_PRUNE_LAG=6*3600000;
 function ilsExpAt(b){ const t=b.doneTs||b.ts||0; return Math.max(t+RETAIN_MS, b.sj ? (b.outTs||t)+SJ_KEEP_MS : 0); }   /* sama dengan aturan lama: 26 jam, atau 7 hari kalau ada surat jalan */
 function syncUnitLog(d){
@@ -9543,7 +9544,8 @@ function syncUnitLog(d){
   /* Retensi: data unit yang sudah TERKIRIM / dikeluarkan + manifest ILS selesai disimpan 26 jam saja, lalu dihapus otomatis */
   const cut = now - RETAIN_MS;
   const clr = d.logClearTs||0;
-  d.unitLog = log.filter(e=> !((e.status==="sent" && (e.sentTs||e.ilsTs||0) < cut) || (e.status==="removed" && (e.removedTs||0) < cut)))
+  const ucut = now - ULOG_RETAIN_MS;
+  d.unitLog = log.filter(e=> !((e.status==="sent" && (e.sentTs||e.ilsTs||0) < ucut) || (e.status==="removed" && (e.removedTs||0) < ucut)))
     .filter(e=> present.has(e) || !clr || Math.max(e.parkedTs||0,e.ilsTs||0,e.sentTs||0,e.removedTs||0) > clr);
   if(clr) d.ils = (d.ils||[]).filter(b=> !(b.status==="done" && (b.doneTs||b.ts||0) <= clr));
   /* Hemat data tahap 2: ILS lama tidak lagi dihapus satu per satu begitu lewat masa simpan (tiap hapus = seluruh daftar ILS dikirim ulang ke semua HP).
@@ -9785,7 +9787,7 @@ function renderLeaderDashboard(){
         <option value="24h" ${ldrPeriod==='24h'?'selected':''}>24 jam terakhir</option>
       </select>
       ${ldrShiftSelect()}
-      <button class="btn btn-sm" onclick="ldrExportCSV()">⬇ CSV</button>
+      <button class="btn btn-sm" onclick="const c=document.getElementById('rkCard'); if(c) c.scrollIntoView({behavior:'smooth'});">📥 Downloader rekap</button>
     </div>
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
@@ -12586,7 +12588,7 @@ function renderAdmin(){
           <td>${x.reportedBy}<br><span style="font-size:10px;color:var(--text-dim);">${new Date(x.ts).toLocaleDateString('id-ID')}</span></td>
           <td>${x.status==="confirmed" ? `<span class="badge green">Confirmed</span><br><span style="font-size:10px;color:var(--text-dim);">${x.confirmedBy||''}</span>` : `<span class="badge gold">Aktif</span>`}</td>
         </tr>`).join("");
-    return `${tabsHtml}${rkCardHtml()}${fbMeterCardHtml()}
+    return `${tabsHtml}${fbMeterCardHtml()}
       <div class="card">
         <h3>🗄 Kelola Data</h3>
         <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Data saat ini tersimpan lokal di browser ini (localStorage). Belum sinkron ke Microsoft 365 / SharePoint.</p>
