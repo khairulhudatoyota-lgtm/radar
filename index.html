@@ -1506,11 +1506,11 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit"];
+const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
 const FB_LITE={
   cc:         { skip:["online","errDev","manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
-  dispatcher: { skip:["online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
-  pdi:        { skip:["online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
+  dispatcher: { skip:["funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
+  pdi:        { skip:["funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
 let _fbMode="", _fbRefs=[], _fbRaw={}, _fbGot=new Set(), _fbNeed=0, _fbWinKeys={}, _fbGen=0, _fbLiteOff=false;
 let _ilsNewId=0;
 let _fbFullGot=0, _fbRestTs=0, _fbRestBusy=false, _fbReAtt=[], _fbRestOk=0;   /* pengaman mode penuh (lihat fbFullWatch) */
@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="19 Nov 2026 07.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="19 Nov 2026 09.00";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2743,7 +2743,7 @@ function doLogout(){
   try{ devSeatRelease(); }catch(e){}
   try{ koSeatRelease(); }catch(e){}   /* kursi Koordinator LP dilepas: HP berikutnya langsung bisa memakai */   /* kursi pembuat ILS dilepas supaya HP lain bisa memakai */
   try{ if(currentUser && currentUser.username && !isViewer()){ const un=currentUser.username, t=Date.now(); DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===un) x.lo=t; }); }); } }catch(e){}   // tandai sudah logout: titik petanya tidak dianggap punya akun aktif
-  ccPlatOk=false; try{ stopShare(true); }catch(e){} try{ ccWaitClear(); }catch(e){}
+  ccPlatOk=false; try{ stopShare(true); }catch(e){} try{ ccWaitClear(); }catch(e){} try{ funStopAll(); }catch(e){}
   spdStop(); spdCloseOverlay();
   geoStop();
   stopScanner();
@@ -3995,7 +3995,9 @@ function renderOrderStall(){
   const _va1 = vaOn();
   const absenBlock = _va1 ? "" : verifiedForm + profileCard + autoCard + manualCard;
 
+  const _dccpW = (currentUser && currentUser.role==="cc" && ccPlatOk && !_va1 && !dccpCurrentOk(data)) ? (()=>{ const inf=ccWaitDccpInfo(data); return `<div class="card" style="border-left:5px solid #3B82F6;margin-bottom:10px;"><b>🕒 ${xlEsc(inf.tit)}</b><div style="font-size:12px;color:var(--text-dim);margin-top:3px;">Absen otomatis menunggu DCCP diupload dan dicoba lagi sendiri. Cek kondisi stall di <a href="#" onclick="switchTab('display');return false;">Display</a>.</div></div>`; })() : "";
   return `
+    ${_dccpW}
     ${dfCcCardHtml(data)}
     ${_va1 ? sjBoxHtml("cc","Surat Jalan Driver","Surat jalan rit driver ini, sama seperti di HP-nya. Muncul setelah loading selesai.") : sjBoxHtml("cc","Surat Jalan Saya", myCcPlatKey()?"Unduh atau tunjukkan ke security saat keluar ADM dan masuk NVDC. Muncul setelah loading selesai. "+sjKeepTxt():"Isi nomor polisi di bagian Profil Truk dulu supaya surat jalan truk kamu muncul di sini.")}
     ${ccMyPosHtml(data)}
@@ -12285,6 +12287,7 @@ function renderAdmin(){
       ${onlineCardHtml()}
       ${renderRegCard()}
       ${devLimitCardHtml()}
+      ${funVideoAdminHtml()}
       <div class="card"><h3>⏱ Keluar otomatis Driver CC</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Driver CC yang lupa keluar dari aplikasi otomatis di-logout setelah sekian jam sejak login, sehingga posisinya berhenti dibagikan. Isi 0 untuk mematikan.</div>
         <div style="display:flex;gap:8px;align-items:center;"><input id="ccAutoOutH" type="number" min="0" max="48" value="${ccAutoOutHours()}" style="width:90px;"><span style="font-size:13px;">jam</span><button class="btn btn-primary btn-sm" style="width:auto;" onclick="ccAutoOutSave()">💾 Simpan</button></div>
         <div style="font-size:12px;color:var(--text-dim);margin:12px 0 8px;border-top:1px solid var(--border);padding-top:10px;">Sesudah <b>ritase terakhir</b> di DCCP selesai dan CC sudah <b>Delout</b>, HP driver otomatis keluar setelah sekian menit — peta & GPS berhenti. Change Shift tidak kena. Isi 0 untuk mematikan.</div>
@@ -13004,9 +13007,9 @@ function ccWaitGet(){ try{ const o=JSON.parse(localStorage.getItem(CC_WAIT_KEY)|
 function ccWaitOn(){ return !!(currentUser && currentUser.role==="cc" && !ccPlatOk && !noPlatUser() && ccWaitGet()); }
 function ccWaitSet(o){ try{ localStorage.setItem(CC_WAIT_KEY, JSON.stringify(o)); }catch(e){} }
 function ccWaitClear(){ try{ localStorage.removeItem(CC_WAIT_KEY); }catch(e){} }
-function ccWaitEnter(plat, lp){
-  const P=platFmt(normPlat(plat))||plat, old=ccWaitGet();
-  ccWaitSet({u:currentUser.username, plat:P, lp:lp||"", ts:(old && normPlat(old.plat)===normPlat(P))?old.ts:Date.now(), dccpOk:dccpCurrentOk()});
+function ccWaitEnter(plat, lp, ex){
+  const P=platFmt(normPlat(plat))||plat, old=ccWaitGet(), same=old && normPlat(old.plat)===normPlat(P) && (old.mode||"")===((ex&&ex.mode)||"");
+  ccWaitSet(Object.assign({u:currentUser.username, plat:P, lp:lp||"", ts:same?old.ts:Date.now(), dccpOk:dccpCurrentOk()}, ex||{}));
   ccPlatOk=false; window._cgPend=null; if(window._gateSjP!==normPlat(P)){ window._gateSjL=null; window._gateSjAt=0; }
   try{ if(shareTrk.on) stopShare(true); }catch(e){} try{ stopAutoAbsen(true); }catch(e){}
   try{ closeModal(); }catch(e){}
@@ -13015,6 +13018,7 @@ function ccWaitEnter(plat, lp){
 /* plat sudah masuk jadwal: jalankan pengisian plat seperti biasa (ambil alih, pemegang plat, absen otomatis) */
 function ccWaitCommit(){
   const w=ccWaitGet(); if(!w) return;
+  try{ funStopAll(); }catch(e){}
   ccPlatGateOpen();
   const i=document.getElementById("cgPlat"); if(i) i.value=w.plat;
   const l=document.getElementById("cgLp"); if(l && l.tagName==="SELECT" && w.lp && !l.value){ l.value=w.lp; }
@@ -13028,6 +13032,7 @@ function ccWaitDccpInfo(d){
 }
 function renderCcWait(){
   const w=ccWaitGet(), d=DB.get(); if(!w) return "";
+  if(w.mode==="serah") return renderCcSerah(w, d);
   const inf=ccWaitDccpInfo(d), now=Date.now();
   const st=Object.keys(d.cc||{}).filter(k=>d.cc[k] && d.cc[k].plat).sort((a,b)=>ccLbl(a)-ccLbl(b));
   const chips=st.map(k=>`<span style="display:inline-block;border:1px solid var(--border);border-radius:999px;padding:3px 9px;margin:2px;font-size:12px;"><b>S${ccLbl(k)}</b> ${xlEsc(platFmt(d.cc[k].plat))}</span>`).join("");
@@ -13048,6 +13053,7 @@ function renderCcWait(){
       <button type="button" class="btn btn-outline nsBtn" style="margin-top:8px;" onclick="switchTab('display')">📺 Lihat Display<small>stall CC · antrian · peta stall unit · jadwal</small></button>
     </div>
     <div id="nsSj">${gateSjHtml(sjB)}</div>
+    <div style="text-align:left;margin-top:8px;">${funCardHtml()}</div>
     <button type="button" class="btn btn-primary nsBtn" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal<small>bunyi di Koordinator</small></button>
     <button type="button" class="btn btn-outline nsBtn" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update?<small>ingatkan Delivery</small></button>
     <div id="cgReqMsg">${(window._sreqMsg && now-window._sreqMsg.t<120000)?window._sreqMsg.h.replace("nsOk",""):""}</div>
@@ -13055,20 +13061,586 @@ function renderCcWait(){
     <div class="nsFoot">Belum tampil di peta dan belum bisa absen. Begitu plat kamu masuk jadwal, HP berbunyi dan RADAR otomatis masuk normal (absen otomatis aktif). Biarkan RADAR terbuka atau di-minimize, jangan ditutup.</div>
   </div>`;
 }
+/* Layar "Plat sudah diserahkan": driver lama (CC 24 jam / ganti driver) tetap bisa melihat surat jalan terakhir & Display tanpa merebut plat */
+function renderCcSerah(w, d){
+  const now=Date.now(), k=normPlat(w.plat), me=currentUser.username, rb=ccReleasedTo(w.plat), q=(d.takeReq||{})[k];
+  const myQ=q && q.to===me && now-(+q.ts||0)<30*60000 ? q : null, hn=rb?ccUserName(rb.u):"";
+  if(!window._gateSjAt || now-window._gateSjAt>5*60000){ window._gateSjAt=now; setTimeout(()=>{ try{ gateSjLoad(w.plat); }catch(e){} },0); }
+  const sjB=gateSjPick(w.plat, ((window._gateSjP===normPlat(w.plat) && window._gateSjL)||[]).concat(d.ils||[]));
+  const at=(myQ && myQ.status==="wait" && rb)?takeAutoAt(myQ, rb):0;
+  const st=myQ && myQ.status==="wait" ? `<div class="msg info" style="text-align:left;">⏳ Menunggu jawaban <b>${xlEsc(hn||myQ.fromName||"")}</b> atau Delivery.${at?` Kalau tidak dijawab, otomatis kembali ke kamu jam <b>${takeHm(at)}</b> (jam ganti shift).`:""}</div>`
+     : myQ && myQ.status==="no" ? `<div class="msg err" style="text-align:left;">${myQ.self?`<b>${xlEsc(myQ.by||hn)}</b> menjawab truk masih dia bawa.`:`Delivery menolak permintaan ini.`}</div>` : "";
+  return `<div class="nsPop nsStatic" style="margin-bottom:12px;">
+    <div class="nsBell">🔑</div>
+    <div class="nsTit">Plat sudah diserahkan · ${xlEsc(w.plat)}</div>
+    <div style="margin:8px 0;padding:10px;border-radius:12px;background:#F5F3FF;border:1px solid #C4B5FD;text-align:left;">
+      ${rb?`<div style="font-weight:800;">Sekarang dipegang ${xlEsc(hn)}</div><div style="font-size:12px;color:var(--text-dim);margin-top:3px;">Sejak ${takeHm(+rb.ts||now)}. Posisi truk dan absen sekarang dari HP ${xlEsc(hn)}. Kamu tidak tampil di peta dan tidak absen.</div>`
+          :`<div style="font-weight:800;">Plat ini sedang tidak dipegang siapa pun</div><div style="font-size:12px;color:var(--text-dim);margin-top:3px;">Kalau kamu yang membawa truk ini lagi, tekan Pakai plat ini lagi.</div>`}
+    </div>
+    <div id="nsSj">${gateSjHtml(sjB)}</div>
+    ${st}
+    ${rb ? (myQ && myQ.status==="wait" ? "" : `<button type="button" class="btn btn-outline nsBtn" onclick="ccTakeAskBack()">🔁 Minta plat kembali<small>${xlEsc(hn)} ditanya dulu, Delivery juga bisa menyetujui</small></button>`)
+         : `<button type="button" class="btn btn-primary nsBtn" onclick="ccWaitCommit()">✔ Pakai plat ini lagi</button>`}
+    <button type="button" class="btn btn-outline nsBtn" onclick="switchTab('display')">📺 Lihat Display<small>stall CC · antrian · peta stall unit · jadwal</small></button>
+    <button type="button" class="btn btn-outline nsBtn" onclick="ccPlatGateOpen(true)">✏️ Ganti plat</button>
+    <div style="text-align:left;margin-top:12px;">${funCardHtml()}</div>
+  </div>`;
+}
 function ccTabbarSync(){
   try{ if(!currentUser || currentUser.role!=="cc") return; const w=ccWaitOn();
     if(w && activeTab==="ccmap") activeTab="orderstall";
-    document.querySelectorAll('#tabbar .tabbtn').forEach(b=>{ if(b.dataset.tab==="ccmap") b.style.display=w?"none":""; if(b.dataset.tab==="orderstall"){ const t=w?"⏳ Menunggu Jadwal":"Order Stall"; if(b.textContent!==t) b.textContent=t; } });
+    document.querySelectorAll('#tabbar .tabbtn').forEach(b=>{ if(b.dataset.tab==="ccmap") b.style.display=w?"none":""; if(b.dataset.tab==="orderstall"){ const t=w?((ccWaitGet()||{}).mode==="serah"?"🔑 Diserahkan":"⏳ Menunggu Jadwal"):"Order Stall"; if(b.textContent!==t) b.textContent=t; } });
   }catch(e){}
 }
 /* pantau: plat masuk jadwal → bunyi + masuk normal; DCCP baru diupload tapi plat belum ada → bunyi sekali */
 setInterval(()=>{ try{
   if(!ccWaitOn() || document.getElementById("cgPlat")) return;
-  const w=ccWaitGet(), d=DB.get(), al=(tit,txt)=>{ try{ soundEv('jadwal',txt); }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([300,150,300]); }catch(e){} try{ ringBg(tit, txt); }catch(e){} try{ if('Notification' in window && Notification.permission==='granted') new Notification(tit,{body:txt}); }catch(e){} };
+  const w=ccWaitGet(), d=DB.get(), al=(tit,txt)=>{ try{ funStopAll(); }catch(e){} try{ soundEv('jadwal',txt); }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([300,150,300]); }catch(e){} try{ ringBg(tit, txt); }catch(e){} try{ if('Notification' in window && Notification.permission==='granted') new Notification(tit,{body:txt}); }catch(e){} };
+  if(w.mode==="serah"){   /* hanya lanjut kalau driver ini MEMINTA plat kembali dan disetujui / waktu habis di jam ganti shift */
+    const k=normPlat(w.plat), me=currentUser.username, q=(d.takeReq||{})[k], rb=ccReleasedTo(w.plat);
+    if(!q || q.to!==me || Date.now()-(+q.ts||0)>30*60000) return;
+    if(q.status==="ok" && !rb){ al("✅ Plat kembali ke kamu", w.plat+" sudah diserahkan kembali. RADAR masuk normal."); ccWaitCommit(); return; }
+    if(q.status==="wait" && rb && q.from===rb.u){ const at=takeAutoAt(q, rb);
+      if(at && Date.now()>=at && takeWindow()){ const now=Date.now();
+        DB.set(x=>{ (x.ccShiftPlat||[]).forEach(e=>{ if(e.u===rb.u && normPlat(e.plat)===k && !e.lo) e.lo=now; }); x.forceOut=x.forceOut||{}; x.forceOut[rb.u]=now;
+          if(x.takeReq) delete x.takeReq[k];
+          x.takeLog=capLog((Array.isArray(x.takeLog)?x.takeLog:[]).concat([{ts:now, plat:q.plat, from:rb.u, fromName:ccUserName(rb.u), to:me, toName:(currentUser.name||me), auto:"timeout"}]),50); });
+        al("✅ Plat kembali ke kamu", w.plat+": tidak ada jawaban "+TAKE_AUTO_MIN+" menit di jam ganti shift. Plat otomatis kembali ke kamu.");
+        window._takeAutoMsg="Plat "+w.plat+" otomatis kembali ke kamu: "+ccUserName(rb.u)+" tidak menjawab "+TAKE_AUTO_MIN+" menit di jam ganti shift. Akun "+ccUserName(rb.u)+" dikeluarkan."; ccWaitCommit(); return; } }
+    return;
+  }
   if(ccPlatGateOk(w.plat)){ al("✅ Jadwal sudah masuk", w.plat+" sudah ada di jadwal. RADAR masuk normal, absen otomatis aktif."); ccWaitCommit(); return; }
   const ok=dccpCurrentOk(d);
   if(ok!==!!w.dccpOk){ w.dccpOk=ok; ccWaitSet(w); if(ok) al("⚠ DCCP sudah diupload", "DCCP shift ini sudah diupload, tapi "+w.plat+" belum ada di jadwal. Tekan Jadwalkan atau hubungi Koordinator."); if(activeTab==="orderstall") render(); }
 }catch(e){} }, 3000);
+/* ===== HIBURAN SAMBIL MENUNGGU (19 Nov 2026 08.00, permintaan Khairul) =====
+   Hanya di layar "Menunggu Jadwal" / "Diserahkan" (driver belum absen, GPS tidak jalan). TIDAK memakai Firebase:
+   • 📻 Radio: daftar stasiun Indonesia dari direktori radio-browser.info, audio langsung dari server radio ke HP (daftar disimpan di HP 24 jam).
+   • ▶️ Video: pemutar resmi YouTube (embed). Daftar video diatur Admin (teks kecil /radar/funVideo), driver juga bisa tempel link sendiri.
+   • 🎮 Parkir CC: game di HP, skor terbaik disimpan di HP.
+   Semua otomatis BERHENTI begitu jadwal masuk, ada serah terima plat, keluar dari layar tunggu, atau logout. */
+const FUN_RB=["https://de1.api.radio-browser.info","https://nl1.api.radio-browser.info","https://at1.api.radio-browser.info"];
+let _funAudio=null, _funSt=null, _funRadioL=[], _funRadioQ="", _funRadioBusy=false, _funRadioErr="";
+function funOn(){ return !!(document.getElementById("funBox") || (_funAudio && _funAudio.src && !_funAudio.paused)); }
+function funStopAll(){
+  try{ if(_funAudio){ _funAudio.pause(); _funAudio.removeAttribute("src"); try{ _funAudio.load(); }catch(e){} } }catch(e){}
+  _funSt=null; try{ pccStop(); }catch(e){} try{ btStop(); }catch(e){}
+  ["funBox","funRadioBar"].forEach(id=>{ try{ const el=document.getElementById(id); if(el) el.remove(); }catch(e){} });
+}
+setInterval(()=>{ try{ if(funOn() && !ccWaitOn()) funStopAll(); }catch(e){} }, 1500);   /* keluar dari layar tunggu (jadwal masuk, logout, dll): hiburan berhenti */
+function funCardHtml(){
+  return `<div class="card" style="margin-bottom:12px;"><h3 style="margin:0 0 4px;">🎵 Hiburan sambil menunggu</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Tidak memakai kuota server RADAR. Otomatis berhenti begitu jadwal masuk, jadi bunyi RADAR tetap terdengar.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button type="button" class="btn btn-primary" style="padding:12px 4px;line-height:1.25;grid-column:1 / -1;" onclick="funOpen('balap')">🏁 Balap Tol · Surya Cipta → KIIC<br><small style="font-weight:500;">main sendiri / berdua 1 HP</small></button>
+      <button type="button" class="btn btn-outline" style="padding:12px 4px;line-height:1.25;" onclick="funOpen('radio')">📻<br>Radio</button>
+      <button type="button" class="btn btn-outline" style="padding:12px 4px;line-height:1.25;" onclick="funOpen('video')">▶️<br>Video</button>
+      <button type="button" class="btn btn-outline" style="padding:12px 4px;line-height:1.25;grid-column:1 / -1;" onclick="funOpen('game')">🎮 Parkir CC</button>
+    </div></div>`;
+}
+function funOpen(kind){
+  if(!ccWaitOn()) return;
+  try{ pccStop(); }catch(e){}
+  let box=document.getElementById("funBox"); if(box) box.remove();
+  box=document.createElement("div"); box.id="funBox"; box.dataset.kind=kind;
+  box.style.cssText="position:fixed;inset:0;z-index:9990;background:var(--bg,#F4F6FA);display:flex;flex-direction:column;";
+  try{ btStop(); }catch(e){}
+  const tit=kind==="radio"?"📻 Radio":kind==="video"?"▶️ Video":kind==="balap"?"🏁 Balap Tol":"🎮 Parkir CC";
+  box.innerHTML=`<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#16213E;color:#fff;">
+      <b style="flex:1;font-size:16px;">${tit}</b>
+      <button type="button" onclick="funClose()" style="background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:10px;padding:8px 14px;font-weight:800;">✕ Tutup</button></div>
+    <div id="funBody" style="flex:1;overflow:auto;padding:12px;"></div>`;
+  document.body.appendChild(box);
+  if(kind==="radio") funRadioUi(true);
+  else if(kind==="video"){ funRadioStop(); funVideoUi(); }
+  else if(kind==="balap"){ funRadioStop(); btOpen(document.getElementById("funBody")); }
+  else { funRadioStop(); pccOpen(document.getElementById("funBody")); }
+}
+function funClose(){ try{ pccStop(); }catch(e){} try{ btStop(); }catch(e){} const b=document.getElementById("funBox"); if(b) b.remove(); funRadioBar(); }
+/* ---------- RADIO ---------- */
+async function funRadioFetch(q){
+  const ck="radar_radiolist", now=Date.now();
+  if(!q){ try{ const c=JSON.parse(localStorage.getItem(ck)||"null"); if(c && now-c.t<24*3600000 && c.L && c.L.length) return c.L; }catch(e){} }
+  const path="/json/stations/search?"+(q?"name="+encodeURIComponent(q)+"&":"")+"countrycode=ID&hidebroken=true&is_https=true&order=clickcount&reverse=true&limit="+(q?40:80);
+  for(const h of FUN_RB){
+    try{ const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(),9000);
+      const r=await fetch(h+path,{signal:ctl.signal}); clearTimeout(tm); if(!r.ok) continue;
+      const j=await r.json(), seen=new Set();
+      const L=(Array.isArray(j)?j:[]).filter(x=>x && /^https:\/\//i.test(x.url_resolved||x.url||"")).map(x=>({n:String(x.name||"").replace(/\s+/g," ").trim().slice(0,60), u:x.url_resolved||x.url, t:String(x.tags||"").split(",").filter(Boolean).slice(0,3).join(", ").slice(0,50), b:+x.bitrate||0, ic:/^https:\/\//i.test(x.favicon||"")?x.favicon:""}))
+        .filter(x=>{ const k=x.n.toLowerCase(); if(!x.n || seen.has(k)) return false; seen.add(k); return true; });
+      if(!q && L.length){ try{ localStorage.setItem(ck, JSON.stringify({t:now, L})); }catch(e){} }
+      return L;
+    }catch(e){}
+  }
+  throw new Error("Daftar radio belum bisa dimuat. Cek sinyal internet lalu coba lagi.");
+}
+async function funRadioLoad(q){
+  if(_funRadioBusy) return; _funRadioBusy=true; _funRadioErr=""; _funRadioQ=q||""; funRadioUi();
+  try{ _funRadioL=await funRadioFetch(_funRadioQ); }catch(e){ _funRadioL=[]; _funRadioErr=e.message||String(e); }
+  _funRadioBusy=false; funRadioUi();
+}
+function funRadioUi(first){
+  const el=document.getElementById("funBody"); if(!el || (document.getElementById("funBox")||{}).dataset.kind!=="radio") return;
+  if(first && !_funRadioL.length && !_funRadioBusy){ setTimeout(()=>funRadioLoad(""),0); }
+  const st=_funSt, playing=!!(_funAudio && _funAudio.src && !_funAudio.paused);
+  el.innerHTML=`${st?`<div class="card" style="margin-bottom:10px;border-left:5px solid #17803d;"><div style="font-size:12px;color:var(--text-dim);">${playing?"Sedang diputar":"Memuat / dijeda"}</div><div style="font-weight:800;font-size:16px;">${xlEsc(st.n)}</div>
+        <div id="funRadioMsg" style="font-size:12px;color:#b91c1c;"></div>
+        <div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn btn-primary" style="flex:1;" onclick="funRadioToggle()">${playing?"⏸ Jeda":"▶ Putar"}</button><button type="button" class="btn btn-outline" style="flex:1;" onclick="funRadioStop();funRadioUi()">⏹ Stop</button></div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Tutup jendela ini untuk melihat Display; radio tetap jalan.</div></div>`:""}
+    <div style="display:flex;gap:8px;margin-bottom:8px;"><input id="funRq" type="search" placeholder="Cari stasiun (mis. dangdut, prambors, RRI)" value="${xlEsc(_funRadioQ)}" style="flex:1;" onkeydown="if(event.key==='Enter')funRadioLoad(this.value.trim())"><button type="button" class="btn btn-outline" style="width:auto;" onclick="funRadioLoad(document.getElementById('funRq').value.trim())">Cari</button></div>
+    ${_funRadioBusy?`<div class="msg info">Memuat daftar radio…</div>`:_funRadioErr?`<div class="msg err">${xlEsc(_funRadioErr)} <button type="button" class="btn btn-outline btn-sm" style="width:auto;margin-left:6px;" onclick="funRadioLoad('${xlEsc(_funRadioQ).replace(/'/g,"")}')">Coba lagi</button></div>`:!_funRadioL.length?`<div class="msg info">Tidak ada stasiun ditemukan.</div>`:""}
+    ${_funRadioL.map((s,i)=>`<button type="button" onclick="funRadioPlay(${i})" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:${st&&st.u===s.u?"#ECFDF3":"var(--card,#fff)"};border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:6px;color:inherit;">
+        <span style="font-size:20px;">${st&&st.u===s.u?"🔊":"📻"}</span><span style="flex:1;min-width:0;"><b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${xlEsc(s.n)}</b><small style="color:var(--text-dim);">${xlEsc(s.t||"radio")}${s.b?" · "+s.b+" kbps":""}</small></span></button>`).join("")}
+    <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Daftar dari radio-browser.info (direktori radio internet). Kalau satu stasiun tidak bunyi, pilih yang lain.</div>`;
+}
+function funRadioPlay(i){
+  const s=_funRadioL[i]; if(!s) return;
+  if(!_funAudio){ _funAudio=new Audio(); _funAudio.preload="none";
+    _funAudio.addEventListener("playing", ()=>{ funRadioUi(); funRadioBar(); });
+    _funAudio.addEventListener("pause", ()=>{ funRadioUi(); funRadioBar(); });
+    _funAudio.addEventListener("error", ()=>{ if(!_funAudio.getAttribute("src")) return; const m=document.getElementById("funRadioMsg"); if(m) m.textContent="Stasiun ini tidak bisa diputar sekarang. Pilih stasiun lain."; }); }
+  _funSt=s; _funAudio.src=s.u;
+  _funAudio.play().catch(()=>{ const m=document.getElementById("funRadioMsg"); if(m) m.textContent="Stasiun ini tidak bisa diputar sekarang. Pilih stasiun lain."; });
+  funRadioUi();
+}
+function funRadioToggle(){ if(!_funAudio || !_funSt) return; if(_funAudio.paused) _funAudio.play().catch(()=>{}); else _funAudio.pause(); }
+function funRadioStop(){ try{ if(_funAudio){ _funAudio.pause(); _funAudio.removeAttribute("src"); try{ _funAudio.load(); }catch(e){} } }catch(e){} _funSt=null; funRadioBar(); }
+/* bar kecil di bawah layar selama radio jalan dan jendela radio ditutup */
+function funRadioBar(){
+  let bar=document.getElementById("funRadioBar");
+  const show=!!(_funSt && _funAudio && _funAudio.getAttribute("src") && !document.getElementById("funBox") && ccWaitOn());
+  if(!show){ if(bar) bar.remove(); return; }
+  if(!bar){ bar=document.createElement("div"); bar.id="funRadioBar"; bar.style.cssText="position:fixed;left:10px;right:10px;bottom:10px;z-index:9980;background:#16213E;color:#fff;border-radius:14px;padding:10px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(0,0,0,.35);"; document.body.appendChild(bar); }
+  const p=!_funAudio.paused;
+  bar.innerHTML=`<span style="font-size:18px;">📻</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;" onclick="funOpen('radio')">${xlEsc(_funSt.n)}</span>
+    <button type="button" onclick="funRadioToggle()" style="background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:10px;padding:6px 10px;font-weight:800;">${p?"⏸":"▶"}</button>
+    <button type="button" onclick="funRadioStop()" style="background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:10px;padding:6px 10px;font-weight:800;">✕</button>`;
+}
+/* ---------- VIDEO (YouTube) ---------- */
+function funYtParse(s){
+  s=String(s||"").trim(); if(!s) return null;
+  let m=s.match(/[?&]list=([A-Za-z0-9_-]{10,})/); const list=m?m[1]:"";
+  m=s.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/live\/|\/embed\/)([A-Za-z0-9_-]{11})/); const v=m?m[1]:(/^[A-Za-z0-9_-]{11}$/.test(s)?s:"");
+  if(!v && !list) return null; return {v, list};
+}
+function funVideoList(){
+  return String((DB.get().funVideo)||"").split(/\n+/).map(l=>{ const i=l.lastIndexOf("|"); const t=(i>=0?l.slice(0,i):"").trim(), u=(i>=0?l.slice(i+1):l).trim(); const p=funYtParse(u); return p?{t:t||"Video", p}:null; }).filter(Boolean).slice(0,30);
+}
+function funVideoUi(){
+  const el=document.getElementById("funBody"); if(!el) return; const L=funVideoList();
+  el.innerHTML=`<div id="funPlayer" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden;margin-bottom:10px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:13px;">Pilih video di bawah</div>
+    ${L.length?`<div style="font-size:12px;font-weight:800;margin-bottom:6px;">Pilihan Admin</div>${L.map((x,i)=>`<button type="button" onclick="funVideoPlay(${i})" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--card,#fff);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:6px;color:inherit;"><span style="font-size:20px;">${x.p.list&&!x.p.v?"📃":"▶️"}</span><b style="flex:1;">${xlEsc(x.t)}</b></button>`).join("")}`
+      :`<div class="msg info" style="font-size:12px;">Belum ada daftar video dari Admin. Tempel link YouTube di bawah.</div>`}
+    <div style="font-size:12px;font-weight:800;margin:10px 0 6px;">Tempel link YouTube</div>
+    <div style="display:flex;gap:8px;"><input id="funYtIn" type="url" placeholder="https://youtu.be/…" style="flex:1;"><button type="button" class="btn btn-primary" style="width:auto;" onclick="funVideoPaste()">▶ Putar</button></div>
+    <div id="funYtMsg" style="font-size:12px;color:#b91c1c;margin-top:4px;"></div>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Diputar langsung dari YouTube. Video berhenti saat jendela ini ditutup atau jadwal masuk.</div>`;
+}
+function funVideoEmbed(p){
+  const pl=document.getElementById("funPlayer"); if(!pl || !p) return;
+  const q="autoplay=1&playsinline=1&rel=0&modestbranding=1";
+  const src=p.v?`https://www.youtube-nocookie.com/embed/${p.v}?${q}${p.list?"&list="+p.list:""}`:`https://www.youtube-nocookie.com/embed/videoseries?list=${p.list}&${q}`;
+  pl.innerHTML=`<iframe src="${src}" title="YouTube" style="position:absolute;inset:0;width:100%;height:100%;border:0;" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+}
+function funVideoPlay(i){ const x=funVideoList()[i]; if(x) funVideoEmbed(x.p); }
+function funVideoPaste(){ const p=funYtParse((document.getElementById("funYtIn")||{}).value); const m=document.getElementById("funYtMsg"); if(!p){ if(m) m.textContent="Link YouTube tidak dikenali."; return; } if(m) m.textContent=""; funVideoEmbed(p); }
+function funVideoSave(){ const v=String((document.getElementById("funVideoTx")||{}).value||"").slice(0,4000); DB.set(d=>{ d.funVideo=v; }); alert("Daftar video hiburan disimpan ("+funVideoList().length+" video)."); render(); }
+function funVideoAdminHtml(){
+  return `<div class="card"><h3>🎬 Hiburan driver</h3><div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Muncul di tab Video pada layar <b>Menunggu Jadwal</b> driver. Satu baris satu video / playlist: <code>Judul | link YouTube</code>. Diputar langsung dari YouTube, tidak memakai kuota Firebase.</div>
+    <textarea id="funVideoTx" rows="5" style="width:100%;font-family:inherit;" placeholder="Safety berkendara truk | https://youtu.be/xxxxxxxxxxx">${xlEsc(DB.get().funVideo||"")}</textarea>
+    <button class="btn btn-primary btn-sm" style="width:auto;margin-top:6px;" onclick="funVideoSave()">💾 Simpan</button> <span style="font-size:12px;color:var(--text-dim);">${funVideoList().length} video terbaca</span>
+</div>`;
+}
+/* ---------- GAME: PARKIR CC ---------- */
+const PCC_W=360, PCC_H=540, PCC_TL=92, PCC_TW=26, PCC_WB=58;
+const PCC_LV=[
+  {n:"Masuk stall", par:12, s:{x:180,y:470,a:0}, t:{x:150,y:30,w:60,h:120},
+    o:[{x:70,y:30,w:34,h:110,k:"cc"},{x:110,y:30,w:34,h:110,k:"cc"},{x:216,y:30,w:34,h:110,k:"cc"},{x:256,y:30,w:34,h:110,k:"cc"}]},
+  {n:"Belok ke stall", par:18, s:{x:60,y:470,a:0}, t:{x:270,y:30,w:60,h:120},
+    o:[{x:120,y:200,w:120,h:40,k:"wall"},{x:228,y:30,w:34,h:110,k:"cc"},{x:0,y:30,w:200,h:24,k:"wall"},{x:150,y:330,w:20,h:20,k:"cone"},{x:210,y:330,w:20,h:20,k:"cone"}]},
+  {n:"Mundur ke stall", par:22, dir:0, s:{x:180,y:110,a:Math.PI/2}, t:{x:150,y:390,w:60,h:125},
+    o:[{x:106,y:390,w:36,h:120,k:"cc"},{x:218,y:390,w:36,h:120,k:"cc"},{x:60,y:390,w:36,h:120,k:"cc"},{x:264,y:390,w:36,h:120,k:"cc"},{x:0,y:0,w:360,h:22,k:"wall"}]},
+  {n:"Stall sempit", par:20, s:{x:300,y:470,a:0}, t:{x:158,y:30,w:44,h:118},
+    o:[{x:114,y:30,w:38,h:112,k:"cc"},{x:208,y:30,w:38,h:112,k:"cc"},{x:70,y:30,w:38,h:112,k:"cc"},{x:252,y:30,w:38,h:112,k:"cc"},{x:0,y:250,w:150,h:30,k:"wall"},{x:250,y:330,w:20,h:20,k:"cone"}]},
+  {n:"Parkir sejajar", par:28, s:{x:60,y:250,a:Math.PI/2}, t:{x:112,y:466,w:142,h:50},
+    o:[{x:4,y:472,w:100,h:38,k:"cc"},{x:262,y:472,w:96,h:38,k:"cc"},{x:0,y:522,w:360,h:18,k:"wall"},{x:150,y:120,w:60,h:40,k:"wall"}]},
+];
+let _pcc=null;
+function pccBest(){ try{ return JSON.parse(localStorage.getItem("radar_pcc")||"{}")||{}; }catch(e){ return {}; } }
+function pccOpen(el){
+  if(!el) return; pccStop();
+  const B=pccBest(), un=Math.min(PCC_LV.length-1, +B.u||0);
+  el.innerHTML=`<div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">Parkirkan car carrier ke kotak hijau tanpa menabrak. Tekan ◀ ▶ untuk belok, ▲ maju, ▼ mundur.</div>
+    ${PCC_LV.map((L,i)=>{ const b=B["l"+i]; const ok=i<=un; return `<button type="button" ${ok?`onclick="pccPlay(${i})"`:"disabled"} style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:${ok?"var(--card,#fff)":"#f3f4f6"};border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:6px;color:inherit;opacity:${ok?1:.55};">
+      <b style="font-size:18px;width:28px;">${i+1}</b><span style="flex:1;"><b>${L.n}</b><br><small style="color:var(--text-dim);">${b?("Terbaik "+b.toFixed(1)+" dtk · "+"⭐".repeat(pccStars(i,b))):(ok?"Belum dimainkan":"🔒 Selesaikan level sebelumnya")}</small></span></button>`; }).join("")}`;
+}
+function pccStars(i,t){ const p=PCC_LV[i].par; return t<=p?3:t<=p*1.8?2:1; }
+function pccPlay(i){
+  const el=document.getElementById("funBody"); if(!el) return; pccStop();
+  const L=PCC_LV[i];
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px;"><b>Level ${i+1} · ${L.n}</b><span id="pccHud">0.0 dtk</span></div>
+    <div style="position:relative;"><canvas id="pccCv" style="width:100%;max-width:420px;display:block;margin:0 auto;border-radius:12px;touch-action:none;background:#3a3f47;"></canvas>
+      <div id="pccMsg" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;"></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:10px;user-select:none;-webkit-user-select:none;">
+      ${[["L","◀"],["R","▶"],["D","▼ Mundur"],["U","▲ Maju"]].map(([k,t])=>`<button type="button" data-k="${k}" class="btn ${k==="U"?"btn-primary":"btn-outline"}" style="padding:16px 4px;font-size:16px;touch-action:none;">${t}</button>`).join("")}
+    </div>
+    <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="pccOpen(document.getElementById('funBody'))">☰ Pilih level</button>`;
+  const cv=document.getElementById("pccCv"), dpr=Math.min(2, window.devicePixelRatio||1);
+  cv.width=PCC_W*dpr; cv.height=PCC_H*dpr; const ctx=cv.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
+  const g={i, L, ctx, k:{}, x:L.s.x, y:L.s.y, a:L.s.a, v:0, st:0, t:0, ok:0, end:false, raf:0, last:0, crash:null};
+  el.querySelectorAll("[data-k]").forEach(b=>{ const k=b.dataset.k;
+    const on=e=>{ e.preventDefault(); g.k[k]=true; }, off=e=>{ e.preventDefault(); g.k[k]=false; };
+    b.addEventListener("pointerdown",on); b.addEventListener("pointerup",off); b.addEventListener("pointerleave",off); b.addEventListener("pointercancel",off); b.addEventListener("contextmenu",e=>e.preventDefault()); });
+  g.kd=e=>{ const m={ArrowLeft:"L",ArrowRight:"R",ArrowUp:"U",ArrowDown:"D"}[e.key]; if(m){ g.k[m]=true; e.preventDefault(); } };
+  g.ku=e=>{ const m={ArrowLeft:"L",ArrowRight:"R",ArrowUp:"U",ArrowDown:"D"}[e.key]; if(m){ g.k[m]=false; e.preventDefault(); } };
+  window.addEventListener("keydown",g.kd); window.addEventListener("keyup",g.ku);
+  _pcc=g; g.last=performance.now(); const loop=ts=>{ if(_pcc!==g) return; const dt=Math.min(0.05,(ts-g.last)/1000); g.last=ts; pccStep(g,dt); pccDraw(g); g.raf=requestAnimationFrame(loop); }; g.raf=requestAnimationFrame(loop);
+}
+function pccStop(){ const g=_pcc; if(!g) return; _pcc=null; try{ cancelAnimationFrame(g.raf); }catch(e){} try{ window.removeEventListener("keydown",g.kd); window.removeEventListener("keyup",g.ku); }catch(e){} }
+function pccCorners(x,y,a,l,w){ const c=Math.cos(a), s=Math.sin(a), fx=s, fy=-c, rx=c, ry=s, P=[];
+  for(const [f,r] of [[.5,-.5],[.5,.5],[-.5,.5],[-.5,-.5],[.5,0],[-.5,0],[.17,-.5],[.17,.5],[-.17,-.5],[-.17,.5]]) P.push([x+fx*f*l+rx*r*w, y+fy*f*l+ry*r*w]);
+  return P; }
+function pccInOBB(px,py,g){ const c=Math.cos(g.a), s=Math.sin(g.a), dx=px-g.x, dy=py-g.y; const f=dx*s-dy*c, r=dx*c+dy*s; return Math.abs(f)<=PCC_TL/2 && Math.abs(r)<=PCC_TW/2; }
+function pccHit(g){
+  const P=pccCorners(g.x,g.y,g.a,PCC_TL,PCC_TW);
+  for(const [px,py] of P){ if(px<0||py<0||px>PCC_W||py>PCC_H) return "Keluar area"; }
+  for(const o of g.L.o){
+    for(const [px,py] of P) if(px>o.x && px<o.x+o.w && py>o.y && py<o.y+o.h) return o.k==="cc"?"Menabrak CC lain":o.k==="cone"?"Menabrak cone":"Menabrak tembok";
+    for(const [px,py] of [[o.x,o.y],[o.x+o.w,o.y],[o.x,o.y+o.h],[o.x+o.w,o.y+o.h]]) if(pccInOBB(px,py,g)) return o.k==="cc"?"Menabrak CC lain":o.k==="cone"?"Menabrak cone":"Menabrak tembok";
+  }
+  return "";
+}
+function pccParked(g){
+  const t=g.L.t, P=pccCorners(g.x,g.y,g.a,PCC_TL,PCC_TW).slice(0,4);
+  if(!P.every(([px,py])=>px>=t.x-1 && px<=t.x+t.w+1 && py>=t.y-1 && py<=t.y+t.h+1)) return false;
+  const want=t.w>t.h?Math.PI/2:0, d=a=>{ let x=((a%(2*Math.PI))+2*Math.PI)%(2*Math.PI); return Math.min(x, 2*Math.PI-x); };
+  if(g.L.dir!=null) return d(g.a-g.L.dir)<0.22;
+  return Math.min(d(g.a-want), d(g.a-want-Math.PI))<0.22;
+}
+function pccStep(g,dt){
+  if(g.end) return;
+  const k=g.k; g.t+=dt;
+  if(k.U) g.v=Math.min(85, g.v+(g.v<0?260:110)*dt); else if(k.D) g.v=Math.max(-45, g.v-(g.v>0?260:90)*dt); else { const dr=150*dt; g.v=Math.abs(g.v)<=dr?0:g.v-Math.sign(g.v)*dr; }
+  const sm=0.62; if(k.L) g.st=Math.max(-sm, g.st-2.4*dt); else if(k.R) g.st=Math.min(sm, g.st+2.4*dt); else { const r=3*dt; g.st=Math.abs(g.st)<=r?0:g.st-Math.sign(g.st)*r; }
+  g.a+=g.v/PCC_WB*Math.tan(g.st)*dt; g.x+=Math.sin(g.a)*g.v*dt; g.y-=Math.cos(g.a)*g.v*dt;
+  const h=pccHit(g); if(h){ g.end=true; g.crash=h; pccMsg(g,false,h); return; }
+  if(pccParked(g) && Math.abs(g.v)<6){ g.ok+=dt; if(g.ok>=0.8){ g.end=true; pccWin(g); } } else g.ok=0;
+  const hud=document.getElementById("pccHud"); if(hud) hud.textContent=g.t.toFixed(1)+" dtk";
+}
+function pccWin(g){
+  const B=pccBest(), key="l"+g.i, best=!B[key] || g.t<B[key];
+  if(best) B[key]=+g.t.toFixed(1); B.u=Math.max(+B.u||0, Math.min(PCC_LV.length-1, g.i+1)); try{ localStorage.setItem("radar_pcc", JSON.stringify(B)); }catch(e){}
+  pccMsg(g,true,(best?"Rekor baru! ":"")+g.t.toFixed(1)+" dtk "+"⭐".repeat(pccStars(g.i,g.t)));
+}
+function pccMsg(g,ok,txt){
+  const m=document.getElementById("pccMsg"); if(!m) return; m.style.display="flex";
+  const nx=ok && g.i<PCC_LV.length-1;
+  m.innerHTML=`<div style="background:rgba(255,255,255,.96);border-radius:16px;padding:16px 18px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.35);max-width:80%;">
+    <div style="font-size:36px;">${ok?"🅿️":"💥"}</div><div style="font-weight:800;font-size:18px;margin:4px 0;">${ok?"Parkir rapi!":"Nabrak!"}</div><div style="font-size:13px;color:#4b5563;">${xlEsc(txt)}</div>
+    <div style="display:flex;gap:8px;margin-top:12px;"><button type="button" class="btn btn-outline" onclick="pccPlay(${g.i})">↻ Ulang</button>${nx?`<button type="button" class="btn btn-primary" onclick="pccPlay(${g.i+1})">Lanjut ▶</button>`:""}</div></div>`;
+}
+function pccDraw(g){
+  const c=g.ctx, L=g.L;
+  c.fillStyle="#3a3f47"; c.fillRect(0,0,PCC_W,PCC_H);
+  c.strokeStyle="rgba(255,255,255,.12)"; c.lineWidth=2; c.setLineDash([14,12]); c.beginPath(); c.moveTo(PCC_W/2,170); c.lineTo(PCC_W/2,PCC_H-20); c.stroke(); c.setLineDash([]);
+  const t=L.t; c.fillStyle=g.ok>0?"rgba(34,197,94,.45)":"rgba(34,197,94,.22)"; c.fillRect(t.x,t.y,t.w,t.h);
+  c.strokeStyle="#22c55e"; c.lineWidth=3; c.setLineDash([8,6]); c.strokeRect(t.x,t.y,t.w,t.h); c.setLineDash([]);
+  c.fillStyle="rgba(255,255,255,.85)"; c.font="800 22px Inter,Arial,sans-serif"; c.textAlign="center"; c.textBaseline="middle"; c.fillText("P", t.x+t.w/2, t.y+t.h/2);
+  if(L.dir!=null){ c.font="700 10px Inter,Arial,sans-serif"; c.fillText("hadap ke atas", t.x+t.w/2, t.y+t.h/2+18); }
+  for(const o of L.o){
+    if(o.k==="cc"){ c.fillStyle="#9ca3af"; c.fillRect(o.x,o.y,o.w,o.h); const vert=o.h>o.w, n=3; const cols=["#ef4444","#f8fafc","#3b82f6","#111827"];
+      for(let j=0;j<n;j++){ c.fillStyle=cols[(j+o.x)%cols.length]; if(vert) c.fillRect(o.x+5, o.y+8+j*(o.h-16)/n, o.w-10, (o.h-16)/n-6); else c.fillRect(o.x+8+j*(o.w-16)/n, o.y+5, (o.w-16)/n-6, o.h-10); }
+      c.strokeStyle="#4b5563"; c.lineWidth=1.5; c.strokeRect(o.x,o.y,o.w,o.h); }
+    else if(o.k==="cone"){ c.fillStyle="#f97316"; c.beginPath(); c.arc(o.x+o.w/2,o.y+o.h/2,o.w/2,0,Math.PI*2); c.fill(); c.fillStyle="#fff"; c.beginPath(); c.arc(o.x+o.w/2,o.y+o.h/2,o.w/5,0,Math.PI*2); c.fill(); }
+    else { c.fillStyle="#d1d5db"; c.fillRect(o.x,o.y,o.w,o.h); c.save(); c.beginPath(); c.rect(o.x,o.y,o.w,o.h); c.clip(); c.strokeStyle="#f59e0b"; c.lineWidth=6; for(let z=-o.h;z<o.w;z+=16){ c.beginPath(); c.moveTo(o.x+z,o.y+o.h); c.lineTo(o.x+z+o.h,o.y); c.stroke(); } c.restore(); }
+  }
+  c.save(); c.translate(g.x,g.y); c.rotate(g.a);
+  const l=PCC_TL, w=PCC_TW;
+  c.fillStyle="rgba(0,0,0,.35)"; c.fillRect(-w/2+3,-l/2+4,w,l);
+  c.fillStyle="#111"; for(const yy of [-l/2+10,-l/2+30,l/2-28,l/2-14]){ c.fillRect(-w/2-3,yy,4,9); c.fillRect(w/2-1,yy,4,9); }
+  c.fillStyle="#6b7280"; c.fillRect(-w/2,-l/2+20,w,l-20);
+  const cc=["#f8fafc","#ef4444","#3b82f6"]; for(let j=0;j<3;j++){ c.fillStyle=cc[j]; c.fillRect(-w/2+4,-l/2+26+j*22,w-8,17); c.fillStyle="rgba(0,0,0,.25)"; c.fillRect(-w/2+6,-l/2+30+j*22,w-12,5); }
+  c.fillStyle="#E60012"; c.fillRect(-w/2+1,-l/2,w-2,20); c.fillStyle="#bfdbfe"; c.fillRect(-w/2+4,-l/2+3,w-8,6);
+  c.restore();
+  if(g.k.U||g.k.D){ /* indikator kecepatan */ }
+}
+/* ===== GAME BALAP TOL — "Surya Cipta → KIIC" (19 Nov 2026, permintaan Khairul) =====
+   Start GT Karawang Timur (KM 54, kawasan Surya Cipta), finish GT Karawang Barat (KM 47, kawasan KIIC): ±7 km arah Jakarta.
+   19 Nov 09.00 — TANPA SERVER: tidak memakai Firebase sama sekali dan tidak memakai server lain.
+   • Main sendiri   • Berdua 1 HP (layar dibagi kiri–kanan)   • Tantang teman: kirim waktu ke WhatsApp.
+   Lintasan HARIAN (seed dari tanggal): semua driver hari itu melewati jalan & rintangan yang sama, jadi adu waktu lewat WA tetap adil.
+   Rekor hanya disimpan di HP ini. */
+const BT_LEN=7000, BT_V=58, BT_PXM=2.5, BT_W=360, BT_LX=[80,180,280], BT_TL=32;
+const BT_UNITS=[["Avanza","#B91C1C"],["Raize","#F59E0B"],["Rush","#1F2937"],["Agya GR","#DC2626"],["Calya","#E5E7EB"],["Innova","#6B7280"],["Veloz","#2563EB"],["Fortuner","#111827"],["Sigra","#16A34A"]];
+const BT_CRASH=["Brak! Nyenggol {u} 😬","Spion {u} kena… minta maaf dulu 🙏","Waduh, {u} ngerem mendadak!","Pelan-pelan, Pak Kapten! 😅","Klakson dulu dong… telat 🙈"];
+let _bt=null, _btAc=null;
+function btYmd(t){ const d=new Date(t==null?Date.now():t); return d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0"); }
+function btTgl(){ return new Date().toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}); }
+function btSeed(){ let h=2166136261; for(const c of "radar-tol-"+btYmd()){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
+function btRng(seed){ let a=seed>>>0; return ()=>{ a=(a+0x6D2B79F5)|0; let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
+function btNow(){ return Date.now(); }
+function btName(){ const n=String((currentUser&&currentUser.name)||(currentUser&&currentUser.username)||"").trim().split(/\s+/)[0]||"Driver"; return n.slice(0,12); }
+function btSnd(k){
+  try{ if(typeof quietRole==="function" && quietRole()) return; _btAc=_btAc||new (window.AudioContext||window.webkitAudioContext)(); const ac=_btAc, t=ac.currentTime;
+    const tone=(f,s,d,ty,v)=>{ const o=ac.createOscillator(), g=ac.createGain(); o.type=ty||"sine"; o.frequency.value=f; g.gain.setValueAtTime(v||.15,t+s); g.gain.exponentialRampToValueAtTime(.0001,t+s+d); o.connect(g); g.connect(ac.destination); o.start(t+s); o.stop(t+s+d+.02); };
+    if(k==="beep") tone(1320,0,.12,"square",.08);
+    else if(k==="brak"){ tone(90,0,.35,"sawtooth",.25); tone(60,.05,.3,"square",.15); }
+    else if(k==="telolet"){ [0,.18,.36,.54].forEach((s,i)=>tone(i%2?659:523,s,.17,"square",.09)); }
+    else if(k==="ding"){ tone(988,0,.1,"sine",.12); tone(1319,.1,.15,"sine",.12); }
+    else if(k==="go") tone(880,0,.35,"square",.1);
+  }catch(e){}
+}
+/* ---------- lintasan (sama untuk seed yang sama) ---------- */
+function btCourse(seed){
+  const R=btRng(seed), C={cars:[], cones:[], items:[], signs:[]};
+  const pick=a=>a[Math.floor(R()*a.length)];
+  const car=(at,l,v,k,len)=>{ const u=pick(BT_UNITS); C.cars.push({id:C.cars.length, b:at-v*(at/BT_V), v, l, k:k||"car", len:len||(k==="tronton"?30:17), u:k==="tronton"?"Tronton":k==="motor"?"Motor nyasar":u[0], col:k==="tronton"?pick(["#EA580C","#0EA5E9","#65A30D"]):u[1], ph:R()*6}); };
+  for(let w=180; w<1000; w+=110+R()*70) car(w, Math.floor(R()*3), 22+R()*6);
+  for(let w=1150; w<2000; w+=250){ const gap=Math.floor(R()*3); [0,1,2].filter(l=>l!==gap).forEach((l,i)=>{ if(i===0 || R()<.55) car(w+R()*30, l, 14, "tronton"); }); }
+  C.signs.push({w:2200, t:"🚑 Hati-hati, ada ambulans"});
+  C.signs.push({w:2600, t:"🚧 Perbaikan jalan · Batas 60"});
+  for(let w=2700; w<3000; w+=25) C.cones.push({w, l:2});
+  for(let w=3020; w<3320; w+=25) C.cones.push({w, l:0});
+  for(let w=2750; w<3300; w+=200) car(w, 1, 15);
+  C.signs.push({w:3280, t:"📸 Kamera ETLE · Batas 60"}); C.cam=3400;
+  for(let w=3500; w<3850; w+=130+R()*60) car(w, Math.floor(R()*3), 23+R()*5);
+  C.goat=3950; C.signs.push({w:3800, t:"🐐 Awas hewan menyeberang"});
+  for(let w=4200; w<4800; w+=150+R()*60) car(w, Math.floor(R()*3), 22+R()*6);
+  car(4300, 1, 18, "motor", 6); car(4650, 0, 18, "motor", 6);
+  C.signs.push({w:4880, t:"🎁 Ambil bonus di jalan"});
+  [["kopi",4980],["gorengan",5180],["telolet",5380]].forEach(([k,w])=>C.items.push({k, w, l:Math.floor(R()*3)}));
+  for(let w=4950; w<5550; w+=170+R()*60) car(w, Math.floor(R()*3), 23+R()*5);
+  C.signs.push({w:5620, t:"👀 Ada yang nonton… pelan-pelan"});
+  for(let w=5720; w<6200; w+=60){ const gap=Math.floor((w-5720)/120)%3; [0,1,2].filter(l=>l!==gap).forEach(l=>{ if(R()<.6) car(w+R()*20, l, 9); }); }
+  for(let w=6300; w<6900; w+=95+R()*50) car(w, Math.floor(R()*3), 24+R()*5);
+  C.signs.push({w:6800, t:"🏁 GT Karawang Barat · KIIC"});
+  return C;
+}
+/* ---------- rekor di HP ini ---------- */
+function btRec(){ try{ return JSON.parse(localStorage.getItem("radar_btrec")||"{}")||{}; }catch(e){ return {}; } }
+function btBestLocal(){ const r=btRec(); return (r.today && r.today.d===btYmd())?+r.today.t:0; }
+function btRecSave(t, pen){
+  const r=btRec(), d=btYmd();
+  if(!(r.today && r.today.d===d) || t<r.today.t) r.today={d, t:+t.toFixed(1)};
+  if(!r.all || t<r.all.t) r.all={d, t:+t.toFixed(1)};
+  r.runs=[{ts:Date.now(), t:+t.toFixed(1), pen:pen||0}].concat(r.runs||[]).slice(0,10);
+  try{ localStorage.setItem("radar_btrec", JSON.stringify(r)); }catch(e){}
+}
+function btShare(text){
+  const u="https://wa.me/?text="+encodeURIComponent(text);
+  try{ if(window.AndroidTLS && window.AndroidTLS.openExternal){ window.AndroidTLS.openExternal(u); return; } }catch(e){}
+  try{ if(navigator.share){ navigator.share({text}).catch(()=>{}); return; } }catch(e){}
+  window.open(u, "_blank");
+}
+function btShareSolo(t, pen){
+  btShare(`🏁 *Balap Tol RADAR* — Surya Cipta → KIIC\nLintasan ${btTgl()}\n${btName()}: *${(+t).toFixed(1)} dtk*${pen?` (sudah termasuk penalti +${pen})`:""}${t<130?" 🔥":""}\n\nBerani adu? Buka RADAR → Hiburan → 🏁 Balap Tol. Lintasan hari ini sama untuk semua 😄`);
+}
+/* ---------- menu ---------- */
+function btBody(){ return document.getElementById("funBody"); }
+function btOpen(el){
+  el=el||btBody(); if(!el) return; btStop(); const B=btBestLocal();
+  el.innerHTML=`<div class="card" style="margin-bottom:10px;"><div style="font-size:12px;color:var(--text-dim);">Lintasan ${btTgl()} · ±7 km arah Jakarta</div>
+      <div style="font-weight:800;font-size:17px;margin:2px 0;">🏁 GT Karawang Timur → GT Karawang Barat</div>
+      <div style="font-size:13px;">Start kawasan <b>Surya Cipta</b> (KM 54), finish kawasan <b>KIIC</b> (KM 47). Tempel e-Toll, salip tronton, kasih jalan ambulans, awas kamera ETLE dan kambing nyasar 🐐.</div>
+      ${B?`<div style="font-size:12px;color:var(--text-dim);margin-top:6px;">Waktu terbaik kamu hari ini: <b>${B.toFixed(1)} dtk</b></div>`:""}</div>
+    <button type="button" class="btn btn-primary" style="width:100%;margin-bottom:8px;padding:14px;" onclick="btPlay([btName()])">🏎 Main sendiri</button>
+    <button type="button" class="btn btn-outline" style="width:100%;margin-bottom:8px;padding:14px;" onclick="btDuoSetup()">👥 Berdua 1 HP<br><small style="font-weight:500;">layar dibagi kiri–kanan</small></button>
+    <button type="button" class="btn btn-outline" style="width:100%;padding:14px;" onclick="btRecUi()">🏆 Rekor saya & tantang teman</button>
+    <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Kontrol: ◀ ▶ pindah lajur (atau geser layar), tahan REM untuk pelan. Truk jalan sendiri. Nabrak = berhenti sebentar + tambah waktu. Game ini tidak memakai internet/server.</div>`;
+}
+function btRecUi(){
+  const el=btBody(); if(!el) return; btStop(); const r=btRec(), B=btBestLocal();
+  el.innerHTML=`<div class="card"><h3 style="margin:0 0 8px;">🏆 Rekor saya</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        <div style="background:var(--bg,#F4F6FA);border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-dim);">Terbaik hari ini</div><div style="font-size:22px;font-weight:800;">${B?B.toFixed(1)+" dtk":"–"}</div></div>
+        <div style="background:var(--bg,#F4F6FA);border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-dim);">Terbaik sepanjang masa</div><div style="font-size:22px;font-weight:800;">${r.all?r.all.t.toFixed(1)+" dtk":"–"}</div></div></div>
+      ${(r.runs||[]).length?`<div style="font-size:12px;font-weight:800;margin-bottom:4px;">10 permainan terakhir</div>${r.runs.map(x=>`<div style="display:flex;padding:5px 0;border-top:1px solid var(--border);font-size:13px;"><span style="flex:1;">${new Date(x.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span><span>${x.t.toFixed(1)} dtk${x.pen?` <small style="color:var(--text-dim);">(+${x.pen})</small>`:""}</span></div>`).join("")}`:`<div style="font-size:13px;color:var(--text-dim);">Belum ada permainan. Ayo coba!</div>`}</div>
+    ${B?`<button type="button" class="btn btn-primary" style="margin-top:10px;" onclick="btShareSolo(${B})">📤 Tantang teman lewat WhatsApp</button>`:""}
+    <button type="button" class="btn btn-outline" style="margin-top:8px;" onclick="btOpen()">← Kembali</button>`;
+}
+function btDuoSetup(){
+  const el=btBody(); if(!el) return; btStop(); let p2=""; try{ p2=localStorage.getItem("radar_btp2")||""; }catch(e){}
+  el.innerHTML=`<div class="card"><h3 style="margin:0 0 6px;">👥 Berdua 1 HP</h3>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">Layar dibagi dua: pemain kiri pakai tombol kiri, pemain kanan pakai tombol kanan. Lebih lega kalau HP dimiringkan.</div>
+      <label style="font-size:12px;">Pemain kiri</label><input id="btP1" type="text" maxlength="12" value="${xlEsc(btName())}" style="width:100%;margin-bottom:8px;">
+      <label style="font-size:12px;">Pemain kanan</label><input id="btP2" type="text" maxlength="12" value="${xlEsc(p2)}" placeholder="Nama teman" style="width:100%;">
+      <div id="btP2m" style="font-size:12px;color:#b91c1c;margin-top:4px;"></div></div>
+    <button type="button" class="btn btn-primary" style="margin-top:10px;padding:14px;" onclick="btDuoGo()">🏁 Mulai berdua</button>
+    <button type="button" class="btn btn-outline" style="margin-top:8px;" onclick="btOpen()">← Kembali</button>`;
+}
+function btDuoGo(){
+  const a=String((document.getElementById("btP1")||{}).value||"").trim().slice(0,12)||"Kiri", b=String((document.getElementById("btP2")||{}).value||"").trim().slice(0,12);
+  if(!b){ const m=document.getElementById("btP2m"); if(m) m.textContent="Isi nama pemain kanan dulu."; return; }
+  try{ localStorage.setItem("radar_btp2", b); }catch(e){}
+  btPlay([a, b]);
+}
+/* ---------- permainan ---------- */
+function btPlay(names){
+  const el=btBody(); if(!el) return; btStop();
+  const duo=names.length>1, goAt=btNow()+3000, seed=btSeed();
+  const col=(i)=>`<div style="min-width:0;">
+      ${duo?`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><b style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i===0?"◀ ":""}${xlEsc(names[i])}${i===1?" ▶":""}</b><span><b id="btTm${i}">0.0</b> dtk</span></div>`
+        :`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:11px;color:var(--text-dim);text-align:center;margin-bottom:6px;">
+          <div>KM<br><b id="btKm${i}" style="font-size:15px;color:var(--text);">54+000</b></div><div>Kecepatan<br><b id="btSp${i}" style="font-size:15px;color:var(--text);">0</b></div>
+          <div>Waktu<br><b id="btTm${i}" style="font-size:15px;color:var(--text);">0.0</b></div><div>Penalti<br><b id="btPs${i}" style="font-size:15px;color:var(--text);">0</b></div></div>`}
+      <div id="btWr${i}" style="position:relative;"><canvas id="btCv${i}" style="width:100%;display:block;border-radius:12px;touch-action:none;background:#3d4148;"></canvas>
+        <div id="btMg${i}" style="position:absolute;left:6px;right:6px;top:${duo?"8px":"70px"};display:none;justify-content:center;pointer-events:none;"><div style="background:rgba(17,24,39,.88);color:#fff;border-radius:12px;padding:${duo?"6px 8px":"9px 14px"};font-weight:800;font-size:${duo?"12px":"15px"};text-align:center;max-width:100%;"></div></div>
+        <div id="btOv${i}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;"></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:${duo?"4px":"8px"};margin-top:8px;user-select:none;-webkit-user-select:none;">
+        <button type="button" data-g="${i}" data-b="L" class="btn btn-outline" style="padding:${duo?"14px 0":"16px 4px"};font-size:18px;touch-action:none;">◀</button>
+        <button type="button" data-g="${i}" data-b="B" class="btn btn-outline" style="padding:${duo?"14px 0":"16px 4px"};font-size:${duo?"12px":"15px"};touch-action:none;">REM</button>
+        <button type="button" data-g="${i}" data-b="R" class="btn btn-outline" style="padding:${duo?"14px 0":"16px 4px"};font-size:18px;touch-action:none;">▶</button></div></div>`;
+  el.innerHTML=`<div id="btArea" style="display:grid;grid-template-columns:${duo?"1fr 1fr":"1fr"};gap:${duo?"10px":"0"};max-width:${duo?"900px":"420px"};margin:0 auto;">${names.map((n,i)=>col(i)).join("")}</div><div id="btRes"></div>`;
+  const S={duo, names, games:[], raf:0, last:performance.now(), shown:false};
+  _bt=S;
+  names.forEach((n,i)=>{
+    const cv=document.getElementById("btCv"+i); let cssW=cv.clientWidth||(duo?180:360);
+    let H=560; if(duo){   /* layar dibagi: tinggi kanvas menyesuaikan layar (tegak atau dimiringkan), tombol tetap kelihatan */
+      const availH=Math.max(200, window.innerHeight-190); H=Math.round(BT_W*availH/cssW);
+      if(H<420){ H=420; cssW=Math.round(availH*BT_W/H); } else if(H>900) H=900;
+      cv.style.width=cssW+"px"; cv.style.margin="0 auto"; }
+    const dpr=Math.min(2, window.devicePixelRatio||1)*(duo?Math.min(1, cssW/BT_W*1.4):1);
+    cv.width=Math.round(BT_W*dpr); cv.height=Math.round(H*dpr); const ctx=cv.getContext("2d"); ctx.setTransform(cv.width/BT_W,0,0,cv.height/H,0,0);
+    const g={i, name:n, small:duo, H, PY:H-140, C:btCourse(seed), ctx, d:0, v:0, l:1, x:BT_LX[1], brake:false, st:"count", goAt, pen:0, stun:0, inv:0, shield:false, boost:0,
+      hit:{}, moved:{}, got:{}, amb:null, ambDone:false, camDone:false, goatHit:false, msg:null, msgShown:"", fin:0, gateA:0, gateB:0, sx:0, tx0:0};
+    S.games.push(g);
+    cv.addEventListener("pointerdown",e=>{ g.sx=e.clientX; g.tx0=Date.now(); });
+    cv.addEventListener("pointerup",e=>{ const dx=e.clientX-g.sx; if(Math.abs(dx)>25 && Date.now()-g.tx0<600) btLane(g, dx<0?-1:1); });
+  });
+  el.querySelectorAll("[data-b]").forEach(b=>{ const g=S.games[+b.dataset.g], k=b.dataset.b;
+    const on=e=>{ e.preventDefault(); if(k==="B") g.brake=true; else btLane(g, k==="L"?-1:1); }, off=e=>{ e.preventDefault(); if(k==="B") g.brake=false; };
+    b.addEventListener("pointerdown",on); b.addEventListener("pointerup",off); b.addEventListener("pointerleave",off); b.addEventListener("pointercancel",off); b.addEventListener("contextmenu",e=>e.preventDefault()); });
+  const K=duo?{a:[0,"L"],d:[0,"R"],s:[0,"B"],w:[0,"T"],ArrowLeft:[1,"L"],ArrowRight:[1,"R"],ArrowDown:[1,"B"],ArrowUp:[1,"T"]}:{ArrowLeft:[0,"L"],ArrowRight:[0,"R"],ArrowDown:[0,"B"],Enter:[0,"T"]," ":[0,"T"]};
+  S.kd=e=>{ const m=K[e.key]||K[String(e.key).toLowerCase()]; if(!m) return; e.preventDefault(); const g=S.games[m[0]]; if(m[1]==="B") g.brake=true; else if(m[1]==="T") btToll(m[0]); else btLane(g, m[1]==="L"?-1:1); };
+  S.ku=e=>{ const m=K[e.key]||K[String(e.key).toLowerCase()]; if(m && m[1]==="B"){ S.games[m[0]].brake=false; e.preventDefault(); } };
+  window.addEventListener("keydown",S.kd); window.addEventListener("keyup",S.ku);
+  const loop=ts=>{ if(_bt!==S) return; const dt=Math.min(0.05,(ts-S.last)/1000); S.last=ts; S.games.forEach(g=>{ btStep(g,dt); btDraw(g); btHud(g); }); btResultCheck(S); S.raf=requestAnimationFrame(loop); };
+  S.raf=requestAnimationFrame(loop);
+}
+function btLane(g, dir){ if(!g || g.st==="count" || g.st==="done") return; g.l=Math.max(0, Math.min(2, g.l+dir)); }
+function btToll(i){ const S=_bt; if(!S) return; const g=S.games[i||0]; if(!g) return;
+  if(g.st==="gate"){ btSnd("beep"); g.st="run"; g.gateA=btNow(); if(Math.random()<.18) btMsg(g,"Saldo kurang… eh cukup ding 😅",2); else btMsg(g,"✔ Saldo cukup. Gas!",1.4); btOvUi(g); }
+  else if(g.st==="fingate"){ btSnd("beep"); g.fin=btElapsed(g)+g.pen; g.st="done"; g.gateB=btNow(); btMsg(g,"🏁 Finish di KIIC!",3); btOvUi(g); if(!S.duo) btRecSave(g.fin, g.pen); }
+}
+function btElapsed(g){ return Math.max(0,(btNow()-g.goAt)/1000); }
+function btMsg(g, t, s){ g.msg={t, until:btNow()+(s||2)*1000}; }
+function btPen(g, s, t){ g.pen+=s; btMsg(g, t+(s?` +${s} dtk`:""), 2.2); }
+function btOvUi(g){
+  const ov=document.getElementById("btOv"+g.i); if(!ov) return;
+  if(g.st==="gate" || g.st==="fingate"){ ov.style.pointerEvents="auto"; ov.innerHTML=`<button type="button" onclick="btToll(${g.i})" style="position:absolute;left:50%;top:38%;transform:translateX(-50%);background:#17803d;color:#fff;border:3px solid #fff;border-radius:16px;padding:${g.small?"12px 12px":"16px 22px"};font-weight:900;font-size:${g.small?"14px":"18px"};white-space:nowrap;text-transform:none;box-shadow:0 6px 20px rgba(0,0,0,.45);">💳 Tempel e-Toll</button>`; }
+  else if(g.st==="done"){ ov.style.pointerEvents="none"; ov.innerHTML=(_bt && _bt.duo)?`<div style="background:rgba(255,255,255,.95);color:#111;border-radius:14px;padding:10px 12px;text-align:center;font-weight:800;">🏁 ${g.fin.toFixed(1)} dtk</div>`:""; }
+  else { ov.style.pointerEvents="none"; ov.innerHTML=""; }
+}
+function btResultCheck(S){
+  if(S.shown || !S.games.every(g=>g.st==="done")) return; S.shown=true;
+  const box=document.getElementById("btRes"); if(!box) return;
+  if(!S.duo){ const g=S.games[0], ov=document.getElementById("btOv0");
+    if(ov){ ov.style.pointerEvents="auto"; ov.innerHTML=`<div style="background:rgba(255,255,255,.97);color:#111;border-radius:16px;padding:16px;width:86%;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.4);">
+      <div style="font-size:34px;">🏁</div><div style="font-weight:900;font-size:18px;">Sampai KIIC!</div>
+      <div style="font-size:14px;margin:4px 0 4px;">Waktu kamu <b>${g.fin.toFixed(1)} dtk</b>${g.pen?` (termasuk penalti +${g.pen} dtk)`:""}</div>
+      <div style="font-size:12px;color:#4b5563;">${btBestLocal() && g.fin<=btBestLocal()+0.05?"🎉 Rekor terbaik kamu hari ini!":"Terbaik hari ini: "+btBestLocal().toFixed(1)+" dtk"}</div>
+      <button type="button" class="btn btn-primary" style="margin-top:12px;" onclick="btShareSolo(${g.fin.toFixed(1)},${g.pen})">📤 Tantang teman (WhatsApp)</button>
+      <div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="btOpen()">☰ Menu</button><button type="button" class="btn btn-outline" style="flex:1;" onclick="btPlay([btName()])">↻ Lagi</button></div></div>`; }
+    return; }
+  const L=S.games.slice().sort((a,b)=>a.fin-b.fin), w=L[0], gap=Math.round(L[1].fin*10)/10-Math.round(L[0].fin*10)/10;
+  const txt=`🏁 *Balap Tol RADAR* — Surya Cipta → KIIC (berdua)\nLintasan ${btTgl()}\n🥇 ${w.name}: *${w.fin.toFixed(1)} dtk*\n🥈 ${L[1].name}: ${L[1].fin.toFixed(1)} dtk\n\nSelisih ${gap.toFixed(1)} dtk 😄 Siapa berani tantang juaranya?`;
+  window._btDuoTxt=txt; window._btDuoNames=S.names.slice();
+  box.innerHTML=`<div class="card" style="margin-top:10px;text-align:center;"><div style="font-size:30px;">🏆</div><div style="font-weight:900;font-size:18px;">${xlEsc(w.name)} menang!</div>
+      <div style="font-size:13px;margin:4px 0 8px;">${L.map((g,i)=>`${i?"🥈":"🥇"} ${xlEsc(g.name)} · ${g.fin.toFixed(1)} dtk${g.pen?` (penalti +${g.pen})`:""}`).join("<br>")}<br><small style="color:var(--text-dim);">Selisih ${gap.toFixed(1)} dtk${gap<1?" — tipis banget! 😱":""}</small></div>
+      <button type="button" class="btn btn-primary" onclick="btShare(window._btDuoTxt)">📤 Kirim hasil ke WhatsApp</button>
+      <div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="btOpen()">☰ Menu</button><button type="button" class="btn btn-outline" style="flex:1;" onclick="btPlay(window._btDuoNames)">↻ Main lagi</button></div></div>`;
+  try{ box.scrollIntoView({block:"nearest"}); }catch(e){}
+}
+function btCarPos(c, t){ return c.b + c.v*t; }
+function btCarX(g, c, t){ const l=(g.moved[c.id]!=null)?g.moved[c.id]:c.l; let x=BT_LX[l]; if(c.k==="motor") x=Math.max(60, Math.min(300, x+65*Math.sin(t*2.2+c.ph))); return x; }
+function btStep(g, dt){
+  const now=btNow(), t=Math.max(0,(now-g.goAt)/1000);
+  g.x+= (BT_LX[g.l]-g.x)*Math.min(1, dt*9);
+  if(g.st==="count"){ if(now>=g.goAt){ g.st="gate"; if(g.i===0) btSnd("go"); btOvUi(g); } return; }
+  if(g.st==="gate" || g.st==="fingate" || g.st==="done"){ g.v=0; return; }
+  if(g.stun>0){ g.stun-=dt; g.v=0; }
+  else { const vmax=g.boost>0?BT_V*1.25:BT_V; if(g.brake) g.v=Math.max(0, g.v-28*dt); else g.v=Math.min(vmax, g.v+(g.v<BT_V*0.5?14:8)*dt); if(g.v>vmax) g.v=Math.max(vmax, g.v-15*dt); }
+  if(g.boost>0) g.boost-=dt; if(g.inv>0) g.inv-=dt;
+  const d0=g.d; g.d+=g.v*dt;
+  if(g.d>=BT_LEN-4){ g.d=BT_LEN-4; g.v=0; g.st="fingate"; btMsg(g,"Gerbang Tol Karawang Barat! Tempel e-Toll",3); btOvUi(g); return; }
+  const C=g.C, kmh=g.v/BT_V*80;
+  if(g.inv<=0) for(const c of C.cars){ if(g.hit[c.id]) continue; const p=btCarPos(c,t); if(p>g.d+5 || p+c.len<g.d-BT_TL) continue; if(p<g.d && p+c.len>g.d-BT_TL && Math.abs(btCarX(g,c,t)-g.x)<36){ g.hit[c.id]=1;
+      if(g.shield){ g.shield=false; g.inv=1.2; btMsg(g,"🛡 Gorengan bikin kuat! Tabrakan diabaikan 😎",2); btSnd("ding"); }
+      else { g.stun=1.1; g.inv=2.2; g.v=0; btSnd("brak"); btPen(g, 2, BT_CRASH[Math.floor(Math.random()*BT_CRASH.length)].replace("{u}", c.u)); } break; } }
+  if(g.inv<=0) for(const k of C.cones){ if(k.w<g.d-BT_TL-2 || k.w>g.d) continue; if(Math.abs(BT_LX[k.l]-g.x)<36){ g.stun=0.8; g.inv=1.6; g.v=Math.min(g.v, 10); btSnd("brak"); btPen(g, 2, "Nabrak cone perbaikan jalan 🚧"); break; } }
+  if(!g.camDone && d0<C.cam && g.d>=C.cam){ g.camDone=true; if(kmh>61) btPen(g, 5, `📸 Kena ETLE! ${Math.round(kmh)} km/jam di zona 60`); else btMsg(g,"📸 ETLE: tertib, aman 👍",2); }
+  if(!g.amb && !g.ambDone && g.d>=2300){ g.amb={p:g.d-BT_TL-70, l:g.l}; btMsg(g,"🚑 Ambulans di belakang! Pindah lajur",2.5); }
+  if(g.amb){ g.amb.p+=(BT_V+16)*dt; if(!g.amb.judged && g.amb.p+18>=g.d-BT_TL){ g.amb.judged=true; if(Math.abs(BT_LX[g.amb.l]-g.x)<40) btPen(g, 3, "🚑 Tidak kasih jalan ambulans… ditegur!"); else btMsg(g,"👏 Mantap, kasih jalan ambulans!",2); }
+    if(g.amb.p>g.d+260){ g.amb=null; g.ambDone=true; } }
+  if(!g.goatHit && g.inv<=0 && C.goat<=g.d && C.goat>=g.d-BT_TL){ const gx=btGoatX(g,now); if(Math.abs(gx-g.x)<34){ g.goatHit=true; g.stun=1; g.inv=2; g.v=0; btSnd("brak"); btPen(g, 3, "Embeeek! Nabrak kambing… disuruh ganti rugi 😅"); } }
+  for(const it of C.items){ if(g.got[it.k] || it.w>g.d || it.w<g.d-BT_TL) continue; if(Math.abs(BT_LX[it.l]-g.x)<40){ g.got[it.k]=1; btSnd(it.k==="telolet"?"telolet":"ding");
+      if(it.k==="kopi"){ g.boost=4; btMsg(g,"☕ Kopi sachet! Ngebut 4 detik",2); }
+      else if(it.k==="gorengan"){ g.shield=true; btMsg(g,"🍤 Gorengan! Tahan 1× tabrakan",2); }
+      else { let n=0; for(const c of C.cars){ const p=btCarPos(c,t); if(p>g.d && p<g.d+220 && Math.abs(btCarX(g,c,t)-g.x)<40){ const cur=(g.moved[c.id]!=null)?g.moved[c.id]:c.l; g.moved[c.id]=cur===1?(Math.random()<.5?0:2):1; n++; } } btMsg(g, n?"📯 Om telolet om! Mobil pada minggir 😂":"📯 Telolet! (jalan sudah sepi)",2.2); } } }
+}
+function btGoatX(g, now){ const t=(now-g.goAt)/1000; return 80+200*(0.5+0.5*Math.sin(t*1.3)); }
+function btHud(g){
+  const set=(id,v)=>{ const e=document.getElementById(id); if(e && e.textContent!==v) e.textContent=v; }, i=g.i;
+  if(!g.small){ const km=Math.max(0, 54000-g.d), s=n=>String(n).padStart(3,"0"); set("btKm"+i, Math.floor(km/1000)+"+"+s(Math.floor(km%1000/100)*100)); set("btSp"+i, String(Math.round(g.v/BT_V*80))); set("btPs"+i, g.pen?("+"+g.pen):"0"); }
+  set("btTm"+i, (g.st==="count"?0:(g.st==="done"?g.fin:btElapsed(g)+g.pen)).toFixed(1));
+  const now=btNow(), t=(g.msg && now<g.msg.until)?g.msg.t:"";
+  if(t!==g.msgShown){ g.msgShown=t; const m=document.getElementById("btMg"+i); if(m){ m.style.display=t?"flex":"none"; m.firstElementChild.textContent=t; } }
+}
+function btStop(){
+  const S=_bt; _bt=null; if(!S) return;
+  try{ cancelAnimationFrame(S.raf); }catch(e){} try{ window.removeEventListener("keydown",S.kd); window.removeEventListener("keyup",S.ku); }catch(e){}
+}
+/* ---------- gambar ---------- */
+function btDraw(g){
+  const c=g.ctx, now=btNow(), t=Math.max(0,(now-g.goAt)/1000), H=g.H, PY=g.PY, Y=w=>PY-(w-g.d)*BT_PXM, sm=g.small;
+  c.fillStyle="#4d7c0f"; c.fillRect(0,0,BT_W,H);
+  c.fillStyle="#3d4148"; c.fillRect(30,0,300,H);
+  c.fillStyle="#9ca3af"; c.fillRect(24,0,6,H); c.fillRect(330,0,6,H);
+  c.strokeStyle="#f8fafc"; c.lineWidth=3; c.beginPath(); c.moveTo(36,0); c.lineTo(36,H); c.moveTo(324,0); c.lineTo(324,H); c.stroke();
+  c.setLineDash([26,22]); c.lineDashOffset=-(g.d*BT_PXM)%48; c.beginPath(); c.moveTo(130,0); c.lineTo(130,H); c.moveTo(230,0); c.lineTo(230,H); c.stroke(); c.setLineDash([]);
+  c.textAlign="center"; c.textBaseline="middle";
+  if(!sm) for(let w=Math.ceil((g.d-80)/500)*500; w<g.d+PY/BT_PXM+20; w+=500){ const y=Y(w); if(y<-20||y>H+20) continue; const km=54000-w; c.fillStyle="#166534"; c.fillRect(338,y-10,20,20); c.fillStyle="#fff"; c.font="800 8px Inter,Arial,sans-serif"; c.fillText(String(Math.floor(km/1000)),348,y-3); c.fillText(String(km%1000).padStart(3,"0"),348,y+5); }
+  for(const s of g.C.signs){ const y=Y(s.w), hh=sm?44:28; if(y<-40||y>H+40) continue; c.fillStyle="#1d4ed8"; btRR(c,36,y-hh/2,288,hh,6); c.fill(); c.fillStyle="#fff"; c.font=`800 ${sm?20:13}px Inter,Arial,sans-serif`; c.fillText(sm?s.t.replace(/ · .*/,""):s.t,180,y,280); }
+  btGate(c, Y(4), sm?"GT KARAWANG TIMUR":"GT KARAWANG TIMUR · SURYA CIPTA", g.gateA?Math.min(1,(now-g.gateA)/500):0, sm);
+  btGate(c, Y(BT_LEN), sm?"GT KARAWANG BARAT":"GT KARAWANG BARAT · KIIC", g.gateB?Math.min(1,(now-g.gateB)/500):0, sm);
+  { const y=Y(g.C.cam); if(y>-20 && y<H+20){ c.strokeStyle="#facc15"; c.lineWidth=2; c.setLineDash([6,6]); c.beginPath(); c.moveTo(36,y); c.lineTo(324,y); c.stroke(); c.setLineDash([]); c.font="22px sans-serif"; c.fillText("📸",12,y); } }
+  for(const k of g.C.cones){ const y=Y(k.w); if(y<-20||y>H+20) continue; c.fillStyle="#f97316"; c.beginPath(); c.moveTo(BT_LX[k.l],y-12); c.lineTo(BT_LX[k.l]-10,y+8); c.lineTo(BT_LX[k.l]+10,y+8); c.closePath(); c.fill(); c.fillStyle="#fff"; c.fillRect(BT_LX[k.l]-6,y-2,12,3); }
+  const IC={kopi:"☕",gorengan:"🍤",telolet:"📯"};
+  for(const it of g.C.items){ if(g.got[it.k]) continue; const y=Y(it.w); if(y<-30||y>H+30) continue; c.fillStyle="rgba(255,255,255,.9)"; c.beginPath(); c.arc(BT_LX[it.l],y,sm?22:17,0,Math.PI*2); c.fill(); c.font=`${sm?28:22}px sans-serif`; c.fillText(IC[it.k],BT_LX[it.l],y+1); }
+  { const y=Y(g.C.goat); if(y>-40 && y<H+40){ c.font=`${sm?38:30}px sans-serif`; c.fillText(g.goatHit?"💫":"🐐", btGoatX(g,now), y); } }
+  for(const car of g.C.cars){ const p=btCarPos(car,t); const yb=Y(p), yt=Y(p+car.len); if(yb<-10||yt>H+10) continue; const x=btCarX(g,car,t);
+    if(car.k==="motor"){ c.font=`${sm?34:28}px sans-serif`; c.fillText("🛵", x, (yb+yt)/2); if(!sm){ c.fillStyle="#fff"; c.font="700 10px Inter,Arial,sans-serif"; c.fillText("motor nyasar?!", x, yt-8); } continue; }
+    const w=car.k==="tronton"?40:32; c.fillStyle="rgba(0,0,0,.3)"; c.fillRect(x-w/2+3,yt+3,w,yb-yt);
+    c.fillStyle=car.col; btRR(c,x-w/2,yt,w,yb-yt,6); c.fill();
+    if(car.k==="tronton"){ c.fillStyle="#9ca3af"; c.fillRect(x-w/2+2,yt+20,w-4,yb-yt-22); c.strokeStyle="rgba(0,0,0,.25)"; c.lineWidth=1; for(let yy=yt+28; yy<yb-4; yy+=9){ c.beginPath(); c.moveTo(x-w/2+3,yy); c.lineTo(x+w/2-3,yy); c.stroke(); } c.fillStyle="#cbd5e1"; c.fillRect(x-w/2+5,yt+4,w-10,8); }
+    else { c.fillStyle="#bfdbfe"; c.fillRect(x-w/2+5,yt+8,w-10,8); c.fillRect(x-w/2+5,yb-14,w-10,6); }
+    if(g.hit[car.id]){ c.font="16px sans-serif"; c.fillText("💢", x+w/2, yt); }
+    if(!sm){ c.fillStyle="#fff"; c.font="700 10px Inter,Arial,sans-serif"; c.fillText(car.u, x, yt-7); } }
+  if(g.amb){ const yb=Y(g.amb.p), yt=Y(g.amb.p+18), x=BT_LX[g.amb.l]; c.globalAlpha=0.92; c.fillStyle="#f8fafc"; btRR(c,x-17,yt,34,yb-yt,6); c.fill(); c.fillStyle="#dc2626"; c.fillRect(x-17,(yt+yb)/2-3,34,6); c.fillStyle=(Math.floor(now/150)%2)?"#ef4444":"#3b82f6"; c.fillRect(x-8,yt+4,16,6); c.globalAlpha=1; if(!sm){ c.fillStyle="#fff"; c.font="800 10px Inter,Arial,sans-serif"; c.fillText("AMBULANS", x, yb+9); } }
+  const blink=g.inv>0 && Math.floor(now/120)%2;
+  btTruck(c, g.x, PY, blink?0.45:1, sm?"":"KAMU");
+  if(g.shield){ c.strokeStyle="#facc15"; c.lineWidth=3; c.beginPath(); c.arc(g.x, PY+BT_TL*BT_PXM/2, 52, 0, Math.PI*2); c.stroke(); }
+  if(g.boost>0){ c.font="18px sans-serif"; c.fillText("💨", g.x, PY+BT_TL*BT_PXM+12); }
+  if(g.st==="count"){ const n=Math.ceil((g.goAt-now)/1000); c.fillStyle="rgba(0,0,0,.45)"; c.fillRect(0,0,BT_W,H); c.fillStyle="#fff"; c.font="900 90px Inter,Arial,sans-serif"; c.fillText(n>0?String(n):"GO", BT_W/2, H/2-30); c.font=`800 ${sm?24:15}px Inter,Arial,sans-serif`; c.fillText("Siap-siap tempel e-Toll!", BT_W/2, H/2+30, 330); }
+}
+function btRR(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function btTruck(c, x, y, a, name){
+  const L=BT_TL*BT_PXM, w=36; c.globalAlpha=a;
+  c.fillStyle="rgba(0,0,0,.35)"; c.fillRect(x-w/2+4,y+4,w,L);
+  c.fillStyle="#111"; [10,24,L-26,L-12].forEach(yy=>{ c.fillRect(x-w/2-3,y+yy,4,10); c.fillRect(x+w/2-1,y+yy,4,10); });
+  c.fillStyle="#6b7280"; c.fillRect(x-w/2,y+16,w,L-16);
+  ["#f8fafc","#ef4444","#3b82f6"].forEach((k,i)=>{ c.fillStyle=k; c.fillRect(x-w/2+5,y+22+i*19,w-10,15); });
+  c.fillStyle="#E60012"; btRR(c,x-w/2,y,w,18,5); c.fill(); c.fillStyle="#bfdbfe"; c.fillRect(x-w/2+5,y+3,w-10,6);
+  c.globalAlpha=1;
+  if(name){ c.fillStyle="#fff"; c.font="800 11px Inter,Arial,sans-serif"; c.textAlign="center"; c.textBaseline="middle"; c.strokeStyle="rgba(0,0,0,.6)"; c.lineWidth=3; c.strokeText(name, x, y+L+10); c.fillText(name, x, y+L+10); }
+}
+function btGate(c, y, label, open, sm){
+  if(y<-60 || y>2000) return;
+  c.fillStyle="#e5e7eb"; c.fillRect(30,y-(sm?40:34),300,sm?24:18); c.fillStyle="#0f766e"; c.fillRect(30,y-(sm?40:34),300,5);
+  c.fillStyle="#111827"; c.font=`900 ${sm?17:11}px Inter,Arial,sans-serif`; c.textAlign="center"; c.textBaseline="middle"; c.fillText(label,180,y-(sm?26:24),290);
+  for(const lx of [130,230]){ c.fillStyle="#9ca3af"; c.fillRect(lx-5,y-16,10,16); }
+  BT_LX.forEach(x=>{ c.save(); c.translate(x-44,y-4); c.rotate(-open*1.2); for(let i=0;i<8;i++){ c.fillStyle=i%2?"#fff":"#dc2626"; c.fillRect(i*10,-3,10,6); } c.restore(); });
+}
 function ccSjGraceUntil(plat){ try{ const k=normPlat(plat); let t=0; (DB.get().ils||[]).forEach(b=>{ if(b && normPlat(b.ccPlat)===k) t=Math.max(t, +b.outTs||0, +b.loadTs||0); }); return t?t+SJ_GRACE_MS:0; }catch(e){ return 0; } }
 function ccPlatGateOk(plat){ return ccPlatRegistered(plat); }   /* 19 Nov 06.40: kembali seperti semula (permintaan Khairul) — tanpa jadwal tetap tertahan; surat jalan terakhir dibuka dari layar itu */
 function ccPlatRow(plat){ const k=normPlat(plat); return (DB.get().dccpSchedule||[]).find(r=>normPlat(r.police)===k)||null; }
@@ -13277,7 +13849,7 @@ function ccPlatGateCheck(){
       try{ ccAutoTrack(); }catch(e){}
       return;
     }
-    { const w=ccWaitGet(); if(w){ if(ccPlatGateOk(w.plat)) ccWaitCommit(); else { activeTab="orderstall"; render(); } return; } }   /* masih Menunggu Jadwal (buka ulang aplikasi): langsung ke layar menunggu */
+    { const w=ccWaitGet(); if(w){ if(w.mode!=="serah" && ccPlatGateOk(w.plat)) ccWaitCommit(); else { activeTab="orderstall"; render(); } return; } }   /* masih Menunggu Jadwal (buka ulang aplikasi): langsung ke layar menunggu */
     ccPlatGateOpen();
   }
 }
@@ -13343,6 +13915,27 @@ function takeWindow(t){ const d=new Date(t==null?Date.now():t), m=d.getHours()*6
 function takeHolderEntry(k, u){ return (DB.get().ccShiftPlat||[]).filter(x=>x && x.u===u && normPlat(x.plat)===k && !x.lo).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0]||null; }
 function takeAutoAt(q, holder){ try{ if(!q || q.status!=="wait" || !holder) return 0; if(Date.now()-(+(holder.since||holder.ts)||0) < TAKE_OLD_H*3600000) return 0; const at=(+q.ts||0)+TAKE_AUTO_MIN*60000; return takeWindow(at) ? at : 0; }catch(e){ return 0; } }
 function takeGaveTo(k, from, to){ const now=Date.now(); return (DB.get().takeLog||[]).some(x=>x && normPlat(x.plat)===k && x.from===from && x.to===to && now-(+x.ts||0)<14*3600000); }
+/* Driver yang SUDAH MELEPAS plat ini (serah terima / logout / dikeluarkan) lalu login lagi, sementara driver lain sudah memegangnya
+   di shift ini (atau login awal ≤2 jam sebelum shift): plat TIDAK diambil alih — masuk layar "Plat sudah diserahkan" (lihat surat jalan
+   terakhir & Display). Mengambil lagi hanya lewat "Minta plat kembali" (popup ke pemegang + Delivery). Hasil: pemegang plat sekarang, atau null. */
+function ccReleasedTo(plat){
+  try{
+    const k=normPlat(plat), me=currentUser&&currentUser.username, now=Date.now(); if(!k || !me) return null;
+    const L=(DB.get().ccShiftPlat||[]).filter(x=>x && normPlat(x.plat)===k);
+    const myLo=Math.max(0, ...L.filter(x=>x.u===me && x.lo && now-(+x.lo)<14*3600000).map(x=>+x.lo));
+    if(!myLo || L.some(x=>x.u===me && !x.lo && (+x.ts||0)>myLo)) return null;
+    const st=shiftWindow(prodDayStart(now), currentShift())[0];
+    return L.filter(x=>x.u!==me && !x.lo && (+x.ts||0)>=myLo-5000 && now-(+x.ts||0)<14*3600000 && (+x.ts||0)>=st-TRK_PRELOGIN_MS).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0]||null;
+  }catch(e){ return null; }
+}
+function ccUserName(u){ const x=(DB.get().users||[]).find(y=>y.username===u); return (x&&x.name)||u||""; }
+function ccTakeAskBack(){
+  const w=ccWaitGet(); if(!w || !currentUser) return;
+  const rb=ccReleasedTo(w.plat); if(!rb){ ccWaitCommit(); return; }
+  const k=normPlat(w.plat), me=currentUser.username;
+  DB.set(d=>{ d.takeReq=d.takeReq||{}; d.takeReq[k]={plat:platFmt(k)||w.plat, from:rb.u, fromName:ccUserName(rb.u), to:me, toName:(currentUser.name||me), lp:w.lp||"", ts:Date.now(), status:"wait", back:true}; });
+  render();
+}
 function takeHm(t){ return new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}); }
 /* HP driver lama: popup konfirmasi serah terima */
 function ccTakeAskCheck(){
@@ -13473,6 +14066,9 @@ function ccPlatGateSave(){
   if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
   if(!ccPlatGateOk(plat) && !ccPlatOk){ ccWaitEnter(plat, lp); return; }   /* belum masuk aplikasi: masuk mode Menunggu Jadwal (lihat Display dari rumah) */
   if(!ccPlatGateOk(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="nsPop"><div class="nsRoad"><span class="nsTruck">🚛</span><i></i></div><div class="nsBell">🔔</div><div class="nsTit">Maaf, plat ${xlEsc(plat)} belum ada jadwal</div><div class="nsSub">Kamu tetap login, tapi belum tampil di peta dan belum bisa absen<span class="nsDots"><b>.</b><b>.</b><b>.</b></span></div><div id="nsSj"></div><button type="button" class="btn btn-primary nsBtn" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal<small>bunyi di Koordinator</small></button><button type="button" class="btn btn-outline nsBtn" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update?<small>ingatkan Delivery</small></button><div id="cgReqMsg"></div><div class="nsFoot">⏳ Layar ini menunggu dan otomatis lanjut begitu plat terdaftar.</div></div>`; gateSjLoad(plat); return; }
+  { const rb=ccReleasedTo(plat); if(rb){   /* plat ini sudah kamu lepas & dipegang driver lain: jangan direbut */
+      if(!ccPlatOk){ ccWaitEnter(plat, lp, {mode:"serah"}); return; }
+      msg.innerHTML=`<div class="msg info">Plat <b>${xlEsc(plat)}</b> sudah kamu serahkan ke <b>${xlEsc(ccUserName(rb.u))}</b>. Pilih plat lain, atau Batal.</div>`; return; } }
   { const oth=ccTakeOther(plat), k=normPlat(plat), me=currentUser.username, q=(DB.get().takeReq||{})[k], fresh=q&&q.to===me&&Date.now()-q.ts<30*60000;
     let _tk = oth ? ccDccpTakeOk(DB.get(), plat, (currentUser&&currentUser.name)||"") : {ok:false};
     if(_tk.ok && takeGaveTo(k, me, oth.u)) _tk={ok:false};   /* plat ini sudah kamu serahkan ke dia (≤14 jam): nama di DCCP lama tidak boleh merebut balik otomatis */
