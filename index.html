@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="19 Nov 2026 10.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="19 Nov 2026 21.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2799,6 +2799,9 @@ function enterApp(forceTab){
   viewerGuardInstall(); viewerBadge(); cleanPlatForUser();
   syncCcProfileFromAccount();
   try{ if(window.AndroidTLS && AndroidTLS.keepAlive && currentUser && currentUser.role!=="display") AndroidTLS.keepAlive(); }catch(e){}
+  /* 19 Nov 18.50: aturan sesi TLS di APK (v69+). Delivery = login TLS sekali per shift (logout hanya 07.00 / 20.00);
+     Koordinator & role lain = aturan lama (logout 00/06/12/18/20 + 6 jam tidak dipakai). APK lama tidak punya fungsi ini → diabaikan. */
+  try{ if(window.AndroidTLS && AndroidTLS.tlsMode) AndroidTLS.tlsMode((currentUser && currentUser.role==="delivery" && !isViewer()) ? "shift" : ""); }catch(e){}
   requestNotifPermission();
   document.getElementById("roleSelectScreen").classList.add("hidden");
   document.getElementById("credScreen").classList.add("hidden");
@@ -3016,6 +3019,60 @@ function offLocCheck(loc){
   return true;
 }
 
+/* ===== INPUT UNIT PER DRIVER (19 Nov 2026 11.50, permintaan Khairul) =====
+   Berapa unit yang diinput (diparkir) tiap driver dispatcher per shift, dirinci per model, sebagai grafik batang bertumpuk.
+   Dihitung di HP dari data yang sudah ada: unit di yard, unit di ILS (nama driver tercatat sejak 19 Nov 10.30) dan log unit di HP (2×24 jam).
+   Tidak ada tulis/baca Firebase tambahan. Unit yang dikeluarkan lalu diinput ulang dihitung sebagai input baru. */
+let pdOpen=false;
+function pdCount(data, from, to){
+  const seen=new Set(), U={}, models={}, log=(data.unitLog||[]).filter(Boolean);
+  const add=(name, model, frame, ts)=>{ if(!ts || ts<from || ts>=to || !frame) return; const k=normVin(frame)+"|"+ts; if(seen.has(k)) return; seen.add(k);
+    const n=String(name||"").trim()||"(tidak tercatat)", m=String(model||"?").toUpperCase(), o=U[n]||(U[n]={n, t:0, m:{}}); o.t++; o.m[m]=(o.m[m]||0)+1; models[m]=(models[m]||0)+1; };
+  Object.keys(data.units||{}).forEach(k=>{ const u=data.units[k]; if(u) add(u.driver, u.model, u.frame, u.ts); });
+  (data.ils||[]).forEach(b=>{ if(!b || !Array.isArray(b.units)) return; b.units.forEach(u=>{ if(!u) return; let nm=u.by; if(!nm){ const e=log.find(x=>x.parkedTs===u.ts && normVin(x.frame)===normVin(u.frame)); nm=e&&e.parkedBy; } add(nm, u.model, u.frame, u.ts); }); });
+  log.forEach(e=>add(e.parkedBy, e.model, e.frame, e.parkedTs));
+  const L=Object.values(U).sort((a,b)=>b.t-a.t || a.n.localeCompare(b.n)), M=Object.keys(models).sort((a,b)=>models[b]-models[a] || a.localeCompare(b));
+  return {L, M, models, total:L.reduce((s,x)=>s+x.t,0)};
+}
+function pdNm(m){ return m.charAt(0)+m.slice(1).toLowerCase(); }
+/* warna per model ikut warna model di RADAR; kalau dua model di grafik yang sama kebetulan sewarna, model berikutnya diberi warna cadangan yang berbeda */
+function pdColors(M, data){ const used=[], C={}, alt=["#16A34A","#0891B2","#DB2777","#475569","#F59E0B","#9333EA","#65A30D","#EA580C","#2563EB","#B91C1C","#0F766E","#A16207"];
+  const rgb=h=>{ const m=/^#?([0-9a-f]{6})$/i.exec(String(h||"")); if(!m) return null; const n=parseInt(m[1],16); return [n>>16&255, n>>8&255, n&255]; };
+  const far=c=>{ const x=rgb(c); return !x || used.every(u=>{ const y=rgb(u); return !y || Math.hypot(x[0]-y[0],x[1]-y[1],x[2]-y[2])>95; }); };   /* beda warna cukup jauh supaya tidak tertukar */
+  M.forEach(m=>{ let c=String(getModelColor(m,data)||"").toUpperCase(); if(!c || !far(c)){ c=alt.find(x=>!used.includes(x) && far(x)) || alt.find(x=>!used.includes(x)) || c; } used.push(c); C[m]=c; }); return C; }
+function pdChartHtml(R, data, me, limit){
+  if(!R.L.length) return `<div style="font-size:13px;color:var(--text-dim);padding:6px 0;">Belum ada unit diinput di periode ini.</div>`;
+  const max=Math.max.apply(null, R.L.map(x=>x.t)); let L=R.L.slice(0, limit||R.L.length);
+  if(limit && me && !L.some(x=>x.n===me)){ const mine=R.L.find(x=>x.n===me); if(mine) L=L.concat([mine]); }
+  const rank=n=>R.L.findIndex(x=>x.n===n), COL=pdColors(R.M, data);
+  const row=x=>{ const i=rank(x.n), mine=x.n===me;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 6px;margin:2px 0;border-radius:8px;${mine?"background:#FFF7E6;":""}">
+      <div style="width:30%;min-width:88px;max-width:170px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${mine?"font-weight:800;":""}" title="${escH(x.n)}">${i<3?["🥇","🥈","🥉"][i]:(i+1)+"."} ${escH(x.n)}</div>
+      <div style="flex:1;min-width:0;"><div style="display:flex;height:16px;border-radius:4px;overflow:hidden;width:${(x.t/max*100).toFixed(2)}%;min-width:4px;">${R.M.filter(m=>x.m[m]).map(m=>`<div title="${escH(pdNm(m))}: ${x.m[m]}" style="flex:${x.m[m]} 0 0;background:${COL[m]};border-right:2px solid var(--panel,#fff);"></div>`).join("")}</div>
+        <div style="font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${R.M.filter(m=>x.m[m]).map(m=>pdNm(m)+" "+x.m[m]).join(" · ")}</div></div>
+      <div style="width:34px;text-align:right;font-weight:800;font-size:15px;">${x.t}</div></div>`; };
+  const legend=R.M.map(m=>`<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0;font-size:11px;color:var(--text-dim);"><i style="width:10px;height:10px;border-radius:2px;background:${COL[m]};display:inline-block;"></i>${escH(pdNm(m))} ${R.models[m]}</span>`).join("");
+  return `<div>${L.map(row).join("")}</div><div style="margin-top:8px;">${legend}</div>`;
+}
+/* Layar Scan Unit (dispatcher): ringkas, bisa dibuka */
+function pdDispHtml(data){
+  try{
+    const [a,b]=shiftWindow(prodDayStart(Date.now()), currentShift()), R=pdCount(data, a, b), me=(currentUser&&currentUser.name)||"";
+    const mine=R.L.find(x=>x.n===me), rk=mine?R.L.indexOf(mine)+1:0, sh=currentShift()==="2"?"Night":"Day";
+    return `<details style="margin-top:12px;border-top:1px dashed var(--border);padding-top:10px;" ${pdOpen?"open":""} ontoggle="pdOpen=this.open">
+      <summary style="cursor:pointer;font-size:14px;"><b>👷 Input unit shift ${sh}</b> · kamu <b style="font-size:17px;color:#16213E;">${mine?mine.t:0}</b> unit${rk?` · peringkat <b>#${rk}</b> dari ${R.L.length} driver`:""} <span style="font-size:12px;color:var(--text-dim);">(total ${R.total})</span></summary>
+      <div style="margin-top:8px;">${pdChartHtml(R, data, me, 10)}</div></details>`;
+  }catch(e){ return ""; }
+}
+/* Dashboard: ikut pilihan periode & shift di atas */
+function pdCardHtml(data){
+  try{
+    const [a,b]=ldrRange(), R=pdCount(data, a, b);
+    const lbl=new Date(a).toLocaleString("id-ID",{weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})+" – "+new Date(Math.min(b,Date.now())).toLocaleString("id-ID",{hour:"2-digit",minute:"2-digit"});
+    return `<div class="card"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;"><h3 style="margin:0;">👷 Input unit per driver</h3><span style="font-size:12px;color:var(--text-dim);">${escH(lbl)} · ${R.total} unit · ${R.L.length} driver</span></div>
+      <div style="margin-top:10px;">${pdChartHtml(R, data, "", 0)}</div></div>`;
+  }catch(e){ return ""; }
+}
 /* Ringkasan WIP saat ini (unit yang masih ada di stall / luar stall = belum dikirim), dipisah REGULER dan BATAM, format "Model = jumlah".
    Model yang muncul di kelompok itu dalam 3 hari terakhir tetap ditampilkan walau jumlahnya 0, supaya daftarnya tetap. Hanya tampilan. */
 function dispSumHtml(data){
@@ -3032,6 +3089,7 @@ function dispSumHtml(data){
   return `<div class="card d-sum" style="padding:12px 14px;">
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px;"><h3 style="margin:0;">📦 WIP (belum dikirim)</h3><span style="font-size:22px;font-weight:800;color:#E8833A;">${tot}</span><span style="font-size:12px;color:var(--text-dim);">unit</span></div>
     <div style="display:flex;gap:18px;flex-wrap:wrap;">${col("REGULER","#16213E","#E9EDF5",G.R)}${col("BATAM","#B25A12","#FDEBDC",G.B)}</div>
+    ${pdDispHtml(data)}
   </div>`;
 }
 function renderDispatcher(){
@@ -4045,6 +4103,7 @@ function ccEffTs(d, plat, ts){
 }
 function ccEarlyMin(d){ const v=Number((d||DB.get()).earlyMin); return isFinite(v)&&v>=0 ? v : 30; }
 function ccNextDue(d, plat){   // ts jam ritase berikutnya milik plat ini; null = tidak terjadwal / semua ritase sudah jalan
+  if(csRowPaused(d, plat)) return null;   /* baris DCCP belum aktif selama Change Shift */
   const k=normPlat(plat), r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return null;
   const times=dccpTripList(r); if(!times.length) return null;
   const done=dccpDoneCount(r,d); if(done>=times.length) return null;
@@ -4117,6 +4176,49 @@ function csArr(d){ const a=d.csList; return Array.isArray(a)?a:(a&&typeof a==="o
 function csLpOk(lp){ if(!currentUser || currentUser.role!=="koordinator") return true; const my=myKoordLP(); if(!my) return true; return lpCanon(lp||"")===lpCanon(my); }   /* koordinator tanpa LP di akunnya: semua LP (sama seperti manifest) */
 function csUntil(){ const h=3600000, pd=prodDayStart(Date.now()), e=currentShift()==="1"?pd+13*h:pd+24*h; return e+(currentShift()==="1"?11*h:13*h); }   // sampai akhir shift berikutnya
 function csActive(d, plat){ const k=normPlat(plat); if(!k) return null; return csArr(d).find(x=>x && normPlat(x.plat)===k && x.until>Date.now() && (d.ils||[]).filter(b=>normPlat(b.ccPlat)===k && b.ts>=x.ts).length < (x.n||1))||null; }
+/* ===== CHANGE SHIFT: PLAT TETAP DI DRIVER CHANGE SHIFT SAMPAI RITNYA DELOUT (19 Nov 2026 21.30, kasus Khairul) =====
+   Kasus: CC terlambat (macet) sudah masuk EKY dan didaftarkan Change Shift, tetapi di DCCP malam plat yang sama tertulis atas nama driver malam.
+   Dulu: driver malam login → dianggap pemegang sah (nama sesuai DCCP) → akun driver Change Shift dikeluarkan dan tidak bisa masuk lagi.
+   Sekarang selama rit Change Shift belum selesai (ILS-nya belum dibuat, atau ILS-nya belum Delout):
+   • plat tetap atas nama driver Change Shift: ia bisa mengisi plat lagi di shift baru, dan plat yang sempat terambil otomatis kembali ke dia;
+   • driver lain (nama DCCP shift baru) TIDAK mengambil alih otomatis → layar "Change Shift", otomatis masuk setelah rit itu Delout,
+     atau "Minta serah terima" (driver Change Shift menjawab / Delivery menyetujui) kalau truk memang sudah berpindah tangan;
+   • nama & kode driver untuk ILS / surat jalan rit itu = driver Change Shift (bukan nama DCCP shift baru). */
+function csEntry(d, plat){ const k=normPlat(plat); if(!k) return null; return csArr(d).filter(x=>x && normPlat(x.plat)===k && x.until>Date.now()).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0]||null; }
+function csBusy(d, plat){
+  try{ const e=csEntry(d, plat); if(!e) return null; const k=normPlat(plat);
+    if(csActive(d, plat)) return e;
+    return (d.ils||[]).some(b=>b && normPlat(b.ccPlat)===k && (+b.ts||0)>=(+e.ts||0) && b.status==="open") ? e : null;
+  }catch(err){ return null; }
+}
+function csUserName(d, u){ const x=((d||DB.get()).users||[]).find(y=>y.username===u); return (x&&x.name)||""; }
+function csOwnerU(d, plat, e){
+  try{ e=e||csEntry(d, plat); if(!e) return ""; if(e.u) return e.u;
+    const k=normPlat(plat), L=(d.ccShiftPlat||[]).filter(x=>x && normPlat(x.plat)===k && Math.abs((+x.ts||0)-(+e.ts||0))<14*3600000);
+    if(e.driver){ const m=L.filter(x=>ccNameMatch(e.driver, csUserName(d, x.u))).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0]; if(m) return m.u; }
+    const h=L.filter(x=>(+x.ts||0)<=(+e.ts||0) && (!x.lo || +x.lo>=(+e.ts||0))).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0];
+    return h?h.u:"";
+  }catch(err){ return ""; }
+}
+function csOwnerName(d, plat, e){ e=e||csEntry(d, plat); if(!e) return ""; return csUserName(d, csOwnerU(d, plat, e))||e.driver||""; }
+function csMine(d, plat, u, name){ const e=csBusy(d, plat); if(!e) return false; const o=csOwnerU(d, plat, e); return o ? o===u : !!(e.driver && ccNameMatch(e.driver, name||"")); }
+/* driver Change Shift sendiri yang menyerahkan plat (tombol Serahkan / disetujui Delivery) sesudah Change Shift dibuat: dihormati, tidak direbut balik */
+function csGave(d, plat, u, e){ const k=normPlat(plat); return (d.takeLog||[]).some(x=>x && x.from===u && normPlat(x.plat)===k && (+x.ts||0)>=(+e.ts||0) && (x.auto==="serah" || x.auto==="delivery")); }
+function csOwnerHold(d, plat, e){ const o=csOwnerU(d, plat, e), k=normPlat(plat); if(!o) return null;
+  return (d.ccShiftPlat||[]).filter(x=>x && x.u===o && normPlat(x.plat)===k && !x.lo && Date.now()-(+x.ts||0)<14*3600000).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0]||null; }
+/* 19 Nov 21.50 (Khairul): selama Change Shift, baris plat yang sama di DCCP shift baru BELUM AKTIF sampai Change Shift dibatalkan / rit-nya Delout.
+   Jadi HP Driver CC selain driver Change Shift tidak bisa memegang plat itu (login dengan nama DCCP pun tidak), kecuali serah terima disetujui
+   (driver Change Shift menekan Serahkan / Delivery menyetujui) — saat itu driver Change Shift berpindah ke dia. Hasil: {u, hold} atau null. */
+function csBlockMe(plat){
+  try{ if(!currentUser || currentUser.role!=="cc" || !plat) return null; const d=DB.get(), e=csBusy(d, plat); if(!e) return null;
+    if(csMine(d, plat, currentUser.username, currentUser.name)) return null;
+    const o=csOwnerU(d, plat, e); if(!o && !e.driver) return null;   /* driver Change Shift tidak diketahui: jangan mengunci siapa pun */
+    return {u:o, name:csOwnerName(d, plat, e), hold:csOwnerHold(d, plat, e)};
+  }catch(err){ return null; }
+}
+function csRowPaused(d, plat){ return !!csBusy(d||DB.get(), plat); }
+function csPausedBadge(d, plat){ const e=csBusy(d, plat); if(!e) return "";
+  return `<div title="Jadwal DCCP plat ini aktif setelah rit Change Shift Delout atau Change Shift dibatalkan" style="margin-top:4px;display:inline-block;background:#F5F3FF;border:1px solid #C4B5FD;color:#6D28D9;border-radius:8px;padding:2px 7px;font-size:11px;line-height:1.35;"><b style="white-space:nowrap;">⏸ Belum aktif</b><br><span style="white-space:nowrap;">🔁 Change Shift</span><br>${xlEsc(csOwnerName(d, plat, e)||"driver shift lalu")}</div>`; }
 function csOpen(){
   if(!canCS()) return; const d=DB.get();
   const rows=(d.dccpSchedule||[]).map(r=>{ const t=dccpTripList(r), dn=dccpDoneCount(r,d); return {r, sisa:t.slice(dn)}; }).filter(x=>x.sisa.length>0 && !csActive(d,x.r.police) && csLpOk(x.r.lp));
@@ -4136,7 +4238,9 @@ function csSave(){
   if(why.length<3){ msg.innerHTML=`<div class="msg err">Alasan wajib diketik (minimal 3 huruf).</div>`; return; }
   const until=csUntil(), by=(currentUser&&currentUser.name)||"";
   DB.set(d=>{ const a=csArr(d).filter(x=>x && !pick.some(p=>normPlat(p.r.police)===normPlat(x.plat)) && x.until>Date.now());
-    pick.forEach(p=>a.push({plat:platFmt(p.r.police), lp:p.r.lp||"", driver:p.r.driver||"", sisa:p.sisa, n:p.n, why, by, ts:Date.now(), until}));
+    pick.forEach(p=>{ const k=normPlat(p.r.police), H=(d.ccShiftPlat||[]).filter(x=>x && normPlat(x.plat)===k && !x.lo && Date.now()-(+x.ts||0)<14*3600000).sort((x,y)=>(+y.ts||0)-(+x.ts||0));
+      const h=(p.r.driver && H.find(x=>ccNameMatch(p.r.driver, csUserName(d, x.u)))) || H[0] || null;   /* akun yang sedang membawa truk ini = driver Change Shift */
+      a.push({plat:platFmt(p.r.police), lp:p.r.lp||"", driver:p.r.driver||(h?csUserName(d, h.u):""), u:h?h.u:"", sisa:p.sisa, n:p.n, why, by, ts:Date.now(), until}); });
     d.csList=capLog(a,60); });
   closeModal(); try{ holdRelease(); }catch(e){} render();
 }
@@ -4144,11 +4248,11 @@ function csCancel(k){ if(!canCS()) return; { const x=csArr(DB.get()).find(y=>y &
   DB.set(d=>{ d.csList=csArr(d).filter(x=>x && normPlat(x.plat)!==k); }); render(); }
 function csCardHtml(data){
   if(!canCS()) return "";
-  const L=csArr(data).filter(x=>x && csActive(data,x.plat) && csLpOk(x.lp)), hm=t=>holdHm(t);
+  const L=csArr(data).filter(x=>x && (csActive(data,x.plat) || (csBusy(data,x.plat)||{}).ts===x.ts) && csLpOk(x.lp)), hm=t=>holdHm(t);
   return `<div class="card" style="border-left:5px solid #7B4FD0;"><h3>🔁 CC Change Shift${L.length?` (${L.length})`:""}</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">CC yang minus di shift ini dan dilanjutkan di shift berikutnya. Setelah DCCP baru diupload, CC ini diprioritaskan masuk, jam berapa pun hadir.</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">CC yang minus di shift ini dan dilanjutkan di shift berikutnya. Setelah DCCP baru diupload, CC ini diprioritaskan masuk, jam berapa pun hadir. Selama rit Change Shift belum Delout, jadwal plat yang sama di DCCP baru <b>belum aktif</b> dan plat tetap atas nama driver Change Shift.</div>
     <button class="btn btn-primary" style="width:100%;" onclick="csOpen()">➕ Pilih CC Change Shift</button>
-    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:space-between;gap:8px;align-items:center;"><div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.lp||"-")}${x.driver?" · "+xlEsc(x.driver):""}</span><br><span style="font-size:12px;">Dilanjutkan ${x.n||1} rit (${(x.sisa||[]).map(xlEsc).join(", ")}) · ${xlEsc(x.why||"")} · ${xlEsc(x.by||"-")} ${hm(x.ts)}</span></div><button class="btn btn-outline btn-sm" onclick="csCancel('${xlEsc(normPlat(x.plat))}')">✕</button></div>`).join("")}
+    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);margin-top:8px;display:flex;justify-content:space-between;gap:8px;align-items:center;"><div style="font-size:13px;"><b>${xlEsc(platFmt(x.plat))}</b> <span style="font-size:11px;color:var(--text-dim);">LP ${xlEsc(x.lp||"-")} · 👤 ${xlEsc(csOwnerName(data, x.plat, x)||x.driver||"-")}</span>${(()=>{ const k=normPlat(x.plat), b=(data.ils||[]).filter(y=>y && normPlat(y.ccPlat)===k && (+y.ts||0)>=(+x.ts||0) && y.status==="open")[0]; return b?` <span style="font-size:11px;background:#F5F3FF;color:#6D28D9;border-radius:6px;padding:1px 6px;font-weight:700;">ILS dibuat · menunggu Delout</span>`:""; })()}<br><span style="font-size:12px;">Dilanjutkan ${x.n||1} rit (${(x.sisa||[]).map(xlEsc).join(", ")}) · ${xlEsc(x.why||"")} · ${xlEsc(x.by||"-")} ${hm(x.ts)}</span></div><button class="btn btn-outline btn-sm" onclick="csCancel('${xlEsc(normPlat(x.plat))}')">✕</button></div>`).join("")}
   </div>`;
 }
 /* BATCH PERTAMA shift = 3 CC PERTAMA di DCCP (urut jam rit pertama, sama jam -> urutan baris DCCP), yang belum jalan satu rit pun di shift ini.
@@ -4159,7 +4263,7 @@ const FIRST_BATCH_N=3;
 function ccFirstBatch(d, plat){
   try{
     const k=normPlat(plat), mt=d.dccpMeta||{}, base=mt.dateTs||dccpFileDate(mt.fileName)||prodMidnight();
-    const rows=(d.dccpSchedule||[]).map((r,i)=>({r,i})).filter(x=>x.r && !x.r.extra && dccpTripList(x.r).length)
+    const rows=(d.dccpSchedule||[]).map((r,i)=>({r,i})).filter(x=>x.r && !x.r.extra && dccpTripList(x.r).length && !csRowPaused(d, x.r.police))
       .map(x=>Object.assign(x,{t:ccTimeToTs(dccpTripList(x.r)[0], base)})).sort((a,b)=>(a.t-b.t)||(a.i-b.i)).slice(0, FIRST_BATCH_N);
     const m=rows.find(x=>normPlat(x.r.police)===k); if(!m) return false;
     return dccpDoneCount(m.r, d)===0;
@@ -5985,7 +6089,7 @@ function sjActionsHtml(b){
   else h+=btn('btn-green','🚪 Delout','delout');
   h+=`</div>`;
   if(b.valStartTs){
-    h+=`<div style="margin-top:8px;font-size:12px;">${b.sj?`<span style="color:#17803d;font-weight:700;">📄 Surat jalan tersimpan (terlihat oleh CC sejak Loading selesai)</span>${ilsTrailHtml(b)}${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;font-weight:800;">SJKB ${escH(b.sjkb)}</span>`:""}${canKeluarkanCC()?` <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjView(${b.id})">👁 Lihat PDF</button> <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjDownload(${b.id})">⬇ Unduh</button>`:""}`:`<span style="color:#b45309;font-weight:700;">⚠ PDF surat jalan belum masuk.</span>`} <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjUploadPick(${b.id})">${b.sj?'Ganti':'Unggah'} PDF</button></div>`;
+    h+=`<div style="margin-top:8px;font-size:12px;">${b.sj?`<span style="color:#17803d;font-weight:700;">📄 Surat jalan tersimpan (terlihat oleh CC sejak Loading selesai)</span>${ilsTrailHtml(b)}${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 8px;font-weight:800;">SJKB ${escH(b.sjkb)}</span>`:""}${canKeluarkanCC()?` <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjView(${b.id})">👁 Lihat PDF</button> <button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjDownload(${b.id})">⬇ Unduh</button>`:""}`:`<span style="color:#b45309;font-weight:700;">⚠ PDF surat jalan belum dibuat Delivery.</span>`} ${(!b.sj || sjCanReplace())?`<button class="btn btn-outline btn-sm" style="width:auto;padding:4px 10px;" onclick="sjUploadPick(${b.id})">${b.sj?'Ganti':'Unggah'} PDF</button>`:`<div style="font-size:11px;color:var(--text-dim);margin-top:3px;">Surat jalan hanya dibuat sekali · kalau isinya salah, minta Delivery/Admin yang mengganti.</div>`}</div>`;
   }
   return h;
 }
@@ -5999,7 +6103,10 @@ function validasiMulai(id){
 }
 function validasiSelesai(id){
   const b=sjILS(id); if(!b||b.valTs) return;
-  if(!confirm("Semua unit sudah dipindai & tervalidasi, dan tombol Generate di TLS sudah ditekan?")) return;
+  /* 19 Nov 16.55: tombol "✔ Validasi selesai" di layar TLS (APK) memakai ILS terakhir yang dibuka lewat tombol Validasi, dan ingatan itu
+     bisa basi (lihat radarSJ). Jadi nama CC selalu ditampilkan, dan diberi peringatan kalau validasi CC ini tidak sedang dibuka dari HP ini. */
+  const mine=!!(b.valStartTs && (!b.valDv || b.valDv===devCode()) && Date.now()-b.valStartTs<3*3600000);
+  if(!confirm((mine?"":"⚠ PERHATIAN: validasi CC ini TIDAK sedang dibuka dari HP ini. Pastikan CC-nya benar.\n\n")+"Validasi selesai untuk CC "+(b.ccPlat||"-")+" (LP "+(b.lp||"-")+", "+((b.units||[]).length)+" unit)?\n\nSemua unit sudah dipindai & tervalidasi, dan tombol Generate di TLS sudah ditekan?")) return;
   { const who=sjWho(), dv=devCode(), dp=devPlat(), t=Date.now(); DB.set(d=>{ const x=d.ils.find(y=>y.id===id); if(x&&!x.valTs){ x.valTs=t; x.valDoneBy=who; x.valDoneDv=dv; x.valDoneDp=dp; } }); }
   try{ if(window.AndroidTLS && window.AndroidTLS.closeTls) window.AndroidTLS.closeTls(); }catch(e){}
 }
@@ -6206,8 +6313,31 @@ async function sjDateCheck(id, b64){
   const best=D.filter(x=>x.s).sort((a,c)=>Math.abs(a.ts-ref)-Math.abs(c.ts-ref))[0];
   return {ok:false, pdf:new Date(best.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:best.t?'2-digit':undefined,minute:best.t?'2-digit':undefined}), ils:new Date(ref).toLocaleString('id-ID',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})};
 }
+/* 19 Nov 16.30: surat jalan yang sama tersimpan di 2 ILS (B 9506 & B 9507 PEJ, No. SJKB .../0055/U6). Sekarang SEMUA jalur simpan PDF
+   (tombol unggah / Ganti PDF, "Jadikan surat jalan", kiriman otomatis APK dari TLS) dicek di sini sebelum disimpan:
+   1) No. SJKB di PDF sudah dipakai surat jalan ILS lain → ditolak.
+   2) No. Rangka di PDF tidak ada satu pun yang cocok dengan ILS ini, tapi cocok dengan ILS lain → ditolak.
+   Admin tetap bisa menyimpan dengan alasan (tercatat). PDF yang tidak terbaca otomatis tidak ditolak. */
+/* 19 Nov 17.05 (permintaan Khairul): SURAT JALAN HANYA DIBUAT SEKALI. Kalau ILS sudah punya surat jalan (biasanya dari Delivery saat ILS dibuat),
+   Koordinator tidak lagi mendapat tombol simpan/ganti dan PDF yang tertangkap saat validasi tidak disimpan. Kalau belum ada, Koordinator boleh
+   menyimpan seperti biasa. Mengganti PDF yang salah hanya Delivery & Admin (dengan cek No. Rangka / No. SJKB). */
+function sjCanReplace(){ return !!(currentUser && !isViewer() && (currentUser.role==="delivery" || currentUser.role==="admin")); }
+function sjSkOf(txt){ const T=String(txt||""), m=T.match(/No\.?\s*SJKB\s*:?\s*([A-Z0-9]{3,}\/[A-Z0-9\/\-\.]{4,})/i) || T.match(/\b([A-Z0-9]{3,}\/\d{8}\/\d{3,6}\/[A-Z0-9]+)\b/); return m?m[1].toUpperCase():""; }
+function sjOwnCheck(id, txt){
+  const b=sjILS(id); if(!b || !txt) return {ok:true};
+  const flat=String(txt).toUpperCase().replace(/[^A-Z0-9]/g,""), now=Date.now(), norm=f=>String(f||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  const pool=(DB.get().ils||[]).filter(x=>x && x.id!==id && (x.status==="open" || now-(+x.ts||0)<SJ_KEEP_MS || (x.outTs && now-x.outTs<SJ_KEEP_MS)));
+  const sk=sjSkOf(txt);
+  if(sk){ const dup=pool.find(x=>x.sj && String(x.sjkb||"").toUpperCase().replace(/\s+/g,"")===sk); if(dup) return {ok:false, why:"No. SJKB "+sk+" sudah dipakai surat jalan ILS "+dup.ccPlat+" (LP "+(dup.lp||"-")+(dup.sj&&dup.sj.by?", disimpan "+dup.sj.by:"")+")."}; }
+  const mine=(b.units||[]).map(u=>norm(u.frame)).filter(f=>f.length>=8);
+  if(mine.length && !mine.some(f=>flat.indexOf(f)>=0)){
+    let other=null, oh=0; pool.forEach(x=>{ const h=(x.units||[]).map(u=>norm(u.frame)).filter(f=>f.length>=8 && flat.indexOf(f)>=0).length; if(h>oh){ oh=h; other=x; } });
+    if(other) return {ok:false, why:"No. Rangka di PDF ini milik ILS "+other.ccPlat+" (LP "+(other.lp||"-")+", "+oh+" unit cocok), bukan ILS "+b.ccPlat+"."}; }
+  return {ok:true};
+}
 async function sjStore(id,name,b64,mime){
   if(!sjILS(id)){ alert("ILS tidak ditemukan."); return false; }
+  { const ex=sjILS(id); if(ex.sj && !sjCanReplace()){ alert("Surat jalan CC "+(ex.ccPlat||"")+" sudah dibuat"+(ex.sj.by?" oleh "+ex.sj.by:"")+(ex.sj.ts?" jam "+holdHm(ex.sj.ts):"")+".\n\nSurat jalan hanya dibuat sekali. Kalau PDF-nya salah, minta Delivery atau Admin yang mengganti."); return false; } }
   { const ck=await sjDateCheck(id,b64); const bb=sjILS(id);
     window._sjChk = ck.skip || "";
     if(!ck.ok){
@@ -6216,6 +6346,13 @@ async function sjStore(id,name,b64,mime){
       const why=prompt("⚠ "+msg+"\n\nAdmin: tetap simpan PDF ini? Ketik alasannya (tercatat):",""); if(why===null) return false;
       if(String(why).trim().length<3){ alert("Alasan wajib diisi. PDF tidak disimpan."); return false; }
       window._sjChk = "tanggal beda, disimpan Admin: "+String(why).trim(); } }
+  { let txt=""; try{ txt=await sjPdfText(b64); }catch(e){}
+    const oc=sjOwnCheck(id, txt), bb=sjILS(id);
+    if(!oc.ok){
+      if(!(currentUser && currentUser.role==="admin")){ alert("Surat jalan DITOLAK untuk ILS "+(bb?bb.ccPlat:"")+": "+oc.why+"\n\nPastikan PDF dari TLS adalah surat jalan CC ini (cocokkan No. Rangka). Kalau yakin benar, minta Admin yang menyimpan."); return false; }
+      const why=prompt("⚠ "+oc.why+"\n\nAdmin: tetap simpan PDF ini ke ILS "+(bb?bb.ccPlat:"")+"? Ketik alasannya (tercatat):",""); if(why===null) return false;
+      if(String(why).trim().length<3){ alert("Alasan wajib diisi. PDF tidak disimpan."); return false; }
+      window._sjChk = (window._sjChk?window._sjChk+" · ":"")+"PDF milik ILS lain, disimpan Admin: "+String(why).trim(); } }
   const size=Math.floor(b64.length*3/4);
   if(size>900000){ alert("PDF terlalu besar (maks ±900 KB)."); return false; }
   if(!sjCanStore()){ alert("RADAR sedang offline — PDF belum bisa disimpan. Coba lagi saat online."); return false; }
@@ -6233,7 +6370,25 @@ async function sjStore(id,name,b64,mime){
   sjIndex(id,b64);   // baca No. SJKB & Cabang di latar belakang (untuk manifest)
   return true;
 }
-window.radarSJ=function(id,name,b64){ return sjStore(Number(id),name,b64,"application/pdf"); };
+/* 19 Nov 16.45: CELAH yang membuat 1 surat jalan masuk ke 2 ILS. APK mengingat ILS terakhir yang dibuka lewat tombol Validasi
+   dan mengirim SETIAP PDF yang diunduh di TLS ke ILS itu. Ingatan itu baru dihapus kalau "Validasi selesai" dikonfirmasi; kembali lewat
+   tombol ← RADAR atau membuka TLS lagi tidak menghapusnya. Jadi PDF CC lain bisa nyasar ke ILS lama, dan jalur ini dulu tidak mengecek
+   No. Rangka. Sekarang PDF kiriman APK hanya langsung disimpan kalau ILS itu memang sedang divalidasi dari HP ini (mulai ≤3 jam,
+   selesai ≤15 menit lalu) DAN isi PDF tidak milik ILS lain. Selain itu PDF dicocokkan lewat No. Rangka (sama seperti "Jadikan surat jalan"). */
+window.radarSJ=async function(id,name,b64){
+  id=Number(id); const b=sjILS(id), now=Date.now();
+  if(b && b.sj){
+    /* ILS ini sudah punya surat jalan → PDF validasi tidak menimpa. Pengecualian: isi PDF jelas milik ILS LAIN yang belum punya surat jalan
+       (ingatan APK basi) → disimpan ke ILS yang benar itu. */
+    let m=null; try{ const flat=await sjPdfFlat(b64); m=flat?sjMatchIls(flat):null; }catch(e){}
+    if(m && m.b.id!==id && !m.b.sj) return sjStore(m.b.id,name,b64,"application/pdf");
+    try{ miniToast("📄 Surat jalan "+(b.ccPlat||"")+" sudah dibuat"+(b.sj.by?" "+b.sj.by:"")+" — PDF validasi tidak disimpan.", 6000); }catch(e){} return false; }
+  const fresh=!!(b && b.valStartTs && (!b.valDv || b.valDv===devCode()) && now-b.valStartTs<3*3600000 && (!b.valTs || now-b.valTs<15*60000));
+  if(!fresh) return sjPickStore(name,b64);
+  let txt=""; try{ txt=await sjPdfText(b64); }catch(e){}
+  if(txt && !sjOwnCheck(id, txt).ok) return sjPickStore(name,b64);
+  return sjStore(id,name,b64,"application/pdf");
+};
 /* Dari penampil PDF di APK: tombol "Jadikan surat jalan" -> pilih ILS tujuan lalu simpan */
 let _sjPick=null;
 let _sjPickAll=false;
@@ -6391,8 +6546,9 @@ function sjRowHtml(b, now){
   const exp=sjFmt(sjT(b)+sjPdfKeepMs()), sh=String(b.shift||"").toUpperCase();
   const _un=!arc && sjUnread(b);
   return `<div class="kitem ${_un?"sjNew":""}" style="margin-top:8px;border-left:6px solid ${_un?"#E8590C":ccColor(b.ccPlat)};${_un?"background:#FFF3E6;":""}">${_un?`<span class="sjNewTag">🆕 BARU · belum dibuka</span>`:""}<b>📄 ${escH(b.ccPlat)}</b> · LP ${escH(b.lp||"-")}${sh?` · <span class="badge">${sh}</span>`:""}
+      ${(()=>{ const sk=String(b.sjkb||"").toUpperCase(); if(!sk || arc) return ""; const o=(DB.get().ils||[]).filter(x=>x && x.id!==b.id && String(x.sjkb||"").toUpperCase()===sk); return o.length?`<div style="margin-top:6px;background:#FEE2E2;color:#991B1B;border-radius:8px;padding:6px 8px;font-size:12px;font-weight:700;">⚠ No. SJKB sama dengan ILS ${o.map(x=>escH(x.ccPlat)).join(", ")}. Salah satu PDF tertukar: buka Lihat e-SJKB, cocokkan No. Rangka dengan unit CC ini, lalu Ganti PDF yang salah.</div>`:""; })()}
       <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">${b.sjkb?`<b>${escH(b.sjkb)}</b> · `:""}${b.units.length} unit · ${sjWhen(b)}${arc?` · <span class="badge">arsip</span>`:""}${b.sj?` · terhapus otomatis ${exp}`:" · PDF TLS belum masuk"}</div>${(currentUser && currentUser.role!=="cc")?ilsTrailHtml(b):""}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:arc?`<div style="font-size:12px;color:var(--text-dim);">PDF surat jalan tidak tersimpan untuk ILS ini.</div>`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>${sjCanUp?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="sjUploadPick(${b.id})">⬆ Unggah PDF validasi</button>`:""}`}${(sjCanUp && (b.sj||b.sjkb) && !b.batam)?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjUploadPick(${b.id})">⬆ Ganti PDF</button>`:""}${(!arc&&b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${b.batam?(b.sj?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">👁 Lihat</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ Download PDF</button>`:""):(b.sj||b.sjkb)?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="esjOpen(${b.id})">🧾 Lihat e-SJKB</button><button class="btn btn-sm" style="flex:1;min-width:130px;background:#0F2A4A;color:#fff;" onclick="esjDownload(${b.id})">⬇ Download e-SJKB</button>${b.sj?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjView(${b.id})">📑 ILS (TLS)</button><button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjDownload(${b.id})">⬇ PDF TLS</button>`:""}`:arc?`<div style="font-size:12px;color:var(--text-dim);">PDF surat jalan tidak tersimpan untuk ILS ini.</div>`:`<div style="font-size:12px;color:#b45309;font-weight:700;">⏳ Menunggu PDF validasi dari TLS. e-SJKB muncul setelah No. SJKB terbaca.</div>${sjCanUp?`<button class="btn btn-primary btn-sm" style="flex:1;min-width:130px;" onclick="sjUploadPick(${b.id})">⬆ Unggah PDF validasi</button>`:""}`}${(sjCanUp && sjCanReplace() && (b.sj||b.sjkb) && !b.batam)?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;" onclick="sjUploadPick(${b.id})">⬆ Ganti PDF</button>`:""}${(!arc&&b.undo&&now-b.outTs<DELOUT_UNDO_MS&&canUndoDelout())?`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:#b91c1c;" onclick="delOutUndo(${b.id})">↩ Batalkan Delout</button>`:""}</div></div>`;
 }
 /* 17 Nov 19.30: plat bisa dipakai banyak driver (beda shift / beda hari). Driver hanya melihat surat jalan rit yang dibuat
    SELAMA akunnya memegang plat itu (sejak mengisi plat, sampai driver lain mengisi plat yang sama), atau ILS yang tercatat atas namanya. */
@@ -7749,7 +7905,7 @@ function tlsOpenCardHtml(){
   if(!window.AndroidTLS||!window.AndroidTLS.openTls) return "";
   return `<div class="card"><h3>🌐 TLS</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Buka TLS di dalam aplikasi (untuk login atau cek manual). Pembuatan ILS tetap lewat tombol <b>Kirim ke TLS</b> di kartu ILS.</div>
-    <button class="btn btn-primary" style="width:100%;" onclick="if(!tlsInAppOk()){tlsInAppMsg();return;} try{AndroidTLS.openTls()}catch(e){alert('Gagal membuka TLS')}">🌐 Buka TLS</button></div>`;
+    <button class="btn btn-primary" style="width:100%;" onclick="if(!tlsInAppOk()){tlsInAppMsg();return;} try{ if(AndroidTLS.closeTls) AndroidTLS.closeTls(); AndroidTLS.openTls(); }catch(e){alert('Gagal membuka TLS')}">🌐 Buka TLS</button></div>`;
 }
 
 /* ======================================================================
@@ -9477,7 +9633,7 @@ function renderDccpUpload(){
       ${dccpSortedIdx(rows).map(([r,ri])=>{
         const a = withActual ? findActualArrival(r.police,data) : null;
         if(withActual && !lpMine(r.lp)) return "";
-        return `<tr><td>${r.lp}</td><td><b>${platFmt(r.police)}</b>${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${(withActual&&currentUser&&["koordinator","delivery","admin"].includes(currentUser.role))?`<div><button class="btn btn-sm" style="margin-top:4px;background:#fff4d6;color:#8a5a00;border:1px solid #e7c76a;" onclick="dccpAddRit(${ri})">➕ +1 Rit</button>${(r.addRit>0)?` <button class="btn btn-sm" style="margin-top:4px;background:#fdecec;color:#b02a2a;border:1px solid #e9a3a3;" onclick="dccpSubRit(${ri})">➖ Hapus rit tambahan</button>`:""}</div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
+        return `<tr${csRowPaused(data, r.police)?` style="background:#FAF7FF;"`:""}><td>${r.lp}</td><td><b>${platFmt(r.police)}</b>${csPausedBadge(data, r.police)}${(withActual&&currentUser&&currentUser.role==="koordinator")?`<div><button class="btn btn-sm" style="margin-top:4px;" onclick="dccpOpenEdit(${ri})">✏️ Edit</button></div>`:""}${(withActual&&currentUser&&["koordinator","delivery","admin"].includes(currentUser.role))?`<div><button class="btn btn-sm" style="margin-top:4px;background:#fff4d6;color:#8a5a00;border:1px solid #e7c76a;" onclick="dccpAddRit(${ri})">➕ +1 Rit</button>${(r.addRit>0)?` <button class="btn btn-sm" style="margin-top:4px;background:#fdecec;color:#b02a2a;border:1px solid #e9a3a3;" onclick="dccpSubRit(${ri})">➖ Hapus rit tambahan</button>`:""}</div>`:""}${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.pengganti?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">PENGGANTI</span>`:""}${r.gantiDari?`<div style="font-size:10px;color:var(--text-dim);">mengganti ${r.gantiDari}</div>`:""}${(r.gantiLog||[]).map(g=>`<div style="font-size:10px;color:#C9661A;">rit ${g.trips.join(", ")} diganti → ${g.to}</div>`).join("")}${(r.origPolice&&!r.tukar)?`<div style="font-size:10px;color:var(--text-dim);">ganti dari ${r.origPolice}</div>`:""}${r.tukar?`<div style="font-size:10px;color:#2F6FB5;">⇄ tukar dgn ${r.tukar}</div>`:""}${dccpNoteTxt(r)?`<div style="font-size:10px;color:var(--text-dim);">${dccpNoteTxt(r)}</div>`:""}</td><td>${r.model}</td><td>${r.driver}</td><td>${withActual ? ccTripChipsHtml(r,data) : (r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-"))}${(!withActual && r.planTrip && r.trips && r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td>
         ${withActual?`<td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+(a.stall?` (Stall ${ccLbl(a.stall)})`:" (antri)")+" "+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum</span>"}</td><td style="white-space:nowrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(${ri})">✏️</button> <button class="btn btn-sm" onclick="dccpGantiOpen(${ri})">🔁 Ganti</button> ${canTukarJam()?`<button class="btn btn-sm" onclick="tukarOpen(${ri})">🔄 Tukar Jam</button>`:""} ${canKeluarkanCC()?`<button class="btn btn-sm" onclick="earlyOne('${xlEsc(r.police)}',true)">🔓 Izin masuk awal</button>`:""} <button class="btn-danger btn btn-sm" onclick="dccpDelete(${ri})">🗑</button></td>`:""}</tr>`;
       }).join("")}
     </table></div>`;
@@ -9794,11 +9950,12 @@ function renderLeaderDashboard(){
     ${tile("Unit Diinput", R.tIn, "#16213E", "periode terpilih")}
     ${tile("Delivery by Unit", R.tOut, "#1E9E5A", "periode terpilih")}
     ${tile("Delivery by CC", R.tCC, "#0E7C66", "jumlah CC · periode terpilih")}
-    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>l+" "+(R.wipByLine[l]||0)).join(" · ")+" · stok unit di stall / luar stall"+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
+    ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>rkArea(l)+" "+(R.wipByLine[l]||0)).join(" · ")+" · stok unit di stall / luar stall"+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
   </div>
 
   ${batamAlertHtml(data)}
   ${planVsInputHtml(data, R)}
+  ${pdCardHtml(data)}
   ${pdmCardHtml(data)}
   ${rptShiftHtml(data)}
   ${inputXlCardHtml(data,'all')}
@@ -13040,7 +13197,7 @@ function ccPlatRememberedOk(){
   }catch(e){ return false; }
 }
 /* Plat WAJIB terdaftar di Jadwal DCCP (termasuk Spot Order dan CC Pengganti yang ditambah / diedit Koordinator atau Delivery). */
-function ccPlatRegistered(plat){ const k=normPlat(plat); return !!k && ((DB.get().dccpSchedule||[]).some(r=>normPlat(r.police)===k) || !!csActive(DB.get(),plat)); }
+function ccPlatRegistered(plat){ const k=normPlat(plat); return !!k && ((DB.get().dccpSchedule||[]).some(r=>normPlat(r.police)===k) || !!csActive(DB.get(),plat) || !!csBusy(DB.get(),plat)); }
 /* Batas lihat surat jalan terakhir: 12 jam setelah loading selesai / Delout (dipakai layar "belum ada jadwal"). */
 const SJ_GRACE_MS = 12*3600000;
 function ccPlatRecentRit(plat){ try{ const k=normPlat(plat); if(!k) return false; const st=shiftWindow(prodDayStart(Date.now()), currentShift())[0]-3600000, g=Date.now()-SJ_GRACE_MS;
@@ -13115,6 +13272,7 @@ function ccWaitDccpInfo(d){
 function renderCcWait(){
   const w=ccWaitGet(), d=DB.get(); if(!w) return "";
   if(w.mode==="serah") return renderCcSerah(w, d);
+  if(w.mode==="cs") return renderCcCs(w, d);
   const inf=ccWaitDccpInfo(d), now=Date.now();
   const st=Object.keys(d.cc||{}).filter(k=>d.cc[k] && d.cc[k].plat).sort((a,b)=>ccLbl(a)-ccLbl(b));
   const chips=st.map(k=>`<span style="display:inline-block;border:1px solid var(--border);border-radius:999px;padding:3px 9px;margin:2px;font-size:12px;"><b>S${ccLbl(k)}</b> ${xlEsc(platFmt(d.cc[k].plat))}</span>`).join("");
@@ -13168,16 +13326,49 @@ function renderCcSerah(w, d){
     <div style="text-align:left;margin-top:12px;">${funCardHtml()}</div>
   </div>`;
 }
+function renderCcCs(w, d){
+  const now=Date.now(), k=normPlat(w.plat), me=currentUser.username, e=csBusy(d, w.plat), on=(e&&csOwnerName(d, w.plat, e))||"driver Change Shift";
+  const q=(d.takeReq||{})[k], myQ=q && q.to===me && now-(+q.ts||0)<30*60000 ? q : null;
+  const ils=e?(d.ils||[]).filter(b=>b && normPlat(b.ccPlat)===k && (+b.ts||0)>=(+e.ts||0) && b.status==="open").sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0]:null;
+  const step=ils?(ils.loadTs?"loading selesai, menunggu Delout":ils.valTs?"validasi selesai, menunggu loading":ils.valStartTs?"sedang validasi":"ILS sudah dibuat"):"menunggu masuk stall / dibuat ILS";
+  const st=myQ && myQ.status==="wait" ? `<div class="msg info" style="text-align:left;">⏳ Menunggu jawaban <b>${xlEsc(on)}</b> atau Delivery.</div>`
+     : myQ && myQ.status==="no" ? `<div class="msg err" style="text-align:left;">${myQ.self?`<b>${xlEsc(myQ.by||on)}</b> menjawab truk masih dia bawa.`:`Delivery menolak permintaan ini.`}</div>` : "";
+  return `<div class="nsPop nsStatic" style="margin-bottom:12px;">
+    <div class="nsBell">🔁</div>
+    <div class="nsTit">Plat ${xlEsc(w.plat)} sedang Change Shift</div>
+    <div style="margin:8px 0;padding:10px;border-radius:12px;background:#F5F3FF;border:1px solid #C4B5FD;text-align:left;">
+      <div style="font-weight:800;">Rit sisa shift sebelumnya masih dibawa ${xlEsc(on)}</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">Status: ${step}. Jadwal DCCP plat ini <b>belum aktif</b> sampai rit Change Shift <b>Delout</b> (atau Change Shift dibatalkan). Setelah itu kamu otomatis masuk RADAR (tampil di peta, absen otomatis aktif).</div>
+    </div>
+    ${st}
+    ${myQ && myQ.status==="wait" ? "" : `<button type="button" class="btn btn-outline nsBtn" onclick="csAskTake()">🔑 Truk sudah saya bawa — minta serah terima<small>${xlEsc(on)} ditanya dulu, Delivery juga bisa menyetujui</small></button>`}
+    <button type="button" class="btn btn-outline nsBtn" onclick="switchTab('display')">📺 Lihat Display<small>stall CC · antrian · peta stall unit · jadwal</small></button>
+    <button type="button" class="btn btn-outline nsBtn" onclick="ccPlatGateOpen(true)">✏️ Ganti plat</button>
+    <div style="text-align:left;margin-top:12px;">${funCardHtml()}</div>
+  </div>`;
+}
+function csAskTake(){
+  const w=ccWaitGet(); if(!w || !currentUser) return;
+  const h=csBlockMe(w.plat); if(!h){ ccWaitCommit(); return; }
+  const k=normPlat(w.plat), me=currentUser.username;
+  DB.set(d=>{ d.takeReq=d.takeReq||{}; d.takeReq[k]={plat:platFmt(k)||w.plat, from:h.u||"", fromName:h.name||ccUserName(h.u)||"", to:me, toName:(currentUser.name||me), lp:w.lp||"", ts:Date.now(), status:"wait", cs:true}; });
+  render();
+}
 function ccTabbarSync(){
   try{ if(!currentUser || currentUser.role!=="cc") return; const w=ccWaitOn();
     if(w && activeTab==="ccmap") activeTab="orderstall";
-    document.querySelectorAll('#tabbar .tabbtn').forEach(b=>{ if(b.dataset.tab==="ccmap") b.style.display=w?"none":""; if(b.dataset.tab==="orderstall"){ const t=w?((ccWaitGet()||{}).mode==="serah"?"🔑 Diserahkan":"⏳ Menunggu Jadwal"):"Order Stall"; if(b.textContent!==t) b.textContent=t; } });
+    document.querySelectorAll('#tabbar .tabbtn').forEach(b=>{ if(b.dataset.tab==="ccmap") b.style.display=w?"none":""; if(b.dataset.tab==="orderstall"){ const t=w?((ccWaitGet()||{}).mode==="serah"?"🔑 Diserahkan":(ccWaitGet()||{}).mode==="cs"?"🔁 Change Shift":"⏳ Menunggu Jadwal"):"Order Stall"; if(b.textContent!==t) b.textContent=t; } });
   }catch(e){}
 }
 /* pantau: plat masuk jadwal → bunyi + masuk normal; DCCP baru diupload tapi plat belum ada → bunyi sekali */
 setInterval(()=>{ try{
   if(!ccWaitOn() || document.getElementById("cgPlat")) return;
   const w=ccWaitGet(), d=DB.get(), al=(tit,txt)=>{ try{ funStopAll(); }catch(e){} try{ soundEv('jadwal',txt); }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([300,150,300]); }catch(e){} try{ ringBg(tit, txt); }catch(e){} try{ if('Notification' in window && Notification.permission==='granted') new Notification(tit,{body:txt}); }catch(e){} };
+  if(w.mode==="cs"){   /* rit Change Shift driver lain selesai (Delout) / serah terima disetujui → masuk normal */
+    if(!csBlockMe(w.plat)){ const q=(d.takeReq||{})[normPlat(w.plat)], ok=q && q.to===currentUser.username && q.status==="ok";
+      al("✅ Plat siap dipakai", ok ? w.plat+": serah terima disetujui. RADAR masuk normal." : w.plat+": rit Change Shift sudah selesai. RADAR masuk normal."); ccWaitCommit(); }
+    return;
+  }
   if(w.mode==="serah"){   /* hanya lanjut kalau driver ini MEMINTA plat kembali dan disetujui / waktu habis di jam ganti shift */
     const k=normPlat(w.plat), me=currentUser.username, q=(d.takeReq||{})[k], rb=ccReleasedTo(w.plat);
     if(!q || q.to!==me || Date.now()-(+q.ts||0)>30*60000) return;
@@ -13733,7 +13924,9 @@ function ccShiftPlatSave(plat){
     DB.set(d=>{
       /* Plat yang sama dipakai driver shift sebelumnya yang lupa logout: akunnya dikeluarkan supaya HP-nya berhenti mengirim posisi dan tidak menimpa posisi truk */
       const k=ccPlatNorm(plat)||plat, slot=currentShift();
-      (d.ccShiftPlat||[]).forEach(x=>{ if(x.u!==un && !x.lo && (ccPlatNorm(x.plat)||x.plat)===k && (x.day!==day || (x.slot||"")!==slot)){ x.lo=Date.now(); d.forceOut=d.forceOut||{}; d.forceOut[x.u]=Date.now(); } });
+      const _cse=csBusy(d, k), _cso=_cse?csOwnerU(d, k, _cse):"";
+      (d.ccShiftPlat||[]).forEach(x=>{ if(_cso && x.u===_cso && un!==_cso) return;   /* driver Change Shift tidak dikeluarkan oleh akun lain selama ritnya berjalan */
+        if(x.u!==un && !x.lo && (ccPlatNorm(x.plat)||x.plat)===k && (x.day!==day || (x.slot||"")!==slot)){ x.lo=Date.now(); d.forceOut=d.forceOut||{}; d.forceOut[x.u]=Date.now(); } });
       /* plat ini sebelumnya dipakai akun lain: HP lamanya (termasuk layanan latar belakang APK) diperintah berhenti mengirim posisi. HP ini menyalakan ulang pengirimannya sendiri (ccAutoTrack). */
       if((d.ccShiftPlat||[]).some(x=>x.u!==un && (ccPlatNorm(x.plat)||x.plat)===k)){ const tk=trkKey(k), now=Date.now(); d.trkKill=d.trkKill||{}; d.trkKill[tk]=now; Object.keys(d.trkKill).forEach(x=>{ if(now-d.trkKill[x]>7*86400000) delete d.trkKill[x]; }); }
       const prev=(d.ccShiftPlat||[]).filter(x=>x.u===un && (ccPlatNorm(x.plat)||x.plat)===k && ((x.day===day && (x.slot||"")===slot) || Date.now()-(+x.ts||0)<14*3600000)).sort((p,q)=>(+p.ts||0)-(+q.ts||0))[0];
@@ -13749,6 +13942,7 @@ function ccShiftPlatEnsure(){
   try{
     if(!currentUser || currentUser.role!=="cc" || noPlatUser()) return;
     const pr=getCcProfile(), k=normPlat(pr.plat||""); if(!k) return;
+    if(csBlockMe(pr.plat)) return;   /* rit Change Shift driver lain masih berjalan */
     const un=currentUser.username, day=prodDayStart(Date.now()), slot=currentShift(), d=DB.get();
     const L=(d.ccShiftPlat||[]).filter(x=>x && normPlat(x.plat)===k);
     const mine=L.find(x=>x.u===un && x.day===day && (x.slot||"")===slot);
@@ -13760,7 +13954,8 @@ function ccPlatDbOk(){
   try{
     if(!currentUser || currentUser.role!=="cc") return false;
     let e=(DB.get().ccShiftPlat||[]).find(x=>x.u===currentUser.username && (x.shift||"")===(loginShift||"") && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift());
-    if(!e || !ccPlatGateOk(e.plat)) return false;
+    if(!e || !ccPlatGateOk(e.plat) || csBlockMe(e.plat)) return false;
+    if(e.lo && ccReleasedTo(e.plat)) return false;   /* 19 Nov 21.40: plat sudah diserahkan / diambil driver lain sesudah kamu keluar → lewat layar isi plat (Diserahkan), jangan dipulihkan diam-diam */
     if(e.lo){ const eu=e.u, et=e.ts; DB.set(d=>{ const x=(d.ccShiftPlat||[]).find(y=>y.u===eu && y.ts===et); if(x) delete x.lo; }); }
     const d=DB.get(), acc=(d.users||[]).find(u=>u.username===currentUser.username && u.role==="cc"), row=ccPlatRow(e.plat), pr=getCcProfile();
     const lp=(acc&&acc.lp)||(row&&row.lp)||pr.lp||""; if(!lp) return false;
@@ -13923,7 +14118,8 @@ function ccPlatChange(){ try{ if(document.getElementById("cgPlat")) return; ccPl
 function ccPlatGateCheck(){
   if(noPlatUser()){ ccPlatOk=true; return; }   // akun tanpa plat: tidak ditanya plat, tidak ada plat yang dipasang
   if(currentUser && currentUser.role==="cc" && !ccPlatOk && !document.getElementById("cgPlat")){
-    if(ccPlatRememberedOk() || ccPlatDbOk()){
+    const _pp=(()=>{ try{ return getCcProfile().plat||""; }catch(e){ return ""; } })();
+    if(!(_pp && csBlockMe(_pp)) && (ccPlatRememberedOk() || ccPlatDbOk())){
       ccPlatOk=true;
       try{ ccShiftPlatEnsure(); }catch(e){}   /* login ulang di shift yang sama: tanda pemegang plat dipulihkan (absen hanya dari pemegang plat) */
       try{ startAutoAbsen(true); }catch(e){}
@@ -13931,7 +14127,7 @@ function ccPlatGateCheck(){
       try{ ccAutoTrack(); }catch(e){}
       return;
     }
-    { const w=ccWaitGet(); if(w){ if(w.mode!=="serah" && ccPlatGateOk(w.plat)) ccWaitCommit(); else { activeTab="orderstall"; render(); } return; } }   /* masih Menunggu Jadwal (buka ulang aplikasi): langsung ke layar menunggu */
+    { const w=ccWaitGet(); if(w){ if(w.mode!=="serah" && (w.mode!=="cs" || !csBlockMe(w.plat)) && ccPlatGateOk(w.plat)) ccWaitCommit(); else { activeTab="orderstall"; render(); } return; } }   /* masih Menunggu Jadwal (buka ulang aplikasi): langsung ke layar menunggu */
     ccPlatGateOpen();
   }
 }
@@ -13995,7 +14191,7 @@ function ccTakeOther(plat){ const k=normPlat(plat), me=currentUser&&currentUser.
 const TAKE_AUTO_MIN = 5, TAKE_OLD_H = 2;
 function takeWindow(t){ const d=new Date(t==null?Date.now():t), m=d.getHours()*60+d.getMinutes(); return [SHIFT_START_H, SHIFT2_START_H].some(h=>m>=h*60-120 && m<h*60+60); }
 function takeHolderEntry(k, u){ return (DB.get().ccShiftPlat||[]).filter(x=>x && x.u===u && normPlat(x.plat)===k && !x.lo).sort((a,b)=>(+b.ts||0)-(+a.ts||0))[0]||null; }
-function takeAutoAt(q, holder){ try{ if(!q || q.status!=="wait" || !holder) return 0; if(Date.now()-(+(holder.since||holder.ts)||0) < TAKE_OLD_H*3600000) return 0; const at=(+q.ts||0)+TAKE_AUTO_MIN*60000; return takeWindow(at) ? at : 0; }catch(e){ return 0; } }
+function takeAutoAt(q, holder){ try{ if(!q || q.status!=="wait" || !holder) return 0; if(csBusy(DB.get(), q.plat)) return 0; if(Date.now()-(+(holder.since||holder.ts)||0) < TAKE_OLD_H*3600000) return 0; const at=(+q.ts||0)+TAKE_AUTO_MIN*60000; return takeWindow(at) ? at : 0; }catch(e){ return 0; } }
 function takeGaveTo(k, from, to){ const now=Date.now(); return (DB.get().takeLog||[]).some(x=>x && normPlat(x.plat)===k && x.from===from && x.to===to && now-(+x.ts||0)<14*3600000); }
 /* Driver yang SUDAH MELEPAS plat ini (serah terima / logout / dikeluarkan) lalu login lagi, sementara driver lain sudah memegangnya
    di shift ini (atau login awal ≤2 jam sebelum shift): plat TIDAK diambil alih — masuk layar "Plat sudah diserahkan" (lihat surat jalan
@@ -14035,6 +14231,7 @@ function ccTakeAskCheck(){
       <div style="font-size:40px;line-height:1;">🔑</div>
       <h3 style="margin:6px 0 4px;">Serah terima plat</h3>
       <div style="font-size:14px;margin-bottom:10px;"><b>${xlEsc(q.toName||q.to||"")}</b> minta memakai plat <b>${xlEsc(q.plat||k)}</b>.</div>
+      ${csBusy(DB.get(), q.plat||k)?`<div style="font-size:13px;margin-bottom:8px;padding:8px;border-radius:10px;background:#F5F3FF;border:1px solid #C4B5FD;">🔁 Plat ini sedang <b>Change Shift</b>. Kalau rit Change Shift masih kamu bawa, tekan <b>Bukan</b>.</div>`:""}
       <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Kalau kunci truk sudah kamu serahkan, tekan <b>Serahkan</b>. Kamu keluar dari RADAR dan posisi truk diambil dari HP ${xlEsc(q.toName||"driver baru")}.</div>
       <button type="button" class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="takeHandover(${JSON.stringify(k).replace(/"/g,"&quot;")},true)">✔ Serahkan ke ${xlEsc(q.toName||"driver baru")}</button>
       <button type="button" class="btn btn-outline" style="width:100%;" onclick="takeHandover(${JSON.stringify(k).replace(/"/g,"&quot;")},false)">✕ Bukan, truk masih saya bawa</button>
@@ -14048,11 +14245,14 @@ function ccTakeAskCheck(){
   }catch(e){}
 }
 setInterval(ccTakeAskCheck, 3000);
+/* serah terima disetujui selama Change Shift: penerima menjadi driver Change Shift (rit sisa dibawa dia) */
+function csMoveTo(d, k, toU, toName){ try{ const e=csBusy(d, k); if(!e) return; const x=csArr(d).find(y=>y && y.ts===e.ts && normPlat(y.plat)===normPlat(k)); if(!x) return;
+  x.moved=(Array.isArray(x.moved)?x.moved:[]).concat([{from:x.u||"", ts:Date.now()}]).slice(-5); x.u=toU; if(toName) x.driver=toName; if(!Array.isArray(d.csList)) d.csList=csArr(d); }catch(err){} }
 function takeHandover(k, ok){
   if(!currentUser || currentUser.role!=="cc") return;
   const me=currentUser.username, myN=currentUser.name||me, now=Date.now(); let q0=null;
   DB.set(d=>{ const q=(d.takeReq||{})[k]; if(!q || q.from!==me || q.status!=="wait") return; q0=Object.assign({}, q);
-    if(ok){ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===me && normPlat(x.plat)===k && !x.lo) x.lo=now; }); q.status="ok"; d.forceOut=d.forceOut||{}; d.forceOut[me]=now;
+    if(ok){ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===me && normPlat(x.plat)===k && !x.lo) x.lo=now; }); q.status="ok"; d.forceOut=d.forceOut||{}; d.forceOut[me]=now; csMoveTo(d, k, q.to, q.toName);
       d.takeLog=capLog((Array.isArray(d.takeLog)?d.takeLog:[]).concat([{ts:now, plat:q.plat, from:me, fromName:myN, to:q.to, toName:q.toName, auto:"serah"}]),50); }
     else q.status="no";
     q.self=true; q.by=myN; q.ts=now; });
@@ -14064,7 +14264,7 @@ function takeHandover(k, ok){
 function takeDecide(k, ok){
   if(!canKeluarkanCC()) return;
   DB.set(d=>{ const q=(d.takeReq||{})[k]; if(!q) return;
-    if(ok){ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===q.from && normPlat(x.plat)===k && !x.lo) x.lo=Date.now(); }); d.forceOut=d.forceOut||{}; d.forceOut[q.from]=Date.now(); q.status="ok";
+    if(ok){ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u===q.from && normPlat(x.plat)===k && !x.lo) x.lo=Date.now(); }); if(q.from){ d.forceOut=d.forceOut||{}; d.forceOut[q.from]=Date.now(); } q.status="ok"; csMoveTo(d, k, q.to, q.toName);
       d.takeLog=capLog((Array.isArray(d.takeLog)?d.takeLog:[]).concat([{ts:Date.now(), plat:q.plat, from:q.from, fromName:q.fromName, to:q.to, toName:q.toName, auto:"delivery", by:(currentUser&&currentUser.name)||""}]),50); }
     else q.status="no";
     q.by=(currentUser&&currentUser.name)||""; q.ts=Date.now(); });
@@ -14075,7 +14275,7 @@ function takeCardHtml(data){
   const L=Object.keys(data.takeReq||{}).map(k=>({k,q:data.takeReq[k]})).filter(x=>x.q.status==="wait" && Date.now()-x.q.ts<30*60000);
   if(!L.length) return "";
   return `<div class="card" style="border-left:5px solid #E8833A;"><h3>🔁 Minta Ambil Alih Plat (${L.length})</h3>
-    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);"><div style="font-size:13px;"><b>${xlEsc(x.q.plat)}</b> masih login atas nama <b>${xlEsc(x.q.fromName)}</b>.<br><b>${xlEsc(x.q.toName)}</b> minta memakai plat ini (pergantian driver). Kalau disetujui, ${xlEsc(x.q.fromName)} otomatis dikeluarkan dari aplikasi.<br><span style="font-size:12px;color:var(--text-dim);">HP ${xlEsc(x.q.fromName)} juga ditanya (bisa langsung menyerahkan).${(()=>{ const at=takeAutoAt(x.q, takeHolderEntry(x.k, x.q.from)); return at?` Tidak dijawab sampai <b>${takeHm(at)}</b> → otomatis disetujui (jam ganti shift).`:""; })()}</span></div>
+    ${L.map(x=>`<div style="padding:8px 0;border-top:1px solid var(--border);"><div style="font-size:13px;"><b>${xlEsc(x.q.plat)}</b> masih login atas nama <b>${xlEsc(x.q.fromName)}</b>.<br><b>${xlEsc(x.q.toName)}</b> minta memakai plat ini (pergantian driver)${csBusy(data, x.q.plat||x.k)?`<br><span style="color:#6D28D9;font-weight:700;">🔁 Plat ini sedang Change Shift — rit sisanya dibawa ${xlEsc(csOwnerName(data, x.q.plat||x.k))}. Setujui hanya kalau truk sudah berpindah tangan</span>`:""}. Kalau disetujui, ${xlEsc(x.q.fromName)} otomatis dikeluarkan dari aplikasi.<br><span style="font-size:12px;color:var(--text-dim);">HP ${xlEsc(x.q.fromName)} juga ditanya (bisa langsung menyerahkan).${(()=>{ const at=takeAutoAt(x.q, takeHolderEntry(x.k, x.q.from)); return at?` Tidak dijawab sampai <b>${takeHm(at)}</b> → otomatis disetujui (jam ganti shift).`:""; })()}</span></div>
       <div style="display:flex;gap:8px;margin-top:6px;"><button class="btn btn-primary btn-sm" onclick="takeDecide('${xlEsc(x.k)}',true)">✔ Setujui</button><button class="btn btn-outline btn-sm" onclick="takeDecide('${xlEsc(x.k)}',false)">✕ Tolak</button></div></div>`).join("")}
   </div>`;
 }
@@ -14148,11 +14348,26 @@ function ccPlatGateSave(){
   if(!lp){ msg.innerHTML=`<div class="msg err">Pilih LP.</div>`; return; }
   if(!ccPlatGateOk(plat) && !ccPlatOk){ ccWaitEnter(plat, lp); return; }   /* belum masuk aplikasi: masuk mode Menunggu Jadwal (lihat Display dari rumah) */
   if(!ccPlatGateOk(plat)){ window._cgPend=plat; msg.innerHTML=`<div class="nsPop"><div class="nsRoad"><span class="nsTruck">🚛</span><i></i></div><div class="nsBell">🔔</div><div class="nsTit">Maaf, plat ${xlEsc(plat)} belum ada jadwal</div><div class="nsSub">Kamu tetap login, tapi belum tampil di peta dan belum bisa absen<span class="nsDots"><b>.</b><b>.</b><b>.</b></span></div><div id="nsSj"></div><button type="button" class="btn btn-primary nsBtn" onclick="schedReqSend('edit')">📅 Jadwalkan / ubah jadwal<small>bunyi di Koordinator</small></button><button type="button" class="btn btn-outline nsBtn" onclick="schedReqSend('dccp')">🔔 DCCP belum di-update?<small>ingatkan Delivery</small></button><div id="cgReqMsg"></div><div class="nsFoot">⏳ Layar ini menunggu dan otomatis lanjut begitu plat terdaftar.</div></div>`; gateSjLoad(plat); return; }
-  { const rb=ccReleasedTo(plat); if(rb){   /* plat ini sudah kamu lepas & dipegang driver lain: jangan direbut */
+  /* Change Shift (19 Nov 21.30) */
+  { const bh=csBlockMe(plat); if(bh){
+      if(!ccPlatOk){ ccWaitEnter(plat, lp, {mode:"cs"}); return; }
+      msg.innerHTML=`<div class="msg info">Plat <b>${xlEsc(plat)}</b> sedang Change Shift dan masih dibawa <b>${xlEsc(bh.name||ccUserName(bh.u))}</b>. Jadwal DCCP plat ini belum aktif sampai rit Change Shift Delout. Pilih plat lain, atau Batal.</div>`; return; } }
+  const _csD=DB.get(), _csE=csBusy(_csD, plat), _csMe=!!(_csE && csMine(_csD, plat, currentUser.username, currentUser.name)) && !csGave(_csD, plat, currentUser.username, _csE);
+  const _csLost=!_csE && (_csD.takeLog||[]).some(x=>x && x.from===currentUser.username && x.auto==="cs" && normPlat(x.plat)===normPlat(plat) && Date.now()-(+x.ts||0)<14*3600000);   /* plat sempat dipakai rit Change Shift driver lain, sekarang sudah selesai */
+  if(_csMe){   /* kamu driver Change Shift: plat kembali / tetap ke kamu, pemegang lain (mis. nama DCCP shift baru) dikeluarkan */
+    const k=normPlat(plat), me=currentUser.username, now=Date.now(), O=(_csD.ccShiftPlat||[]).filter(x=>x && x.u!==me && normPlat(x.plat)===k && !x.lo && now-(+x.ts||0)<14*3600000);
+    if(O.length){ const nms=[...new Set(O.map(x=>ccUserName(x.u)))];
+      DB.set(d=>{ (d.ccShiftPlat||[]).forEach(x=>{ if(x.u!==me && normPlat(x.plat)===k && !x.lo) x.lo=now; }); d.forceOut=d.forceOut||{}; O.forEach(x=>{ d.forceOut[x.u]=now; });
+        if(d.takeReq) delete d.takeReq[k];
+        d.takeLog=capLog((Array.isArray(d.takeLog)?d.takeLog:[]).concat(O.map(x=>({ts:now, plat:platFmt(plat), from:x.u, fromName:ccUserName(x.u), to:me, toName:(currentUser.name||me), auto:"cs"}))),50); });
+      window._takeAutoMsg="Plat "+platFmt(plat)+" kembali ke kamu karena rit Change Shift-nya masih kamu bawa. Akun "+nms.join(", ")+" dikeluarkan sementara; masuk lagi otomatis setelah rit ini Delout.";
+    }
+  }
+  if(!_csMe){ const rb=_csLost ? null : ccReleasedTo(plat); if(rb){   /* plat ini sudah kamu lepas & dipegang driver lain: jangan direbut */
       if(!ccPlatOk){ ccWaitEnter(plat, lp, {mode:"serah"}); return; }
       msg.innerHTML=`<div class="msg info">Plat <b>${xlEsc(plat)}</b> sudah kamu serahkan ke <b>${xlEsc(ccUserName(rb.u))}</b>. Pilih plat lain, atau Batal.</div>`; return; } }
-  { const oth=ccTakeOther(plat), k=normPlat(plat), me=currentUser.username, q=(DB.get().takeReq||{})[k], fresh=q&&q.to===me&&Date.now()-q.ts<30*60000;
-    let _tk = oth ? ccDccpTakeOk(DB.get(), plat, (currentUser&&currentUser.name)||"") : {ok:false};
+  if(!_csMe){ const oth=ccTakeOther(plat), k=normPlat(plat), me=currentUser.username, q=(DB.get().takeReq||{})[k], fresh=q&&q.to===me&&Date.now()-q.ts<30*60000;
+    let _tk = (oth && !_csE) ? ccDccpTakeOk(DB.get(), plat, (currentUser&&currentUser.name)||"") : {ok:false};   /* selama rit Change Shift: tidak ada ambil alih otomatis karena nama DCCP */
     if(_tk.ok && takeGaveTo(k, me, oth.u)) _tk={ok:false};   /* plat ini sudah kamu serahkan ke dia (≤14 jam): nama di DCCP lama tidak boleh merebut balik otomatis */
     if(oth && _tk.ok){   /* nama akun sesuai DCCP plat ini & sudah ≤1 jam sebelum rit pertamanya: ambil alih otomatis, akun lama dikeluarkan */
       const on=(()=>{ const u=(DB.get().users||[]).find(y=>y.username===oth.u); return (u&&u.name)||oth.u; })(), now=Date.now();
@@ -14251,7 +14466,7 @@ function shareCardHtml(){
 let ccMapShift="all"; try{ const v=localStorage.getItem("radar_ccmapshift"); if(v==="day"||v==="night") ccMapShift=v; }catch(e){}
 function ccMapShiftOk(plat){
   if(ccMapShift==="all") return true;
-  const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); if(!r) return true;
+  const r=(DB.get().dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); if(!r || csRowPaused(DB.get(), plat)) return true;
   const T=dccpTripList(r); if(!T.length) return true;
   return T.some(t=>{ const h=+String(t).split(":")[0]; const day=(h>=SHIFT_START_H && h<SHIFT2_START_H); return ccMapShift==="day"?day:!day; });
 }
@@ -14353,7 +14568,7 @@ function trkDirOf(r, t, total){
   return trkDirGuess(r, t*(total>0?total:20));
 }
 function trkRit(plat, dir){
-  try{ const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return null;
+  try{ const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r || csRowPaused(data, plat)) return null;
     { const mt=data.dccpMeta||{}, dd=mt.dateTs||dccpFileDate(mt.fileName);   // jadwal DCCP sudah lewat (>1 jam setelah shift berakhir): jangan tampilkan nomor ritase dari jadwal basi
       if(dd && mt.shift){ const st=dd+(mt.shift==="night"?SHIFT2_START_H:SHIFT_START_H)*3600000, en=st+(mt.shift==="night"?11:13)*3600000; if(Date.now()>en+3600000 || Date.now()<st-3*3600000) return null; } }   // lewat, atau shift-nya baru mulai besok (CC istirahat hari ini): tidak ada label ritase
     const spot=!!r.extra, tot=Math.max(dccpTripList(r).length,spot?1:0), done=dccpDoneCount(r,data); if(!tot) return null;
@@ -14392,7 +14607,7 @@ function trkCompute(r, mp){
 function trkTxt(o){ return o.dir==="back" ? `${o.dB.toFixed(1)} km dari NVDC · ${o.dA.toFixed(1)} km lagi ke ADM KAP <span style="font-weight:700;color:#C77700;">↩ kembali</span>` : `${o.dA.toFixed(1)} km dari ADM KAP · ${o.dB.toFixed(1)} km lagi ke NVDC`; }
 /* CC hanya tampil di peta saat sedang bekerja: mulai 1 jam sebelum jam ritase pertamanya sampai 1 jam setelah shift DCCP berakhir. Plat yang bukan dari jadwal (Spot / Pengganti) atau DCCP tanpa tanggal/shift: selalu tampil. */
 function trkWorking(plat){
-  try{ const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r || r.extra) return true;
+  try{ const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r || r.extra || csRowPaused(data, plat)) return true;
     const mt=data.dccpMeta||{}, dd=mt.dateTs||dccpFileDate(mt.fileName); if(!dd||!mt.shift) return true;
     const t=dccpTripList(r), now=Date.now(), st=dd+(mt.shift==="night"?SHIFT2_START_H:SHIFT_START_H)*3600000, en=st+(mt.shift==="night"?11:13)*3600000;
     const first=t.length?ccTimeToTs(t[0],dd):st;
@@ -14622,6 +14837,7 @@ function ccDriverAny(plat, ts){
   const k=normPlat(plat); let n="";
   /* Nama driver: Jadwal DCCP / Pengganti (resmi, per shift) didahulukan. Kalau jadwal tidak punya nama, baru akun CC yang login dengan plat ini di shift SEKARANG.
      Akun non-CC (Dispatcher, Delivery, dll.) tidak pernah dipakai sebagai nama driver. */
+  try{ const d0=DB.get(), e=csBusy(d0, plat); if(e && (!ts || +ts>=(+e.ts||0))){ const n0=csOwnerName(d0, plat, e); if(n0) return n0; } }catch(err){}   /* rit Change Shift: nama driver Change Shift */
   n=ccDriverName(plat,ts)||"";
   if(!n){ try{ const us=DB.get().users||[];
     const e=(DB.get().ccShiftPlat||[]).filter(x=>normPlat(x.plat)===k && !x.lo && x.day===prodDayStart(Date.now()) && (x.slot||"")===currentShift() && (us.find(y=>y.username===x.u)||{}).role==="cc").sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
@@ -14693,7 +14909,7 @@ function vaCands(d){
   try{ (d.queue||[]).forEach((q,i)=>{ if(q && q.plat) add(q.plat, q.lp, "Waiting list ke-"+(i+1), 100+i); }); }catch(e){}
   try{ (d.hold||[]).slice().filter(Boolean).sort((a,b)=>ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts)).forEach((q,i)=>add(q.plat, q.lp, "Parkir Luar ke-"+(i+1), 300+i)); }catch(e){}
   try{ Object.values(TRACK||{}).forEach(r=>{ if(r && r.plat && typeof r.lat==="number" && Date.now()-(r.ts||0)<TRK_SHOW_MS && ccPlatRegistered(r.plat)) add(r.plat, r.lp, "Di jalan", 500); }); }catch(e){}
-  try{ (d.dccpSchedule||[]).forEach(r=>{ if(!r || !r.police) return; let st="Jadwal DCCP"; try{ const n=dccpTripList(r).length, dn=dccpDoneCount(r,d); if(n) st=dn>=n?"Rit selesai ("+dn+"/"+n+")":"Rit "+dn+"/"+n; }catch(e){} add(r.police, r.lp, st, 600); }); }catch(e){}
+  try{ (d.dccpSchedule||[]).forEach(r=>{ if(!r || !r.police) return; let st="Jadwal DCCP"; try{ const n=dccpTripList(r).length, dn=dccpDoneCount(r,d); if(n) st=dn>=n?"Rit selesai ("+dn+"/"+n+")":"Rit "+dn+"/"+n; if(csRowPaused(d, r.police)) st="🔁 Change Shift (jadwal DCCP belum aktif)"; }catch(e){} add(r.police, r.lp, st, 600); }); }catch(e){}
   return [...M.values()].sort((a,b)=>a.ord-b.ord || a.k.localeCompare(b.k)).map(o=>Object.assign(o,{plat:platFmt(o.k)||o.k, name:(()=>{ try{ return ccDriverAny(o.k)||""; }catch(e){ return ""; } })()}));
 }
 function vaListHtml(){
@@ -15602,7 +15818,7 @@ function renderDisplay(){
   const _now0=Date.now(), _mt=data.dccpMeta||{}, _dd=_mt.dateTs||dccpFileDate(_mt.fileName)||prodMidnight(), _rows=[], _seenK=new Set();
   (data.dccpSchedule||[]).forEach(r=>{ if(r.extra) return; const k=normPlat(r.police); if(_seenK.has(k)) return; _seenK.add(k);
     const T=dccpTripList(r), done=dccpDoneCount(r,data), dueN=T.filter(t=>ccTimeToTs(t,_dd)<=_now0).length;
-    _rows.push({k, plat:platFmt(r.police), lp:r.lp||"", driver:r.driver||"", done, tot:T.length, dueN, late: done<dueN}); });
+    _rows.push({k, plat:platFmt(r.police), lp:r.lp||"", driver:r.driver||"", done, tot:T.length, dueN, late: done<dueN && !csRowPaused(data, r.police)}); });
   Object.keys(ritaseByPlat).forEach(pl=>{ const k=normPlat(pl); if(_seenK.has(k)) return; _seenK.add(k); _rows.push({k, plat:pl, lp:"", driver:"", done:ritaseByPlat[pl], tot:0, dueN:0, late:false}); });
   _rows.sort((a,b)=>(b.late-a.late)||(b.done-a.done));
   const totalRitase = _rows.reduce((q,x)=>q+x.done,0);
@@ -15626,7 +15842,7 @@ function renderDisplay(){
         <div style="overflow-x:auto;"><table>
           <tr><th>Plat</th><th>LP / Driver</th><th>Jam Ritase</th><th>Aktual Datang</th><th>Status</th></tr>
           ${dccpSortedIdx(sched).map(([r])=>{ const a=findActualArrival(r.police,data);
-            return `<tr><td><b>${platFmt(r.police)}</b>${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${r.origPolice}</div>`:""}</td><td>${r.lp}<div style="font-size:11px;color:var(--text-dim);">${r.driver||""}</div></td><td>${ccTripChipsHtml(r,data)}</td>
+            return `<tr${csRowPaused(data, r.police)?` style="background:#FAF7FF;"`:""}><td><b>${platFmt(r.police)}</b>${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${csPausedBadge(data, r.police)}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${r.origPolice}</div>`:""}</td><td>${r.lp}<div style="font-size:11px;color:var(--text-dim);">${r.driver||""}</div></td><td>${ccTripChipsHtml(r,data)}</td>
             <td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):"-"}</td>
             <td>${a?(a.stall?`Stall ${ccLbl(a.stall)} `:"Antri ")+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum datang</span>"}</td></tr>`;}).join("")}
         </table></div>
