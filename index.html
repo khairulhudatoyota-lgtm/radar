@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="19 Nov 2026 09.00";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="19 Nov 2026 10.35";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4864,7 +4864,7 @@ function renderDelivery(){
 
     <div class="dl-right"><div class="dlbatches" id="dlSecAktif">
       ${batchHtml || `<div class="card"><h3>🚚 ILS Aktif</h3><div class="emptystate">Belum ada ILS yang sedang berjalan. Pilih truk CC dan unit di sebelah kiri, lalu tekan Buat ILS.</div></div>`}
-    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}${dfLettersCardHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest)</summary><div style="margin-top:10px;">${absenLogCardHtml(data)}${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}${inputXlCardHtml(data,'batam')}</div></details></div>
+    </div>${ilsPendingHtml(data)}${deliverySjHtml(data)}${dfLettersCardHtml(data)}<details class="card" style="margin-top:12px;" ${dlMoreOpen?"open":""} ontoggle="dlMoreOpen=this.open"><summary style="cursor:pointer;font-weight:800;">⚙ Lainnya (CC dikeluarkan, TLS, manifest, rekap unit)</summary><div style="margin-top:10px;">${absenLogCardHtml(data)}${ilsFixCardHtml(data)}${ccOutLogHtml(data)}${tlsOpenCardHtml()}${manifestCardHtml(data)}${rkCardHtml()}${inputXlCardHtml(data,'batam')}</div></details></div>
   `;
 }
 let dlUnitOpen={};
@@ -4988,7 +4988,7 @@ function createILS(ccNum, slots){
   const data = DB.get();
   const ccInfo = data.cc[ccNum];
   if(!ccInfo){ alert("Stall CC tidak valid."); return false; }
-  const units = slots.filter(slot=>data.units[slot] && !data.units[slot].ilsId).map(slot=>({slot, loc:data.units[slot].loc||"", frame:data.units[slot].frame, model:data.units[slot].model, batam:!!data.units[slot].batam, prio:!!data.units[slot].prio, ts:data.units[slot].ts||0, line:data.units[slot].line||""}));
+  const units = slots.filter(slot=>data.units[slot] && !data.units[slot].ilsId).map(slot=>({slot, loc:data.units[slot].loc||"", frame:data.units[slot].frame, model:data.units[slot].model, batam:!!data.units[slot].batam, prio:!!data.units[slot].prio, ts:data.units[slot].ts||0, line:data.units[slot].line||"", by:data.units[slot].driver||""}));
   if(!units.length){ alert("Unit sudah tidak tersedia."); return false; }
   const _dupI=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===normPlat(ccInfo.plat));
   if(_dupI){ alert("Plat "+ccInfo.plat+" sudah punya ILS #"+_dupI.id+" yang masih aktif di Stall "+ccLbl(_dupI.ccNum)+(_dupI.mp?" (dibuat oleh "+_dupI.mp+")":"")+". Satu CC hanya boleh punya satu ILS aktif. Selesaikan atau batalkan ILS itu dulu."); return false; }
@@ -5019,7 +5019,7 @@ function createILS(ccNum, slots){
     /* dicek ULANG di dalam transaksi (data server terbaru): kalau di saat yang sama orang lain sudah membuat ILS untuk plat ini, ILS ini TIDAK dibuat */
     if((d.ils||[]).some(b=>b && b.status==="open" && !b.outTs && (normPlat(b.ccPlat)===normPlat(ccInfo.plat) || b.ccNum==ccNum))) return;
     _ilsNewId=id;
-    d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), drvName: ccDriverAny(ccInfo.plat)||"", mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), status:"open", dv: _cdv, dp: _cdp});
+    d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), drvName: ccDriverAny(ccInfo.plat)||"", mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), ccIn: ccInfo.ts||0, ccAbs: ccInfo.absenTs||0, status:"open", dv: _cdv, dp: _cdp});
     if(_cvia) d.ils[d.ils.length-1].via=_cvia;
     units.forEach(u=>{ if(d.units[u.slot] && !d.units[u.slot].ilsId) d.units[u.slot].ilsId = id; });
   });
@@ -6592,10 +6592,10 @@ function mfXlsx(sheets, widths){
   files.push({name:"_rels/.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'});
   files.push({name:"xl/workbook.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'+names.map(x=>'<sheet name="'+_xe(x.n)+'" sheetId="'+(x.i+1)+'" r:id="rId'+(x.i+1)+'"/>').join("")+'</sheets></workbook>'});
   files.push({name:"xl/_rels/workbook.xml.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+names.map(x=>'<Relationship Id="rId'+(x.i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(x.i+1)+'.xml"/>').join("")+'<Relationship Id="rId'+(names.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'});
-  files.push({name:"xl/styles.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="dd\-mmm\-yy"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF000000"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/></cellXfs></styleSheet>'});
+  files.push({name:"xl/styles.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="dd\-mmm\-yy"/><numFmt numFmtId="165" formatCode="dd/mm/yyyy hh:mm"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF000000"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>'});
   sheets.forEach((sh,si)=>{
     const cols=widths?'<cols>'+widths.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join("")+'</cols>':'';
-    const rows=sh.rows.map((r,ri)=>'<row r="'+(ri+1)+'">'+r.map((v,ci)=>{ const ref=_colName(ci)+(ri+1), st=ri===0?' s="1"':''; if(v && typeof v==="object"){ if(v.y) return '<c r="'+ref+'" s="3"/>'; if(v.d!=null) return '<c r="'+ref+'" s="2"><v>'+v.d+'</v></c>'; v=""; } if(v===""||v===null||v===undefined) return ri===0?'<c r="'+ref+'"'+st+'/>':''; if(typeof v==="number") return '<c r="'+ref+'"'+st+'><v>'+v+'</v></c>'; return '<c r="'+ref+'"'+st+' t="inlineStr"><is><t xml:space="preserve">'+_xe(v)+'</t></is></c>'; }).join("")+'</row>').join("");
+    const rows=sh.rows.map((r,ri)=>'<row r="'+(ri+1)+'">'+r.map((v,ci)=>{ const ref=_colName(ci)+(ri+1), st=ri===0?' s="1"':''; if(v && typeof v==="object"){ if(v.y) return '<c r="'+ref+'" s="3"/>'; if(v.d!=null) return '<c r="'+ref+'" s="2"><v>'+v.d+'</v></c>'; if(v.dt!=null) return '<c r="'+ref+'" s="4"><v>'+v.dt+'</v></c>'; v=""; } if(v===""||v===null||v===undefined) return ri===0?'<c r="'+ref+'"'+st+'/>':''; if(typeof v==="number") return '<c r="'+ref+'"'+st+'><v>'+v+'</v></c>'; return '<c r="'+ref+'"'+st+' t="inlineStr"><is><t xml:space="preserve">'+_xe(v)+'</t></is></c>'; }).join("")+'</row>').join("");
     files.push({name:"xl/worksheets/sheet"+(si+1)+".xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'+cols+'<sheetData>'+rows+'</sheetData><autoFilter ref="A1:'+_colName((sh.rows[0]||[]).length-1)+Math.max(1,sh.rows.length)+'"/></worksheet>'});
   });
   return _zip(files);
@@ -7928,6 +7928,85 @@ function inputXlCardHtml(data, defKind){
   </div>`;
 }
 
+/* ===== REKAP KERJA UNIT — Parkir → Delout (19 Nov 2026 10.30, permintaan Khairul) =====
+   Satu baris per unit: diparkir siapa / stall / jam → ILS dibuat siapa / jam → CC (plat, LP, driver, stall CC, absen, masuk stall)
+   → loading selesai → validasi mulai & selesai → surat jalan (No. SJKB, disimpan siapa) → Delout siapa / jam, plus lama tiap tahap (menit).
+   Sumber: ILS yang masih tersimpan (±7 hari, selama surat jalan tersimpan), unit yang masih di yard, dan log unit di HP ini (unit dikeluarkan,
+   nama dispatcher untuk ILS lama). Tidak ada baca/tulis Firebase tambahan: semua dari data yang sudah ada di HP. */
+function rkSerial(t){ if(!t) return ""; const d=new Date(t); return {dt:(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),d.getHours(),d.getMinutes(),d.getSeconds())/86400000)+25569}; }
+function rkArea(v){ const m=/^KA?P\s*([12])$/i.exec(String(v||"").trim()); return m?"KAP "+m[1]:String(v||""); }   /* area produksi tersimpan "KP1"/"KP2" → ditulis "KAP 1"/"KAP 2" */
+function rkMin(a,b){ return (a && b && b>=a) ? Math.round((b-a)/60000) : ""; }
+function rkShiftOf(t){ if(!t) return ""; const m=new Date(t).getHours()*60+new Date(t).getMinutes(); return (m>=SHIFT_START_H*60 && m<SHIFT2_START_H*60) ? "Day" : "Night"; }
+function rkWindow(ds, shf){
+  const pd=new Date(ds+"T00:00:00"); pd.setHours(SHIFT_START_H,0,0,0); const p=pd.getTime();
+  if(shf==="Day") return shiftWindow(p,"1"); if(shf==="Night") return shiftWindow(p,"2"); return [p, p+24*3600000];
+}
+function rkCollect(data, from, to){
+  const rows=[], inW=t=>t && t>=from && t<to, seen=new Set();
+  const log=(data.unitLog||[]).filter(Boolean), logBy=f=>{ const k=normVin(f); return log.filter(e=>normVin(e.frame)===k).sort((a,b)=>(b.parkedTs||0)-(a.parkedTs||0)); };
+  const parkedBy=(u)=>{ if(u.by) return u.by; const L=logBy(u.frame); const e=L.find(x=>x.parkedTs && u.ts && Math.abs(x.parkedTs-u.ts)<120000)||L[0]; return (e&&e.parkedBy)||""; };
+  /* 1. unit di ILS (aktif & selesai) */
+  (data.ils||[]).filter(b=>b && Array.isArray(b.units)).forEach(b=>{
+    b.units.filter(Boolean).forEach(u=>{
+      const T=[u.ts, b.ts, b.loadTs, b.valStartTs, b.valTs, b.sj&&b.sj.ts, b.outTs];
+      if(!T.some(inW)) return;
+      seen.add(normVin(u.frame)+"|"+b.id);
+      const st=b.outTs?"Delout":b.valTs?"Validasi selesai":b.valStartTs?"Validasi":b.loadTs?"Loading selesai":"ILS dibuat";
+      rows.push({frame:u.frame, model:u.model||"", jenis:(u.batam?"Batam":"Reguler")+(u.prio?" · Prioritas":""), st,
+        pTs:u.ts||0, pBy:parkedBy(u), line:u.line||"", slot:slotText(u.slot,u),
+        iTs:b.ts||0, iBy:b.mp||"", plat:b.ccPlat||"", lp:b.lp||"", drv:b.drvName||"", ccStall:b.ccNum!=null?String(ccLbl(b.ccNum)):"", abs:b.ccAbs||0, ccIn:b.ccIn||0,
+        lTs:b.loadTs||0, lBy:b.loadBy||"", vsTs:b.valStartTs||0, vsBy:b.valBy||"", vTs:b.valTs||0, vBy:b.valDoneBy||"",
+        sjkb:b.sjkb||"", sjTs:(b.sj&&b.sj.ts)||0, sjBy:(b.sj&&b.sj.by)||"", oTs:b.outTs||0, oBy:b.outBy||"", ils:b.id});
+    });
+  });
+  /* 2. unit masih di yard tanpa ILS */
+  Object.keys(data.units||{}).forEach(k=>{ const u=data.units[k]; if(!u || !u.frame || u.ilsId) return; if(!inW(u.ts)) return;
+    rows.push({frame:u.frame, model:u.model||"", jenis:(u.batam?"Batam":"Reguler")+(u.prio?" · Prioritas":""), st:"Parkir", pTs:u.ts||0, pBy:u.driver||"", line:u.line||"", slot:slotText(k,u)}); });
+  /* 3. unit dikeluarkan tanpa ILS (log di HP ini) */
+  log.filter(e=>e.status==="removed" && (inW(e.parkedTs)||inW(e.removedTs))).forEach(e=>{
+    rows.push({frame:e.frame, model:e.model||"", jenis:(e.batam?"Batam":"Reguler"), st:"Dikeluarkan", pTs:e.parkedTs||0, pBy:e.parkedBy||"", line:e.line||"", slot:e.slot||"", oTs:e.removedTs||0}); });
+  rows.sort((a,b)=>(a.pTs||a.iTs||0)-(b.pTs||b.iTs||0));
+  return rows;
+}
+const RK_HEAD=["No. Rangka","Model","Jenis","Status","Parkir · jam","Parkir · oleh","Area (KAP)","Stall unit","ILS dibuat · jam","ILS dibuat · oleh","Plat CC","LP","Driver CC","Stall CC","CC absen · jam","CC masuk stall · jam","Loading selesai · jam","Loading selesai · oleh","Validasi mulai · jam","Validasi mulai · oleh","Validasi selesai · jam","Validasi selesai · oleh","No. SJKB","Surat jalan disimpan · jam","Surat jalan disimpan · oleh","Delout · jam","Delout · oleh","Shift Delout","Parkir → ILS (menit)","ILS → Loading selesai (menit)","Loading → Delout (menit)","Total Parkir → Delout (menit)","ID ILS"];
+const RK_W=[20,12,12,15,16,16,10,12,16,16,13,10,16,8,16,16,16,16,16,16,16,16,26,16,16,16,16,9,11,11,11,12,15];
+function rkSheetRows(R){
+  const D=t=>t?rkSerial(t):"";
+  return [RK_HEAD].concat(R.map(r=>[r.frame, r.model, r.jenis, r.st, D(r.pTs), r.pBy||"", rkArea(r.line), r.slot||"", D(r.iTs), r.iBy||"", r.plat||"", r.lp||"", r.drv||"", r.ccStall||"", D(r.abs), D(r.ccIn),
+    D(r.lTs), r.lBy||"", D(r.vsTs), r.vsBy||"", D(r.vTs), r.vBy||"", r.sjkb||"", D(r.sjTs), r.sjBy||"", D(r.oTs), r.st==="Delout"?(r.oBy||""):(r.st==="Dikeluarkan"?"(dikeluarkan)":""), r.st==="Delout"?rkShiftOf(r.oTs):"",
+    rkMin(r.pTs,r.iTs), rkMin(r.iTs,r.lTs), rkMin(r.lTs,r.st==="Delout"?r.oTs:0), rkMin(r.pTs,r.st==="Delout"?r.oTs:0), r.ils?String(r.ils):""]));
+}
+function rkSummary(R, label){
+  const avg=a=>{ const v=a.filter(x=>typeof x==="number"); return v.length?Math.round(v.reduce((s,x)=>s+x,0)/v.length):""; };
+  const cnt=st=>R.filter(r=>r.st===st).length, out=[["Rekap Kerja Unit RADAR EKY",""],["Periode",label],["Dibuat",new Date().toLocaleString("id-ID")+" oleh "+((currentUser&&currentUser.name)||"")],["",""],
+    ["Total unit",R.length],["Sudah Delout",cnt("Delout")],["Masih proses ILS / loading / validasi",R.filter(r=>/ILS|Loading|Validasi/.test(r.st)).length],["Masih parkir (belum ILS)",cnt("Parkir")],["Dikeluarkan tanpa ILS",cnt("Dikeluarkan")],
+    ["Rata-rata Parkir → Delout (menit)",avg(R.filter(r=>r.st==="Delout").map(r=>rkMin(r.pTs,r.oTs)))],["Rata-rata ILS → Delout (menit)",avg(R.filter(r=>r.st==="Delout").map(r=>rkMin(r.iTs,r.oTs)))],["",""]];
+  const grp=(key)=>{ const m={}; R.forEach(r=>{ const k=r[key]||"(kosong)"; (m[k]=m[k]||[]).push(r); }); return Object.keys(m).sort((a,b)=>m[b].length-m[a].length).map(k=>[k,m[k]]); };
+  out.push(["Per model","Unit","Sudah Delout","Rata-rata Parkir → Delout (menit)"]); grp("model").forEach(([k,L])=>out.push([k,L.length,L.filter(r=>r.st==="Delout").length,avg(L.filter(r=>r.st==="Delout").map(r=>rkMin(r.pTs,r.oTs)))])); out.push(["",""]);
+  { const m={}; R.forEach(r=>{ const k=rkArea(r.line)||"(tidak tercatat)"; m[k]=(m[k]||0)+1; }); out.push(["Per area (KAP)","Unit"]); Object.keys(m).sort().forEach(k=>out.push([k,m[k]])); out.push(["",""]); }
+  out.push(["Per LP","Unit diangkut","Rit (ILS)","Rata-rata ILS → Delout (menit)"]); grp("lp").filter(([k])=>k!=="(kosong)").forEach(([k,L])=>out.push([k,L.length,new Set(L.map(r=>r.ils)).size,avg(L.filter(r=>r.st==="Delout").map(r=>rkMin(r.iTs,r.oTs)))])); out.push(["",""]);
+  out.push(["Diparkir oleh (dispatcher)","Unit"]); grp("pBy").forEach(([k,L])=>out.push([k==="(kosong)"?"(tidak tercatat)":k,L.length])); out.push(["",""]);
+  out.push(["ILS dibuat oleh (Delivery)","Unit","ILS"]); grp("iBy").filter(([k])=>k!=="(kosong)").forEach(([k,L])=>out.push([k,L.length,new Set(L.map(r=>r.ils)).size])); out.push(["",""]);
+  out.push(["Catatan",""]); out.push(["Sumber: data yang tersimpan di RADAR (ILS ±7 hari selama surat jalan tersimpan). Jam CC absen / masuk stall dan nama dispatcher di ILS mulai tercatat sejak 19 Nov 2026.",""]);
+  return out;
+}
+function rkDownload(btn){
+  const ds=(document.getElementById("rkDate")||{}).value||mfDateStr(prodDayStart()), shf=(document.getElementById("rkShift")||{}).value||"";
+  const [from,to]=rkWindow(ds, shf), R=rkCollect(DB.get(), from, to);
+  const label=ds+(shf?" shift "+shf:" (Day + Night)")+" · "+new Date(from).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})+" – "+new Date(to-60000).toLocaleString("id-ID",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+  const msg=document.getElementById("rkMsg");
+  if(!R.length){ if(msg) msg.innerHTML=`<div class="msg info">Tidak ada unit di periode ini.</div>`; return; }
+  mfSave("Rekap-Unit-EKY-"+ds+(shf?"-"+shf:"")+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx([{name:"Rekap Unit", rows:rkSheetRows(R)},{name:"Ringkasan", rows:rkSummary(R,label)}], RK_W));
+  if(msg) msg.innerHTML=`<div class="msg ok">✔ ${R.length} unit (${R.filter(r=>r.st==="Delout").length} sudah Delout) diunduh.</div>`;
+}
+function rkCardHtml(){
+  const today=mfDateStr(prodDayStart()), min=mfDateStr(prodDayStart()-7*86400000);
+  return `<div class="card"><h3>📥 Rekap Kerja Unit (Parkir → Delout)</h3>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Satu baris per unit: No. Rangka, model, diparkir siapa di stall berapa jam berapa, ILS dibuat siapa, CC / LP / driver, loading, validasi, surat jalan, Delout siapa jam berapa, plus lama tiap tahap. Data tersimpan ±7 hari.</div>
+    <div class="field"><label>Tanggal (hari produksi)</label><input id="rkDate" type="date" value="${today}" min="${min}" max="${today}"></div>
+    <div class="field"><label>Shift</label><select id="rkShift"><option value="">Semua shift (Day + Night: 07:00 – 06:59 besok)</option><option value="Day">Day (07:00–20:00)</option><option value="Night">Night (20:01 – 06:59 besok)</option></select></div>
+    <button class="btn btn-primary" onclick="rkDownload(this)">⬇ Download Rekap Excel</button><div id="rkMsg" style="margin-top:6px;"></div></div>`;
+}
 function manifestCardHtml(data){
   const today=mfDateStr(prodDayStart());   /* hari produksi: jam 06.00 pagi masih tanggal kemarin (shift malam belum selesai) */
   const lps=(()=>{ const seen=new Set(), o=[]; [...(data.lpList||[]), ...mfRecords(data).map(m=>m.lp)].filter(Boolean).forEach(l=>{ const c=lpCanon(l); if(seen.has(c)) return; seen.add(c); o.push(mfLpLabel(data,l)); }); return o; })();
@@ -9758,7 +9837,8 @@ function renderLeaderDashboard(){
         return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${e.frame}</b>${ldrWipBatam(data,e,_wipU)?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800;vertical-align:1px;">BATAM</span>`:""}</td><td style="${td}"><span style="color:${getModelColor(e.model,data)};font-weight:700;">${e.model}</span></td><td style="${td}">${e.slot}</td><td style="${td}">${ldrDT(e.parkedTs)}</td><td style="${td};color:${col};font-weight:700;">${ldrAge(e.parkedTs)}</td><td style="${td}">${e.status==="ils"?`ILS ${ldrHM(e.ilsTs)} · ${e.ccPlat||""}`:"Menunggu ILS"}</td></tr>`; }).join("")}
     </table></div>`}
   </div>
-  <div class="footnote">Data dihitung dari log input Dispatcher & ILS Delivery. Data sebelum fitur ini aktif hanya memuat unit terkirim (tanpa jam masuk).</div>`;
+  <div class="footnote">Data dihitung dari log input Dispatcher & ILS Delivery. Data sebelum fitur ini aktif hanya memuat unit terkirim (tanpa jam masuk).</div>
+  <div style="margin-top:12px;">${rkCardHtml()}</div>`;
 }
 
 /* ======================================================================
@@ -12506,7 +12586,7 @@ function renderAdmin(){
           <td>${x.reportedBy}<br><span style="font-size:10px;color:var(--text-dim);">${new Date(x.ts).toLocaleDateString('id-ID')}</span></td>
           <td>${x.status==="confirmed" ? `<span class="badge green">Confirmed</span><br><span style="font-size:10px;color:var(--text-dim);">${x.confirmedBy||''}</span>` : `<span class="badge gold">Aktif</span>`}</td>
         </tr>`).join("");
-    return `${tabsHtml}${fbMeterCardHtml()}
+    return `${tabsHtml}${rkCardHtml()}${fbMeterCardHtml()}
       <div class="card">
         <h3>🗄 Kelola Data</h3>
         <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">Data saat ini tersimpan lokal di browser ini (localStorage). Belum sinkron ke Microsoft 365 / SharePoint.</p>
