@@ -1745,7 +1745,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="21 Nov 2026 03.59";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="21 Nov 2026 04.08";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -11225,30 +11225,44 @@ function mdlMergeInp(old, nw){
    supaya grafik DPP·MDP·Aktual, Daily Report, dll. sudah terisi sejak tgl 1 (riwayat RADAR baru mulai 12 Nov).
    Hari produksi 07.00–06.59: unit jam < 07.00 masuk hari sebelumnya. Shift dari jam input (07.00–19.59 = Day).
    KAP dari model (Avanza = KAP 2). Disimpan ringkas di /radar/achDaily/<tgl> (digabung nilai terbesar, aman kalau file lebih pendek). */
+/* 21 Nov 04.10: unit yang juga diinput Dispatcher di RADAR dihitung pada JAM INPUT DISPATCHER (bukan jam PDI), supaya unit yang sama
+   jatuh di hari & shift yang sama di kedua sumber → tidak terhitung dobel walau jam PDI beda sedikit (mis. input 19.50, PDI 20.10).
+   Unit yang tidak ada di RADAR tetap memakai jam PDI. Jam RADAR hanya dipakai kalau selisihnya ≤ 24 jam dari jam PDI (kejadian yang sama). */
+function achRadarTimes(d){
+  const M=new Map(), put=(f,t)=>{ f=normVin(f); t=+t||0; if(!f || !t) return; const o=M.get(f); if(!o || t<o) M.set(f,t); };
+  Object.values(d.units||{}).forEach(u=>{ if(u) put(u.frame, u.ts); });
+  (d.ils||[]).forEach(b=>{ if(b) (b.units||[]).forEach(z=>{ if(z) put(z.frame, z.ts); }); });
+  (d.unitLog||[]).forEach(e=>{ if(e && e.status!=="removed") put(e.frame, e.parkedTs); });
+  return M;
+}
 function achDailyFromH(H){
   const c=H.ci; if(c.PDIACTUALDATE==null) return null;
-  const out={};
+  const out={}, RT=achRadarTimes(DB.get()), st0={same:0, pdi:0};
   for(let r=H.hr+1;r<H.g.length;r++){
     const row=H.g[r]||[]; if(!normVin(mdlNul(row[c.FRAMENUMBER]))) continue;
     const dk=mdpDate(mdlNul(row[c.PDIACTUALDATE])); if(!dk) continue;
-    const tv=c.PDIACTUALTIME!=null?row[c.PDIACTUALTIME]:null; let hh=NaN;
-    if(typeof tv==="number") hh=Math.floor((tv%1)*24+1e-6); else { const m=String(mdlNul(tv)).match(/(\d{1,2})[:.]/); if(m) hh=+m[1]; }
-    const key=(!isNaN(hh) && hh<SHIFT_START_H) ? ekyAddDays(dk,-1) : dk;
+    const tv=c.PDIACTUALTIME!=null?row[c.PDIACTUALTIME]:null; let hh=NaN, mi=0;
+    if(typeof tv==="number"){ const mm=Math.round((tv%1)*1440); hh=Math.floor(mm/60)%24; mi=mm%60; } else { const m=String(mdlNul(tv)).match(/(\d{1,2})[:.](\d{2})?/); if(m){ hh=+m[1]; mi=+(m[2]||0); } }
+    let key=(!isNaN(hh) && hh<SHIFT_START_H) ? ekyAddDays(dk,-1) : dk;
     const st=c.PDIACTUALSHIFT!=null?String(mdlNul(row[c.PDIACTUALSHIFT])).toUpperCase():"";
     /* shift = JAM input (sama dengan cara RADAR menghitung input Dispatcher). Kolom PDIActualShift = shift produksi ADM
        (unit KAP 1 "MALAM" banyak diinput siang hari), jadi hanya dipakai kalau jam tidak ada. */
-    const w=!isNaN(hh) ? ((hh>=SHIFT_START_H && hh<SHIFT2_START_H)?"1":"2") : (st==="MALAM"?"2":"1");
+    let w=!isNaN(hh) ? ((hh>=SHIFT_START_H && hh<SHIFT2_START_H)?"1":"2") : (st==="MALAM"?"2":"1");
+    { const [y0,m0,d0]=dk.split("-").map(Number), tA=new Date(y0,m0-1,d0,isNaN(hh)?12:hh,mi).getTime(), tR=RT.get(normVin(mdlNul(row[c.FRAMENUMBER])));
+      if(tR && Math.abs(tR-tA)<=24*3600000){ const h2=new Date(tR).getHours(); key=prodDateKey(tR); w=(h2>=SHIFT_START_H && h2<SHIFT2_START_H)?"1":"2"; st0.same++; } else st0.pdi++; }
     /* KAP dari MODEL (pengaturan "Model produksi KP2" di MDP, default Avanza) — kolom PDIActualLineNumber = jalur PDI,
        bukan KAP (contoh 20 Nov: semua tercatat LINE 1, padahal 208 unit dari KAP 2) */
     const md=dppSafeKey(ekyMKey(mdlNul(row[c.MODELNAME])||"LAINNYA")), L=mdpLineOf(md);
     const o=out[key]=out[key]||{s1:{},s2:{},m1:{},m2:{}};
     ekyAdd(o["s"+w], L); ekyAdd(o["m"+w], md);
   }
+  achDailyFromH.last=st0;
   return out;
 }
 function achDailySave(AD){
   if(!AD || !Object.keys(AD).length) return 0;
-  DB.set(d=>{ const o=Object.assign({}, d.achDaily||{}); Object.keys(AD).forEach(k=>{ o[k]=ekyMergeMax(Object.assign({}, o[k]||{}), AD[k]); o[k].ts=Date.now(); });
+  const tot=x=>x?ekySum(x.s1)+ekySum(x.s2):0;   /* 21 Nov: file baru menggantikan hari yang sama (tidak dicampur angka terbesar per kolom → tidak dobel) kecuali file baru lebih sedikit */
+  DB.set(d=>{ const o=Object.assign({}, d.achDaily||{}); Object.keys(AD).forEach(k=>{ if(tot(AD[k])>=tot(o[k])){ o[k]=Object.assign({}, AD[k]); o[k].ts=Date.now(); } });
     const cut=ekyAddDays(prodDateKey(),-100); Object.keys(o).forEach(k=>{ if(k<cut) delete o[k]; }); d.achDaily=o; });
   return Object.keys(AD).length;
 }
@@ -11330,7 +11344,8 @@ function mdlUpload(msgId){
           if(achKs.length){   /* 21 Nov 03.55: pastikan Aktual harian (grafik DPP·MDP·Aktual) benar-benar tersimpan di server */
             const dt=k=>{ const [y,m,d]=k.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("id-ID",{day:"numeric",month:"short"}); };
             let okS=false, why=""; for(let i=0;i<8 && !okS;i++){ await new Promise(r=>setTimeout(r,800)); try{ const v=(await FBS.db.ref(FB_ROOT+"/achDaily/"+achKs[0]).once("value")).val(); okS=!!v; }catch(e){ why=fbDenied(e)?"server menolak (aturan Firebase)":String(e&&e.message||e); break; } }
-            out.push(okS?`<div class="msg" style="background:var(--green-bg);color:var(--green);">📈 Grafik Aktual harian terisi dari file ini: <b>${achKs.length}</b> hari (${escH(dt(achKs[0]))} – ${escH(dt(achKs[achKs.length-1]))}).</div>`
+            const S0=achDailyFromH.last||{};
+            out.push(okS?`<div class="msg" style="background:var(--green-bg);color:var(--green);">📈 Grafik Aktual harian terisi dari file ini: <b>${achKs.length}</b> hari (${escH(dt(achKs[0]))} – ${escH(dt(achKs[achKs.length-1]))}).${S0.same?` <b>${S0.same.toLocaleString('id-ID')}</b> unit juga diinput Dispatcher → dihitung pada jam input Dispatcher; <b>${(S0.pdi||0).toLocaleString('id-ID')}</b> unit hanya ada di file → jam PDI. Tiap unit dihitung sekali.`:""}</div>`
               :`<div class="msg err">⚠ Aktual harian untuk grafik belum terkonfirmasi tersimpan di server${why?` (${escH(why)})`:""}. Cek koneksi lalu upload file ini sekali lagi.</div>`);
           }
           out.push(`<div class="msg" style="background:var(--green-bg);color:var(--green);">✔ Achievement PDI: <b>${I.n.toLocaleString('id-ID')}</b> unit (PDI ${escH(mdlDateTxt(I.from))} – ${escH(mdlDateTxt(I.to))})${old && (+rec.n||0)>I.n?` · digabung dengan upload sebelumnya jadi <b>${(+rec.n||0).toLocaleString('id-ID')}</b> unit`:""}.</div>`);
