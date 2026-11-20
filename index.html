@@ -492,6 +492,7 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 @media(min-width:1100px){
   #mainView:not(.hidden){display:grid !important; grid-template-columns:236px minmax(0,1fr); grid-template-rows:auto 1fr; grid-template-areas:"top top" "side main"; min-height:100vh;}
   #mainView:has(#tabbar.hidden){grid-template-columns:minmax(0,1fr); grid-template-areas:"top" "main";}
+  #mainView.noside:not(.hidden){grid-template-columns:minmax(0,1fr); grid-template-areas:"top" "main";}   /* 21 Nov: browser PC/TV lama tanpa :has() → kolom menu 236px kosong di kiri */
   .topbar{grid-area:top; padding:12px 28px;}
   .tabbar{grid-area:side; flex-direction:column; flex-wrap:nowrap; align-items:stretch; gap:4px; padding:16px 12px; border-right:1px solid var(--border); border-bottom:none; position:sticky; top:68px; align-self:start; height:calc(100vh - 68px); overflow-y:auto;}
   .tabbtn{text-align:left; padding:11px 14px; font-size:14px;}
@@ -1506,7 +1507,7 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
+const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
 const FB_LITE={
   cc:         { skip:["online","errDev","manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
   dispatcher: { skip:["funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
@@ -1744,7 +1745,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="21 Nov 2026 00.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="21 Nov 2026 03.25";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1885,7 +1886,7 @@ function viewerClean(root){
   if(!isViewer()) return;
   try{
     (root||document).querySelectorAll('button,input,select,textarea,a[onclick],label[for],[onclick]').forEach(el=>{
-      if(el.closest("#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv,#chatCard,.logoutBtn,#curUserRole,#roleSelectScreen,#credScreen")) return;   /* layar login tidak pernah disembunyikan */   /* tombol Keluar & label role tetap ada untuk Pengamat */
+      if(el.closest(".nvo-ok,#tabbar,#viewerBadge,.leaflet-container,#spdOv,#ccCallOv,#chatCard,.logoutBtn,#curUserRole,#roleSelectScreen,#credScreen")) return;   /* layar login tidak pernah disembunyikan */   /* tombol Keluar & label role tetap ada untuk Pengamat */
       if(/chatSend|thrDraft|thrTxt|chatDraft|chatTag|chatTo\b|lapPick\(.(chat|thr)/.test((el.getAttribute("onclick")||"")+(el.getAttribute("oninput")||"")+(el.id||""))) return;   // Pengamat boleh chat/bertanya langsung
       const h=(el.getAttribute("onclick")||"")+" "+(el.getAttribute("onchange")||"")+" "+(el.getAttribute("oninput")||"");
       if(VW_DEMO.test(h)){ el.setAttribute("data-vdemo","1"); return; }   /* tombol kerja contoh: tampil, ditekan hanya bunyi/notifikasi contoh */
@@ -2042,7 +2043,7 @@ const TABS_BY_ROLE = {
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
   viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"drvview", label:"Layar Driver"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
-  rci:         [{key:"rci", label:"📡 Ringkasan"}, {key:"ccmap", label:"🗺️ Peta"}, {key:"ccplan", label:"🚚 DCCP"}, {key:"rcidpp", label:"🏭 DPP"}, {key:"rcidef", label:"🛠️ Defect"}, {key:"rcimdp", label:"⏰ Delay MDP"}, {key:"display", label:"🅿️ Display"}],
+  rci:         [{key:"rci", label:"📡 Ringkasan"}, {key:"rciorder", label:"📦 Order Unit"}, {key:"ccmap", label:"🗺️ Peta"}, {key:"ccplan", label:"🚚 DCCP"}, {key:"rcidpp", label:"🏭 DPP"}, {key:"rcidef", label:"🛠️ Defect"}, {key:"rcimdp", label:"⏰ Delay MDP"}, {key:"display", label:"🅿️ Display"}],
   admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
 };
 
@@ -2687,7 +2688,7 @@ function ccForceOutCheck(){
   }
   if(currentUser.role==="cc"){
     const H=ccAutoOutHours();
-    if(H>0 && lt && Date.now()-lt>H*3600000){ doLogout(); setTimeout(()=>{ try{ alert("Kamu otomatis keluar karena sudah login lebih dari "+H+" jam. Login lagi kalau masih bertugas."); }catch(e){} },300); }
+    if(H>0 && lt && Date.now()-lt>H*3600000 && !(ccKeepOn(DB.get(), myCcPlatKey()) && Date.now()-lt<(H+8)*3600000)){ doLogout(); setTimeout(()=>{ try{ alert("Kamu otomatis keluar karena sudah login lebih dari "+H+" jam. Login lagi kalau masih bertugas."); }catch(e){} },300); }
   }
 }
 function ccAutoOutSave(){ const v=(document.getElementById("ccAutoOutH")||{}).value; const n=Math.max(0,Math.min(48,+v||0)); DB.set(d=>{ d.ccAutoOutH=n; }); alert(n?("Driver CC otomatis keluar setelah "+n+" jam login."):"Keluar otomatis dimatikan."); render(); }
@@ -2704,7 +2705,7 @@ function ccLastRitState(d, plat){
     if(Object.values(d.cc||{}).some(c=>c && normPlat(c.plat)===k) || (d.queue||[]).some(q=>q && normPlat(q.plat)===k) || (d.hold||[]).some(q=>q && normPlat(q.plat)===k)
        || (d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k)) return null;
     const lo=ccLastDelout(d, plat); if(!lo || lo<dccpShiftFrom(r) || lo>Date.now()+120000) return null;
-    return {lo, at:lo+M*60000, M, trips:t.length};
+    return {lo, at:lo+M*60000, M, trips:t.length, wait:ccTripOpen(d, plat, lo)};   /* wait: belum tiba NVDC → GPS tetap menyala */
   }catch(e){ return null; }
 }
 function ccLastOutFmtM(M){ return (M>=60 && M%60===0) ? (M/60)+" jam" : M+" menit"; }
@@ -2717,7 +2718,7 @@ function ccLastOutCheck(force){
   const plat=myCcPlatKey(), d=DB.get(), st=plat?ccLastRitState(d, plat):null;
   if(!st){ if(bar) bar.remove(); return; }
   const lt=+currentUser.ts||0, at=(lt && lt>st.at) ? lt+st.M*60000 : st.at;   /* login lagi sesudah batas: hitung dari login itu */
-  if(now>=at){
+  if(now>=at && !st.wait){
     if(bar) bar.remove();
     try{ ccLastOutKill(trkKey(plat)); }catch(e){}
     doLogout();
@@ -2728,7 +2729,8 @@ function ccLastOutCheck(force){
     el.style.cssText="margin:10px 12px 0;background:#1F2937;color:#fff;border-radius:12px;padding:10px 14px;font:500 13px/1.45 system-ui,sans-serif;";
     const vp=document.getElementById("viewport"); if(vp && vp.parentNode) vp.parentNode.insertBefore(el, vp); else document.body.appendChild(el); }   /* di bawah tab, tidak menutupi tombol / chip kecepatan */
   const hm=x=>new Date(x).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"}), sisa=Math.max(1,Math.ceil((at-now)/60000));
-  el.innerHTML=`✅ <b>Ritase terakhir selesai</b> (${st.trips} rit, Delout ${hm(st.lo)}). RADAR keluar otomatis pukul <b>${hm(at)}</b> (±${sisa} menit lagi) — posisi & GPS berhenti dikirim.`;
+  el.innerHTML=st.wait ? `✅ <b>Ritase terakhir selesai</b> (${st.trips} rit, Delout ${hm(st.lo)}). GPS tetap menyala sampai CC <b>tiba di NVDC</b>, sesudah itu RADAR keluar otomatis${now<at?` (paling cepat pukul ${hm(at)})`:""}.`
+    : `✅ <b>Ritase terakhir selesai</b> (${st.trips} rit, Delout ${hm(st.lo)}). RADAR keluar otomatis pukul <b>${hm(at)}</b> (±${sisa} menit lagi) — posisi & GPS berhenti dikirim.`;
 }
 let _ccLastOutBkT=0;
 function ccLastOutBackstop(){
@@ -2736,7 +2738,7 @@ function ccLastOutBackstop(){
   const now=Date.now(); if(now-_ccLastOutBkT<60000) return; _ccLastOutBkT=now;
   const d=DB.get(), tk=d.trkKill||{}, raw=TRACK_RAW||{};
   (d.dccpSchedule||[]).forEach(r=>{
-    const st=r && ccLastRitState(d, r.police); if(!st) return;
+    const st=r && ccLastRitState(d, r.police); if(!st || st.wait) return;
     const key=trkKey(r.police), lim=st.at+3*60000; if(now<lim || (+tk[key]||0)>=st.at) return;   /* HP driver diberi waktu keluar sendiri dulu */
     if(!Object.keys(raw).some(x=>{ const v=raw[x]; return v && (x===key || trkKey(v.plat)===key) && (+v.ts||0)>st.at+60000; })) return;   /* masih mengirim posisi sesudah batas */
     DB.set(dd=>{ const o=dd.trkKill||{}; if((+o[key]||0)>=st.at) return; o[key]=Date.now(); Object.keys(o).forEach(x=>{ if(Date.now()-o[x]>7*86400000) delete o[x]; }); dd.trkKill=o; });
@@ -2747,6 +2749,7 @@ function doLogout(){
   try{ document.body.classList.remove("disp-tv"); }catch(e){}
   try{ presenceOff(); }catch(e){}
   try{ mdlStop(); }catch(e){}
+  try{ nvoStop(); }catch(e){}
   try{ ilsSeatRelease(); }catch(e){}
   try{ devSeatRelease(); }catch(e){}
   try{ koSeatRelease(); }catch(e){}   /* kursi Koordinator LP dilepas: HP berikutnya langsung bisa memakai */   /* kursi pembuat ILS dilepas supaya HP lain bisa memakai */
@@ -2832,6 +2835,7 @@ function enterApp(forceTab){
   { const mb=document.getElementById("menuBtn"); if(mb) mb.style.display = (!isDisplay && currentUser.roles && currentUser.roles.length>1) ? "" : "none"; }
   { const lb = document.querySelector(".logoutBtn"); if(lb) lb.textContent = isDisplay ? "← Menu Login" : "⎋ Keluar"; }
   const tabbarEl = document.getElementById("tabbar");
+  try{ const mv=document.getElementById("mainView"); if(mv) mv.classList.toggle("noside", !!isDisplay); }catch(e){}
   if(isDisplay){
     tabbarEl.classList.add("hidden");
     activeTab = "display";
@@ -2897,6 +2901,7 @@ function renderInner(){
     b.classList.toggle("active", b.dataset.tab===activeTab);
   });
   const vp = document.getElementById("viewport");
+  try{ if(currentUser && !["cc","pdi","dispatcher"].includes(currentUser.role)) nvoListen(); }catch(e){}   /* order unit NVDC (21 Nov) */
   try{ if(isRci()){ ldrPeriod="today"; ldrShift=currentShift(); ccMapShift=currentShift()==="1"?"day":"night"; } }catch(e){}   /* RCI: selalu hari ini & shift berjalan */
   let _uiAnim=false; try{ _uiAnim=!!(currentUser && !uiLite() && currentUser.role!=="display" && !_rciSeen[activeTab] && !UI_NO_HERO.has(activeTab)); }catch(e){}
   const _dispIn=!!(isDispTv() && !_rciSeen.display);
@@ -2905,7 +2910,7 @@ function renderInner(){
   else if(activeTab==="orderstall") setVP(vp, renderOrderStall());
   else if(activeTab==="drvview") setVP(vp, renderDrvView());
   else if(activeTab==="delivery") setVP(vp, chgReqHtml()+schedReqHtml()+pdiCardSafe()+renderDelivery());
-  else if(activeTab==="koordinator") setVP(vp, chgReqHtml()+schedReqHtml()+pdiCardSafe()+renderKoordinator());
+  else if(activeTab==="koordinator") setVP(vp, chgReqHtml()+schedReqHtml()+pdiCardSafe()+nvoDeliveryHtml(DB.get())+renderKoordinator());
   else if(activeTab==="defect"){ setVP(vp, renderDefectReport()); if(_vpChanged) setTimeout(init3DCarDiagram, 0); }
   else if(activeTab==="confirmdefect") setVP(vp, renderConfirmDefect());
   else if(activeTab==="ccplan") setVP(vp, renderCCPlan());
@@ -2913,6 +2918,7 @@ function renderInner(){
   else if(activeTab==="rcidpp") setVP(vp, rciDppHtml(DB.get()));
   else if(activeTab==="rcidef") setVP(vp, rciDefHtml(DB.get()));
   else if(activeTab==="rcimdp") setVP(vp, rciMdpHtml(DB.get()));
+  else if(activeTab==="rciorder") setVP(vp, rciOrderHtml(DB.get()));
   else if(activeTab==="batam") setVP(vp, renderBatamPage());
   else if(activeTab==="prio") setVP(vp, renderPrioPage());
   else if(activeTab==="dashboard") setVP(vp, pdiCardSafe()+renderLeaderDashboard());
@@ -2922,7 +2928,7 @@ function renderInner(){
   else if(activeTab==="speedlog") setVP(vp, renderSpeedLog());
   else if(activeTab==="dccp") setVP(vp, chgReqHtml()+schedReqHtml()+renderDccpUpload());
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
-  else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
+  else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); try{ ccProgBoxUpdate(); }catch(e){} }
   else if(activeTab==="ccreport" && TRIP_ON){ setVP(vp, renderCcReport()); if(_vpChanged) setTimeout(()=>tripLoad().then(rptUpdate),0); }
   else if(activeTab==="admin"){ setVP(vp, renderAdmin()); if(adminTab==="users") usrRender(); }
   else if(activeTab==="display") setVP(vp, renderDisplay());
@@ -3671,6 +3677,7 @@ const SND_EV=[
   {k:"defect",  t:"Unit defect dilaporkan",    d:"Driver CC / Dispatcher / Koordinator melaporkan unit defect; Delivery memutuskan lanjut atau tidak", roles:["delivery","admin","koordinator"], def:"sirene"},
   {k:"dfres",   t:"Keputusan unit defect",     d:"Delivery sudah memutuskan laporan defect (OK / dengan catatan / tidak lanjut); surat bisa dibuka", roles:["cc","koordinator"], def:"chime"},
   {k:"ppbj",    t:"Data PPBJ Batam masuk",     d:"Data PPBJ Batam diperbarui; unit Batam di stall yang sudah PPBJ siap dikirim", roles:["delivery","admin"], def:"chime"},
+  {k:"nvorder", t:"Order unit dari NVDC",      d:"RCI NVDC order unit model tertentu; stall yang di-order didahulukan di Draft ILS", roles:["delivery","admin","koordinator"], def:"telepon"},
   {k:"koord",   t:"Notifikasi Koordinator",    d:"CC masuk stall, ILS sudah di TLS, dan kabar lain untuk LP-mu", roles:["koordinator"], def:"naik"}
 ];
 const SND_TONES={
@@ -3746,7 +3753,7 @@ function soundEv(ev, detail){ if(quietRole()) return; const t=sndTone(ev);
   if(!viaNative) sndPlay(t);
   try{ sndBanner(ev, detail); }catch(e){} if(t==="senyap" || ev==="giliran" || ev==="kecepatan"){ try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){} } }
 /* Tanda di layar saat ada nada berbunyi: pengguna langsung tahu bunyi itu untuk apa. Ketuk untuk menutup; hilang sendiri setelah 14 detik. */
-const SND_ICON={absen:"✅",sj:"📄",lapor:"⚠️",chat:"💬",draft:"🚚",jadwal:"⏰",ilstls:"🧾",ambilalih:"🔁",sreq:"📅",tanya:"❓",chgreq:"📝",chgres:"📝",jawab:"💬",koord:"🚚",naikstall:"🅿️"};
+const SND_ICON={absen:"✅",sj:"📄",lapor:"⚠️",chat:"💬",draft:"🚚",jadwal:"⏰",ilstls:"🧾",ambilalih:"🔁",sreq:"📅",tanya:"❓",chgreq:"📝",chgres:"📝",jawab:"💬",koord:"🚚",naikstall:"🅿️",nvorder:"📦"};
 function sndBanner(ev, detail){
   if(ev==="giliran" || ev==="kecepatan") return;   // dua ini sudah punya layar peringatan sendiri
   const e=SND_EV.find(x=>x.k===ev); if(!e) return;
@@ -4994,7 +5001,7 @@ function renderDelivery(){
     ${earlyBox}
     ${batamAlertHtml(data)}
     ${ppbjDelHtml(data)}
-    ${draftCardsHtml(data)}
+    ${nvoDeliveryHtml(data)}${draftCardsHtml(data)}
     <div id="dlSecBuat" style="height:0;"></div>
     <div class="dl-left">
     <div class="card">
@@ -5362,6 +5369,7 @@ function stallStats(data){
 let draftStall = {};            // {ccNum: nomor stall} pilihan manual MP
 function ccProposals(data){
   const stats = stallStats(data), used = new Set(), usedBy = {}, manualBy = {}, out = [], ccs = [];
+  const ordM = (typeof nvoActiveStalls==="function") ? nvoActiveStalls(data) : new Map(), oRank = x=>ordM.has(x.stall) ? (+ordM.get(x.stall).ts||0) : Infinity;   /* 21 Nov: stall order NVDC didahulukan */
   for(let i=1;i<=CONFIG.CC_TOTAL;i++){ if(data.cc[i]) ccs.push({n:i, c:data.cc[i]}); }
   ccs.sort((a,b)=>(a.c.ts||0)-(b.c.ts||0));
   const wantBOf = (n,c)=>{ const row = (data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat)); return draftType[n]!==undefined ? draftType[n]==="B" : /batam/i.test((row&&row.dest)||""); };
@@ -5382,13 +5390,14 @@ function ccProposals(data){
     let pick = manual[n] || null;
     if(!pick){
       const cand = stats.filter(x=>!used.has(x.stall) && okFor(x,wantB));
-      const full = cand.filter(x=>x.n>=CONFIG.SLOTS_PER_STALL).sort((a,b)=>a.fullTs-b.fullTs)[0];
-      pick = full || cand.slice().sort((a,b)=>b.n-a.n||a.firstTs-b.firstTs)[0] || null;
+      const full = cand.filter(x=>x.n>=CONFIG.SLOTS_PER_STALL).sort((a,b)=>(oRank(a)-oRank(b))||a.fullTs-b.fullTs)[0];
+      pick = full || cand.slice().sort((a,b)=>(oRank(a)-oRank(b))||b.n-a.n||a.firstTs-b.firstTs)[0] || null;
       if(pick){ used.add(pick.stall); usedBy[pick.stall]=n; }
     }
     if(pick && pick.n>=CONFIG.SLOTS_PER_STALL) out.push({...base, ready:true, stall:pick.stall, units:pick.units.slice(0,CONFIG.MAX_LOAD_PER_CC), have:pick.n});
     else out.push({...base, ready:false, stall:pick?pick.stall:null, units:pick?pick.units:[], have:pick?pick.n:0});
   }
+  out.forEach(p=>{ if(p.stall && ordM.has(p.stall)) p.nvo=ordM.get(p.stall); });
   out.forEach(p=>{ p.cands = stats.filter(x=>okFor(x,p.batam) && (!manualBy[x.stall] || manualBy[x.stall]===p.n)).map(x=>({stall:x.stall, n:x.n})); });
   return out;
 }
@@ -5459,7 +5468,7 @@ function draftCardsHtml(data){
   const drvRow = p=>`<div style="display:flex;gap:6px;margin:6px 0;align-items:center;"><span style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Kode driver TLS:</span><input id="drvIn${p.n}" type="text" value="${escH(p.drvCode||"")}" placeholder="mis. KMDCCDRV302" onchange="draftSetDrv(${p.n},this.value)" style="flex:1;min-width:0;text-transform:uppercase;padding:6px 8px;border:1px solid ${p.drvCode?"var(--border,#ccd)":"#D64545"};border-radius:8px;"></div>${p.drvCode?"":`<div style="font-size:11px;color:#D64545;margin:-2px 0 4px;">Kode driver belum diisi — TLS akan memakai nama driver (bisa tertukar).</div>`}`;
   const outBtn = p=>!canKeluarkanCC()?"":`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`;
   return `<div class="dl-draft">` + P.map(p=>{
-    const who = `LP <b>${p.lp||"-"}</b> · <b>${p.plat}</b>${p.driver?` · Driver <b>${p.driver}</b>`:` · <span style="color:#c0392b;font-weight:700;">⚠ Driver belum ada di jadwal DCCP</span>`}`;
+    const who = `LP <b>${p.lp||"-"}</b> · <b>${p.plat}</b>${p.driver?` · Driver <b>${p.driver}</b>`:` · <span style="color:#c0392b;font-weight:700;">⚠ Driver belum ada di jadwal DCCP</span>`}${p.nvo?` <span class="nvo-b" title="Order NVDC oleh ${escH(p.nvo.by)}">📦 ORDER NVDC · Stall ${escH(p.stall)}</span>`:""}`;
     if(!p.dismissed && draftOffSel(data,p).length){
       const mix=draftMixUnits(data,p), nOff=mix.filter(k=>isOffKey(k)).length, nSt=mix.length-nOff;
       return `<div class="card" style="border:2px solid var(--green);background:#F3FBF6;">
@@ -11865,6 +11874,7 @@ const RCI_TABS={
   ccplan: {t:"DCCP · Plan & Aktual", s:"Ritase car carrier sesuai jadwal DCCP", e:"🚚", g:"linear-gradient(135deg,#EA580C 0%,#F59E0B 55%,#FBBF24 100%)"},
   rcidpp: {t:"DPP vs Aktual Harian", s:"Plan DPP ADM vs unit masuk EKY · Day & Night", e:"🏭", g:"linear-gradient(135deg,#1D4ED8 0%,#4F46E5 55%,#7C3AED 100%)"},
   rcidef: {t:"Defect Ditemukan di EKY", s:"Laporan defect 2×24 jam terakhir", e:"🛠️", g:"linear-gradient(135deg,#BE123C 0%,#E11D48 45%,#9333EA 100%)"},
+  rciorder:{t:"Order Unit EKY", s:"Pilih stall berisi model yang dibutuhkan NVDC", e:"📦", g:"linear-gradient(135deg,#DB2777 0%,#9333EA 55%,#4F46E5 100%)"},
   rcimdp: {t:"Delay MDP", s:"Unit yang PLOD-nya sudah lewat tapi belum masuk", e:"⏰", g:"linear-gradient(135deg,#C2410C 0%,#F97316 50%,#DC2626 100%)"},
   display:{t:"Display Yard EKY", s:"Isi stall & antrian saat ini", e:"🅿️", g:"linear-gradient(135deg,#047857 0%,#10B981 55%,#0D9488 100%)"}
 };
@@ -11923,7 +11933,7 @@ function rciCss(){
   @keyframes rciPulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.75);}70%{box-shadow:0 0 0 9px rgba(74,222,128,0);}100%{box-shadow:0 0 0 0 rgba(74,222,128,0);}}
   @keyframes rciBob{0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-6px) rotate(4deg);}}
   @media (prefers-reduced-motion: reduce){.rci-hero *,.rci-in *{animation:none!important;}}
-  `+uiCssExtra()+dispCss()+progCss()+rsCss();
+  `+uiCssExtra()+dispCss()+progCss()+rsCss()+nvoCss();
   document.head.appendChild(st);
 }
 function rciHero(tab, extra){
@@ -11973,7 +11983,8 @@ function rciHomeHtml(data){
     tile("linear-gradient(135deg,#0284C7,#14B8A6)","🔁","Ritase CC shift ini", `${rt?rciN(rt.a):"–"}<small> / ${rt?rt.t:"–"} rit</small>`, rt?`${rt.au} / ${rt.u} unit · ${pctR}%`:"jadwal DCCP belum ada", pctR, "ccplan"),
     tile(nMdp?"linear-gradient(135deg,#DC2626,#F97316)":"linear-gradient(135deg,#16A34A,#22C55E)","⏰","Delay MDP", nMdp==null?"…":rciN(nMdp), nMdp==null?"memuat data MDP":(nMdp?`unit lewat PLOD · paling lama ${old} hari`:"semua unit lewat PLOD sudah masuk ✨"), null, "rcimdp"),
     tile(DF.length?"linear-gradient(135deg,#BE123C,#9333EA)":"linear-gradient(135deg,#0D9488,#10B981)","🛠️","Defect EKY (2×24 jam)", rciN(DF.length), DF.length?`${dfOpen} menunggu keputusan`:"tidak ada defect ✨", null, "rcidef"),
-    tile("linear-gradient(135deg,#047857,#10B981)","🅿️","Stok di yard", rciN(W.t), `unit di stall / luar stall${W.b?" · Batam "+W.b:""}`, null, "display")
+    tile("linear-gradient(135deg,#047857,#10B981)","🅿️","Stok di yard", rciN(W.t), `unit di stall / luar stall${W.b?" · Batam "+W.b:""}`, null, "display"),
+    (()=>{ let nA=0; try{ nvoListen(); nA=nvoEval(data).filter(o=>o.active).length; }catch(e){} return tile("linear-gradient(135deg,#DB2777,#7C3AED)","📦","Order unit EKY", rciN(nA), nA?`${nA} order sedang diproses`:"pilih stall berisi model yang dibutuhkan", null, "rciorder"); })()
   ];
   return rciWrap("rci", `<div class="rci-grid">${tiles.join("")}</div>
     <div style="margin-top:12px;">${ccProgressHtml(data, false)}</div>
@@ -12070,7 +12081,7 @@ const UI_TAB_EMO={pdi:"🔍", dispatcher:"🚙", defect:"⚠️", display:"🅿�
   confirmdefect:"✅", dccp:"📅", ccplan:"🚛", batam:"🏝️", prio:"⭐", koordinator:"🧭", dashboard:"📈", datadefect:"🛠️", drvview:"📱", admin:"🔐", ccreport:"🧾", unduh:"⬇️"};
 (function(){ try{ Object.values(TABS_BY_ROLE).forEach(L=>(L||[]).forEach(t=>{ const e=UI_TAB_EMO[t.key]; if(e && t.label.indexOf(e)!==0 && !/^[☀-➿\uD83C-\uDBFF]/.test(t.label)) t.label=e+" "+t.label; })); }catch(e){} })();
 function uiTabLabel(key){ try{ const L=TABS_BY_ROLE[currentUser&&currentUser.role]||[]; const t=L.find(x=>x.key===key); return t?t.label:key; }catch(e){ return key; } }
-const UI_NO_HERO=new Set(["pdi","rci","rcidpp","rcidef","rcimdp"]);
+const UI_NO_HERO=new Set(["pdi","rci","rcidpp","rcidef","rcimdp","rciorder"]);
 function uiLite(){ return !!(currentUser && ["cc","dispatcher","pdi"].includes(currentUser.role)); }
 function uiHeroHtml(tab){
   if(!currentUser || currentUser.role==="display" || UI_NO_HERO.has(tab)) return "";
@@ -12197,6 +12208,226 @@ function dispCss(){
 }
 
 /* ======================================================================
+   ORDER UNIT EKY DARI NVDC (21 Nov 2026 03.30, permintaan Khairul)
+   NVDC kadang butuh model tertentu segera (line di NVDC kekurangan), padahal EKY parkir acak.
+   RCI NVDC melihat komposisi unit tiap stall → contreng stall → Order.
+   Draft ILS Delivery EKY otomatis mendahulukan stall yang di-order (urutan order paling dulu), aturan Batam/reguler & 6 unit tetap.
+   Order dicatat per NOMOR RANGKA unit saat order: begitu unit itu masuk ILS / terangkut, stall kembali FIFO normal.
+   Disimpan di radar_foto/_nvo/o/{id} (rule radar_foto yang sudah ada; akun RCI hanya-lihat tetap boleh menulis di sini).
+   Order kedaluwarsa 24 jam; riwayat dihapus otomatis setelah 3 hari.
+====================================================================== */
+const NVO_PATH="radar_foto/_nvo";
+const NVO={ref:null, cb:null, o:{}, state:"", seen:null, sel:{}, mdl:{}, busy:false};
+function nvoListen(){
+  if(NVO.ref || !FBS.enabled || !FBS.db || !FBS.authed) return;
+  try{
+    const ref=FBS.db.ref(NVO_PATH+"/o");
+    const cb=snap=>{ NVO.o=snap.val()||{}; NVO.state="ok"; try{ nvoNotify(); }catch(e){} nvoRerender(); };
+    NVO.state=NVO.state||"load"; NVO.ref=ref; NVO.cb=cb;
+    ref.on("value", cb, e=>{ NVO.state=fbDenied(e)?"denied":"err"; NVO.ref=null; nvoRerender(); });
+  }catch(e){ NVO.ref=null; }
+}
+function nvoStop(){ try{ if(NVO.ref) NVO.ref.off("value", NVO.cb); }catch(e){} NVO.ref=null; NVO.cb=null; NVO.o={}; NVO.state=""; NVO.seen=null; NVO.sel={}; NVO.mdl={}; }
+function nvoRerender(){ try{ const a=document.activeElement; if(a && /^(nvoNote|ldrSearchInput)$/.test(a.id||"")) return; if(typeof activeTab!=="undefined" && ["rciorder","rci","delivery","koordinator","display","dashboard"].includes(activeTab)) render(); }catch(e){} }
+function nvoMdlList(m){ return Array.isArray(m) ? m.filter(x=>Array.isArray(x)) : Object.entries(m||{}); }
+function nvoMdlTxt(m){ return nvoMdlList(m).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k} ${v}`).join(", "); }
+/* status tiap order dihitung dari data RADAR sekarang (tidak perlu ditulis ulang) */
+function nvoEval(d){
+  d=d||DB.get(); const now=Date.now(), idx=new Map(), ilsById=new Map(), outIdx=new Map();
+  Object.entries(d.units||{}).forEach(([k,u])=>{ if(u && u.frame) idx.set(normVin(u.frame),[k,u]); });
+  (d.ils||[]).forEach(b=>{ if(!b) return; ilsById.set(b.id,b); if(b.outTs) (b.units||[]).forEach(z=>{ if(z && z.frame) outIdx.set(normVin(z.frame), b); }); });
+  return Object.values(NVO.o||{}).filter(o=>o && o.id && o.st).map(o=>{
+    const stalls=Object.entries(o.st).map(([g,x])=>{
+      const S={stall:g, m:x.m||[], n:0, wait:0, ils:0, load:0, out:0, gone:0, at:new Set(), plats:new Set(), outPl:new Set()};
+      (x.f||[]).forEach(f0=>{ const f=normVin(f0); S.n++; const e=idx.get(f);
+        if(e){ const u=e[1];
+          if(u.ilsId){ const b=ilsById.get(u.ilsId); if(b && b.outTs){ S.out++; S.outPl.add(b.ccPlat); } else { if(b && b.loadTs) S.load++; else S.ils++; if(b) S.plats.add(b.ccPlat); } }
+          else { S.wait++; if(!isOffKey(e[0])) S.at.add(groupOf(e[0])); } }
+        else if(outIdx.has(f)){ S.out++; S.outPl.add(outIdx.get(f).ccPlat); }
+        else S.gone++; });
+      return S; });
+    const cancelled=!!o.x, pending=stalls.some(s=>s.wait>0), inprog=stalls.some(s=>s.ils+s.load>0), expired=now-(o.ts||0)>24*3600000;
+    const status=cancelled?"batal":(!pending && !inprog)?"selesai":(expired && pending)?"kedaluwarsa":pending?"menunggu":"loading";
+    return Object.assign({}, o, {stalls, status, active:status==="menunggu"||status==="loading"});
+  }).sort((a,b)=>(b.ts||0)-(a.ts||0));
+}
+/* stall (lokasi unit order sekarang) → order yang menunggu, paling dulu di depan */
+function nvoActiveStalls(d){
+  const M=new Map();
+  try{ nvoEval(d).filter(o=>o.status==="menunggu").sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(o=>o.stalls.forEach(s=>{ if(s.wait>0) s.at.forEach(g=>{ if(!M.has(g)) M.set(g,{id:o.id, ts:o.ts, by:o.by||"", note:o.note||""}); }); })); }catch(e){}
+  return M;
+}
+function nvoNotify(){
+  const L=Object.values(NVO.o||{}).filter(o=>o && o.id);
+  if(NVO.seen===null){ NVO.seen=new Set(L.map(o=>o.id)); return; }
+  const fresh=L.filter(o=>!NVO.seen.has(o.id) && !o.x && Date.now()-(o.ts||0)<30*60000); L.forEach(o=>NVO.seen.add(o.id));
+  if(!fresh.length || !currentUser || !["delivery","admin","koordinator"].includes(currentUser.role)) return;
+  const o=fresh[0], txt=Object.entries(o.st||{}).map(([g,x])=>`Stall ${g} (${nvoMdlTxt(x.m)})`).join(" · ");
+  try{ soundEv("nvorder", `${o.by||"NVDC"}: ${txt}${o.note?" — "+o.note:""}`); }catch(e){}
+  try{ miniToast("📦 Order unit dari NVDC: "+txt, 8000); }catch(e){}
+}
+function nvoCanOrder(){ return !!(currentUser && ["rci","admin","delivery"].includes(currentUser.role)); }
+function nvoCanCancel(o){ return !!(currentUser && (["admin","delivery"].includes(currentUser.role) || (o && o.u && o.u===currentUser.username) || currentUser.role==="rci")); }
+/* komposisi stall: unit siap (belum ILS, bukan defect) */
+function nvoStallInfo(d){
+  const ils=new Map((d.ils||[]).filter(b=>b && b.status==="open" && !b.outTs).map(b=>[b.id,b])), act=nvoActiveStalls(d);
+  return (CONFIG.STALL_GROUPS||[]).map(g=>{
+    const cells=[], free=[], inIls=new Map(); let df=0;
+    for(let i=1;i<=CONFIG.SLOTS_PER_STALL;i++){ const u=d.units[g+i]; cells.push(u||null); if(!u) continue;
+      if(u.ilsId){ const b=ils.get(u.ilsId); if(b) inIls.set(b.id,b); continue; }
+      if(dfBlockOf(d,u.frame)){ df++; continue; } free.push(u); }
+    const m={}; free.forEach(u=>{ m[u.model]=(m[u.model]||0)+1; });
+    return {g, cells, free, m, df, ils:[...inIls.values()], ord:act.get(g)||null, batam:free.some(u=>u.batam), mixed:free.some(u=>u.batam)&&free.some(u=>!u.batam)};
+  });
+}
+function nvoPick(g){ const d=DB.get(), s=nvoStallInfo(d).find(x=>x.g===g); if(!s) return;
+  if(!s.free.length){ miniToast("Stall "+g+" tidak punya unit siap (kosong / sudah masuk ILS)."); return; }
+  if(s.ord && !NVO.sel[g]){ miniToast("Stall "+g+" sudah di-order dan masih menunggu CC."); return; }
+  if(s.mixed && !NVO.sel[g]){ miniToast("Stall "+g+" berisi unit Batam + reguler tercampur, belum bisa dibuat ILS. Pilih stall lain."); return; }
+  NVO.sel[g]=!NVO.sel[g]; if(!NVO.sel[g]) delete NVO.sel[g]; render(); }
+function nvoPickModel(m){ NVO.mdl[m]=!NVO.mdl[m]; if(!NVO.mdl[m]) delete NVO.mdl[m]; render(); }
+function nvoPesan(){
+  if(!nvoCanOrder()) return;
+  const d=DB.get(), G=Object.keys(NVO.sel).filter(g=>NVO.sel[g]);
+  if(!G.length){ alert("Contreng dulu stall yang mau di-order."); return; }
+  if(!FBS.enabled || !FBS.db || !FBS.authed){ alert("Belum tersambung ke server. Coba lagi sebentar."); return; }
+  const info=nvoStallInfo(d), st={};
+  G.forEach(g=>{ const s=info.find(x=>x.g===g); if(!s || !s.free.length) return; st[g]={f:s.free.map(u=>u.frame), m:Object.entries(s.m)}; });
+  if(!Object.keys(st).length){ alert("Stall yang dipilih sudah tidak punya unit siap (sudah masuk ILS / kosong)."); return; }
+  const note=String((document.getElementById("nvoNote")||{}).value||"").trim().slice(0,200);
+  const txt=Object.entries(st).map(([g,x])=>`• Stall ${g}: ${nvoMdlTxt(x.m)}`).join("\n");
+  if(!confirm(`Order unit ke EKY?\n\n${txt}${note?`\n\nCatatan: ${note}`:""}\n\nDelivery EKY otomatis mendahulukan stall ini saat membuat ILS (berikutnya). Setelah unitnya terangkut, stall kembali normal.`)) return;
+  const id=Date.now(), o={id, ts:id, by:(currentUser&&currentUser.name)||"RCI NVDC", u:(currentUser&&currentUser.username)||"", note, st};
+  NVO.busy=true; render();
+  FBS.db.ref(NVO_PATH+"/o/"+id).set(o).then(()=>{ NVO.busy=false; NVO.sel={}; try{ const el=document.getElementById("nvoNote"); if(el) el.value=""; }catch(e){} miniToast("📦 Order terkirim ke Delivery EKY"); nvoPrune(); render(); })
+    .catch(e=>{ NVO.busy=false; render(); alert("Order gagal disimpan: "+(e&&e.message||e)); });
+}
+function nvoPrune(){ try{ const now=Date.now(); Object.values(NVO.o||{}).forEach(o=>{ if(o && o.id && now-(o.ts||0)>3*86400000) FBS.db.ref(NVO_PATH+"/o/"+o.id).remove(); }); }catch(e){} }
+function nvoBatal(id){
+  const o=(NVO.o||{})[id]; if(!o || !nvoCanCancel(o)) return;
+  if(!confirm("Batalkan order unit ini? Stall kembali urut FIFO normal.")) return;
+  FBS.db.ref(NVO_PATH+"/o/"+id).update({x:Date.now(), xby:(currentUser&&currentUser.name)||""}).then(()=>{ miniToast("Order dibatalkan"); render(); }).catch(e=>alert("Gagal: "+(e&&e.message||e)));
+}
+const NVO_STAT={menunggu:["⏳","Menunggu CC","#DB2777"], loading:["🔄","Sedang dimuat","#0891B2"], selesai:["✅","Selesai terangkut","#16A34A"], batal:["✖","Dibatalkan","#64748B"], kedaluwarsa:["⌛","Kedaluwarsa (24 jam)","#B45309"]};
+function nvoStallLine(s){
+  const p=[]; if(s.wait) p.push(`⏳ ${s.wait} unit menunggu CC${s.at.size && ![...s.at].every(g=>g===s.stall)?` (sekarang di ${[...s.at].join(", ")})`:""}`);
+  if(s.ils) p.push(`🔄 ${s.ils} unit di ILS ${[...s.plats].join(", ")} (loading)`); if(s.load) p.push(`🚚 ${s.load} unit siap Delout ${[...s.plats].join(", ")}`);
+  if(s.out) p.push(`✅ ${s.out} unit terangkut ${[...s.outPl].join(", ")}`); if(s.gone) p.push(`${s.gone} unit pindah/keluar stall`);
+  return p.join(" · ");
+}
+function nvoOrderListHtml(d, opt){
+  opt=opt||{}; const hm=t=>new Date(t).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"}), dm=t=>new Date(t).toLocaleDateString("id-ID",{day:"2-digit",month:"short"});
+  let L=nvoEval(d); if(opt.activeOnly) L=L.filter(o=>o.active); else L=L.filter(o=>o.active || Date.now()-(o.ts||0)<24*3600000);
+  if(!L.length) return opt.activeOnly?"":`<div class="nvo-empty">Belum ada order dalam 24 jam terakhir.</div>`;
+  return L.map(o=>{ const S=NVO_STAT[o.status]||NVO_STAT.menunggu;
+    return `<div class="nvo-o" style="--c:${S[2]};"><div class="nvo-oh"><span class="nvo-os">${S[0]} ${S[1]}</span><b>Order ${dm(o.ts)} ${hm(o.ts)}</b><span class="nvo-by">oleh ${escH(o.by||"-")}</span>
+      ${o.active && nvoCanCancel(o)?`<button class="btn btn-outline btn-sm nvo-x" onclick="event.stopPropagation();nvoBatal(${o.id})">✖ Batalkan</button>`:""}</div>
+      ${o.note?`<div class="nvo-note">📝 ${escH(o.note)}</div>`:""}
+      ${o.stalls.map(s=>`<div class="nvo-sr"><b>Stall ${escH(s.stall)}</b> <span class="nvo-sm">${escH(nvoMdlTxt(s.m))}</span><div class="nvo-ss">${escH(nvoStallLine(s))}</div></div>`).join("")}
+      ${o.status==="batal"&&o.xby?`<div class="nvo-note">Dibatalkan ${escH(o.xby)}</div>`:""}</div>`; }).join("");
+}
+/* Banner di halaman Delivery / Koordinator */
+function nvoDeliveryHtml(d){
+  nvoListen(); const L=nvoEval(d).filter(o=>o.active); if(!L.length) return "";
+  return `<div class="card nvo-dl nvo-ok"><h3>📦 Order Unit dari NVDC <span class="nvo-cnt">${L.length}</span></h3>
+    <div style="font-size:12px;color:var(--text-dim);margin:-4px 0 8px;">Stall yang di-order <b>otomatis didahulukan</b> di Draft ILS untuk CC berikutnya (tetap 6 unit, Batam/reguler tidak dicampur). Setelah unitnya masuk ILS, stall kembali urut FIFO normal.</div>
+    ${nvoOrderListHtml(d,{activeOnly:true})}</div>`;
+}
+/* Menu RCI NVDC: Order Unit */
+function rciOrderHtml(d){
+  nvoListen();
+  const info=nvoStallInfo(d), selM=Object.keys(NVO.mdl).filter(m=>NVO.mdl[m]);
+  const allM={}; info.forEach(s=>Object.entries(s.m).forEach(([m,n])=>{ allM[m]=(allM[m]||0)+n; }));
+  const mdlChips=Object.entries(allM).sort((a,b)=>b[1]-a[1]).map(([m,n])=>{ const c=getModelColor(m,d)||"#64748B"; return `<button class="nvo-mchip ${NVO.mdl[m]?"on":""}" style="--mc:${c};--mfg:${slotFg(c)};" onclick="nvoPickModel('${escH(m).replace(/'/g,"\\'")}')"><i></i>${escH(m)} <b>${n}</b></button>`; }).join("");
+  const hit=s=>selM.length?s.free.filter(u=>NVO.mdl[u.model]).length:0;
+  const ord=info.filter(s=>s.free.length || s.ils.length).slice().sort((a,b)=>((!a.free.length||a.mixed)-(!b.free.length||b.mixed)) || (selM.length?(hit(b)-hit(a))||(b.free.length-a.free.length):0));
+  const short=m=>String(m||"").split(/\s+/)[0].slice(0,7);
+  const card=s=>{ const on=!!NVO.sel[s.g], h=hit(s), dis=!s.free.length || s.mixed || (!!s.ord && !on);
+    const cells=s.cells.map(u=>{ if(!u) return `<span class="nvo-c e"></span>`; const c=getModelColor(u.model,d)||"#64748B"; return `<span class="nvo-c ${u.ilsId?"ils":""} ${selM.length&&!NVO.mdl[u.model]?"dim":""}" style="--mc:${c};color:${slotFg(c)};">${escH(short(u.model))}</span>`; }).join("");
+    const mc=Object.entries(s.m).sort((a,b)=>b[1]-a[1]).map(([m,n])=>`<span class="${NVO.mdl[m]?"hit":""}">${escH(m)} ×${n}</span>`).join("");
+    const st=[]; s.ils.forEach(b=>st.push(`<span class="nvo-tg ils">${b.loadTs?"🚚 Siap Delout":"🔄 Loading"} · ${escH(b.ccPlat||"")}</span>`)); if(s.ord) st.push(`<span class="nvo-tg ord">📦 Sudah di-order ${new Date(s.ord.ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</span>`); if(s.df) st.push(`<span class="nvo-tg df">⚠ ${s.df} defect</span>`); if(s.mixed) st.push(`<span class="nvo-tg df">Batam + reguler tercampur — dipisah dulu oleh EKY</span>`);
+    return `<div class="nvo-st ${on?"on":""} ${dis?"dis":""}" onclick="nvoPick('${s.g}')">
+      <div class="nvo-sh"><span class="nvo-ck">${on?"✔":""}</span><b>${escH(s.g)}</b><span class="nvo-n">${s.free.length} unit siap</span>${s.batam?`<i class="nvo-bt">BATAM</i>`:""}${h?`<span class="nvo-hit">🎯 ${h}</span>`:""}</div>
+      <div class="nvo-cells">${cells}</div><div class="nvo-mc">${mc||`<span style="opacity:.6;">tidak ada unit siap</span>`}</div>${st.length?`<div class="nvo-tgs">${st.join("")}</div>`:""}</div>`; };
+  const G=Object.keys(NVO.sel).filter(g=>NVO.sel[g]), tot={}; G.forEach(g=>{ const s=info.find(x=>x.g===g); if(s) Object.entries(s.m).forEach(([m,n])=>{ tot[m]=(tot[m]||0)+n; }); });
+  const nU=Object.values(tot).reduce((a,b)=>a+b,0);
+  const body=`<div class="nvo-ok">
+    <div class="card nvo-how"><b>📦 Order unit model tertentu dari EKY</b><div>1. Pilih model yang dibutuhkan (boleh lebih dari satu) — stall paling banyak model itu tampil paling atas.<br>2. Contreng stall yang mau diambil.<br>3. Tekan <b>Order</b>. Delivery EKY langsung mendapat notifikasi dan stall itu didahulukan saat membuat ILS. Setelah unitnya terangkut, urutan kembali FIFO normal.</div></div>
+    ${NVO.state==="denied"?`<div class="msg err">Server menolak akses data order (rule radar_foto). Hubungi Admin.</div>`:""}
+    <div class="card"><h3 style="margin:0 0 8px;">🎯 Model yang dibutuhkan</h3><div class="nvo-mdls">${mdlChips||`<span style="color:var(--text-dim);font-size:13px;">Belum ada unit siap di stall.</span>`}</div></div>
+    <div class="nvo-grid">${ord.map(card).join("")||`<div class="nvo-empty">Stall kosong.</div>`}</div>
+    <div class="nvo-bar"><div class="nvo-bi"><b>${G.length} stall dipilih</b>${nU?` · ${nU} unit: ${escH(Object.entries(tot).sort((a,b)=>b[1]-a[1]).map(([m,n])=>m+" "+n).join(", "))}`:""}</div>
+      <input id="nvoNote" type="text" maxlength="200" placeholder="Catatan untuk EKY (mis. line NVDC kekurangan Avanza)">
+      <button class="btn btn-primary" ${G.length&&!NVO.busy?"":"disabled"} onclick="nvoPesan()">${NVO.busy?"⏳ Menyimpan…":`📦 Order ke EKY${G.length?` (${G.length} stall)`:""}`}</button></div>
+    <div class="card"><h3 style="margin:0 0 8px;">🧾 Order 24 jam terakhir</h3>${nvoOrderListHtml(d)}</div></div>`;
+  return rciWrap("rciorder", body);
+}
+/* ---------- Tanda di peta stall: sudah dibuat ILS / sedang loading / di-order NVDC ---------- */
+function stallLiveMarks(d){
+  const M={}, open=new Map((d.ils||[]).filter(b=>b && b.status==="open" && !b.outTs).map(b=>[b.id,b]));
+  Object.entries(d.units||{}).forEach(([k,u])=>{ if(!u || !u.ilsId || isOffKey(k)) return; const b=open.get(u.ilsId); if(!b) return; const g=groupOf(k), m=M[g]=M[g]||{ils:[]}; if(!m.ils.some(x=>x.id===b.id)) m.ils.push({id:b.id, plat:b.ccPlat||"", load:!!b.loadTs}); });
+  try{ nvoActiveStalls(d).forEach((v,g)=>{ (M[g]=M[g]||{ils:[]}).ord=v; }); }catch(e){}
+  return M;
+}
+function stallMarkCls(m){ if(!m) return ""; const c=[]; if(m.ils.length) c.push(m.ils.some(x=>!x.load)?"sm-ils":"sm-load"); if(m.ord) c.push("sm-ord"); return c.join(" "); }
+function stallMarkTags(m){ if(!m) return ""; let h="";
+  if(m.ord) h+=`<span class="sm-tag sm-t-ord" title="Order NVDC oleh ${escH(m.ord.by)}">📦 ORDER</span>`;
+  if(m.ils.length){ const b=m.ils[0], short=String(b.plat||"").replace(/^[A-Z]+\s*/,"").replace(/\s+[A-Z]+$/,""); h+=`<span class="sm-tag ${b.load?"sm-t-load":"sm-t-ils"}" title="ILS #${b.id} · ${escH(b.plat)}">${b.load?"🚚 DELOUT":"🔄 LOADING"} ${escH(short)}</span>`; }
+  return h?`<div class="sm-tags">${h}</div>`:""; }
+function stallMarkLegend(M){ const v=Object.values(M||{}); if(!v.length) return "";
+  const nI=v.filter(m=>m.ils.some(x=>!x.load)).length, nL=v.filter(m=>m.ils.length && m.ils.every(x=>x.load)).length, nO=v.filter(m=>m.ord).length;
+  const p=[]; if(nI) p.push(`<span class="sm-lg sm-t-ils">🔄 ILS dibuat / loading ${nI}</span>`); if(nL) p.push(`<span class="sm-lg sm-t-load">🚚 Loading selesai, siap Delout ${nL}</span>`); if(nO) p.push(`<span class="sm-lg sm-t-ord">📦 Order NVDC ${nO}</span>`);
+  return p.length?`<div class="sm-legend">${p.join("")}</div>`:""; }
+function nvoCss(){
+  return `
+  .stallcol{position:relative;}
+  .stallcol.sm-ils{box-shadow:0 0 0 3px #06B6D4, 0 0 18px rgba(6,182,212,.55);border-radius:12px;animation:smPulse 1.6s ease-in-out infinite;}
+  .stallcol.sm-load{box-shadow:0 0 0 3px #22C55E, 0 0 16px rgba(34,197,94,.5);border-radius:12px;}
+  .stallcol.sm-ord:not(.sm-ils):not(.sm-load){box-shadow:0 0 0 3px #EC4899, 0 0 16px rgba(236,72,153,.5);border-radius:12px;}
+  .stallcol.sm-ord.sm-ils,.stallcol.sm-ord.sm-load{outline:2px dashed #EC4899;outline-offset:5px;}
+  @keyframes smPulse{0%,100%{box-shadow:0 0 0 3px #06B6D4, 0 0 8px rgba(6,182,212,.35);}50%{box-shadow:0 0 0 3px #06B6D4, 0 0 22px rgba(6,182,212,.75);}}
+  .sm-tags{position:absolute;top:-10px;left:0;right:0;display:flex;justify-content:center;gap:3px;z-index:2;pointer-events:none;flex-wrap:nowrap;}
+  .sm-tag{font-size:9.5px;font-weight:900;letter-spacing:.03em;padding:2px 6px;border-radius:6px;color:#fff;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .sm-t-ils{background:#0891B2;} .sm-t-load{background:#16A34A;} .sm-t-ord{background:#DB2777;}
+  .sm-legend{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px;} .sm-lg{font-size:11px;font-weight:800;color:#fff;border-radius:999px;padding:3px 10px;}
+  @media(max-width:700px){ .sm-tag{font-size:8px;padding:1px 4px;} .sm-tags{top:-8px;} }
+  .yardcell.in-ils{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.30) 0 6px,transparent 6px 12px) !important;}
+  .nvo-how{background:linear-gradient(135deg,rgba(219,39,119,.08),rgba(124,58,237,.08));border:1px solid rgba(219,39,119,.25);font-size:13px;line-height:1.55;} .nvo-how>b{font-size:14px;color:#BE185D;display:block;margin-bottom:4px;}
+  .nvo-mdls{display:flex;flex-wrap:wrap;gap:6px;}
+  .nvo-mchip{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--border);background:var(--panel,#fff);color:var(--text);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer;}
+  .nvo-mchip i{width:10px;height:10px;border-radius:3px;background:var(--mc);} .nvo-mchip b{opacity:.65;}
+  .nvo-mchip.on{border-color:var(--mc);background:var(--mc);color:var(--mfg,#fff);} .nvo-mchip.on i{background:var(--mfg,#fff);} .nvo-mchip.on b{opacity:.9;}
+  .nvo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;margin:12px 0;}
+  .nvo-st{border:2px solid var(--border);border-radius:16px;padding:10px 12px;background:var(--panel,#fff);cursor:pointer;transition:transform .15s, box-shadow .15s;}
+  .nvo-st:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(15,23,42,.10);}
+  .nvo-st.on{border-color:#DB2777;box-shadow:0 0 0 3px rgba(219,39,119,.25);background:linear-gradient(160deg,rgba(219,39,119,.07),rgba(124,58,237,.05));}
+  .nvo-st.dis{opacity:.55;cursor:default;}
+  .nvo-sh{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:13px;} .nvo-sh b{font-size:18px;} .nvo-n,.nvo-hit,.nvo-bt{white-space:nowrap;}
+  .nvo-ck{width:22px;height:22px;border-radius:7px;border:2px solid #CBD5E1;display:inline-flex;align-items:center;justify-content:center;font-weight:900;color:#fff;flex:none;}
+  .nvo-st.on .nvo-ck{background:#DB2777;border-color:#DB2777;}
+  .nvo-n{color:var(--text-dim);font-size:12px;} .nvo-bt{font-style:normal;background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800;}
+  .nvo-hit{margin-left:auto;background:#DB2777;color:#fff;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:800;}
+  .nvo-cells{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin:8px 0 6px;}
+  .nvo-c{height:30px;border-radius:6px;background:var(--mc);color:#fff;font-size:8.5px;font-weight:800;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap;}
+  .nvo-c.e{background:transparent;border:1.5px dashed #CBD5E1;} .nvo-c.dim{opacity:.28;} .nvo-c.ils{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 4px,transparent 4px 8px);opacity:.55;}
+  .nvo-mc{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--text-dim);} .nvo-mc .hit{color:#BE185D;font-weight:800;}
+  .nvo-tgs{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;} .nvo-tg{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 7px;color:#fff;}
+  .nvo-tg.ils{background:#0891B2;} .nvo-tg.ord{background:#DB2777;} .nvo-tg.df{background:#B45309;}
+  .nvo-bar{position:sticky;bottom:8px;z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel,#fff);border:2px solid #DB2777;border-radius:16px;padding:10px 12px;box-shadow:0 10px 24px rgba(219,39,119,.18);margin-bottom:12px;}
+  .nvo-bi{flex:1 1 220px;font-size:13px;} .nvo-bar input{flex:2 1 240px;min-width:0;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;background:var(--panel,#fff);color:var(--text);}
+  .nvo-bar .btn{flex:1 1 200px;width:auto;background:linear-gradient(135deg,#DB2777,#7C3AED);border:none;color:#fff;} .nvo-bar .btn:disabled{opacity:.5;}
+  .nvo-o{border-left:5px solid var(--c);background:rgba(148,163,184,.08);border-radius:12px;padding:9px 12px;margin-top:8px;}
+  .nvo-oh{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;} .nvo-os{background:var(--c);color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;}
+  .nvo-by{color:var(--text-dim);font-size:12px;} .nvo-x{margin-left:auto;}
+  .nvo-note{font-size:12px;color:var(--text-dim);margin-top:4px;}
+  .nvo-sr{font-size:12.5px;margin-top:6px;padding-top:6px;border-top:1px dashed rgba(148,163,184,.35);} .nvo-sm{color:var(--text-dim);} .nvo-ss{font-size:12px;margin-top:2px;}
+  .nvo-empty{font-size:13px;color:var(--text-dim);padding:6px 0;}
+  .nvo-dl{border:2px solid #DB2777;background:linear-gradient(160deg,rgba(219,39,119,.06),rgba(124,58,237,.04));} .nvo-dl h3{color:#BE185D;}
+  .nvo-cnt{background:#DB2777;color:#fff;border-radius:999px;padding:0 9px;font-size:13px;margin-left:4px;}
+  .nvo-b{background:#DB2777;color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:800;white-space:nowrap;}
+  `;
+}
+/* ======================================================================
    PROGRESS CC EKY — REAL-TIME PER SHIFT (21 Nov 2026 00.50, revisi permintaan Khairul)
    Dulu: semua CC yang Delout 8 jam terakhir ikut dihitung → CC shift lalu yang sudah pulang ikut "di jalan" (12 CC padahal plan 7).
    Sekarang hanya CC shift ini: jadwal DCCP + Spot Order + Change Shift lanjutan + CC yang ILS di shift ini.
@@ -12231,12 +12462,15 @@ function ccProgress(d){
     if(where[k]){ it.sub=where[k]; out.eky.push(it); return; }
     let lo=0; try{ lo=ccLastDelout(d, o.plat)||0; }catch(e){}
     if(lo && lo<w[0]-2*3600000) lo=0;                                   /* Delout lama dari shift lalu: bukan perjalanan sekarang */
+    const mk=((d.ccDoneMk||{})[k])||null;
+    if(mk && (+mk.ts||0)>=w[0] && (!lo || (+mk.ts||0)>=lo)){ it.mk=mk; it.lo=lo; out.done.push(it); return; }   /* ditandai Selesai ritase oleh Delivery (HP driver mati) */
     const r=pos[k], fresh=!!(r && now-(r.ts||0)<=15*60000 && (!lo || (r.ts||0)>=lo));
     let c=null; if(fresh){ try{ c=trkCompute(r, mp); }catch(e){} }
     const dN=(fresh && nv && typeof nv.lat==="number") ? haversineKm(r.lat,r.lng,nv.lat,nv.lng) : null;
     const dY=(fresh && y.lat!=null) ? haversineKm(r.lat,r.lng,y.lat,y.lng) : null;
     Object.assign(it, {lo, t:c&&typeof c.t==="number"?c.t:null, dA:c?c.dA:null, dB:c?c.dB:dN, dN, dY, gps:fresh});
-    const arrived=!!lo && (((d.ccNvdc||{})[k])||0)>=lo, inYard=dY!=null && dY<=rad;
+    let arrived=!!lo && (((d.ccNvdc||{})[k])||0)>=lo; const inYard=dY!=null && dY<=rad;
+    if(!arrived && lo && !fresh && now-lo>3*3600000){ arrived=true; it.est=true; }   /* tanpa GPS > 3 jam sejak Delout: dianggap sudah tiba NVDC (perkiraan) */
     let seenBack=false; try{ seenBack=!!(c && (_trkDirMem[k]||{}).dir==="back"); }catch(e){}
     if(!lo){                                                             /* belum Delout di shift ini */
       if(dN!=null && dN<=1.5){ out.nvdc.push(it); return; }
@@ -12254,8 +12488,8 @@ function ccProgress(d){
   out.back.sort((a,b)=>(a.dA==null?9e9:a.dA)-(b.dA==null?9e9:b.dA));
   return out;
 }
-function ccProgressHtml(d, dark){
-  d=d||DB.get();
+function ccProgressHtml(d, dark, opt){
+  d=d||DB.get(); opt=opt||{};
   const P=ccProgress(d), mp=d.mapPoints||{}, hasMap=!!(mp.nvdc && typeof mp.nvdc.lat==="number");
   const ago=ms=>{ const m=Math.max(0,Math.round(ms/60000)); return m<60?m+" mnt":Math.floor(m/60)+" j "+(m%60)+" m"; };
   const rit=it=>it.tot?` · rit ${it.done}/${it.tot}`:"";
@@ -12263,11 +12497,12 @@ function ccProgressHtml(d, dark){
     if(kind==="eky") return (it.sub||"di EKY")+rit(it);
     if(kind==="otw") return (it.dB!=null?`${it.dB.toFixed(1)} km lagi`:`Delout ${ago(Date.now()-it.lo)} lalu${it.gps?"":" · tanpa GPS"}`)+(it.sub?" · "+it.sub:"");
     if(kind==="nvdc") return "di NVDC"+rit(it)+(it.fin?" · rit terakhir":"");
-    if(kind==="back") return (it.dA!=null?`${it.dA.toFixed(1)} km ke EKY`:`tanpa GPS · Delout ${ago(Date.now()-it.lo)} lalu`)+rit(it);
-    if(kind==="done") return `rit ${it.done}/${it.tot} selesai`;
+    if(kind==="back") return (it.est?"perkiraan sudah tiba NVDC (tanpa GPS)":it.dA!=null?`${it.dA.toFixed(1)} km ke EKY`:`tanpa GPS · Delout ${ago(Date.now()-it.lo)} lalu`)+rit(it);
+    if(kind==="done") return (it.tot?`rit ${it.done}/${it.tot} selesai`:"selesai")+(it.mk?` · ditandai ${it.mk.by||"Delivery"}`:"")+(it.est?" · perkiraan (tanpa GPS)":"");
     return it.dY!=null?`${it.dY.toFixed(1)} km ke EKY`:"belum absen";
   };
-  const chip=(it,kind)=>`<span class="pg-chip pg-${kind}"><span class="pg-p"><b>${escH(it.plat)}</b>${it.lp?` <i>${escH(it.lp)}</i>`:""}</span><em>${escH(sub(it,kind))}</em></span>`;
+  const btn=(it,kind)=>!opt.mark?"":(kind==="done"?(it.mk?`<button class="pg-btn" onclick="ccDoneUnset('${it.k}')">↺ Batal tanda</button>`:""):(["otw","nvdc","back","belum"].includes(kind)?`<button class="pg-btn" onclick="ccDoneSet('${it.k}')">✅ Selesai ritase</button>`:""));
+  const chip=(it,kind)=>`<span class="pg-chip pg-${kind}"><span class="pg-p"><b>${escH(it.plat)}</b>${it.lp?` <i>${escH(it.lp)}</i>`:""}</span><em>${escH(sub(it,kind))}</em>${btn(it,kind)}</span>`;
   const col=(kind,ico,lbl,L)=>`<div class="pg-col pg-${kind}"><div class="pg-h"><span class="pg-ico">${ico}</span><span class="pg-l">${lbl}</span><span class="pg-n">${rciN(L.length)}</span></div>
     <div class="pg-list">${L.length?L.map(it=>chip(it,kind)).join(""):`<span class="pg-none">–</span>`}</div></div>`;
   const short=p=>String(p).replace(/^[A-Z]+\s*/,"").replace(/\s+[A-Z]+$/,"");
@@ -12277,9 +12512,35 @@ function ccProgressHtml(d, dark){
   return `<div class="card y-prog ${dark?"pg-dark":""}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">🛣️ Progress CC EKY</h3><span class="pg-tot">${P.total} CC shift ${shN} · real-time</span></div>
     ${hasMap?`<div class="pg-road"><span class="pg-end pg-a">EKY <b>${P.eky.length}</b></span><div class="pg-line"><div class="pg-flow"></div>${dots}</div><span class="pg-end pg-b">NVDC <b>${P.nvdc.length}</b></span></div>`:""}
     <div class="pg-cols">${col("eky","🅿️","Di EKY",P.eky)}${col("otw","🚚","Arah NVDC",P.otw)}${col("nvdc","🏁","Di NVDC",P.nvdc)}${col("back","↩️","Arah balik EKY",P.back)}${col("done","✅","Selesai ritase",P.done)}</div>
-    ${P.belum.length?`<div class="pg-belum"><b>⏳ Belum datang (${P.belum.length}):</b> ${P.belum.map(it=>`${escH(it.plat)}${it.lp?` <i>${escH(it.lp)}</i>`:""}${it.dY!=null?` <i>· ${it.dY.toFixed(1)} km</i>`:""}`).join(" · ")}</div>`:""}
+    ${P.belum.length?`<div class="pg-belum"><b>⏳ Belum datang (${P.belum.length}):</b> ${P.belum.map(it=>`${escH(it.plat)}${it.lp?` <i>${escH(it.lp)}</i>`:""}${it.dY!=null?` <i>· ${it.dY.toFixed(1)} km</i>`:""}${opt.mark?` <button class="pg-btn pg-btn-i" onclick="ccDoneSet('${it.k}')">✅</button>`:""}`).join(" · ")}</div>`:""}
+    ${opt.mark?`<div style="font-size:11px;opacity:.75;margin-top:6px;">✅ Selesai ritase = tandai CC yang sebenarnya sudah selesai tapi HP driver mati / GPS tidak terbaca, supaya Display tidak rancu. Tanda batal sendiri kalau CC itu Delout lagi.</div>`:""}
     ${hasMap?"":`<div style="font-size:11px;opacity:.75;margin-top:6px;">Titik NVDC belum diatur Admin (Titik Lokasi) — posisi di jalan tidak bisa dihitung.</div>`}</div>`;
 }
+/* 21 Nov 03.30: tombol Selesai ritase (Delivery/Admin) — HP driver mati / GPS tidak terbaca padahal CC sudah selesai */
+function ccDoneSet(k){
+  if(!currentUser || !["delivery","admin"].includes(currentUser.role)) return;
+  const pl=platFmt(k);
+  if(!confirm(`Tandai CC ${pl} SUDAH SELESAI RITASE shift ini?\n\nPakai ini kalau HP driver mati / GPS tidak terbaca, padahal CC sebenarnya sudah selesai.\nDi Display & Progress CC, CC ini pindah ke "Selesai ritase".\nKalau CC ini Delout lagi sesudahnya, tanda ini otomatis tidak berlaku.`)) return;
+  const now=Date.now(), by=currentUser.name||currentUser.username||"Delivery";
+  DB.set(x=>{ const o=Object.assign({}, x.ccDoneMk||{}); o[k]={ts:now, by}; Object.keys(o).forEach(z=>{ if(now-(+(o[z]||{}).ts||0)>2*86400000) delete o[z]; }); x.ccDoneMk=o; });
+  try{ miniToast("✅ "+pl+" ditandai selesai ritase"); }catch(e){} render(); try{ ccProgBoxUpdate(); }catch(e){}
+}
+function ccDoneUnset(k){
+  if(!currentUser || !["delivery","admin"].includes(currentUser.role)) return;
+  if(!confirm("Batalkan tanda Selesai ritase untuk "+platFmt(k)+"?")) return;
+  DB.set(x=>{ const o=Object.assign({}, x.ccDoneMk||{}); delete o[k]; x.ccDoneMk=o; });
+  render(); try{ ccProgBoxUpdate(); }catch(e){}
+}
+function ccProgBoxUpdate(){ const el=document.getElementById("ccProgBox"); if(!el) return; const h=ccProgressHtml(DB.get(), false, {mark:!!(currentUser && ["delivery","admin"].includes(currentUser.role))}); if(el._h!==h){ el._h=h; el.innerHTML=h; } }
+/* GPS driver tetap menyala selama CC masih di jalan ke NVDC (sudah Delout, belum tiba) atau masih punya rit Change Shift */
+function ccTripOpen(d, plat, lo){
+  try{ const k=normPlat(plat); if(!k) return false; lo=lo||ccLastDelout(d, plat); if(!lo) return false;
+    const now=Date.now(); if(now-lo>4*3600000 || lo>now+120000) return false;
+    if((((d.ccNvdc||{})[k])||0)>=lo) return false;
+    const mk=(d.ccDoneMk||{})[k]; if(mk && (+mk.ts||0)>=lo) return false;
+    return true; }catch(e){ return false; }
+}
+function ccKeepOn(d, plat){ try{ if(!plat) return false; if(csActive(d, plat)) return "cs"; if(ccTripOpen(d, plat)) return "trip"; }catch(e){} return false; }
 /* Delay MDP ringkas untuk Display tanpa login */
 function dispMdlHtml(d){
   try{ mdlListen(); }catch(e){}
@@ -12330,6 +12591,8 @@ function progCss(){
   .pg-col.pg-eky .pg-l,.pg-col.pg-eky .pg-n{color:#4F46E5;} .pg-col.pg-done .pg-l,.pg-col.pg-done .pg-n{color:#475569;}
   .pg-dark .pg-col.pg-eky .pg-l,.pg-dark .pg-col.pg-eky .pg-n{color:#A5B4FC;} .pg-dark .pg-col.pg-done .pg-l,.pg-dark .pg-col.pg-done .pg-n{color:#CBD5E1;}
   .pg-end b{margin-left:4px;padding:0 6px;border-radius:6px;background:rgba(255,255,255,.25);}
+  .pg-btn{display:inline-block;margin-top:4px;font-size:10.5px;font-weight:800;border-radius:7px;border:1px solid currentColor;background:rgba(255,255,255,.6);color:#15803D;padding:2px 7px;cursor:pointer;}
+  .pg-dark .pg-btn{background:rgba(0,0,0,.25);color:#86EFAC;} .pg-btn-i{margin:0 0 0 2px;padding:0 5px;}
   .pg-belum{font-size:11.5px;margin-top:8px;padding:6px 9px;border-radius:10px;background:rgba(148,163,184,.12);line-height:1.5;max-height:64px;overflow:auto;}
   .pg-belum i{font-style:normal;opacity:.7;font-size:10.5px;}
   .pg-col{border-radius:14px;padding:9px 10px;min-width:0;}
@@ -15781,6 +16044,7 @@ function renderCcMap(){
     <div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Posisi diperbarui saat aplikasi driver terbuka. ${routeGet()?"Garis biru = rute jalan CC; jarak dihitung sepanjang rute.":"Garis putus-putus = garis lurus (Admin belum menyimpan rute jalan)."}</div>
     ${trailCardHtml()}
   </div>
+  ${currentUser && currentUser.role!=="cc"?`<div id="ccProgBox"></div>`:""}
   <div class="card"><h3>🚚 CC di perjalanan</h3><div id="trkList"></div></div>
   ${lapChatCardsHtml()}`;
 }
@@ -15912,6 +16176,7 @@ function trkWorking(plat){
   }catch(e){ return true; }
 }
 function updateTrackUI(){
+  try{ ccProgBoxUpdate(); }catch(e){}
   const list = document.getElementById("trkList"), mp = DB.get().mapPoints || {};
   const allLive = Object.values(TRACK||{}).filter(r=>r && typeof r.lat==="number" && Date.now()-(r.ts||0) < TRK_SHOW_MS);
   const _tk=DB.get().trkKill||{}, ghosts = allLive.filter(r=>!trkHasAccount(r) && !((_tk[trkKey(r.plat)]||0) && Date.now()-_tk[trkKey(r.plat)]<24*3600000));   // yang sudah dihapus Admin disembunyikan 24 jam walau HP lama masih mengirim
@@ -17087,6 +17352,7 @@ function dispStallMapHtml(data){
   const totalSlots = CONFIG.STALL_GROUPS.length*CONFIG.SLOTS_PER_STALL;
   const filledCount = Object.entries(data.units).filter(([k,u])=>u && !isOffKey(k)).length;
   const stallNums = [...new Set(CONFIG.STALL_GROUPS.map(g=>g.slice(0,-1)))];
+  let _SMc=null; const _SMg=g=>(_SMc||(_SMc=stallLiveMarks(data)))[g];   /* 21 Nov: tanda ILS / loading / order NVDC */
   function stallColHtml(num, side){
     const groupId = num+side;
     let cells = "";
@@ -17094,13 +17360,14 @@ function dispStallMapHtml(data){
       const id = groupId+i;
       const v = data.units[id];
       const mc = v ? getModelColor(v.model, data) : null;
-      cells += `<div class="yardcell ${v?'filled':'empty'}" ${v?`style="${slotFillStyle(mc)}"`:''} onclick="openSlotDetail('${id}')">
+      const _ci = v && v.ilsId && (_SMg(groupId)||{ils:[]}).ils.some(x=>x.id===v.ilsId);
+      cells += `<div class="yardcell ${v?'filled':'empty'}${_ci?' in-ils':''}" ${v?`style="${slotFillStyle(mc)}"`:''} onclick="openSlotDetail('${id}')">
         <div class="id">${id}${v&&ppbjOf(data,v.frame)?' <span class="ppbjb">PPBJ</span>':''}</div>
         <div class="v">${v ? v.model : 'KOSONG'}${v&&v.prio?' ⭐':''}${v&&v.batam?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 3px;font-size:9px;">B</span>':''}</div>
       </div>`;
     }
     const occ = [1,2,3,4,5,6].filter(i=>data.units[groupId+i]).length;
-    return `<div class="stallcol side${side}">
+    return `<div class="stallcol side${side} ${stallMarkCls(_SMg(groupId))}">${stallMarkTags(_SMg(groupId))}
       <div class="colhead">${groupId}${isBatamStall(data,groupId)?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 4px;font-size:9px;">BATAM</span>':""}<span class="n">${occ}/6</span></div>
       <div class="cellstack">${cells}</div>
     </div>`;
@@ -17109,7 +17376,7 @@ function dispStallMapHtml(data){
   const colsA = stallNums.map(n=>stallColHtml(n,"A")).join("");
   const colsB = stallNums.map(n=>stallColHtml(n,"B")).join("");
   return `<div class="stallblock">
-        <div class="stalltitle"><h3>🅿️ Peta Stall Unit</h3><span class="cnt">${filledCount}/${totalSlots} terisi</span></div>
+        <div class="stalltitle"><h3>🅿️ Peta Stall Unit</h3><span class="cnt">${filledCount}/${totalSlots} terisi</span></div>${stallMarkLegend(_SMc||(_SMc=stallLiveMarks(data)))}
         <div class="stallmap">
           <div class="mapcol">
             <div class="gridblock front"><div class="glabel">● DEPAN (A)</div><div class="stallcolset">${colsA}</div></div>
@@ -17175,6 +17442,7 @@ function rsBuildRows(data, sh, w, ilsShift){
       if(r.tukar){ const s=rsSwapWhy(data, r.police); x.tags.push({c:"tk", t:"TUKAR JAM", s:`dengan ${platFmt(r.tukar)}${s&&s.cross?" (beda LP)":""}`, w:(s&&s.why)||""}); }
       try{ const f=(data.dccpFix||{})[x.k]; if(f && f.ts>=dccpShiftFrom(r)) x.tags.push({c:"fx", t:"DIKOREKSI", s:`ritase diisi manual ${f.n}${f.by?` oleh ${f.by}`:""}`}); }catch(e){}
     }
+    try{ const mk=(data.ccDoneMk||{})[x.k]; if(mk && (+mk.ts||0)>=w[0]) x.tags.push({c:"fx", t:"SELESAI RITASE", s:`ditandai ${mk.by||"Delivery"} ${new Date(mk.ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}`}); }catch(e){}
     const a=findActualArrival(x.plat, data);
     const rd=road[x.k]||{};
     x.pos = a ? (a.stall?{c:"in", t:`📍 Stall ${ccLbl(a.stall)}`}:{c:"q", t:"⏳ Antri"}) : (rd.b==="otw"?{c:"otw", t:"🚚 Arah NVDC"}:rd.b==="nvdc"?{c:"nv", t:"🏁 di NVDC"}:rd.b==="back"?{c:"bk", t:"↩️ Arah balik EKY"}:rd.b==="done"?{c:"dn", t:"✅ Selesai ritase"}:rd.b==="eky"?{c:"ey", t:`📍 ${rd.sub||"di EKY"}`}:rd.b==="belum"?{c:"bl", t:"⏳ Belum datang"}:null);
@@ -17269,6 +17537,7 @@ function renderDisplay(){
   const filledCount = Object.entries(data.units).filter(([k,u])=>u && !isOffKey(k)).length;
   const stallNums = [...new Set(CONFIG.STALL_GROUPS.map(g=>g.slice(0,-1)))];
 
+  let _SMc=null; const _SMg=g=>(_SMc||(_SMc=stallLiveMarks(data)))[g];   /* 21 Nov: tanda ILS / loading / order NVDC */
   function stallColHtml(num, side){
     const groupId = num+side;
     let cells = "";
@@ -17276,13 +17545,14 @@ function renderDisplay(){
       const id = groupId+i;
       const v = data.units[id];
       const mc = v ? getModelColor(v.model, data) : null;
-      cells += `<div class="yardcell ${v?'filled':'empty'}" ${v?`style="${slotFillStyle(mc)}"`:''} onclick="openSlotDetail('${id}')">
+      const _ci = v && v.ilsId && (_SMg(groupId)||{ils:[]}).ils.some(x=>x.id===v.ilsId);
+      cells += `<div class="yardcell ${v?'filled':'empty'}${_ci?' in-ils':''}" ${v?`style="${slotFillStyle(mc)}"`:''} onclick="openSlotDetail('${id}')">
         <div class="id">${id}${v&&ppbjOf(data,v.frame)?' <span class="ppbjb">PPBJ</span>':''}</div>
         <div class="v">${v ? v.model : 'KOSONG'}${v&&v.prio?' ⭐':''}${v&&v.batam?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 3px;font-size:9px;">B</span>':''}</div>
       </div>`;
     }
     const occ = [1,2,3,4,5,6].filter(i=>data.units[groupId+i]).length;
-    return `<div class="stallcol side${side}">
+    return `<div class="stallcol side${side} ${stallMarkCls(_SMg(groupId))}">${stallMarkTags(_SMg(groupId))}
       <div class="colhead">${groupId}${isBatamStall(data,groupId)?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 4px;font-size:9px;">BATAM</span>':""}<span class="n">${occ}/6</span></div>
       <div class="cellstack">${cells}</div>
     </div>`;
@@ -17354,7 +17624,7 @@ function renderDisplay(){
       </div>
       <div class="ymap">
       <div class="stallblock">
-        <div class="stalltitle"><h3>🅿️ Peta Stall Unit</h3><span class="cnt">${filledCount}/${totalSlots} terisi</span></div>
+        <div class="stalltitle"><h3>🅿️ Peta Stall Unit</h3><span class="cnt">${filledCount}/${totalSlots} terisi</span></div>${stallMarkLegend(_SMc||(_SMc=stallLiveMarks(data)))}
         <div class="stallmap">
           <div class="mapcol">
             <div class="gridblock front">
