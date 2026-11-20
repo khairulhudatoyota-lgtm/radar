@@ -1745,7 +1745,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="21 Nov 2026 04.08";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="21 Nov 2026 04.18";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2746,7 +2746,7 @@ function ccLastOutBackstop(){
 }
 function ccLastOutSave(){ const v=(document.getElementById("ccLastOutM")||{}).value; const n=Math.max(0,Math.min(240,Math.round(+v||0))); DB.set(d=>{ d.ccLastOutM=n; }); alert(n?("Driver CC otomatis keluar "+ccLastOutFmtM(n)+" sesudah Delout ritase terakhir (DCCP)."):"Keluar otomatis sesudah ritase terakhir dimatikan."); render(); }
 function doLogout(){
-  try{ document.body.classList.remove("disp-tv"); }catch(e){}
+  try{ document.body.classList.remove("disp-tv"); document.body.classList.remove("ldr-tv"); }catch(e){}
   try{ presenceOff(); }catch(e){}
   try{ mdlStop(); }catch(e){}
   try{ nvoStop(); }catch(e){}
@@ -2890,7 +2890,7 @@ function renderFail(e){
   }catch(_){}
 }
 function setVP(vp, html){
-  try{ if(isDispTv() && activeTab==="display"){ const _d=DB.get(); html=dispHudHtml(_d)+dispTvLayout(html, _d); } else html=uiHeroHtml(activeTab)+html; }catch(e){}   /* banner warna per menu / HUD display (20 Nov) · 3 kolom + Progress CC + Delay MDP (21 Nov) */
+  try{ if(isDispTv() && activeTab==="display"){ const _d=DB.get(); html=dispHudHtml(_d)+dispTvLayout(html, _d); } else if(activeTab==="dashboard" && ldrTvActive()) html=dispHudHtml(DB.get())+html; else html=uiHeroHtml(activeTab)+html; }catch(e){}   /* banner warna per menu / HUD display (20 Nov) · 3 kolom + Progress CC + Delay MDP (21 Nov) */
   // Auto-refresh: kalau hasil HTML sama persis, jangan sentuh layar sama sekali
   if(_autoRender && html === _lastVPHtml && _lastVPTab === activeTab){ _vpChanged = false; return; }
   _vpChanged = true; _lastVPHtml = html; _lastVPTab = activeTab;
@@ -2902,6 +2902,7 @@ function renderInner(){
     b.classList.toggle("active", b.dataset.tab===activeTab);
   });
   const vp = document.getElementById("viewport");
+  try{ const lt=ldrTvActive(); document.body.classList.toggle("ldr-tv", lt); document.body.classList.toggle("disp-tv", isDispTv() || lt); const mv=document.getElementById("mainView"); if(mv) mv.classList.toggle("noside", !!(currentUser && currentUser.role==="display") || lt); }catch(e){}   /* Mode TV Dashboard (21 Nov) */
   try{ if(currentUser && !["cc","pdi","dispatcher"].includes(currentUser.role)) nvoListen(); }catch(e){}   /* order unit NVDC (21 Nov) */
   try{ if(isRci()){ ldrPeriod="today"; ldrShift=currentShift(); ccMapShift=currentShift()==="1"?"day":"night"; } }catch(e){}   /* RCI: selalu hari ini & shift berjalan */
   let _uiAnim=false; try{ _uiAnim=!!(currentUser && !uiLite() && currentUser.role!=="display" && !_rciSeen[activeTab] && !UI_NO_HERO.has(activeTab)); }catch(e){}
@@ -2922,7 +2923,7 @@ function renderInner(){
   else if(activeTab==="rciorder") setVP(vp, rciOrderHtml(DB.get()));
   else if(activeTab==="batam") setVP(vp, renderBatamPage());
   else if(activeTab==="prio") setVP(vp, renderPrioPage());
-  else if(activeTab==="dashboard") setVP(vp, pdiCardSafe()+renderLeaderDashboard());
+  else if(activeTab==="dashboard"){ const _h=pdiCardSafe()+renderLeaderDashboard(); setVP(vp, ldrTvActive()?ldrTvLayout(_h, DB.get()):_h); }
   else if(activeTab==="ekyrep") setVP(vp, renderEkyReport());
   else if(activeTab==="pdi" && typeof renderPdiPage!=="function"){ setVP(vp, `<div class="card" style="text-align:center;">Memuat PDI…</div>`); setTimeout(()=>{ try{ render(); }catch(e){} }, 300); }
   else if(activeTab==="pdi"){ if(!document.getElementById("pdiRoot")){ setVP(vp, renderPdiPage()); setTimeout(pdiMounted,0); } else { _vpChanged=false; pdiUi(); } }
@@ -10015,7 +10016,7 @@ function renderLeaderDashboard(){
   const modelRows = R.models.map(m=>{ const x=R.byModel[m]||{inp:0,out:0,wip:0}; return {m,...x}; }).sort((a,b)=>b.inp-a.inp);
   const mxModel = Math.max(1,...modelRows.map(r=>Math.max(r.inp,r.out,r.wip)));
   return `
-  <div class="card ldr-main"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 10px;">
+  <div class="card ldr-main" data-tv="top"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 10px;">
     <h3 style="margin:0;">📊 Dashboard Produksi</h3>
     <div style="display:flex;gap:8px;align-items:center;">
       <select onchange="ldrPeriod=this.value;render()">
@@ -10025,6 +10026,7 @@ function renderLeaderDashboard(){
       </select>
       ${ldrShiftSelect()}
       <button class="btn btn-sm" style="width:auto;" onclick="switchTab('unduh')">⬇️ Download</button>
+      <button class="btn btn-sm ldr-tvbtn" style="width:auto;" onclick="ldrTvSwitch()">${ldrTvActive()?"🖥 Mode biasa":"📺 Mode TV"}</button>
     </div>
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
@@ -10033,10 +10035,10 @@ function renderLeaderDashboard(){
     ${tile("Delivery by CC", R.tCC, "#0E7C66", "jumlah CC · periode terpilih")}
     ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>rkArea(l)+" "+(R.wipByLine[l]||0)).join(" · ")+" · stok unit di stall / luar stall"+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
   </div></div>
-  ${batamAlertHtml(data)}
-  ${ldrDppHtml(data)}
-  ${rptShiftHtml(data)}
-  <div class="card"><h3>Ringkasan per Model</h3>
+  ${tvTag(batamAlertHtml(data),"top")}
+  ${tvTag(ldrDppHtml(data),"L")}
+  ${tvTag(rptShiftHtml(data),"L")}
+  <div class="card" data-tv="L"><h3>Ringkasan per Model</h3>
     ${modelRows.map(r=>`<div style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;font-size:13px;"><b style="color:${getModelColor(r.m,data)};">${r.m}</b><span>Input <b>${r.inp}</b> · Delivery <b>${r.out}</b> · WIP <b>${r.wip}</b></span></div>
       <div style="height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:3px;"><div style="height:100%;width:${r.inp/mxModel*100}%;background:${getModelColor(r.m,data)};"></div></div>
@@ -10044,12 +10046,12 @@ function renderLeaderDashboard(){
     </div>`).join("")}
     <div style="font-size:11px;color:var(--text-dim);">Bar atas = input, bar bawah hijau = delivery by unit.</div>
   </div>
-  ${ldrLpHtml(data)}
-  ${mdlCardHtml(data)}
-  <div class="card"><h3>Input vs Delivery per 30 menit</h3>${ldrChartSVG(R.slots)}</div>
-  <div class="card ldr-stall">${dispStallMapHtml(data)}</div>
-  ${pdmCardHtml(data)}
-  <div class="ldr-more"><details ${ldrMoreOpen?"open":""} ontoggle="ldrMoreOpen=this.open"><summary>➕ Data lainnya <span>cari No. Rangka · input per driver · rincian per 30 menit · input per model · WIP · pelanggaran kecepatan</span></summary>
+  ${tvTag(ldrLpHtml(data),"R")}
+  ${tvTag(mdlCardHtml(data),"R")}
+  <div class="card" data-tv="M"><h3>Input vs Delivery per 30 menit</h3>${ldrChartSVG(R.slots)}</div>
+  <div class="card ldr-stall" data-tv="M">${dispStallMapHtml(data)}</div>
+  ${tvTag(pdmCardHtml(data),"M")}
+  <div class="ldr-more" data-tv="x"><details ${ldrMoreOpen?"open":""} ontoggle="ldrMoreOpen=this.open"><summary>➕ Data lainnya <span>cari No. Rangka · input per driver · rincian per 30 menit · input per model · WIP · pelanggaran kecepatan</span></summary>
   <div class="card">
     <h3>🔎 Cari No. Rangka</h3>
     <input id="ldrSearchInput" type="search" placeholder="Ketik No. Rangka (min. 3 karakter)" value="${ldrSearch.replace(/"/g,'&quot;')}" oninput="ldrOnSearch(this.value)" style="width:100%;margin-top:8px;font-size:16px;" autocomplete="off" autocapitalize="characters">
@@ -11961,7 +11963,7 @@ function rciCss(){
   @keyframes rciPulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.75);}70%{box-shadow:0 0 0 9px rgba(74,222,128,0);}100%{box-shadow:0 0 0 0 rgba(74,222,128,0);}}
   @keyframes rciBob{0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-6px) rotate(4deg);}}
   @media (prefers-reduced-motion: reduce){.rci-hero *,.rci-in *{animation:none!important;}}
-  `+uiCssExtra()+dispCss()+progCss()+rsCss()+nvoCss();
+  `+uiCssExtra()+dispCss()+progCss()+rsCss()+nvoCss()+ldrTvCss();
   document.head.appendChild(st);
 }
 function rciHero(tab, extra){
@@ -12213,7 +12215,7 @@ function dispCss(){
   .dh-date{font-size:13px;color:#93C5FD;margin-top:4px;}
   .disp-in .disp-hud,.disp-in .card,.disp-in .stallblock{animation:rciUp .6s cubic-bezier(.2,.8,.2,1) backwards;}
   .disp-in .dh-arc{animation:rciRing 1.4s cubic-bezier(.2,.8,.2,1) backwards .2s;--c:188.5;}
-  @media(max-width:1099px){ body.disp-tv .disp-cols,body.disp-tv .dc{display:contents;} body.disp-tv .yardwrap .y-prog{order:2;} body.disp-tv .yardwrap .y-mdl{order:3;} }
+  @media(max-width:1099px){ body.disp-tv .disp-cols,body.disp-tv .dc{display:contents;} body.disp-tv .yardwrap .y-prog{order:2;} body.disp-tv .yardwrap .y-mdl{order:3;} body.disp-tv .yardwrap .y-flow{order:7;} }
   @media(max-width:1500px){ .dh-pod{min-width:112px;padding:8px 10px;} .dh-gauge{min-width:190px;} .dh-pv{font-size:30px;} .dh-time{font-size:42px;} .dh-brand{min-width:200px;} .dh-t{font-size:24px;} }
   @keyframes dhScan{from{left:-30%;}to{left:110%;}}
   @keyframes dhBlink{0%,100%{opacity:1;}50%{opacity:.35;}}
@@ -12620,6 +12622,76 @@ function pgMapClose(){
   try{ if(ccMapObj) ccMapObj.remove(); }catch(e){} ccMapObj=null; ccMapLayer=null; ccFollow=null; ov.remove();
 }
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && document.getElementById("pgMapOv")) pgMapClose(); });
+/* ======================================================================
+   21 Nov 04.20 (permintaan Khairul): Display TV — grafik Input vs Delivery shift berjalan (isi celah kolom tengah)
+   + MODE TV Dashboard Leader / Pengamat / Admin: otomatis di layar lebar (TV / monitor besar ≥ 1700 px), bisa dinyalakan/dimatikan
+   dengan tombol 📺 Mode TV (diingat per HP/PC). Tema gelap seperti Display, HUD di atas, 3 kolom penuh lebar, menu samping disembunyikan.
+====================================================================== */
+function dispFlowHtml(d){
+  const sp=ldrPeriod, ss=ldrShift; let R=null;
+  try{ ldrPeriod="today"; ldrShift=currentShift(); R=ldrCompute(d); }catch(e){ R=null; } finally{ ldrPeriod=sp; ldrShift=ss; }
+  if(!R || !R.slots || !R.slots.length) return "";
+  const tIn=R.slots.reduce((a,x)=>a+x.inp,0), tOut=R.slots.reduce((a,x)=>a+x.out,0);
+  return `<div class="card y-flow"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">📈 Input vs Delivery · Shift ${currentShift()==="1"?"Day":"Night"}</h3>
+    <span class="fl-k"><span class="fl-i">Input <b>${tIn}</b></span><span class="fl-o">Delivery <b>${tOut}</b></span><span class="fl-w">WIP <b>${R.wipTotal||0}</b></span></span></div>${ldrChartSVG(R.slots)}</div>`;
+}
+function tvTag(h, slot){ return h ? String(h).replace(/^(\s*<div)/, `$1 data-tv="${slot}"`) : ""; }
+function ldrTvPref(){ try{ return localStorage.getItem("radar_ldrtv")||""; }catch(e){ return ""; } }
+function ldrTvActive(){
+  if(!currentUser || !["leader","viewer","admin"].includes(currentUser.role) || typeof activeTab==="undefined" || activeTab!=="dashboard") return false;
+  const p=ldrTvPref(); if(p==="1") return true; if(p==="0") return false; return window.innerWidth>=1700;
+}
+function ldrTvSwitch(){ const on=ldrTvActive(); try{ localStorage.setItem("radar_ldrtv", on?"0":"1"); }catch(e){} _lastVPHtml=""; render(); try{ window.scrollTo(0,0); }catch(e){} }
+let _ldrTvW=0; window.addEventListener("resize", ()=>{ clearTimeout(_ldrTvW); _ldrTvW=setTimeout(()=>{ try{ if(currentUser && activeTab==="dashboard" && !ldrTvPref()){ _lastVPHtml=""; render(); } }catch(e){} }, 400); });
+function ldrTvLayout(html, d){
+  try{
+    const t=document.createElement("template"); t.innerHTML=html;
+    const top=[], L=[], M=[], R=[];
+    [...t.content.children].forEach(e=>{ const k=e.getAttribute("data-tv")||"top"; if(k==="x") return; ({top, L, M, R}[k]||top).push(e); });
+    const tmp=document.createElement("template"); tmp.innerHTML=ccProgressHtml(d, true); const prog=tmp.content.querySelector(".y-prog"); if(prog) R.push(prog);
+    const mk=(c,L)=>{ const e=document.createElement("div"); e.className=c; L.forEach(x=>e.appendChild(x)); return e; };
+    const wrap=document.createElement("div"); wrap.className="ltv";
+    wrap.append(mk("ltv-top", top), mk("ltv-cols", [mk("ltv-c", L), mk("ltv-c", M), mk("ltv-c", R)]));
+    const o=document.createElement("div"); o.appendChild(wrap); return o.innerHTML;
+  }catch(e){ return html; }
+}
+function ldrTvCss(){
+  return `
+  body.ldr-tv #viewport.v-dashboard{display:block !important;max-width:none !important;padding:16px 20px 28px !important;}
+  @media(min-width:1100px){ body.ldr-tv #tabbar{display:none !important;} }
+  body.ldr-tv .ltv-top>*{margin:0 0 14px !important;}
+  body.ldr-tv .ltv-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) minmax(0,1fr);gap:14px;align-items:start;}
+  body.ldr-tv .ltv-c{display:flex;flex-direction:column;gap:14px;min-width:0;}
+  body.ldr-tv .ltv-c>*{margin:0 !important;min-width:0;}
+  @media(max-width:1399px){ body.ldr-tv .ltv-cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr);} body.ldr-tv .ltv-c:nth-child(2){grid-row:span 2;} }
+  @media(max-width:899px){ body.ldr-tv .ltv-cols{display:block;} body.ldr-tv .ltv-c{margin-bottom:14px;} }
+  body.ldr-tv .ltv-c .y-prog .pg-cols{grid-template-columns:repeat(2,minmax(0,1fr));} body.ldr-tv .ltv-c .y-prog .pg-col.pg-done{grid-column:1/-1;}
+  body.ldr-tv .ltv-top>.alertcard{column-count:3;column-gap:28px;} body.ldr-tv .ltv-top>.alertcard h3{column-span:all;}
+  @media(min-width:1100px){
+    body.ldr-tv .ldr-stall .stalltitle{margin-bottom:4px;}
+    body.ldr-tv .ldr-stall .mapcol{flex-direction:row;gap:10px;}
+    body.ldr-tv .ldr-stall .gridblock{flex:1 1 0;min-width:0;padding:6px 6px 8px;}
+    body.ldr-tv .ldr-stall .gridblock .glabel{margin-bottom:12px;}
+    body.ldr-tv .ldr-stall .stallcolset{gap:5px;}
+    body.ldr-tv .ldr-stall .colhead{font-size:15px !important;line-height:1.05;padding:0 0 3px !important;}
+    body.ldr-tv .ldr-stall .colhead .n{font-size:10px !important;}
+    body.ldr-tv .ldr-stall .cellstack{gap:4px;}
+    body.ldr-tv .ldr-stall .yardcell{min-height:0 !important;padding:5px 2px !important;border-radius:8px !important;}
+    body.ldr-tv .ldr-stall .yardcell .id{font-size:10px !important;line-height:1.1;}
+    body.ldr-tv .ldr-stall .yardcell .v{font-size:11.5px !important;margin-top:1px !important;line-height:1.15;}
+  }
+  body.ldr-tv .ldr-tvbtn,body.ldr-tv .ldr-main select{background:rgba(30,41,59,.85) !important;color:#E2E8F0 !important;border-color:rgba(103,232,249,.3) !important;}
+  body.ldr-tv .ldr-tvbtn{box-shadow:0 0 14px -4px rgba(34,211,238,.7);}
+  /* grafik SVG bawaan (warna terang) dibuat terbaca di tema gelap */
+  body.disp-tv svg line[stroke="#E2E6ED"]{stroke:rgba(148,163,184,.16);}
+  body.disp-tv svg text[fill="#6B7686"],body.disp-tv svg text[fill="#475467"]{fill:#94A3B8;}
+  body.disp-tv svg rect[fill="#16213E"]{fill:#38BDF8;}
+  body.disp-tv i[style*="background:#16213E"]{background:#38BDF8 !important;}
+  .y-flow .fl-k{display:inline-flex;gap:10px;flex-wrap:wrap;font-size:12.5px;}
+  .y-flow .fl-k>span{border-radius:999px;padding:3px 10px;background:rgba(148,163,184,.14);} .y-flow .fl-k b{font-size:15px;}
+  body.disp-tv .y-flow .fl-i b{color:#38BDF8 !important;} body.disp-tv .y-flow .fl-o b{color:#34D399 !important;} body.disp-tv .y-flow .fl-w b{color:#FBBF24 !important;}
+  `;
+}
 /* Delay MDP ringkas untuk Display tanpa login */
 function dispMdlHtml(d){
   try{ mdlListen(); }catch(e){}
@@ -12639,10 +12711,10 @@ function dispTvLayout(html, d){
     const others=yl?[...yl.children].filter(e=>![sum,cc,off,queue].includes(e)):[];
     const mk=c=>{ const e=document.createElement("div"); e.className="dc "+c; return e; };
     const L=mk("dc-l"), M=mk("dc-m"), R=mk("dc-r"), tmp=document.createElement("template");
-    tmp.innerHTML=ccProgressHtml(d, true)+dispMdlHtml(d);
-    const prog=tmp.content.querySelector(".y-prog"), mdl=tmp.content.querySelector(".y-mdl");
+    tmp.innerHTML=ccProgressHtml(d, true)+dispMdlHtml(d)+dispFlowHtml(d);
+    const prog=tmp.content.querySelector(".y-prog"), mdl=tmp.content.querySelector(".y-mdl"), flow=tmp.content.querySelector(".y-flow");
     [alert, cc, mdl, ...others, queue, off].forEach(e=>{ if(e) L.appendChild(e); });   /* 21 Nov 03.50: peringatan Batam ke kolom kiri supaya Progress CC tidak tertutup */
-    [stall, prog].forEach(e=>{ if(e) M.appendChild(e); });
+    [stall, prog, flow].forEach(e=>{ if(e) M.appendChild(e); });   /* 21 Nov 04.20: grafik Input vs Delivery mengisi celah bawah */
     [sum, sched].forEach(e=>{ if(e) R.appendChild(e); });
     const cols=document.createElement("div"); cols.className="disp-cols"; cols.append(L, M, R);
     while(w.firstChild) w.removeChild(w.firstChild);
