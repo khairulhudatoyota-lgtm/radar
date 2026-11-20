@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="20 Nov 2026 18.35";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="20 Nov 2026 22.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -1778,14 +1778,14 @@ function verBanner(){
 function verReload(){ try{ location.reload(); }catch(e){} }
 setInterval(()=>{ verCheck(); }, 5*60000); setTimeout(()=>{ verCheck(true); }, 15000);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") verCheck(); });
-function isViewer(){ return !!(currentUser && currentUser.role==="viewer"); }
+function isViewer(){ return !!(currentUser && (currentUser.role==="viewer" || currentUser.role==="rci")); }   /* RCI NVDC (seksi lain) = hanya lihat */
 /* Pengamat → "Layar Driver": driver yang sedang dilihat (sessionStorage, hanya di HP Pengamat). var: dipakai sebelum baris ini jalan pun aman. */
 var _va=null; try{ _va=JSON.parse(sessionStorage.getItem("radar_va")||"null"); if(!_va || typeof _va!=="object" || !_va.plat) _va=null; }catch(e){ _va=null; }
 function vaOn(){ return isViewer() && !!(_va && _va.plat); }
 function vaLive(){ if(!vaOn()) return false; if(activeTab==="drvview") return true; try{ return activeTab==="ccmap" && !!ccFollow && normPlat(ccFollow)===normPlat(_va.plat); }catch(e){ return false; } }   /* popup driver hanya di Layar Driver, atau di Peta saat sedang mengikuti driver itu */
 /* 18 Nov (permintaan Khairul): akun PENGAMAT senyap total — tidak ada bunyi, suara, getar, maupun notifikasi apa pun dari menu role mana pun. */
 /* Pengamat senyap otomatis. Bunyi hanya kalau Pengamat sendiri menekan tombol contoh (lihat vwHear / vwDemoAct / sndTest): jalur paksa, bukan jendela waktu */
-function quietRole(){ return !!(currentUser && currentUser.role==="viewer"); }
+function quietRole(){ return !!(currentUser && (currentUser.role==="viewer" || currentUser.role==="rci")); }
 function vwVib(p){ try{ if(window.__rawVib) window.__rawVib(p); }catch(e){} }
 (function(){
   try{ if(navigator.vibrate){ const v0=navigator.vibrate.bind(navigator); window.__rawVib=v0; navigator.vibrate=function(p){ if(quietRole()) return false; return v0(p); }; } }catch(e){}
@@ -1870,7 +1870,7 @@ function viewerBlockedToast(){
   if(Date.now()-_uiAt>1500 || Date.now()-_vbT<2500) return; _vbT=Date.now();
   try{ const t=document.createElement("div"); t.textContent="👁 Akun Pengamat: hanya bisa melihat, data tidak diubah."; t.style.cssText="position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0F2A4A;color:#fff;padding:10px 16px;border-radius:12px;font:700 13px Inter,Arial,sans-serif;z-index:100001;box-shadow:0 4px 16px rgba(0,0,0,.4);max-width:88vw;text-align:center;"; document.body.appendChild(t); setTimeout(()=>{ try{ t.remove(); }catch(e){} },2600); }catch(e){}
 }
-function viewerBadge(){ try{ let b=document.getElementById("viewerBadge"); if(isViewer()){ if(!b){ b=document.createElement("div"); b.id="viewerBadge"; b.textContent="👁 PENGAMAT · hanya lihat"; b.style.cssText="position:fixed;top:6px;right:6px;background:#0F2A4A;color:#fff;font:800 11px Inter,Arial,sans-serif;padding:4px 9px;border-radius:8px;z-index:9000;opacity:.9;pointer-events:none;"; document.body.appendChild(b); } } else if(b) b.remove(); }catch(e){} }
+function viewerBadge(){ try{ let b=document.getElementById("viewerBadge"); if(isViewer()){ if(!b){ b=document.createElement("div"); b.id="viewerBadge"; b.textContent=(currentUser&&currentUser.role==="rci")?"📡 RCI NVDC · hanya lihat":"👁 PENGAMAT · hanya lihat"; b.style.cssText="position:fixed;top:6px;right:6px;background:#0F2A4A;color:#fff;font:800 11px Inter,Arial,sans-serif;padding:4px 9px;border-radius:8px;z-index:9000;opacity:.9;pointer-events:none;"; document.body.appendChild(b); } } else if(b) b.remove(); }catch(e){} }
 function viewerGuardInstall(){
   try{
     if(window._vgDone || !window.firebase || !firebase.database || !firebase.database.Reference) return;
@@ -2029,9 +2029,10 @@ const ROLES = [
   {key:"admin",       label:"Admin", icon:"🔐", desc:"Sistem & konfigurasi data"},
   {key:"viewer",      label:"Pengamat", icon:"👁", desc:"Lihat semua menu, tidak bisa mengubah data"},
   {key:"pdi",         label:"PDI", icon:"🔍", desc:"Scan unit PDI & input TLS (PC)"},
+  {key:"rci",         label:"RCI NVDC", icon:"📡", desc:"Peta, DCCP, DPP vs aktual, defect, delay MDP & display (hanya lihat)"},
 ];
 /* Urutan di menu "Pilih menu tujuan" */
-const ROLE_ORDER = ["admin","leader","pdi","dispatcher","delivery","koordinator","cc","viewer"];
+const ROLE_ORDER = ["admin","leader","pdi","dispatcher","delivery","koordinator","cc","viewer","rci"];
 function roleSort(arr){ const ix = r=>{ const i = ROLE_ORDER.indexOf(r); return i<0 ? 99 : i; }; return (arr||[]).slice().sort((a,b)=>ix(a)-ix(b)); }
 const TABS_BY_ROLE = {
   pdi:         [{key:"pdi", label:"Scan PDI"}, {key:"display", label:"Display"}],
@@ -2041,6 +2042,7 @@ const TABS_BY_ROLE = {
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
   viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"drvview", label:"Layar Driver"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  rci:         [{key:"rci", label:"📡 Ringkasan"}, {key:"ccmap", label:"🗺️ Peta"}, {key:"ccplan", label:"🚚 DCCP"}, {key:"rcidpp", label:"🏭 DPP"}, {key:"rcidef", label:"🛠️ Defect"}, {key:"rcimdp", label:"⏰ Delay MDP"}, {key:"display", label:"🅿️ Display"}],
   admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
 };
 
@@ -2739,6 +2741,7 @@ function ccLastOutBackstop(){
 function ccLastOutSave(){ const v=(document.getElementById("ccLastOutM")||{}).value; const n=Math.max(0,Math.min(240,Math.round(+v||0))); DB.set(d=>{ d.ccLastOutM=n; }); alert(n?("Driver CC otomatis keluar "+ccLastOutFmtM(n)+" sesudah Delout ritase terakhir (DCCP)."):"Keluar otomatis sesudah ritase terakhir dimatikan."); render(); }
 function doLogout(){
   try{ presenceOff(); }catch(e){}
+  try{ mdlStop(); }catch(e){}
   try{ ilsSeatRelease(); }catch(e){}
   try{ devSeatRelease(); }catch(e){}
   try{ koSeatRelease(); }catch(e){}   /* kursi Koordinator LP dilepas: HP berikutnya langsung bisa memakai */   /* kursi pembuat ILS dilepas supaya HP lain bisa memakai */
@@ -2839,6 +2842,7 @@ function switchTab(t){
   if(currentUser && TABS_BY_ROLE[currentUser.role] && !TABS_BY_ROLE[currentUser.role].some(x=>x.key===t)) return;   // menu di luar otoritas role ditolak
   if(activeTab==="defect" && t!=="defect"){ disposeCar3D(); }
   if(activeTab==="pdi" && t!=="pdi"){ try{ pdiCamStop(); pdiOvClose(); }catch(e){} }
+  if(typeof _rciSeen!=="undefined") _rciSeen[t]=false;
   activeTab = t; deliverySelUnits=[]; deliverySelCC=null; pickedSlot=null; stopScanner(); render();
 }
 
@@ -2893,7 +2897,11 @@ function renderInner(){
   else if(activeTab==="koordinator") setVP(vp, chgReqHtml()+schedReqHtml()+pdiCardSafe()+renderKoordinator());
   else if(activeTab==="defect"){ setVP(vp, renderDefectReport()); if(_vpChanged) setTimeout(init3DCarDiagram, 0); }
   else if(activeTab==="confirmdefect") setVP(vp, renderConfirmDefect());
-  else if(activeTab==="ccplan") setVP(vp, renderCCPlan());
+  else if(activeTab==="ccplan") setVP(vp, isRci()?rciWrap("ccplan", renderCCPlan()):renderCCPlan());
+  else if(activeTab==="rci") setVP(vp, rciHomeHtml(DB.get()));
+  else if(activeTab==="rcidpp") setVP(vp, rciDppHtml(DB.get()));
+  else if(activeTab==="rcidef") setVP(vp, rciDefHtml(DB.get()));
+  else if(activeTab==="rcimdp") setVP(vp, rciMdpHtml(DB.get()));
   else if(activeTab==="batam") setVP(vp, renderBatamPage());
   else if(activeTab==="prio") setVP(vp, renderPrioPage());
   else if(activeTab==="dashboard") setVP(vp, pdiCardSafe()+renderLeaderDashboard());
@@ -2903,10 +2911,11 @@ function renderInner(){
   else if(activeTab==="speedlog") setVP(vp, renderSpeedLog());
   else if(activeTab==="dccp") setVP(vp, chgReqHtml()+schedReqHtml()+renderDccpUpload());
   else if(activeTab==="datadefect") setVP(vp, renderConfirmDefect());
-  else if(activeTab==="ccmap"){ setVP(vp, renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
+  else if(activeTab==="ccmap"){ setVP(vp, isRci()?rciWrap("ccmap", renderCcMap()):renderCcMap()); if(_vpChanged) setTimeout(initCcMap,0); }
   else if(activeTab==="ccreport" && TRIP_ON){ setVP(vp, renderCcReport()); if(_vpChanged) setTimeout(()=>tripLoad().then(rptUpdate),0); }
   else if(activeTab==="admin"){ setVP(vp, renderAdmin()); if(adminTab==="users") usrRender(); }
-  else if(activeTab==="display") setVP(vp, renderDisplay());
+  else if(activeTab==="display") setVP(vp, isRci()?rciWrap("display", renderDisplay()):renderDisplay());
+  try{ rciAfterRender(); }catch(e){}
 }
 
 /* ======================================================================
@@ -7413,7 +7422,7 @@ window.addEventListener("online",()=>setTimeout(()=>{ try{ gsTick(); }catch(e){}
    PENDAFTARAN AKUN MANDIRI — user daftar sendiri (password buatan sendiri, tersimpan hash),
    Admin menyetujui / menolak. Driver CC: Admin wajib isi Kode Driver saat menyetujui.
 ====================================================================== */
-const REG_ROLES=["dispatcher","cc","delivery","koordinator","leader","viewer","pdi"];
+const REG_ROLES=["dispatcher","cc","delivery","koordinator","leader","viewer","pdi","rci"];
 const REG_KEEP_MS=7*24*3600*1000;
 function regList(d){ return xlArr((d||DB.get()).regs); }
 function regPending(d){ return regList(d).filter(r=>r.status==="pending").sort((a,b)=>a.ts-b.ts); }
@@ -10012,6 +10021,7 @@ function renderLeaderDashboard(){
 
   ${batamAlertHtml(data)}
   ${planVsInputHtml(data, R)}
+  ${mdlCardHtml(data)}
   ${pdCardHtml(data)}
   ${pdmCardHtml(data)}
   ${rptShiftHtml(data)}
@@ -10674,27 +10684,7 @@ function mdpParse(wb, blist){
    data.mdp["YYYY-MM"] = {ym, file, ts, by, out, units, plan:{d1:{MODEL:n}}, act:{d1:{MODEL:n}}}
 ====================================================================== */
 function mdpSum(o){ let s=0; Object.values(o||{}).forEach(v=>{ s+=(+v||0); }); return s; }
-function mdpUpload(){
-  const inp=document.createElement("input"); inp.type="file"; inp.accept=".xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-  inp.onchange=async()=>{
-    const f=inp.files&&inp.files[0]; if(!f) return;
-    const msg=h=>{ const el=document.getElementById("mdpMsg"); if(el) el.innerHTML=h; };
-    if(typeof XLSX==="undefined"){ msg(`<div class="msg err">Pembaca Excel belum termuat (butuh internet). Muat ulang RADAR lalu coba lagi.</div>`); return; }
-    try{
-      msg(`<div class="msg info">⏳ Membaca ${escH(f.name)}… (file besar, tunggu beberapa detik)</div>`);
-      await new Promise(r=>setTimeout(r,30));
-      let bytes=await dppReadFile(f);
-      try{ bytes=await OFC.open(bytes,[...new Set([dppCfg().pw,"123",""])]); }catch(e){ if(String(e&&e.message)==="PASSWORD"){ const pw=prompt("Password file "+f.name+":"); if(!pw) throw new Error("password salah"); bytes=await OFC.open(bytes,[pw]); } else throw e; }
-      const P=mdpParse(XLSX.read(bytes,{type:"array"}), mdpBatamList());
-      if(!P) throw new Error("bukan format MDP (kolom DTPLOD dan ModelName tidak ditemukan)");
-      const rec={ym:P.ym, file:f.name, ts:Date.now(), by:(currentUser&&currentUser.name)||"", out:P.out||"", units:P.units, plan:P.plan, planB:P.planB, nB:P.nB, bl:mdpBatamList().join("|")};
-      DB.set(d=>{ const o=Object.assign({}, d.mdp||{}); o[P.ym]=rec; Object.keys(o).sort().slice(0,-3).forEach(k=>{ delete o[k]; }); d.mdp=o; });
-      render();
-      msg(`<div class="msg" style="background:var(--green-bg);color:var(--green);">✔ MDP ${escH(dppMonthName(P.ym))}: plan <b>${P.units.toLocaleString('id-ID')}</b> unit, <b>${(P.nB||0).toLocaleString('id-ID')}</b> unit dealer Batam${P.hasBranch?"":" (kolom BranchName tidak ada, Batam tidak bisa dipisah)"}. Laporan ada di menu Laporan EKY.</div>`);
-    }catch(e){ msg(`<div class="msg err">✖ ${escH(f.name)}: ${escH(String(e&&e.message||e)==="PASSWORD"?"password salah":String(e&&e.message||e))}</div>`); }
-  };
-  inp.click();
-}
+function mdpUpload(){ mdlUpload("mdpMsg"); }   /* 20 Nov: file MDP / Input PDI dikenali otomatis (lihat DELAY MDP) */
 function mdpSaveBatam(){ const v=((document.getElementById("mdpBatam")||{}).value||"").split(/\n+/).map(x=>x.trim()).filter(Boolean); if(!v.length){ alert("Isi minimal satu nama cabang."); return; } DB.set(d=>{ d.mdpCfg=Object.assign({}, d.mdpCfg||{}, {batam:v}); }); }
 function mdpSaveSplit(){ const r=parseFloat(((document.getElementById("mdpDayR")||{}).value||"").replace(",",".")), only=((document.getElementById("mdpDayOnly")||{}).value||"").split(/[,;\n]+/).map(x=>x.trim().toUpperCase()).filter(Boolean);
   if(!(r>0 && r<100)){ alert("Porsi Day diisi 1–99 (%)."); return; }
@@ -10707,9 +10697,11 @@ function mdpCardHtml(data){
     ${ks.length?ks.map(k=>{ const r=M[k], old=r.bl==null||r.bl!==mdpBatamList().join("|");
       return `<div style="font-size:13px;padding:6px 0;border-top:1px solid var(--border);"><b>${escH(dppMonthName(k))}</b> · plan <b>${(+r.units||0).toLocaleString('id-ID')}</b> unit · Batam <b>${r.nB!=null?(+r.nB).toLocaleString('id-ID'):"–"}</b>${old?` <span style="color:#b45309;font-weight:700;">· upload ulang supaya unit Batam terpisah</span>`:""}<div style="font-size:11px;color:var(--text-dim);">${escH(r.file||"")}${r.out?" · data Datalizer "+escH(r.out):""} · upload ${sjFmt(r.ts)}${r.by?" oleh "+escH(r.by):""}</div></div>`; }).join("")
       :`<div style="font-size:13px;color:var(--text-dim);padding:6px 0;border-top:1px solid var(--border);">Belum ada MDP.</div>`}
+    <div style="font-size:12px;color:var(--text-dim);margin-top:8px;">File <b>Achievement PDI</b> dipakai untuk <b>Delay MDP</b> di Dashboard. Jenis file dikenali otomatis, boleh pilih MDP & Achievement PDI sekaligus.</div>
     <button class="btn btn-primary" style="margin-top:10px;" onclick="mdpUpload()">📂 Pilih file MDP</button>
+    <button class="btn btn-outline" style="margin-top:8px;" onclick="mdpUpload()">📂 Upload Achievement PDI</button>
     ${ks.length?`<button class="btn btn-outline" style="margin-top:8px;" onclick="mdpDownload('${ks[0]}')">⬇ Download tabel MDP (Excel)</button>`:""}
-    <div id="mdpMsg" style="margin-top:8px;"></div>
+    <div id="mdpMsg" style="margin-top:8px;">${mdlMsgHtml("mdpMsg")}</div>
     <details style="margin-top:10px;"><summary style="cursor:pointer;font-size:13px;font-weight:600;">⚙ Pembagian Day / Night</summary>
       <div style="font-size:12px;color:var(--text-dim);margin:6px 0;">Sekarang: ${escH(mdpSplitTxt())}.</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;"><label style="font-size:12px;">Porsi Day (%)<br><input id="mdpDayR" type="number" min="1" max="99" inputmode="numeric" value="${Math.round(mdpSplitCfg().r*100)}" style="width:90px;"></label>
@@ -10870,9 +10862,24 @@ function ekyDay(data, base, recs){
 function prodActCompute(data, base){ return ekyDay(data, base); }   /* dipakai grafik DPP · MDP · Aktual */
 function ekyWipNow(data){ const w={t:0,b:0,m:{},mb:{},ts:Date.now()}; Object.values(data.units||{}).forEach(u=>{ if(!u) return; const m=ekyMKey(u.model); w.t++; if(u.batam){ w.b++; ekyAdd(w.mb,m); } else ekyAdd(w.m,m); }); return w; }
 /* plan delivery shift berjalan dari jadwal DCCP (Planning CC) */
-function ekyDpNow(data){
-  const sh=currentShift(), sp=ldrPeriod, ss=ldrShift;
-  try{ ldrPeriod="today"; ldrShift=sh; const R=ccplanCompute(data), lp={};
+/* 20 Nov 22.40: jadwal DCCP MILIK shift itu (Day/Night) untuk tanggal produksi key. Jadwal Night yang diupload / dijalankan
+   lebih awal (sebelum 20.00) tidak boleh dihitung sebagai plan Day — dulu plan Day jadi 0 di Daily Report. */
+function ekyDpData(data, sh, key){
+  const want=sh==="1"?"day":"night", m=data.dccpMeta||{};
+  let rows=null, meta=null;
+  if((m.shift||"")===want && (data.dccpSchedule||[]).length){ rows=data.dccpSchedule; meta=m; }
+  else { const st=(data.dccpStore||{})[want]; if(st && Array.isArray(st.rows) && st.rows.length){ rows=st.rows; meta=st.meta||{}; } }
+  if(!rows) return null;
+  const ymd=ts=>{ const d=new Date(ts); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+  const dt=meta.dateTs||dccpFileDate(meta.fileName), dk=dt ? ymd(dt) : (meta.uploadedAt ? prodDateKey(meta.uploadedAt) : "");
+  if(dk && dk!==key) return null;   /* jadwal tanggal lain (mis. Day besok yang sudah diupload) */
+  return rows===data.dccpSchedule ? data : Object.assign({}, data, {dccpSchedule:rows, dccpMeta:meta});
+}
+function ekyDpNow(data, sh, key){
+  sh=sh||currentShift(); key=key||prodDateKey();
+  const D=ekyDpData(data, sh, key); if(!D) return null;
+  const sp=ldrPeriod, ss=ldrShift;
+  try{ ldrPeriod="today"; ldrShift=sh; const R=ccplanCompute(D), lp={};
     R.rows.forEach(x=>{ if(x.isSpot) return; const k=dppSafeKey(x.r.lp||"-"), o=lp[k]=lp[k]||{n:0,p:0,a:0,pu:0,au:0}; o.n++; o.p+=x.planTrip; o.a+=x.act; o.pu+=x.planUnit; o.au+=x.actUnit; });
     return {s:"s"+sh, v:{u:R.T.planUnit||0, t:R.T.planTrip||0, a:R.T.act||0, au:R.T.actUnit||0, sp:R.T.spotAct||0, spu:R.T.spotUnit||0, lp}};
   } finally { ldrPeriod=sp; ldrShift=ss; }
@@ -10891,14 +10898,26 @@ function ekyDayData(data, key){
   const P=(data.prodAct||{})[key]||null, today=prodDateKey(), base=ekyBaseOf(key), live=key===today || (key===ekyAddDays(today,-1) && Date.now()<ekyBaseOf(today)+2*3600000);
   if(!P && !live) return null;
   const o=ekyMergeMax(Object.assign({}, P||{}), live?ekyDay(data, base):{});
-  if(key===today){ o.w=ekyWipNow(data); try{ if((data.dccpSchedule||[]).length){ const dp=ekyDpNow(data); o.dp=Object.assign({}, o.dp||{}, {[dp.s]:dp.v}); } }catch(e){} }
+  if(key===today){ o.w=ekyWipNow(data); try{ ekyDpLive(data, key).forEach(dp=>{ o.dp=Object.assign({}, o.dp||{}, {[dp.s]:dp.v}); }); }catch(e){} }
   return o;
+}
+/* plan DCCP per shift hari ini: shift berjalan dihitung ulang; shift yang sudah lewat hanya diisi kalau belum tersimpan / tersimpan 0 */
+function ekyDpLive(data, key, saved){
+  const out=[], now=currentShift(), P=saved!==undefined ? saved : (((data.prodAct||{})[key]||{}).dp||{});
+  ["1","2"].forEach(sh=>{
+    if(sh==="2" && now==="1") return;   /* Night belum mulai */
+    const old=P["s"+sh], oldT=old?(+old.t||0):0;
+    if(sh!==now && oldT>0) return;
+    const dp=ekyDpNow(data, sh, key); if(!dp) return;
+    if(oldT>0 && !((+dp.v.t||0)>0)) return;   /* jangan timpa plan yang sudah ada dengan 0 */
+    out.push(dp); });
+  return out;
 }
 function ekyRecvTot(o){ return o ? ekySum(o.s1)+ekySum(o.s2) : 0; }
 function prodActTotal(o){ return ekyRecvTot(o); }
 /* tulis ke Firebase per tanggal (radar/prodAct/<tgl>), digabung nilai terbesar di server: ringan, tidak mengirim seluruh riwayat */
 function ekyWrite(k, u){
-  const apply=cur=>{ cur=Object.assign({}, cur||{}); if(u.c) ekyMergeMax(cur,u.c); if(u.w) cur.w=u.w; if(u.dp){ cur.dp=Object.assign({}, cur.dp||{}); cur.dp[u.dp.s]=u.dp.v; } return cur; };
+  const apply=cur=>{ cur=Object.assign({}, cur||{}); if(u.c) ekyMergeMax(cur,u.c); if(u.w) cur.w=u.w; if(u.dp){ cur.dp=Object.assign({}, cur.dp||{}); (Array.isArray(u.dp)?u.dp:[u.dp]).forEach(x=>{ if(x && x.s) cur.dp[x.s]=x.v; }); } return cur; };
   if(typeof FBS!=="undefined" && FBS.enabled && FBS.ready && FBS.db){
     try{ FBS.db.ref(FB_ROOT+"/prodAct/"+k).transaction(cur=>apply(cur), ()=>{}, false); return; }catch(e){}
   }
@@ -10913,7 +10932,7 @@ function prodActSnap(){
     const kT=prodDateKey(pd+3600000), cur=P[kT]||{}, w=ekyWipNow(data), ow=cur.w||{}, age=now-(+ow.ts||0);
     const wChg=ow.t!==w.t || ow.b!==w.b || JSON.stringify(ow.m||{})!==JSON.stringify(w.m) || JSON.stringify(ow.mb||{})!==JSON.stringify(w.mb);
     if((wChg && age>9*60000) || age>55*60000) (upd[kT]=upd[kT]||{}).w=w;   /* isi stall: tiap ±10 menit kalau berubah (nilai terakhir = stok akhir hari) */
-    try{ if((data.dccpSchedule||[]).length){ const dp=ekyDpNow(data), old=(cur.dp||{})[dp.s]; if(!old || JSON.stringify(old)!==JSON.stringify(dp.v)) (upd[kT]=upd[kT]||{}).dp=dp; } }catch(e){}
+    try{ const L=ekyDpLive(data, kT, cur.dp||{}).filter(dp=>{ const old=(cur.dp||{})[dp.s]; return !old || JSON.stringify(old)!==JSON.stringify(dp.v); }); if(L.length) (upd[kT]=upd[kT]||{}).dp=L; }catch(e){}
     Object.keys(upd).forEach(k=>ekyWrite(k, upd[k]));
     /* riwayat > 45 hari dihapus (sekali sehari) */
     try{ const last=+localStorage.getItem("radar_pa_clean")||0; if(now-last>20*3600000){ localStorage.setItem("radar_pa_clean", String(now)); const cut=prodDateKey(now-45*86400000); const old=Object.keys(P).filter(k=>k<cut);
@@ -11050,6 +11069,339 @@ function mdpDownload(ym){
     sheets.push({name:"DPP vs MDP vs Aktual", rows}); }
   const w=[24]; for(let i=0;i<40;i++) w.push(7);
   mfSave("MDP-EKY-"+ym+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx(sheets, w));
+}
+
+/* ======================================================================
+   DELAY MDP (20 Nov 2026, permintaan Khairul)
+   Unit di MDP yang PLOD-nya sudah lewat tetapi belum ada di data input.
+   "Sudah input" = salah satu dari:
+     • PDIActualDate terisi di file MDP itu sendiri
+     • No. rangka ada di file Input PDI (PDI Achievement, Datalizer)
+     • No. rangka sudah diinput dispatcher di RADAR (stall / ILS / log HP) → langsung, tanpa menunggu upload
+   Unit MDP yang belum punya No. rangka (snapshot MDP lama) dicocokkan per PLOD + Katashiki + Suffix + Warna
+   dengan unit Input PDI yang No. rangkanya tidak ada di MDP.
+   Disimpan di luar node /radar (radar_foto/_mdpdl) supaya HP lain (driver CC dll.) tidak ikut mengunduh:
+     mdp/<YYYY-MM>  : unit MDP yang BELUM input menurut file MDP (dibaca hanya saat upload)
+     inp/<YYYY-MM>  : No. rangka Input PDI per (PLOD, Katashiki|Suffix|Warna), digabung tiap upload (dibaca hanya saat upload)
+     rdr/<YYYY-MM>/<No. rangka> : tanggal produksi unit yang diinput dispatcher di RADAR — dicatat otomatis oleh HP Dispatcher/Delivery/
+                      Leader/Admin, karena di RADAR data per No. rangka hanya tersimpan ±7 hari (ILS) / 2 hari (log HP)
+     res/d/d<YYYYMMDD> : hasil pencocokan per tanggal PLOD = unit yang masih belum input (dibaca Dashboard Leader / Pengamat / Admin);
+                      HP Delivery/Leader/Admin langsung mencoret unit yang sudah diinput dispatcher (tanpa menunggu upload)
+====================================================================== */
+const MDL_PATH="radar_foto/_mdpdl", MDL_KEEP_M=2;
+let MDL={res:null, state:"", err:"", ref:null, cb:null, msg:{}, fm:"", all:false, busy:false};
+function mdlMsgHtml(id){ const m=MDL.msg[id]; return (m && (MDL.busy || Date.now()-m.ts<180000)) ? m.h : ""; }
+function mdlCanUpload(){ return !!(currentUser && !isViewer() && ["admin","leader"].includes(currentUser.role)); }
+function mdlNul(v){ const s=String(v==null?"":v).trim(); return (!s || /^<\s*NULL\s*>$/i.test(s)) ? "" : s; }
+function mdlYmd(v){ const k=mdpDate(mdlNul(v)); return k ? +k.replace(/-/g,"") : 0; }
+function mdlYm(p){ const s=String(p||""); return s.length===8 ? s.slice(0,4)+"-"+s.slice(4,6) : ""; }
+function mdlDateTxt(p){ const s=String(p||""); if(s.length!==8) return "-"; return new Date(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8)).toLocaleDateString('id-ID',{day:'numeric',month:'short'}); }
+function mdlDays(p, today){ const a=String(p), b=String(today); if(a.length!==8||b.length!==8) return 0;
+  return Math.round((Date.UTC(+b.slice(0,4),+b.slice(4,6)-1,+b.slice(6,8))-Date.UTC(+a.slice(0,4),+a.slice(4,6)-1,+a.slice(6,8)))/86400000); }
+function mdlOutTs(s){ const m=String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?/); return m ? new Date(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0)).getTime() : 0; }
+function mdlTsTxt(ts){ if(!ts) return "-"; const d=new Date(ts); return d.toLocaleDateString('id-ID',{day:'numeric',month:'short'})+" "+String(d.getHours()).padStart(2,"0")+"."+String(d.getMinutes()).padStart(2,"0"); }
+function mdlSplit(s){ return String(s||"").split(",").filter(Boolean); }
+function mdlArr(v){ return Array.isArray(v) ? v.filter(Boolean) : (v && typeof v==="object" ? Object.values(v).filter(Boolean) : []); }
+
+/* Kenali file: MDP (ekstraksi per DTPLOD) atau Input PDI / PDI Achievement (ekstraksi per PDIActualDate + IsPDIDone) */
+function mdlHead(wb){
+  for(const name of wb.SheetNames){
+    const g=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:true,defval:null});
+    let txt="", out="";
+    for(let r=0;r<Math.min(g.length,40);r++){
+      const row=(g[r]||[]).map(v=>String(v==null?"":v).replace(/\s+/g,"").toUpperCase());
+      txt+=" "+row.join(" ");
+      row.forEach(v=>{ const m=v.match(/OUTPUT:?(\d{4}\/\d{2}\/\d{2})(\d{2}:\d{2})?/); if(m && !out) out=m[1].replace(/\//g,"-")+(m[2]?" "+m[2]:""); });
+      if(row.indexOf("DTPLOD")>=0 && row.indexOf("MODELNAME")>=0){
+        const ci={}; row.forEach((v,i)=>{ if(v && ci[v]==null) ci[v]=i; });
+        const kind=/ISPDIDONE|PDIACHIEVEMENT/.test(txt) ? "inp" : "mdp";
+        return {kind, g, hr:r, ci, out};
+      }
+    }
+  }
+  return null;
+}
+function mdlKey(row, ci){ return ["KATASHIKI","SUFFIX","COLORNAME"].map(c=>ci[c]==null?"":mdlNul(row[ci[c]]).toUpperCase().replace(/[|,]/g," ")).join("|"); }
+
+/* MDP → unit yang belum input menurut file MDP, dikelompokkan per (PLOD, Katashiki|Suffix|Warna, model, Batam) */
+function mdlParseMdp(H){
+  const c=H.ci, bl=mdpBatamList(), G=new Map(), doneByPK=new Map(), ymCnt={};
+  let n=0, nDone=0;
+  for(let r=H.hr+1;r<H.g.length;r++){
+    const row=H.g[r]||[], p=mdlYmd(row[c.DTPLOD]); if(!p) continue;
+    n++; const ym=mdlYm(p); ymCnt[ym]=(ymCnt[ym]||0)+1;
+    const f=normVin(mdlNul(row[c.FRAMENUMBER])), k=mdlKey(row,c), pk=p+"|"+k;
+    const done=c.PDIACTUALDATE!=null && !!mdlNul(row[c.PDIACTUALDATE]);
+    if(done){ nDone++; if(f){ const L=doneByPK.get(pk)||[]; L.push(f); doneByPK.set(pk,L); } continue; }
+    const m=(mdlNul(row[c.MODELNAME])||"LAINNYA").toUpperCase(), b=(c.BRANCHNAME!=null && mdpIsBatam(row[c.BRANCHNAME], bl))?1:0, gk=pk+"|"+m+"|"+b;
+    let g=G.get(gk); if(!g){ g={p, k, m, b, f:[], r:[]}; G.set(gk, g); }
+    if(f) g.f.push(f); else g.r.push((mdlNul(row[c.RRN])||("baris "+(r+1))).toUpperCase().replace(/,/g," "));
+  }
+  if(!n) return null;
+  const ym=Object.keys(ymCnt).sort((a,b)=>ymCnt[b]-ymCnt[a])[0], xUsed=new Set();
+  const g=[...G.values()].sort((a,b)=>a.p-b.p).map(x=>{ const pk=x.p+"|"+x.k, o={p:x.p, k:x.k, m:x.m, b:x.b, f:x.f.join(","), r:x.r.join(",")};
+    if(x.r.length && !xUsed.has(pk)){ xUsed.add(pk); o.x=(doneByPK.get(pk)||[]).join(","); }   /* No. rangka unit yang sudah input di grup ini: tidak boleh dipakai untuk mencocokkan unit tanpa No. rangka */
+    return o; });
+  return {ym, n, nDone, nPend:n-nDone, g};
+}
+/* Input PDI (PDI Achievement) → No. rangka per (PLOD, Katashiki|Suffix|Warna) */
+function mdlParseInp(H){
+  const c=H.ci, G=new Map(), ymCnt={}; let n=0, from=0, to=0;
+  if(c.FRAMENUMBER==null) return null;
+  for(let r=H.hr+1;r<H.g.length;r++){
+    const row=H.g[r]||[], f=normVin(mdlNul(row[c.FRAMENUMBER])); if(!f) continue;
+    n++; const a=c.PDIACTUALDATE!=null ? mdlYmd(row[c.PDIACTUALDATE]) : 0;
+    if(a){ if(!from||a<from) from=a; if(a>to) to=a; const ym=mdlYm(a); ymCnt[ym]=(ymCnt[ym]||0)+1; }
+    const pk=mdlYmd(row[c.DTPLOD])+"|"+mdlKey(row,c), L=G.get(pk)||[]; L.push(f); G.set(pk, L);
+  }
+  if(!n) return null;
+  const ym=Object.keys(ymCnt).sort((a,b)=>ymCnt[b]-ymCnt[a])[0]||prodDateKey().slice(0,7);
+  return {ym, n, from, to, g:[...G.entries()].map(([pk,L])=>{ const i=pk.indexOf("|"); return {p:+pk.slice(0,i)||0, k:pk.slice(i+1), f:L.join(",")}; })};
+}
+function mdlMergeInp(old, nw){
+  if(!old || !old.g) return nw;
+  const G=new Map(); let n=0;
+  [old, nw].forEach(I=>mdlArr(I.g).forEach(x=>{ const pk=x.p+"|"+x.k; let S=G.get(pk); if(!S){ S=new Set(); G.set(pk,S); } mdlSplit(x.f).forEach(f=>S.add(f)); }));
+  const g=[...G.entries()].map(([pk,S])=>{ n+=S.size; const i=pk.indexOf("|"); return {p:+pk.slice(0,i)||0, k:pk.slice(i+1), f:[...S].join(",")}; });
+  return Object.assign({}, nw, {n, from:Math.min(old.from||nw.from||0, nw.from||old.from||0), to:Math.max(old.to||0, nw.to||0), g});
+}
+/* Pencocokan: hasil = unit MDP yang masih belum input (termasuk PLOD yang belum lewat — besok-besok bisa jadi delay) */
+function mdlCompute(MD, IN, RD){
+  const inF=new Set(), pool=new Map(), mdpF=new Set();
+  Object.values(RD||{}).forEach(o=>{ if(o && typeof o==="object") Object.keys(o).forEach(f=>inF.add(f)); });   /* input dispatcher RADAR (tersimpan) */
+  Object.values(IN||{}).forEach(I=>mdlArr(I&&I.g).forEach(x=>{ const fs=mdlSplit(x.f), pk=x.p+"|"+x.k; fs.forEach(f=>inF.add(f)); pool.set(pk,(pool.get(pk)||[]).concat(fs)); }));
+  const groups=[]; Object.values(MD||{}).forEach(M=>mdlArr(M&&M.g).forEach(x=>{ groups.push(x); mdlSplit(x.f).forEach(f=>mdpF.add(f)); mdlSplit(x.x).forEach(f=>mdpF.add(f)); }));
+  const avail=new Map(); pool.forEach((fs,pk)=>{ avail.set(pk, new Set(fs.filter(f=>!mdpF.has(f))).size); });
+  const g=[]; let nPend=0;
+  groups.sort((a,b)=>a.p-b.p).forEach(x=>{
+    const f=mdlSplit(x.f).filter(v=>!inF.has(v)), pk=x.p+"|"+x.k, rr=mdlSplit(x.r), a=avail.get(pk)||0, take=Math.min(a, rr.length);
+    if(take) avail.set(pk, a-take);
+    const r=rr.slice(take);   /* RRN urut produksi: yang paling awal dianggap sudah input */
+    if(f.length || r.length){ g.push({p:x.p, k:x.k, m:x.m, b:x.b?1:0, f:f.join(","), r:r.join(",")}); nPend+=f.length+r.length; }
+  });
+  return {g, nPend};
+}
+async function mdlRecalc(){
+  try{ await mdlRecTick(true); }catch(e){}   /* input dispatcher di HP ini dicatat dulu */
+  const [ms, is, rs]=await Promise.all([FBS.db.ref(MDL_PATH+"/mdp").once("value"), FBS.db.ref(MDL_PATH+"/inp").once("value"), FBS.db.ref(MDL_PATH+"/rdr").once("value")]);
+  let MD=ms.val()||{}, IN=is.val()||{}, RD=rs.val()||{};
+  const prune=async(o,sub,keep)=>{ const ks=Object.keys(o).sort(); for(const k of ks.slice(0,-keep)){ delete o[k]; try{ await FBS.db.ref(MDL_PATH+"/"+sub+"/"+k).remove(); }catch(e){} } };
+  await prune(MD,"mdp",MDL_KEEP_M); await prune(IN,"inp",MDL_KEEP_M); await prune(RD,"rdr",MDL_KEEP_M+1);
+  const C=mdlCompute(MD, IN, RD), info=o=>Object.keys(o).sort().map(k=>{ const x=o[k]||{}; return {ym:k, file:String(x.file||""), out:String(x.out||""), ts:+x.ts||0, n:+x.n||0, from:+x.from||0, to:+x.to||0, nDone:+x.nDone||0}; });
+  const d={}; C.g.forEach(g=>{ const k="d"+g.p; (d[k]=d[k]||{g:[]}).g.push({k:g.k, m:g.m, b:g.b, f:g.f, r:g.r}); });
+  const res={ts:Date.now(), by:(currentUser&&currentUser.name)||"", mdp:info(MD), inp:info(IN), nPend:C.nPend, d};
+  await FBS.db.ref(MDL_PATH+"/res").set(res);
+  MDL.res=res; MDL.state="ok";
+  return res;
+}
+async function mdlReadWb(f){
+  let bytes=await dppReadFile(f);
+  try{ bytes=await OFC.open(bytes,[...new Set([dppCfg().pw,"123",""])]); }
+  catch(e){ if(String(e&&e.message)==="PASSWORD"){ const pw=prompt("Password file "+f.name+":"); if(!pw) throw new Error("password salah"); bytes=await OFC.open(bytes,[pw]); } else throw e; }
+  return XLSX.read(bytes,{type:"array"});
+}
+/* simpan plan MDP (jumlah per tanggal per model, untuk Laporan EKY) — sama seperti sebelumnya */
+function mdpSaveWb(wb, f){
+  const P=mdpParse(wb, mdpBatamList());
+  if(!P) throw new Error("bukan format MDP (kolom DTPLOD dan ModelName tidak ditemukan)");
+  const rec={ym:P.ym, file:f.name, ts:Date.now(), by:(currentUser&&currentUser.name)||"", out:P.out||"", units:P.units, plan:P.plan, planB:P.planB, nB:P.nB, bl:mdpBatamList().join("|")};
+  DB.set(d=>{ const o=Object.assign({}, d.mdp||{}); o[P.ym]=rec; Object.keys(o).sort().slice(0,-3).forEach(k=>{ delete o[k]; }); d.mdp=o; });
+  return P;
+}
+/* satu tombol untuk MDP dan Input PDI (boleh pilih dua file sekaligus); jenis file dikenali otomatis */
+function mdlUpload(msgId){
+  const inp=document.createElement("input"); inp.type="file"; inp.multiple=true; inp.accept=".xlsx,.xls,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  inp.onchange=async()=>{
+    const fs=[...(inp.files||[])]; if(!fs.length) return;
+    const show=h=>{ MDL.msg[msgId]={h, ts:Date.now()}; const el=document.getElementById(msgId); if(el) el.innerHTML=h; };
+    if(typeof XLSX==="undefined"){ show(`<div class="msg err">Pembaca Excel belum termuat (butuh internet). Muat ulang RADAR lalu coba lagi.</div>`); return; }
+    const out=[]; let srv=0, delayLine="";
+    MDL.busy=true;
+    for(const f of fs){
+      try{
+        show(`<div class="msg info">⏳ Membaca ${escH(f.name)}… (file besar, tunggu beberapa detik)</div>`);
+        await new Promise(r=>setTimeout(r,30));
+        const wb=await mdlReadWb(f), H=mdlHead(wb);
+        if(!H) throw new Error("bukan file MDP / Achievement PDI dari Datalizer (kolom DTPLOD dan ModelName tidak ditemukan)");
+        if(H.kind==="mdp"){
+          const P=mdpSaveWb(wb, f), M=mdlParseMdp(H); if(!M) throw new Error("tidak ada baris unit");
+          let ok=false; if(FBS.enabled && FBS.db){ await FBS.db.ref(MDL_PATH+"/mdp/"+M.ym).set(Object.assign({file:f.name, out:H.out||"", ts:Date.now(), by:(currentUser&&currentUser.name)||""}, M)); srv++; ok=true; }
+          out.push(`<div class="msg" style="background:var(--green-bg);color:var(--green);">✔ MDP ${escH(dppMonthName(P.ym))}: plan <b>${P.units.toLocaleString('id-ID')}</b> unit${P.hasBranch?` (<b>${(P.nB||0).toLocaleString('id-ID')}</b> dealer Batam)`:" (kolom BranchName tidak ada, Batam tidak bisa dipisah)"}${ok?` · <b>${M.nDone.toLocaleString('id-ID')}</b> sudah input menurut file MDP`:""}.</div>`);
+        } else {
+          const I=mdlParseInp(H); if(!I) throw new Error("kolom FrameNumber tidak ditemukan / tidak ada baris unit");
+          if(!(FBS.enabled && FBS.db)) throw new Error("butuh koneksi server");
+          const old=(await FBS.db.ref(MDL_PATH+"/inp/"+I.ym).once("value")).val();
+          const rec=mdlMergeInp(old, Object.assign({file:f.name, out:H.out||"", ts:Date.now(), by:(currentUser&&currentUser.name)||""}, I));
+          await FBS.db.ref(MDL_PATH+"/inp/"+I.ym).set(rec); srv++;
+          out.push(`<div class="msg" style="background:var(--green-bg);color:var(--green);">✔ Achievement PDI: <b>${I.n.toLocaleString('id-ID')}</b> unit (PDI ${escH(mdlDateTxt(I.from))} – ${escH(mdlDateTxt(I.to))})${old && (+rec.n||0)>I.n?` · digabung dengan upload sebelumnya jadi <b>${(+rec.n||0).toLocaleString('id-ID')}</b> unit`:""}.</div>`);
+        }
+      }catch(e){ const m=String(e&&e.message||e); out.push(`<div class="msg err">✖ ${escH(f.name)}: ${escH(m==="PASSWORD"?"password salah":(fbDenied(e)?"server menolak menyimpan (aturan Firebase radar_foto)":m))}</div>`); }
+    }
+    if(srv){ try{ show(out.join("")+`<div class="msg info">⏳ Mencocokkan MDP dengan data input…</div>`); const R=await mdlRecalc(); const L=mdlLate(DB.get(), R)||[];
+        delayLine=`<div class="msg" style="background:${L.length?"#FEF3C7":"var(--green-bg)"};color:${L.length?"#92400E":"var(--green)"};">${L.length?`⏰ Delay MDP sekarang: <b>${L.length.toLocaleString('id-ID')}</b> unit${msgId==="mdlMsg"?"":" (lihat Dashboard)"}.`:"✔ Tidak ada delay MDP: semua unit yang PLOD-nya sudah lewat sudah terdaftar input."}</div>`; }
+      catch(e){ delayLine=`<div class="msg err">✖ Gagal menghitung delay MDP: ${escH(String(e&&e.message||e))}</div>`; } }
+    MDL.busy=false;
+    show(out.join("")+delayLine); render();
+  };
+  inp.click();
+}
+
+/* ---------- tampilan (Dashboard Leader / Pengamat / Admin) ---------- */
+function mdlListen(){
+  if(MDL.ref || !FBS.enabled || !FBS.db || !FBS.authed) return;
+  try{
+    const ref=FBS.db.ref(MDL_PATH+"/res");
+    const cb=snap=>{ MDL.res=snap.val(); MDL.state="ok"; MDL.err=""; mdlRerender(); };
+    MDL.state=MDL.state||"load"; MDL.ref=ref; MDL.cb=cb;
+    ref.on("value", cb, e=>{ MDL.state=fbDenied(e)?"denied":"err"; MDL.err=String(e&&e.message||e); MDL.ref=null; mdlRerender(); });
+  }catch(e){ MDL.ref=null; }
+}
+function mdlStop(){ try{ if(MDL.ref) MDL.ref.off("value", MDL.cb); }catch(e){} MDL.ref=null; MDL.cb=null; MDL.res=null; MDL.state=""; MDL.msg={}; MDL.fm=""; MDL.all=false; }
+function mdlRerender(){ if(MDL.busy) return; try{ const a=document.activeElement; if(a && a.id==="ldrSearchInput") return; if(typeof activeTab!=="undefined" && ["dashboard","rci","rcimdp"].includes(activeTab)) render(); }catch(e){} }
+function mdlLiveFrames(data){
+  const S=new Set(), add=f=>{ if(f) S.add(normVin(f)); };
+  Object.values(data.units||{}).forEach(u=>{ if(u) add(u.frame); });
+  (data.ils||[]).forEach(b=>{ if(b) (b.units||[]).forEach(u=>{ if(u) add(u.frame); }); });
+  (data.unitLog||[]).forEach(e=>{ if(e) add(e.frame); });
+  return S;
+}
+function mdlResGroups(R){
+  const out=[]; if(!R) return out;
+  if(R.d && typeof R.d==="object") Object.keys(R.d).forEach(dk=>{ const p=+String(dk).replace(/^d/,""); mdlArr(R.d[dk]&&R.d[dk].g).forEach(g=>out.push(Object.assign({p}, g))); });
+  mdlArr(R.g).forEach(g=>out.push(g));
+  return out;
+}
+/* ---------- pencatat input dispatcher (HP Dispatcher / Delivery / Leader / Admin) ---------- */
+const MDL_REC_ROLES=["dispatcher","delivery","admin","leader"], MDL_PRUNE_ROLES=["delivery","admin","leader"];
+let _mdlRecSent=new Set(), _mdlRecBusy=false, _mdlRecOld=false;
+function mdlRecFrames(data){
+  const M=new Map(), add=(f,ts)=>{ f=normVin(f); if(!/^[A-Z0-9]{6,25}$/.test(f) || M.has(f)) return; M.set(f, +prodDateKey(ts||Date.now()).replace(/-/g,"")); };
+  Object.values(data.units||{}).forEach(u=>{ if(u) add(u.frame, u.ts); });
+  (data.ils||[]).forEach(b=>{ if(b) (b.units||[]).forEach(u=>{ if(u) add(u.frame, u.ts||b.ts); }); });
+  (data.unitLog||[]).forEach(e=>{ if(e) add(e.frame, e.parkedTs||e.ilsTs||e.sentTs); });
+  return M;
+}
+async function mdlRecTick(force){
+  if(_mdlRecBusy || !currentUser || isViewer() || !MDL_REC_ROLES.includes(currentUser.role) || !FBS.enabled || !FBS.db || !FBS.authed || (!FBS.ready && !force)) return;
+  _mdlRecBusy=true;
+  try{
+    const M=mdlRecFrames(DB.get()), up={};
+    M.forEach((d,f)=>{ if(!_mdlRecSent.has(f)) up[mdlYm(d)+"/"+f]=d; });
+    const ks=Object.keys(up);
+    for(let i=0;i<ks.length;i+=400){ const part={}, kk=ks.slice(i,i+400); kk.forEach(k=>part[k]=up[k]); await FBS.db.ref(MDL_PATH+"/rdr").update(part); kk.forEach(k=>_mdlRecSent.add(k.slice(k.indexOf("/")+1))); }
+    if(!_mdlRecOld){ _mdlRecOld=true; const d=new Date(); for(let k=MDL_KEEP_M+1;k<=MDL_KEEP_M+3;k++){ const x=new Date(d.getFullYear(), d.getMonth()-k, 1); try{ FBS.db.ref(MDL_PATH+"/rdr/"+x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")).remove(); }catch(e){} } }
+    if(MDL_PRUNE_ROLES.includes(currentUser.role)){ mdlListen(); await mdlPrune(M); }
+  }catch(e){ try{ fbErrNote("delay MDP", e); }catch(_){} }
+  finally{ _mdlRecBusy=false; }
+}
+/* unit di daftar "belum input" yang ternyata sudah diinput dispatcher → langsung dicoret di server */
+async function mdlPrune(M){
+  const R=MDL.res; if(!R || !R.d || typeof R.d!=="object") return;
+  const byDay={};
+  Object.keys(R.d).forEach(dk=>{ mdlArr(R.d[dk]&&R.d[dk].g).forEach(g=>mdlSplit(g.f).forEach(f=>{ if(M.has(f)) (byDay[dk]=byDay[dk]||new Set()).add(f); })); });
+  for(const dk of Object.keys(byDay)){
+    const S=byDay[dk];
+    await FBS.db.ref(MDL_PATH+"/res/d/"+dk).transaction(cur=>{ if(!cur) return cur;
+      const G=mdlArr(cur.g).map(g=>Object.assign({}, g, {f:mdlSplit(g.f).filter(f=>!S.has(f)).join(",")})).filter(g=>g.f || g.r);
+      return G.length ? {g:G} : null; });
+  }
+}
+setInterval(()=>{ try{ mdlRecTick(); }catch(e){} }, 3*60000); setTimeout(()=>{ try{ mdlRecTick(); }catch(e){} }, 25000);
+function mdlLate(data, R){
+  R=R||MDL.res; if(!R) return null;
+  const today=+prodDateKey().replace(/-/g,""), live=mdlLiveFrames(data), L=[];
+  mdlResGroups(R).forEach(g=>{ if(!(+g.p>0 && +g.p<today)) return;
+    const base={m:g.m||"-", p:+g.p, k:String(g.k||""), b:!!g.b, d:mdlDays(g.p, today)};
+    mdlSplit(g.f).forEach(f=>{ if(!live.has(f)) L.push(Object.assign({f}, base)); });
+    mdlSplit(g.r).forEach(r=>L.push(Object.assign({r}, base))); });
+  L.sort((a,b)=>a.p-b.p || String(a.m).localeCompare(String(b.m)) || String(a.f||a.r).localeCompare(String(b.f||b.r)));
+  return L;
+}
+function mdlCardHtml(data){
+  if(!currentUser || !["leader","viewer","admin","rci"].includes(currentUser.role)) return "";
+  mdlListen();
+  const R=MDL.res, up=mdlCanUpload();
+  const upBtn=up?`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><button class="btn btn-primary btn-sm" style="width:auto;" onclick="mdlUpload('mdlMsg')">📂 Upload Achievement PDI</button><button class="btn btn-outline btn-sm" style="width:auto;" onclick="mdlUpload('mdlMsg')">📂 Upload MDP</button></div><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">File dari Datalizer · jenis file dikenali otomatis · boleh pilih MDP & Achievement PDI sekaligus.</div>`:"";
+  const msgDiv=`<div id="mdlMsg" style="margin-top:8px;">${mdlMsgHtml("mdlMsg")}</div>`;
+  const head=(badge)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">⏰ Delay MDP ${badge||""}</h3></div>`;
+  if(!R){
+    const st=MDL.state==="denied"?"Server menolak membaca data Delay MDP (aturan Firebase radar_foto).":(MDL.state==="err"?"Gagal membaca data Delay MDP: "+escH(MDL.err):(MDL.state==="load"&&FBS.enabled?"Memuat…":"Belum ada data. Upload file <b>MDP</b> dan <b>Achievement PDI</b> dari Datalizer."));
+    return `<div class="card">${head()}<div style="font-size:13px;color:var(--text-dim);margin-top:8px;">${st}</div>${upBtn}${msgDiv}</div>`;
+  }
+  const L=mdlLate(data, R)||[], fm=MDL.fm, byM={}; L.forEach(x=>{ byM[x.m]=(byM[x.m]||0)+1; });
+  if(fm && !byM[fm]) MDL.fm="";
+  const V=MDL.fm?L.filter(x=>x.m===MDL.fm):L, oldest=L[0], noF=L.filter(x=>!x.f).length;
+  const badge=`<span class="badge" style="background:${L.length?"#D64545":"#1E9E5A"};color:#fff;">${L.length.toLocaleString('id-ID')} unit</span>`;
+  const tile=(lbl,val,col,sub)=>`<div style="flex:1;min-width:120px;background:var(--panel);border:1px solid var(--border);border-top:4px solid ${col};border-radius:12px;padding:10px 12px;"><div style="font-size:12px;color:var(--text-dim);">${lbl}</div><div style="font-size:26px;font-weight:800;line-height:1.15;">${val}</div>${sub?`<div style="font-size:11px;color:var(--text-dim);">${sub}</div>`:""}</div>`;
+  const chip=(k,lbl)=>`<button type="button" class="linechip ${MDL.fm===k?"on":""}" style="padding:5px 11px;font-size:12px;" onclick="MDL.fm='${k}';MDL.all=false;render()">${escH(lbl)}</button>`;
+  const lim=MDL.all?V.length:25, shown=V.slice(0,lim);
+  let rows="", lastP=0;
+  shown.forEach(x=>{
+    if(x.p!==lastP){ lastP=x.p; const n=V.filter(y=>y.p===x.p).length;
+      rows+=`<tr><td colspan="3" style="padding:9px 6px 4px;font-size:12px;font-weight:800;color:#B42318;border-top:1px solid var(--border);">PLOD ${escH(mdlDateTxt(x.p))} · lewat ${x.d} hari · ${n} unit</td></tr>`; }
+    const kk=x.k.split("|"), sub=[kk[0], kk[2]].filter(Boolean).join(" · ");
+    rows+=`<tr style="border-top:1px solid var(--border);"><td style="padding:6px 4px 6px 0;font-size:12px;">${x.f?`<b style="font-family:ui-monospace,Menlo,monospace;white-space:nowrap;letter-spacing:-.2px;">${escH(x.f)}</b>`:`<span style="color:var(--text-dim);">RRN</span> <b style="font-family:ui-monospace,Menlo,monospace;">${escH(x.r)}</b><div style="font-size:10.5px;color:#b45309;">No. rangka belum ada di MDP</div>`}</td>
+      <td style="padding:6px;font-size:12.5px;"><b>${escH(x.m)}</b>${x.b?` <span class="badge gold" style="font-size:10px;">BATAM</span>`:""}${sub?`<div style="font-size:10.5px;color:var(--text-dim);">${escH(sub)}</div>`:""}</td>
+      <td style="padding:6px;font-size:12.5px;text-align:right;white-space:nowrap;color:#B42318;font-weight:800;">${x.d} hari</td></tr>`;
+  });
+  const srcM=mdlArr(R.mdp).map(m=>`MDP ${escH(dppMonthName(m.ym))} (download ${escH(mdlTsTxt(mdlOutTs(m.out)||m.ts))})`).join(" · ")||"MDP belum ada";
+  const srcI=mdlArr(R.inp).map(m=>`Achievement PDI s.d. ${escH(mdlDateTxt(m.to))} (download ${escH(mdlTsTxt(mdlOutTs(m.out)||m.ts))})`).join(" · ")||"Achievement PDI belum ada";
+  const lastI=Math.max(0,...mdlArr(R.inp).map(m=>mdlOutTs(m.out)||+m.ts||0)), lastM=Math.max(0,...mdlArr(R.mdp).map(m=>mdlOutTs(m.out)||+m.ts||0));
+  const warn=[];
+  if(!mdlArr(R.mdp).length) warn.push("File MDP belum diupload.");
+  if(!mdlArr(R.inp).length) warn.push("File Achievement PDI belum diupload — yang dipakai hanya status di file MDP + input dispatcher RADAR.");
+  else if(Date.now()-lastI>24*3600000) warn.push("Achievement PDI terakhir didownload "+escH(mdlTsTxt(lastI))+". Upload yang terbaru supaya akurat.");
+  if(noF) warn.push(`<b>${noF}</b> unit di atas belum punya No. rangka di file MDP (MDP didownload ${escH(mdlTsTxt(lastM))}), jadi ditampilkan dengan RRN. Download ulang MDP dari Datalizer supaya bisa dicek per No. rangka.`);
+  return `<div class="card" id="mdlCard">${head(badge)}
+    <div style="font-size:12px;color:var(--text-dim);margin:6px 0 10px;line-height:1.5;">Unit di MDP yang <b>PLOD-nya sudah lewat</b> tapi belum terdaftar input (Achievement PDI Datalizer + input dispatcher RADAR). PLOD hari ini belum dihitung.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      ${tile("Delay MDP", L.length.toLocaleString('id-ID'), L.length?"#D64545":"#1E9E5A", "unit belum input")}
+      ${tile("Paling lama", oldest?oldest.d+" hari":"–", "#E8833A", oldest?"PLOD "+escH(mdlDateTxt(oldest.p)):"tidak ada delay")}
+    </div>
+    ${L.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">${chip("","Semua "+L.length)}${Object.keys(byM).sort((a,b)=>byM[b]-byM[a]).map(m=>chip(m.replace(/'/g,""), m+" "+byM[m])).join("")}</div>
+    <div style="overflow-x:auto;margin-top:6px;"><table style="width:100%;border-collapse:collapse;">
+      <tr><th style="text-align:left;padding:6px;font-size:11px;color:var(--text-dim);">No. Rangka</th><th style="text-align:left;padding:6px;font-size:11px;color:var(--text-dim);">Model</th><th style="text-align:right;padding:6px;font-size:11px;color:var(--text-dim);">Lewat PLOD</th></tr>
+      ${rows}</table></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+      ${V.length>lim?`<button type="button" class="btn btn-sm" style="width:auto;" onclick="MDL.all=true;render()">Tampilkan semua (${V.length})</button>`:""}
+      <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="mdlCopy(this)">📋 Salin WA</button>
+      <button type="button" class="btn btn-outline btn-sm" style="width:auto;" onclick="mdlDownload()">⬇ Excel</button>
+    </div>`:`<div class="emptystate" style="margin-top:10px;font-size:13px;">✔ Semua unit yang PLOD-nya sudah lewat sudah terdaftar input.</div>`}
+    ${warn.length?`<div style="margin-top:10px;background:#FEF3C7;color:#92400E;border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.5;">${warn.map(w=>"⚠ "+w).join("<br>")}</div>`:""}
+    <div style="font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5;">Sumber: ${srcM} · ${srcI} · input dispatcher RADAR (langsung & tercatat permanen).</div>
+    ${upBtn}${msgDiv}
+  </div>`;
+}
+function mdlWaText(data){
+  const R=MDL.res, L=mdlLate(data||DB.get(), R)||[], fm=MDL.fm, V=fm?L.filter(x=>x.m===fm):L;
+  const now=new Date(), pad=n=>String(n).padStart(2,"0"), CAP=300;
+  let t="*DELAY MDP EKY"+(fm?" — "+fm:"")+"*\n"+pad(now.getDate())+"/"+pad(now.getMonth()+1)+"/"+now.getFullYear()+" "+pad(now.getHours())+":"+pad(now.getMinutes())+"\n";
+  if(!V.length) return t+"\n✅ Tidak ada delay MDP: semua unit yang PLOD-nya sudah lewat sudah terdaftar input.";
+  const byM={}; V.forEach(x=>{ byM[x.m]=(byM[x.m]||0)+1; });
+  t+="Total: *"+V.length+" unit* belum terdaftar input · paling lama "+V[0].d+" hari\n";
+  if(!fm) t+="Per model: "+Object.keys(byM).sort((a,b)=>byM[b]-byM[a]).map(m=>m+" "+byM[m]).join(" · ")+"\n";
+  let lastP=0, i=0;
+  V.slice(0,CAP).forEach(x=>{
+    if(x.p!==lastP){ lastP=x.p; t+="\n*PLOD "+mdlDateTxt(x.p)+" · lewat "+x.d+" hari ("+V.filter(y=>y.p===x.p).length+" unit)*\n"; }
+    const k=x.k.split("|"); i++;
+    t+=i+". "+(x.f?x.f:"RRN "+x.r+" (No. rangka belum ada)")+" · "+x.m+(k[2]?" · "+k[2]:"")+(x.b?" · BATAM":"")+"\n";
+  });
+  if(V.length>CAP) t+="…dan "+(V.length-CAP)+" unit lain (lengkapnya: Download Excel di RADAR)\n";
+  const lastI=Math.max(0,...mdlArr(R&&R.inp).map(m=>mdlOutTs(m.out)||+m.ts||0)), lastM=Math.max(0,...mdlArr(R&&R.mdp).map(m=>mdlOutTs(m.out)||+m.ts||0));
+  t+="\nData: MDP download "+mdlTsTxt(lastM)+(lastI?" · Achievement PDI download "+mdlTsTxt(lastI):"")+" · + input dispatcher RADAR";
+  return t;
+}
+function mdlCopy(btn){ try{ tlsCopy(mdlWaText(DB.get()), btn); }catch(e){ alert("Gagal menyalin: "+(e&&e.message||e)); } }
+function mdlDownload(){
+  const L=mdlLate(DB.get()); if(!L || !L.length){ alert("Tidak ada delay MDP."); return; }
+  const H=["No","No. Rangka","RRN","Model","Katashiki","Suffix","Warna","Batam","PLOD","Lewat (hari)"];
+  const ser=p=>{ const s=String(p); return {d:Math.round((Date.UTC(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8))-Date.UTC(1899,11,30))/86400000)}; };
+  const rows=[H].concat(L.map((x,i)=>{ const k=x.k.split("|"); return [i+1, x.f||"", x.r||"", x.m, k[0]||"", k[1]||"", k[2]||"", x.b?"BATAM":"", ser(x.p), x.d]; }));
+  const by={}; L.forEach(x=>{ const o=by[x.m]=by[x.m]||{n:0,mx:0}; o.n++; o.mx=Math.max(o.mx,x.d); });
+  const sum=[["Model","Unit delay","Paling lama (hari)"]].concat(Object.keys(by).sort().map(m=>[m, by[m].n, by[m].mx])).concat([["Total", L.length, Math.max(...L.map(x=>x.d))]]);
+  const p=x=>String(x).padStart(2,"0"), d=new Date();
+  mfSave("Delay-MDP-EKY-"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes())+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    mfXlsx([{name:"Delay MDP", rows}, {name:"Ringkasan", rows:sum}], [5,21,10,10,15,7,20,8,11,11]));
 }
 
 /* ======================================================================
@@ -11202,8 +11554,9 @@ function drCompute(data, key){
 }
 function drSaveRemark(key){
   const g=id=>((document.getElementById(id)||{}).value||"").trim();
-  const day=g("drRemD"), night=g("drRemN");
-  DB.set(d=>{ const o=Object.assign({}, d.dailyRemark||{}); if(day||night) o[key]={day, night, by:(currentUser&&currentUser.name)||"", ts:Date.now()}; else delete o[key]; const cut=ekyAddDays(prodDateKey(),-60); Object.keys(o).forEach(k=>{ if(k<cut) delete o[k]; }); d.dailyRemark=o; });
+  const day=g("drRemD"), night=g("drRemN"), catD=day?g("drCatD"):"", catN=night?g("drCatN"):"";
+  /* 20 Nov: + kategori problem (Plant ADM / Internal TAM) dan disimpan ±13 bulan untuk rekap Problem Plant Update */
+  DB.set(d=>{ const o=Object.assign({}, d.dailyRemark||{}); if(day||night) o[key]={day, night, catD, catN, by:(currentUser&&currentUser.name)||"", ts:Date.now()}; else delete o[key]; const cut=ekyAddDays(prodDateKey(),-400); Object.keys(o).forEach(k=>{ if(k<cut) delete o[k]; }); d.dailyRemark=o; });
 }
 function drWaText(R){
   const f=v=>v==null?"-":Math.round(v).toLocaleString('id-ID'), g=v=>v==null?"-":(v>0?"+":"")+v;
@@ -11214,7 +11567,7 @@ function drWaText(R){
   if(R.mSp) t+=`\n*Receiving vs MDP TAM*\nPlan ${f(R.mT)} (Day ${f(R.mSp[0])}, Night ${f(R.mSp[1])}) | aktual ${f(R.act?R.act.t:null)}\nBulan ini: MDP ${f(R.mdpMonth)} | aktual s.d. tgl ${f(R.actTD)}\n`;
   t+=`\n*Delivery EKY Out*\nDay: plan ${f(R.dlvP.D)} | aktual ${f(R.out.D.t)}\nNight: plan ${f(R.dlvP.N)} | aktual ${f(R.out.N.t)}\n`;
   if(R.w) t+=`\n*WIP*: reguler ${f(R.w.t-R.w.b)} · Batam ${f(R.w.b)}\n`;
-  if(R.rem.day||R.rem.night) t+=`\n*Problem*\nDay: ${R.rem.day||"-"}\nNight: ${R.rem.night||"-"}\n`;
+  if(R.rem.day||R.rem.night) t+=`\n*Problem*\nDay: ${R.rem.day||"-"}${R.rem.day&&R.rem.catD?" ("+R.rem.catD+")":""}\nNight: ${R.rem.night||"-"}${R.rem.night&&R.rem.catN?" ("+R.rem.catN+")":""}\n`;
   return t.trim();
 }
 function drCopyWa(){ const t=drWaText(drCompute(DB.get(), drKey||drDefaultKey())); const ok=()=>{ const el=document.getElementById("drMsg"); if(el) el.innerHTML=`<span style="color:#1E9E5A;font-weight:700;">✔ Laporan tersalin, tinggal tempel di WhatsApp.</span>`; };
@@ -11268,15 +11621,16 @@ function drCardHtml(data){
         const dv=!R.dpp1.has?null:(si<0?R.dpp1.KP1[0]+R.dpp1.KP2[0]+R.dpp1.KP1[1]+R.dpp1.KP2[1]:(l==="t"?R.dpp1.KP1[si]+R.dpp1.KP2[si]:R.dpp1[l][si]));
         const mv=R.m1T==null?null:(si<0?R.m1T:(l==="t"?(R.m1Sp?R.m1Sp[si]:null):ml1[l][si]));
         return `<tr style="border-top:${si<0?"2px solid var(--gold)":(l==="t"?"1px solid var(--border)":"1px dashed var(--border)")};${l==="t"?"font-weight:700;":""}"><td style="${td}text-align:left;">${lb}</td><td style="${td}">${f(dv)}</td><td style="${td}">${f(mv)}</td></tr>`; }).join("")}</table>`;
-    const rem=canEdit?`<div style="display:flex;gap:10px;flex-wrap:wrap;"><label style="flex:1;min-width:220px;font-size:12px;">☀ Problem Day<textarea id="drRemD" rows="2" style="width:100%;margin-top:4px;">${escH(R.rem.day||"")}</textarea></label><label style="flex:1;min-width:220px;font-size:12px;">🌙 Problem Night<textarea id="drRemN" rows="2" style="width:100%;margin-top:4px;">${escH(R.rem.night||"")}</textarea></label></div><button class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="drSaveRemark('${key}')">Simpan catatan</button>${R.rem.by?`<span style="font-size:11px;color:var(--text-dim);margin-left:8px;">terakhir oleh ${escH(R.rem.by)}</span>`:""}`
-      :`<div style="font-size:13px;">☀ ${escH(R.rem.day||"-")}<br>🌙 ${escH(R.rem.night||"-")}</div>`;
+    const rem=canEdit?`<div style="display:flex;gap:10px;flex-wrap:wrap;"><label style="flex:1;min-width:220px;font-size:12px;">☀ Problem Day<textarea id="drRemD" rows="2" style="width:100%;margin-top:4px;">${escH(R.rem.day||"")}</textarea>${ppuCatSel("drCatD", R.rem.catD||"")}</label><label style="flex:1;min-width:220px;font-size:12px;">🌙 Problem Night<textarea id="drRemN" rows="2" style="width:100%;margin-top:4px;">${escH(R.rem.night||"")}</textarea>${ppuCatSel("drCatN", R.rem.catN||"")}</label></div><button class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="drSaveRemark('${key}')">Simpan catatan</button>${R.rem.by?`<span style="font-size:11px;color:var(--text-dim);margin-left:8px;">terakhir oleh ${escH(R.rem.by)}</span>`:""}`
+      :`<div style="font-size:13px;">☀ ${escH(R.rem.day||"-")}${R.rem.day?ppuCatTxt(R.rem.catD):""}<br>🌙 ${escH(R.rem.night||"-")}${R.rem.night?ppuCatTxt(R.rem.catN):""}</div>`;
     const sec=(t,body)=>`<div style="margin-top:14px;"><div style="font-size:13px;font-weight:800;letter-spacing:.02em;margin-bottom:6px;">${t}</div>${body}</div>`;
     return `<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
         <h3 style="margin:0;">🗒 Daily Report EKY</h3>
         <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;"><button class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="drShift(-1)" aria-label="Hari sebelumnya">◀</button><input type="date" value="${key}" onchange="drKey=this.value;render()" style="font-size:14px;"><button class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="drShift(1)" aria-label="Hari berikutnya">▶</button>
-        <button class="btn btn-outline btn-sm" style="width:auto;" onclick="drCopyWa()">📋 Salin WA</button><button class="btn btn-primary btn-sm" style="width:auto;" onclick="drDownload()">⬇ Download Excel</button></span></div>
+        <button class="btn btn-outline btn-sm" style="width:auto;" onclick="drCopyWa()">📋 Salin WA</button><button class="btn btn-primary btn-sm" style="width:auto;" onclick="drDownload()">⬇ Download Excel</button><button class="btn btn-outline btn-sm" style="width:auto;" onclick="ppuDownload('${key.slice(0,7)}')" title="Rekap problem sebulan (format Problem Plant Update)">⬇ Problem Plant ${escH(PPU_SHEET[+key.slice(5,7)-1])}</button></span></div>
       <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">${dt.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · hari produksi 07:00 – 06:59${R.today?" · <b>berjalan</b>":""}${!R.A&&!R.future?" · data hari ini belum tercatat di RADAR (pencatatan harian mulai 12 Nov 2026)":""}</div>
+      ${ppuReminderHtml()}
       <div id="drMsg" style="font-size:12px;margin-top:4px;"></div>
       ${sec("RECEIVING (aktual = input Dispatcher)", recv)}
       ${sec("DELIVERY EKY OUT", dl)}
@@ -11285,6 +11639,7 @@ function drCardHtml(data){
       ${sec("WIP", wip)}
       ${sec("PLANNING D+1", `<div style="overflow-x:auto;">${d1}</div>`)}
       ${sec("PROBLEM / REMARK", rem)}
+      ${ppuCalHtml(data, canEdit)}
     </div>`;
   }catch(e){ console.warn("daily report", e); return `<div class="card"><h3>🗒 Daily Report EKY</h3><div class="msg err">Gagal menyusun laporan: ${escH(String(e&&e.message||e))}</div></div>`; }
 }
@@ -11315,9 +11670,293 @@ function drDownload(){
   rows.push([""]); rows.push(["PLANNING D+1", new Date(ekyBaseOf(R.nk)).toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}),"Day KP1","Day KP2","Day Total","Night KP1","Night KP2","Night Total","Total"]);
   rows.push(["","Receiving (DPP)",R.dpp1.KP1[0],R.dpp1.KP2[0],R.dpp1.KP1[0]+R.dpp1.KP2[0],R.dpp1.KP1[1],R.dpp1.KP2[1],R.dpp1.KP1[1]+R.dpp1.KP2[1],R.dpp1.KP1[0]+R.dpp1.KP2[0]+R.dpp1.KP1[1]+R.dpp1.KP2[1]]);
   rows.push(["","MDP",n(R.m1Line?R.m1Line.KP1[0]:null),n(R.m1Line?R.m1Line.KP2[0]:null),n(R.m1Sp?R.m1Sp[0]:null),n(R.m1Line?R.m1Line.KP1[1]:null),n(R.m1Line?R.m1Line.KP2[1]:null),n(R.m1Sp?R.m1Sp[1]:null),n(R.m1T)]);
-  rows.push([""]); rows.push(["PROBLEM","Day",R.rem.day||""]); rows.push(["","Night",R.rem.night||""]);
+  rows.push([""]); rows.push(["PROBLEM","Day",R.rem.day||"",R.rem.day?(R.rem.catD||""):""]); rows.push(["","Night",R.rem.night||"",R.rem.night?(R.rem.catN||""):""]);
   mfSave("Daily-Report-EKY-"+key+".xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", mfXlsx([{name:"Daily Report", rows}], [22,16,11,11,11,11,11,11,12,14]));
 }
+
+/* ======================================================================
+   PROBLEM PLANT UPDATE (20 Nov 2026, permintaan Khairul)
+   Rekap bulanan catatan Problem Day/Night di Daily Report, dengan format sama seperti file
+   "Problem Plant Update EKY": No · Tgl · Hari · Kode Hari (1 = kerja, 2 = libur) · Remark Problem PDI / Plant · Kategori Problem.
+   Kode Hari = kalender kerja TAM (sama dengan sheet TGL): Senin–Jumat 1, Sabtu/Minggu 2, hari libur nasional/TAM 2,
+   hari pengganti (TAM masuk) 1. Daftar 2026 diambil dari file Khairul; bisa diubah di Daily Report (⚙ Kalender kerja TAM).
+   Download di akhir bulan / awal bulan baru (ada pengingat di Daily Report tanggal terakhir & 1–3).
+====================================================================== */
+const PPU_CATS=["Plant ADM","Internal TAM"], PPU_SHEET=["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agust","Sept","Okt","Nov","Des"];
+const PPU_DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const PPU_LIBUR_DEF=[["2026-01-01","Tahun Baru 2025 Masehi"],["2026-01-02","Tukar Hari dengan 30Mei DS & 24Mei NS"],["2026-01-16","Isra Miraj Nabi Muhammad SAW"],["2026-02-17","Tahun Baru Imlek 2576"],["2026-03-19","Hari Raya Nyepi Tahun Baru Saka 1948"],["2026-03-20","Tukar Hari dengan 21Feb DS & 15Feb NS"],["2026-03-21","Hari Raya Idul Fitri 1447 H"],["2026-03-22","Hari Raya Idul Fitri 1447 H"],["2026-03-23","Cuti Bersama Hari Raya Idul Fitri 1447 H"],["2026-03-24","Cuti Bersama Hari Raya Idul Fitri 1447 H"],["2026-03-25","Cuti Bersama Hari Raya Idul Fitri 1447 H"],["2026-03-26","Tukar Hari dengan 20Jun DS & 14Jun NS"],["2026-03-27","Tukar Hari dengan 29Ags DS & 23Ags NS"],["2026-04-03","Wafat Yesus Kristus"],["2026-04-05","Kebangkitan Yesus Kristus (Paskah)"],["2026-05-01","Hari Buruh International"],["2026-05-14","Kenaikan Yesus Kristus"],["2026-05-27","Hari Raya Idul Adha 1447 H"],["2026-05-31","Hari Raya Waisak 2570 BE"],["2026-06-01","Hari Lahir Pancasila"],["2026-06-16","Tahun Baru Hijriyah 1448 H"],["2026-08-17","Proklamasi Kemerdekaan RI"],["2026-08-25","Maulid Nabi Muhammad SAW"],["2026-12-25","Hari Raya Natal"]];
+const PPU_GANTI_DEF=["2026-01-11","2026-02-15","2026-02-21","2026-03-15","2026-05-24","2026-05-30","2026-06-14","2026-06-20","2026-08-23","2026-08-29","2026-12-20","2026-12-27"];
+function ppuCal(data){ const c=(data||DB.get()).ppuCfg||{}, lib=Array.isArray(c.libur)?c.libur:PPU_LIBUR_DEF.map(([d,n])=>({d,n})), gan=Array.isArray(c.ganti)?c.ganti:PPU_GANTI_DEF;
+  return {libur:lib.filter(x=>x&&x.d), ganti:gan.filter(Boolean), L:new Set(lib.map(x=>x&&x.d)), G:new Set(gan)}; }
+function ppuKode(cal, key, wd){ const l=cal.L.has(key), g=cal.G.has(key); return (l && !g) ? 2 : ((g && !l) ? 1 : ((wd===0||wd===6) ? 2 : 1)); }
+function ppuParseDate(s){ s=String(s||"").trim(); let m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/); if(m) return [m[1]+"-"+m[2].padStart(2,"0")+"-"+m[3].padStart(2,"0"), s.slice(m[0].length).trim()];
+  m=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/); if(m) return [m[3]+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0"), s.slice(m[0].length).trim()]; return null; }
+function ppuSaveCal(){
+  const g=id=>((document.getElementById(id)||{}).value||""), bad=[];
+  const libur=g("ppuLibur").split(/\n+/).map(x=>x.trim()).filter(Boolean).map(x=>{ const p=ppuParseDate(x); if(!p){ bad.push(x); return null; } return {d:p[0], n:p[1].replace(/^[-–:·\s]+/,"").slice(0,80)}; }).filter(Boolean);
+  const ganti=g("ppuGanti").split(/[\n,;]+/).map(x=>x.trim()).filter(Boolean).map(x=>{ const p=ppuParseDate(x); if(!p){ bad.push(x); return null; } return p[0]; }).filter(Boolean);
+  if(bad.length){ alert("Tanggal tidak dikenali:\n"+bad.slice(0,8).join("\n")+"\n\nTulis seperti 2026-12-25 Hari Raya Natal (satu tanggal per baris)."); return; }
+  DB.set(d=>{ d.ppuCfg=Object.assign({}, d.ppuCfg||{}, {libur:libur.sort((a,b)=>a.d<b.d?-1:1), ganti:[...new Set(ganti)].sort(), by:(currentUser&&currentUser.name)||"", ts:Date.now()}); });
+  alert("Kalender kerja TAM tersimpan: "+libur.length+" hari libur, "+ganti.length+" hari pengganti.");
+}
+function ppuCalHtml(data, canEdit){
+  if(!canEdit) return "";
+  const C=ppuCal(data);
+  return `<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:12.5px;font-weight:600;">⚙ Kalender kerja TAM (Kode Hari di Problem Plant Update)</summary>
+    <div style="font-size:12px;color:var(--text-dim);margin:6px 0;">Kode Hari: Senin–Jumat <b>1</b>, Sabtu/Minggu <b>2</b>. Hari libur nasional/TAM → <b>2</b>, hari pengganti (TAM masuk) → <b>1</b>. Satu tanggal per baris.</div>
+    <label style="font-size:12px;">Hari libur nasional + libur TAM<textarea id="ppuLibur" rows="6" style="width:100%;margin-top:4px;font-size:12px;">${escH(C.libur.map(x=>x.d+(x.n?" "+x.n:"")).join("\n"))}</textarea></label>
+    <label style="font-size:12px;display:block;margin-top:6px;">Hari pengganti (TAM masuk)<textarea id="ppuGanti" rows="3" style="width:100%;margin-top:4px;font-size:12px;">${escH(C.ganti.join("\n"))}</textarea></label>
+    <button type="button" class="btn btn-outline btn-sm" style="width:auto;margin-top:6px;" onclick="ppuSaveCal()">Simpan kalender</button></details>`;
+}
+function ppuCatSel(id, v){ return `<select id="${id}" style="font-size:12px;margin-top:4px;width:100%;"><option value="">Kategori problem: –</option>${PPU_CATS.map(c=>`<option value="${escH(c)}" ${v===c?"selected":""}>${escH(c)}</option>`).join("")}</select>`; }
+function ppuCatTxt(c){ return c ? ` <span class="badge" style="font-size:10px;background:${c==="Plant ADM"?"#FDE7E7":"#E8F0FB"};color:${c==="Plant ADM"?"#B42318":"#1D4F91"};">${escH(c)}</span>` : ""; }
+function ppuRows(data, ym){
+  const y=+ym.slice(0,4), m=+ym.slice(5,7), nd=new Date(y,m,0).getDate(), pad=n=>String(n).padStart(2,"0"), R=data.dailyRemark||{}, cal=ppuCal(data);
+  const rows=[];
+  for(let d=1; d<=nd; d++){
+    const key=ym+"-"+pad(d), wd=new Date(y,m-1,d).getDay(), kode=ppuKode(cal, key, wd);
+    const r=R[key]||{}, parts=[];
+    if(r.day) parts.push("Day: "+r.day); if(r.night) parts.push("Night: "+r.night);
+    rows.push({no:d, key, y, m, d, hari:PPU_DAYS[wd], kode, rem:parts.join("\n"), cat:[...new Set([r.catD, r.catN].filter(Boolean))].join(", ")});
+  }
+  return rows;
+}
+function ppuHasData(data, ym){ return Object.keys(data.dailyRemark||{}).some(k=>k.slice(0,7)===ym); }
+/* workbook bergaya sama dengan file Problem Plant Update (Segoe UI 12, header kuning, garis tipis, hari libur merah, pilihan kategori) */
+function ppuXlsx(sheets){
+  const files=[], ser=(y,m,d)=>Math.round((Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/86400000);
+  files.push({name:"[Content_Types].xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map((_,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("")+'</Types>'});
+  files.push({name:"_rels/.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'});
+  files.push({name:"xl/workbook.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>'+sheets.map((s,i)=>'<sheet name="'+_xe(s.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join("")+'</sheets></workbook>'});
+  files.push({name:"xl/_rels/workbook.xml.rels", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+sheets.map((_,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join("")+'<Relationship Id="rId'+(sheets.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'});
+  files.push({name:"xl/styles.xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    +'<fonts count="2"><font><sz val="12"/><name val="Segoe UI"/><family val="2"/></font><font><b/><sz val="12"/><name val="Segoe UI"/><family val="2"/></font></fonts>'
+    +'<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill></fills>'
+    +'<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border></borders>'
+    +'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+    +'<cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+    +'<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
+    +'<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+    +'<xf numFmtId="14" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+    +'<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs>'
+    +'<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+    +'<dxfs count="1"><dxf><font><b/><color rgb="FFFFFFFF"/></font><fill><patternFill patternType="solid"><fgColor rgb="FFC00000"/><bgColor rgb="FFC00000"/></patternFill></fill></dxf></dxfs>'
+    +'</styleSheet>'});
+  sheets.forEach((sh,si)=>{
+    const L=sh.rows, last=L.length+2, c=(ref,s,v,t)=>v==null||v===""?'<c r="'+ref+'" s="'+s+'"/>':(t==="s"?'<c r="'+ref+'" s="'+s+'" t="inlineStr"><is><t xml:space="preserve">'+_xe(v)+'</t></is></c>':'<c r="'+ref+'" s="'+s+'"><v>'+v+'</v></c>');
+    let x='<row r="1"/>';
+    x+='<row r="2" ht="30" customHeight="1">'+[["B","No"],["C","Tgl"],["D","Hari"],["E","Kode Hari"],["F","Remark Problem PDI / Plant"],["G","Kategori Problem"]].map(([k,v])=>c(k+"2",1,v,"s")).join("")+'</row>';
+    L.forEach((r,i)=>{ const n=i+3, lines=String(r.rem||"").split("\n").reduce((a,s)=>a+Math.max(1,Math.ceil(s.length/58)),0), ht=Math.max(30, lines*17+10);
+      x+='<row r="'+n+'" ht="'+ht+'" customHeight="1">'+c("B"+n,2,r.no)+c("C"+n,3,ser(r.y,r.m,r.d))+c("D"+n,2,r.hari,"s")+c("E"+n,2,r.kode)+c("F"+n,4,r.rem,"s")+c("G"+n,4,r.cat,"s")+'</row>'; });
+    files.push({name:"xl/worksheets/sheet"+(si+1)+".xml", data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="B2:G'+last+'"/>'
+      +'<sheetViews><sheetView workbookViewId="0"'+(si===0?' tabSelected="1"':'')+'><pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="17.25"/>'
+      +'<cols><col min="1" max="1" width="2.8" customWidth="1"/><col min="2" max="2" width="6.6" customWidth="1"/><col min="3" max="3" width="12.6" customWidth="1"/><col min="4" max="4" width="13.5" customWidth="1"/><col min="5" max="5" width="10.7" customWidth="1"/><col min="6" max="6" width="62" customWidth="1"/><col min="7" max="7" width="17.3" customWidth="1"/></cols>'
+      +'<sheetData>'+x+'</sheetData>'
+      +'<conditionalFormatting sqref="B3:G'+last+'"><cfRule type="expression" dxfId="0" priority="1"><formula>$E3=2</formula></cfRule></conditionalFormatting>'
+      +'<dataValidations count="1"><dataValidation type="list" allowBlank="1" showErrorMessage="1" sqref="G3:G'+last+'"><formula1>"Internal TAM,Plant ADM"</formula1></dataValidation></dataValidations>'
+      +'<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/></worksheet>'});
+  });
+  return _zip(files);
+}
+function ppuDownload(ym){
+  const data=DB.get(); ym=ym||String(drKey||drDefaultKey()).slice(0,7);
+  const y=ym.slice(0,4), m=+ym.slice(5,7), sheets=[];
+  for(let k=m; k>=1; k--){ const yk=y+"-"+String(k).padStart(2,"0"); if(k===m || ppuHasData(data, yk)) sheets.push({name:PPU_SHEET[k-1], rows:ppuRows(data, yk)}); }
+  mfSave("Problem_Plant_Update_EKY_"+y+"_"+PPU_SHEET[m-1]+".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ppuXlsx(sheets));
+}
+/* pengingat: tanggal terakhir bulan (untuk bulan ini) dan tanggal 1–3 (untuk bulan lalu) */
+function ppuReminderHtml(){
+  const t=prodDateKey(), y=+t.slice(0,4), m=+t.slice(5,7), d=+t.slice(8,10), nd=new Date(y,m,0).getDate();
+  let ym="";
+  if(d===nd) ym=t.slice(0,7);
+  else if(d<=3){ const p=new Date(y,m-2,1); ym=p.getFullYear()+"-"+String(p.getMonth()+1).padStart(2,"0"); }
+  if(!ym) return "";
+  return `<div style="margin-top:8px;background:#FEF3C7;color:#92400E;border-radius:10px;padding:8px 10px;font-size:12.5px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+    <span>📅 ${d===nd?"Akhir":"Awal"} bulan: waktunya download <b>Problem Plant Update ${escH(dppMonthName(ym))}</b>.</span>
+    <button type="button" class="btn btn-sm" style="width:auto;" onclick="ppuDownload('${ym}')">⬇ Download</button></div>`;
+}
+
+/* ======================================================================
+   ROLE RCI NVDC (20 Nov 2026, permintaan Khairul) — seksi lain, HANYA LIHAT, tampilan berwarna + animasi.
+   Menu: Ringkasan · Peta CC · DCCP (plan & aktual) · DPP vs Aktual harian · Defect EKY · Delay MDP · Display Yard.
+   Animasi hanya diputar saat menu pertama kali dibuka (bukan tiap data berubah); ikut "kurangi animasi" di HP.
+====================================================================== */
+const RCI_TABS={
+  rci:    {t:"Ringkasan RCI NVDC", s:"Kondisi EKY hari ini dalam satu layar", e:"📡", g:"linear-gradient(135deg,#4F46E5 0%,#7C3AED 48%,#DB2777 100%)"},
+  ccmap:  {t:"Peta Car Carrier", s:"Posisi CC ADM KAP ⇄ NVDC Karawang", e:"🗺️", g:"linear-gradient(135deg,#0284C7 0%,#0EA5E9 45%,#14B8A6 100%)"},
+  ccplan: {t:"DCCP · Plan & Aktual", s:"Ritase car carrier sesuai jadwal DCCP", e:"🚚", g:"linear-gradient(135deg,#EA580C 0%,#F59E0B 55%,#FBBF24 100%)"},
+  rcidpp: {t:"DPP vs Aktual Harian", s:"Plan DPP ADM vs unit masuk EKY · Day & Night", e:"🏭", g:"linear-gradient(135deg,#1D4ED8 0%,#4F46E5 55%,#7C3AED 100%)"},
+  rcidef: {t:"Defect Ditemukan di EKY", s:"Laporan defect 2×24 jam terakhir", e:"🛠️", g:"linear-gradient(135deg,#BE123C 0%,#E11D48 45%,#9333EA 100%)"},
+  rcimdp: {t:"Delay MDP", s:"Unit yang PLOD-nya sudah lewat tapi belum masuk", e:"⏰", g:"linear-gradient(135deg,#C2410C 0%,#F97316 50%,#DC2626 100%)"},
+  display:{t:"Display Yard EKY", s:"Isi stall & antrian saat ini", e:"🅿️", g:"linear-gradient(135deg,#047857 0%,#10B981 55%,#0D9488 100%)"}
+};
+let _rciSeen={}, rciKey="";
+function isRci(){ return !!(currentUser && currentUser.role==="rci"); }
+function rciCss(){
+  if(document.getElementById("rciCss")) return;
+  const st=document.createElement("style"); st.id="rciCss";
+  st.textContent=`
+  .rci-hero{position:relative;overflow:hidden;border-radius:18px;padding:18px 18px 16px;margin-bottom:14px;color:#fff;box-shadow:0 10px 28px -12px rgba(30,27,75,.55);}
+  .rci-hero .rci-b1,.rci-hero .rci-b2{position:absolute;border-radius:50%;filter:blur(2px);opacity:.35;background:radial-gradient(circle at 30% 30%,#fff,rgba(255,255,255,0) 70%);}
+  .rci-hero .rci-b1{width:180px;height:180px;right:-50px;top:-60px;animation:rciFloat 9s ease-in-out infinite;}
+  .rci-hero .rci-b2{width:120px;height:120px;left:-40px;bottom:-60px;animation:rciFloat 11s ease-in-out infinite reverse;}
+  .rci-hero .rci-sheen{position:absolute;inset:0;background:linear-gradient(110deg,rgba(255,255,255,0) 35%,rgba(255,255,255,.18) 50%,rgba(255,255,255,0) 65%);background-size:250% 100%;animation:rciSheen 6s linear infinite;}
+  .rci-hero .rci-top{position:relative;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.92;}
+  .rci-live{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);border-radius:999px;padding:3px 9px;letter-spacing:.08em;}
+  .rci-live i{width:8px;height:8px;border-radius:50%;background:#4ADE80;box-shadow:0 0 0 0 rgba(74,222,128,.8);animation:rciPulse 1.6s infinite;}
+  .rci-hero .rci-row{position:relative;display:flex;align-items:center;gap:14px;margin-top:10px;}
+  .rci-emo{font-size:40px;line-height:1;filter:drop-shadow(0 6px 10px rgba(0,0,0,.25));animation:rciBob 3.2s ease-in-out infinite;}
+  .rci-hero h2{margin:0;font-size:30px;line-height:1.02;font-weight:800;letter-spacing:.01em;}
+  .rci-hero .rci-sub{font-size:13px;opacity:.92;margin-top:3px;}
+  .rci-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  @media(min-width:760px){.rci-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+  .rci-tile{position:relative;overflow:hidden;border-radius:16px;padding:12px 12px 12px;color:#fff;cursor:pointer;box-shadow:0 8px 20px -12px rgba(15,23,42,.6);transition:transform .15s;}
+  .rci-tile:active{transform:scale(.97);}
+  .rci-tile .rci-tl{font-size:11.5px;font-weight:700;letter-spacing:.04em;opacity:.95;text-transform:uppercase;padding-right:30px;line-height:1.3;min-height:30px;}
+  .rci-tile .rci-big{font-family:'Barlow Condensed','Roboto Condensed',sans-serif;font-size:38px;font-weight:800;line-height:1;margin-top:6px;}
+  .rci-tile .rci-big small{font-size:18px;opacity:.85;font-weight:700;}
+  .rci-tile .rci-ts{font-size:11.5px;opacity:.92;margin-top:4px;line-height:1.35;}
+  .rci-tile .rci-ico{position:absolute;right:8px;top:6px;font-size:26px;opacity:.9;}
+  .rci-tile .rci-bar{height:6px;border-radius:99px;background:rgba(255,255,255,.28);margin-top:8px;overflow:hidden;}
+  .rci-tile .rci-bar b{display:block;height:100%;border-radius:99px;background:#fff;transform-origin:left;}
+  .rci-card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 6px 18px -14px rgba(15,23,42,.5);}
+  .rci-sh{border-radius:16px;overflow:hidden;margin-bottom:12px;background:var(--panel);border:1px solid var(--border);box-shadow:0 8px 22px -14px rgba(15,23,42,.55);}
+  .rci-sh .rci-shh{padding:12px 14px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .rci-sh .rci-shh b{font-family:'Barlow Condensed','Roboto Condensed',sans-serif;font-size:24px;letter-spacing:.02em;}
+  .rci-sh .rci-shb{padding:12px 14px;}
+  .rci-kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center;}
+  .rci-kv div{background:var(--panel2);border-radius:12px;padding:8px 4px;}
+  .rci-kv .rci-l{display:block;font-size:11px;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+  .rci-kv strong{font-family:'Barlow Condensed','Roboto Condensed',sans-serif;font-size:28px;line-height:1.1;}
+  .rci-kp{display:grid;grid-template-columns:44px 1fr auto;gap:8px;align-items:center;margin-top:9px;font-size:12.5px;}
+  .rci-kp .rci-track{position:relative;height:12px;border-radius:99px;background:var(--panel3);overflow:hidden;}
+  .rci-kp .rci-track b{position:absolute;left:0;top:0;bottom:0;border-radius:99px;transform-origin:left;}
+  .rci-chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700;margin:0 6px 6px 0;}
+  .rci-def{border-radius:14px;border:1px solid var(--border);border-left:6px solid #E11D48;padding:10px 12px;margin-bottom:9px;background:var(--panel);}
+  .rci-in .rci-hero,.rci-in .rci-tile,.rci-in .rci-card,.rci-in .rci-sh,.rci-in .rci-def{animation:rciUp .55s cubic-bezier(.2,.8,.2,1) both;}
+  .rci-in .rci-tile:nth-child(2),.rci-in .rci-sh:nth-of-type(2){animation-delay:.06s}.rci-in .rci-tile:nth-child(3){animation-delay:.12s}.rci-in .rci-tile:nth-child(4){animation-delay:.18s}.rci-in .rci-tile:nth-child(5){animation-delay:.24s}.rci-in .rci-tile:nth-child(6){animation-delay:.3s}
+  .rci-in .rci-bar b,.rci-in .rci-track b{animation:rciGrow 1.1s cubic-bezier(.2,.8,.2,1) both .25s;}
+  .rci-in .rci-ring circle.rci-arc{animation:rciRing 1.3s cubic-bezier(.2,.8,.2,1) both .2s;}
+  @keyframes rciUp{from{opacity:0;transform:translateY(14px) scale(.98);}to{opacity:1;transform:none;}}
+  @keyframes rciGrow{from{transform:scaleX(0);}to{transform:scaleX(1);}}
+  @keyframes rciRing{from{stroke-dashoffset:var(--c);}}
+  @keyframes rciFloat{0%,100%{transform:translate(0,0);}50%{transform:translate(-18px,14px);}}
+  @keyframes rciSheen{from{background-position:150% 0;}to{background-position:-100% 0;}}
+  @keyframes rciPulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.75);}70%{box-shadow:0 0 0 9px rgba(74,222,128,0);}100%{box-shadow:0 0 0 0 rgba(74,222,128,0);}}
+  @keyframes rciBob{0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-6px) rotate(4deg);}}
+  @media (prefers-reduced-motion: reduce){.rci-hero *,.rci-in *{animation:none!important;}}
+  `;
+  document.head.appendChild(st);
+}
+function rciHero(tab, extra){
+  const H=RCI_TABS[tab]; if(!H) return "";
+  const now=new Date(), sh=currentShift()==="1"?"Shift Day":"Shift Night";
+  return `<div class="rci-hero" style="background:${H.g};"><div class="rci-b1"></div><div class="rci-b2"></div><div class="rci-sheen"></div>
+    <div class="rci-top"><span>RADAR EKY × RCI NVDC</span><span class="rci-live"><i></i>LIVE · ${sh}</span></div>
+    <div class="rci-row"><div class="rci-emo">${H.e}</div><div style="min-width:0;"><h2>${escH(H.t)}</h2><div class="rci-sub">${escH(H.s)} · ${now.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'})}</div></div></div>${extra||""}</div>`;
+}
+function rciN(v, dec){ if(v==null || isNaN(v)) return "–"; const n=Math.round(v); return `<span class="rci-n" data-n="${n}">${n.toLocaleString('id-ID')}</span>`; }
+function rciPct(a, p){ return (p>0 && a!=null) ? Math.round(a*100/p) : null; }
+function rciCol(pct){ return pct==null ? "#64748B" : (pct>=100 ? "#16A34A" : (pct>=90 ? "#D97706" : "#DC2626")); }
+function rciRing(pct, col, size){
+  size=size||84; const r=size/2-8, c=2*Math.PI*r, p=Math.max(0, Math.min(100, pct||0)), off=c*(1-p/100);
+  return `<svg class="rci-ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex:none;"><circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${col}22" stroke-width="9"/>
+    <circle class="rci-arc" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" style="--c:${c.toFixed(1)};" transform="rotate(-90 ${size/2} ${size/2})"/>
+    <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle" style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:${Math.round(size*0.27)}px;fill:${col};">${pct==null?"–":pct+"%"}</text></svg>`;
+}
+/* angka naik dari 0 saat menu pertama kali dibuka */
+function rciCountUp(){
+  try{ if(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const els=[...document.querySelectorAll("#viewport .rci-n")]; if(!els.length) return;
+    const t0=performance.now(), D=900;
+    const step=t=>{ const k=Math.min(1,(t-t0)/D), e=1-Math.pow(1-k,3); els.forEach(el=>{ const n=+el.dataset.n||0; el.textContent=Math.round(n*e).toLocaleString('id-ID'); }); if(k<1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }catch(e){}
+}
+function rciWrap(tab, body){ rciCss(); return `<div class="rci-page ${_rciSeen[tab]?"":"rci-in"}">${rciHero(tab)}${body}</div>`; }
+function rciAfterRender(){ if(!isRci() || !RCI_TABS[activeTab]) return; if(!_rciSeen[activeTab]){ _rciSeen[activeTab]=true; setTimeout(rciCountUp, 20); } }
+
+/* ---------- Ringkasan ---------- */
+function rciHomeHtml(data){
+  mdlListen();
+  const key=prodDateKey(), R=drCompute(data, key), a=R.act||{D:{t:null},N:{t:null},t:null};
+  const dD=R.dpp.has?R.dpp.KP1[0]+R.dpp.KP2[0]:null, dN=R.dpp.has?R.dpp.KP1[1]+R.dpp.KP2[1]:null, dT=R.dpp.has?(dD+(R.nightOn?dN:0)):null;
+  const aT=a.t!=null?a.t:null, pIn=rciPct(aT, dT);
+  const oD=R.out.D.t||0, oN=R.out.N.t||0, pD=R.dlvP.D, pN=R.dlvP.N, pOut=(pD!=null||pN!=null)?(pD||0)+(pN||0):null, pctO=rciPct(oD+oN, pOut);
+  let rit=null; try{ rit=ekyDpNow(data); }catch(e){}
+  const rt=rit?rit.v:null, pctR=rt?rciPct(rt.a, rt.t):null;
+  const L=MDL.res?mdlLate(data):null, nMdp=L?L.length:null, old=L&&L[0]?L[0].d:0;
+  const DF=dfList(data), dfOpen=DF.filter(x=>x.status==="open").length;
+  const W=ekyWipNow(data);
+  const tile=(g,ico,lbl,big,sub,pct,tab)=>`<div class="rci-tile" style="background:${g};" onclick="switchTab('${tab}')"><div class="rci-ico">${ico}</div><div class="rci-tl">${lbl}</div><div class="rci-big">${big}</div><div class="rci-ts">${sub}</div>${pct!=null?`<div class="rci-bar"><b style="width:${Math.min(100,pct)}%;"></b></div>`:""}</div>`;
+  const tiles=[
+    tile("linear-gradient(135deg,#2563EB,#7C3AED)","🏭","Unit masuk vs DPP", `${rciN(aT)}<small> / ${dT==null?"–":dT.toLocaleString('id-ID')}</small>`, `${pIn==null?"DPP belum ada":"Tercapai "+pIn+"%"} · Day ${a.D.t==null?"–":a.D.t}${R.nightOn?" · Night "+(a.N.t==null?"–":a.N.t):""}`, pIn, "rcidpp"),
+    tile("linear-gradient(135deg,#EA580C,#F59E0B)","🚚","Delivery unit vs DCCP", `${rciN(oD+oN)}<small> / ${pOut==null?"–":pOut.toLocaleString('id-ID')}</small>`, `${pctO==null?"plan DCCP belum ada":"Tercapai "+pctO+"%"} · Day ${oD} · Night ${oN}`, pctO, "ccplan"),
+    tile("linear-gradient(135deg,#0284C7,#14B8A6)","🔁","Ritase CC shift ini", `${rt?rciN(rt.a):"–"}<small> / ${rt?rt.t:"–"} rit</small>`, rt?`${rt.au} / ${rt.u} unit · ${pctR}%`:"jadwal DCCP belum ada", pctR, "ccplan"),
+    tile(nMdp?"linear-gradient(135deg,#DC2626,#F97316)":"linear-gradient(135deg,#16A34A,#22C55E)","⏰","Delay MDP", nMdp==null?"…":rciN(nMdp), nMdp==null?"memuat data MDP":(nMdp?`unit lewat PLOD · paling lama ${old} hari`:"semua unit lewat PLOD sudah masuk ✨"), null, "rcimdp"),
+    tile(DF.length?"linear-gradient(135deg,#BE123C,#9333EA)":"linear-gradient(135deg,#0D9488,#10B981)","🛠️","Defect EKY (2×24 jam)", rciN(DF.length), DF.length?`${dfOpen} menunggu keputusan`:"tidak ada defect ✨", null, "rcidef"),
+    tile("linear-gradient(135deg,#047857,#10B981)","🅿️","Stok di yard", rciN(W.t), `unit di stall / luar stall${W.b?" · Batam "+W.b:""}`, null, "display")
+  ];
+  return rciWrap("rci", `<div class="rci-grid">${tiles.join("")}</div>
+    <div style="font-size:11.5px;color:var(--text-dim);text-align:center;margin:10px 0 4px;">Sentuh kotak untuk melihat rinciannya · data langsung dari RADAR EKY</div>`);
+}
+
+/* ---------- DPP vs Aktual harian ---------- */
+function rciShiftCard(lbl, g, plan, act, kp, on, mdp){
+  const pct=rciPct(act, plan), col=rciCol(pct), diff=(plan!=null&&act!=null)?act-plan:null;
+  const mx=Math.max(1, ...kp.map(k=>Math.max(k.p||0, k.a||0)));
+  const kpRows=kp.map(k=>`<div class="rci-kp"><b>${k.l}</b><div class="rci-track"><b style="width:${(k.p||0)*100/mx}%;background:#CBD5E1;"></b><b style="width:${(k.a||0)*100/mx}%;background:${g.split(",")[1]||"#4F46E5"};opacity:.9;"></b></div><span><b>${k.a==null?"–":k.a}</b> / ${k.p==null?"–":k.p}</span></div>`).join("");
+  return `<div class="rci-sh"><div class="rci-shh" style="background:linear-gradient(135deg,${g});"><b>${lbl}</b><span style="font-size:12px;font-weight:700;background:rgba(255,255,255,.2);border-radius:999px;padding:3px 10px;">${on?(pct==null?"plan –":(pct>=100?"🎯 tercapai":"berjalan")):"belum mulai"}</span></div>
+    <div class="rci-shb"><div style="display:flex;gap:12px;align-items:center;">${rciRing(on?pct:null, on?col:"#94A3B8", 92)}
+      <div class="rci-kv" style="flex:1;"><div><span class="rci-l">Plan DPP</span><strong>${plan==null?"–":rciN(plan)}</strong></div><div><span class="rci-l">Aktual</span><strong style="color:${on?col:"inherit"};">${on&&act!=null?rciN(act):"–"}</strong></div><div><span class="rci-l">Selisih</span><strong style="color:${diff==null?"inherit":(diff>=0?"#16A34A":"#DC2626")};">${!on||diff==null?"–":(diff>0?"+":diff<0?"−":"")+Math.abs(diff).toLocaleString('id-ID')}</strong></div></div></div>
+      ${kpRows}
+      ${mdp!=null?`<div style="font-size:11.5px;color:var(--text-dim);margin-top:8px;">Plan MDP shift ini: <b>${Math.round(mdp).toLocaleString('id-ID')}</b> unit</div>`:""}</div></div>`;
+}
+function rciDppHtml(data){
+  const key=rciKey||prodDateKey(), R=drCompute(data, key), a=R.act, has=R.dpp.has, today=prodDateKey();
+  const dt=new Date(ekyBaseOf(key));
+  const nav=`<div class="rci-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;">
+    <button class="btn btn-sm" style="width:auto;padding:6px 12px;" onclick="rciKey=ekyAddDays(rciKey||prodDateKey(),-1);_rciSeen.rcidpp=false;render()">◀</button>
+    <div style="text-align:center;"><div style="font-weight:800;font-size:15px;">${dt.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div><div style="font-size:11.5px;color:var(--text-dim);">hari produksi 07.00 – 06.59${key===today?" · <b style='color:#16A34A;'>hari ini</b>":""}</div></div>
+    <button class="btn btn-sm" style="width:auto;padding:6px 12px;" ${key>=today?"disabled":""} onclick="rciKey=ekyAddDays(rciKey||prodDateKey(),1);if(rciKey>prodDateKey())rciKey='';_rciSeen.rcidpp=false;render()">▶</button></div>`;
+  if(R.future) return rciWrap("rcidpp", nav+`<div class="rci-card emptystate">Tanggal ini belum berjalan.</div>`);
+  const kp=(i,w)=>["KP1","KP2"].map(l=>({l:l==="KP1"?"KAP 1":"KAP 2", p:has?R.dpp[l][i]:null, a:a&&a[w][l]!=null?a[w][l]:null}));
+  const dD=has?R.dpp.KP1[0]+R.dpp.KP2[0]:null, dN=has?R.dpp.KP1[1]+R.dpp.KP2[1]:null;
+  const day=rciShiftCard("☀ DAY · 07.00–20.00", "#F59E0B,#EA580C", dD, a?a.D.t:null, kp(0,"D"), true, R.mSp?R.mSp[0]:null);
+  const night=rciShiftCard("🌙 NIGHT · 20.00–07.00", "#4338CA,#1E1B4B", dN, a&&R.nightOn?a.N.t:null, kp(1,"N"), R.nightOn, R.mSp?R.mSp[1]:null);
+  const tP=has?dD+dN:null, tA=a?a.t:null, tp=rciPct(tA, tP);
+  const tot=`<div class="rci-card" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#0F172A,#1E293B);color:#fff;border:0;">
+    ${rciRing(tp, tp==null?"#94A3B8":(tp>=100?"#4ADE80":(tp>=90?"#FBBF24":"#F87171")), 96)}
+    <div style="flex:1;"><div style="font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;opacity:.8;font-weight:700;">Total hari ini</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:40px;font-weight:800;line-height:1;">${tA==null?"–":rciN(tA)}<span style="font-size:20px;opacity:.75;"> / ${tP==null?"–":tP.toLocaleString('id-ID')}</span></div>
+      <div style="font-size:12px;opacity:.85;margin-top:3px;">unit masuk EKY vs plan DPP ADM${R.mT!=null?" · MDP "+Math.round(R.mT).toLocaleString('id-ID'):""}</div></div></div>`;
+  const note=has?"":`<div class="rci-card" style="background:#FEF3C7;color:#92400E;border-color:#FDE68A;font-size:12.5px;">DPP bulan ini belum diupload di RADAR, jadi plan DPP kosong.</div>`;
+  return rciWrap("rcidpp", nav+tot+note+day+night+`<div style="font-size:11.5px;color:var(--text-dim);text-align:center;">Aktual = unit yang diinput Dispatcher di EKY (per KAP).</div>`);
+}
+
+/* ---------- Defect EKY ---------- */
+function rciDefHtml(data){
+  const L=dfList(data).sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const n=k=>L.filter(x=>x.status==="decided" && x.decision && x.decision.k===k).length, open=L.filter(x=>x.status==="open").length;
+  const tile=(g,lbl,v,ico)=>`<div class="rci-tile" style="background:${g};cursor:default;"><div class="rci-ico">${ico}</div><div class="rci-tl">${lbl}</div><div class="rci-big">${rciN(v)}</div></div>`;
+  const tiles=`<div class="rci-grid" style="margin-bottom:12px;">${tile("linear-gradient(135deg,#BE123C,#9333EA)","Total defect",L.length,"🛠️")}${tile("linear-gradient(135deg,#DC2626,#F97316)","Menunggu keputusan",open,"⏳")}${tile("linear-gradient(135deg,#16A34A,#22C55E)","OK lanjut kirim",n("ok"),"✅")}${tile("linear-gradient(135deg,#D97706,#FBBF24)","Lanjut dgn catatan",n("note"),"📝")}${tile("linear-gradient(135deg,#7F1D1D,#B91C1C)","Tidak lanjut",n("no"),"⛔")}${tile("linear-gradient(135deg,#0F766E,#14B8A6)","Sudah diperbaiki",L.filter(x=>x.fixedTs).length,"🔧")}</div>`;
+  const by=f=>{ const o={}; L.forEach(x=>{ const k=String(f(x)||"Lainnya"); o[k]=(o[k]||0)+1; }); return Object.entries(o).sort((a,b)=>b[1]-a[1]); };
+  const pal=["#E11D48","#7C3AED","#2563EB","#0D9488","#EA580C","#DB2777","#4F46E5","#16A34A"];
+  const chips=(arr)=>arr.map(([k,v],i)=>`<span class="rci-chip" style="background:${pal[i%pal.length]}18;color:${pal[i%pal.length]};">${escH(k)} <b>${v}</b></span>`).join("");
+  const stat=L.length?`<div class="rci-card"><div style="font-weight:800;margin-bottom:8px;">Jenis defect</div>${chips(by(x=>x.defectType))}<div style="font-weight:800;margin:6px 0 8px;">Per model</div>${chips(by(x=>x.model))}<div style="font-weight:800;margin:6px 0 8px;">Ditemukan oleh</div>${chips(by(x=>{ const r=dfRoleName(x.src); return r==="-"?"Lainnya":r; }))}</div>`:"";
+  const list=L.length?L.map(x=>{ const dc=x.decision?DF_DEC[x.decision.k]:null, bc=dc?dc.c:"#E11D48";
+    return `<div class="rci-def" style="border-left-color:${bc};"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;"><div style="min-width:0;">
+      <div style="font-family:ui-monospace,Menlo,monospace;font-weight:800;font-size:13px;">${xlEsc(x.frame)}</div>
+      <div style="font-size:12.5px;"><b>${xlEsc(x.model||"-")}</b>${x.ccPlat?` · 🚚 ${xlEsc(x.ccPlat)}`:""}${x.lp?` · ${xlEsc(x.lp)}`:""}</div>
+      <div style="font-size:13.5px;font-weight:800;color:#BE123C;margin-top:3px;">${xlEsc(x.defectType||"Defect")}</div>
+      <div style="font-size:12px;color:var(--text-dim);">${xlEsc([x.part,x.side,x.position,x.subLoc].filter(Boolean).join(" · "))}${x.note?" · "+xlEsc(x.note):""}</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:3px;">${xlEsc(dfRoleName(x.src))} · ${new Date(x.ts).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;"><span style="background:${dc?dc.bg:"#FDECEA"};color:${bc};border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:800;white-space:nowrap;">${dc?dc.s:"Menunggu"}</span>${x.fixedTs?`<span style="font-size:11px;color:#0F766E;font-weight:700;">🔧 diperbaiki</span>`:""}
+      ${x.photo||x.photoRef?`<button class="btn btn-sm btn-outline" style="width:auto;" onclick="dfPhotoShow(${x.id})">📷 Foto</button>`:""}</div></div></div>`; }).join("")
+    :`<div class="rci-card" style="text-align:center;padding:26px 14px;"><div style="font-size:44px;">✨</div><div style="font-weight:800;font-size:17px;margin-top:4px;">Tidak ada defect</div><div style="font-size:12.5px;color:var(--text-dim);">dalam 2×24 jam terakhir</div></div>`;
+  return rciWrap("rcidef", tiles+stat+list+`<div style="font-size:11.5px;color:var(--text-dim);text-align:center;margin-top:4px;">Data defect di RADAR disimpan 2×24 jam.</div>`);
+}
+function rciMdpHtml(data){ return rciWrap("rcimdp", mdlCardHtml(data)); }
 
 /* ======================================================================
    TAB LAPORAN EKY (Leader / Admin / Delivery / Pengamat)
