@@ -464,7 +464,7 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 @media(min-width:900px){ #viewport.v-delivery>.dl-draft{grid-column:1/-1;} }
 /* ---------- Hanya HP & tablet kecil: urutan Display ---------- */
 @media(max-width:1099px){
-  .yardwrap>.alertcard{order:0;} .yardwrap .y-sum{order:1;} .yardwrap .y-cc{order:2;} .yardwrap .y-sched{order:3;}
+  .yardwrap>.alertcard{order:0;} .yardwrap .y-dpp{order:1;} .yardwrap .y-sum{order:1;} .yardwrap .y-cc{order:2;} .yardwrap .y-sched{order:3;}
   .yardwrap .stallblock{order:4;} .yardwrap .y-off{order:5;} .yardwrap .y-queue{order:6;} .yardwrap .footnote{order:9;}
   .yardwrap>.ydesk,.yardwrap .yleft,.yardwrap .ymap{display:contents;}
 }
@@ -1745,7 +1745,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="21 Nov 2026 04.18";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="21 Nov 2026 04.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -12230,7 +12230,12 @@ function dispCss(){
     body.disp-tv .dc>*{margin:0 !important;min-width:0;}
     body.disp-tv .dc-l .y-queue{max-height:30vh;overflow:auto;}
     body.disp-tv .dc-l>.card:not(.y-cc):not(.y-mdl):not(.y-queue){max-height:32vh;overflow:auto;}
-    body.disp-tv .dc-r .y-sum{max-height:52vh;overflow:auto;}
+    body.disp-tv .dc-r .y-sum{max-height:46vh;overflow:auto;}
+    body.disp-tv .dc-r .y-dpp .rci-ring{display:none;}
+    body.disp-tv .dc-r .y-dpp .rci-shh{padding:8px 12px;} body.disp-tv .dc-r .y-dpp .rci-shh b{font-size:17px;}
+    body.disp-tv .dc-r .y-dpp .rci-shb{padding:8px 12px 10px;}
+    body.disp-tv .dc-r .y-dpp .ldr-2col{grid-template-columns:repeat(2,minmax(0,1fr));}
+    body.disp-tv .dc-r .y-mdl .md-oktxt{font-size:13px;color:#86EFAC;}
     body.disp-tv .dc-r .y-sched{max-height:none;overflow:visible;}
     body.disp-tv .dc-l>.alertcard{max-height:30vh;overflow:auto;}
     body.disp-tv .dc-m .stallblock{padding:10px 12px;}
@@ -12635,6 +12640,13 @@ function dispFlowHtml(d){
   return `<div class="card y-flow"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">📈 Input vs Delivery · Shift ${currentShift()==="1"?"Day":"Night"}</h3>
     <span class="fl-k"><span class="fl-i">Input <b>${tIn}</b></span><span class="fl-o">Delivery <b>${tOut}</b></span><span class="fl-w">WIP <b>${R.wipTotal||0}</b></span></span></div>${ldrChartSVG(R.slots)}</div>`;
 }
+/* 21 Nov 04.40: kartu DPP vs Input (sama dengan Dashboard Leader) untuk Display — selalu hari produksi ini.
+   Menggantikan blok Plan produksi / Unit diinput / Masih minus di Ringkasan (isinya sama); daftar ritase CC + keterangan tetap. */
+function dispDppHtml(d){
+  const sp=ldrPeriod; let h="";
+  try{ ldrPeriod="today"; h=ldrDppHtml(d)||""; }catch(e){ h=""; } finally{ ldrPeriod=sp; }
+  return h.replace('class="card ldr-dpp"','class="card ldr-dpp y-dpp"').replace(' Ikut pilihan "Hari produksi ini / kemarin" di atas.','');
+}
 function tvTag(h, slot){ return h ? String(h).replace(/^(\s*<div)/, `$1 data-tv="${slot}"`) : ""; }
 function ldrTvPref(){ try{ return localStorage.getItem("radar_ldrtv")||""; }catch(e){ return ""; } }
 function ldrTvActive(){
@@ -12699,7 +12711,7 @@ function dispMdlHtml(d){
   const L=mdlLate(d)||[], byM={}; L.forEach(x=>{ byM[x.m]=(byM[x.m]||0)+1; });
   const top=L.slice(0,7).map(x=>`<div class="md-row"><span class="md-f">${x.f?escH(x.f):"RRN "+escH(x.r)}</span><span class="md-m">${escH(x.m)}${x.b?" · B":""}</span><span class="md-d">${x.d} hari</span></div>`).join("");
   return `<div class="card y-mdl"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">⏰ Delay MDP</h3><span class="md-big ${L.length?"md-bad":"md-ok"}">${rciN(L.length)}<small> unit</small></span></div>
-    ${L.length?`<div class="md-sub">paling lama <b>${L[0].d} hari</b> (PLOD ${escH(mdlDateTxt(L[0].p))}) · ${Object.keys(byM).sort((a,b)=>byM[b]-byM[a]).map(m=>`${escH(m)} ${byM[m]}`).join(" · ")}</div>${top}${L.length>7?`<div class="md-more">+${L.length-7} unit lainnya</div>`:""}`:`<div class="md-sub">✨ Semua unit yang PLOD-nya sudah lewat sudah masuk.</div>`}</div>`;
+    ${L.length?`<div class="md-sub">paling lama <b>${L[0].d} hari</b> (PLOD ${escH(mdlDateTxt(L[0].p))}) · ${Object.keys(byM).sort((a,b)=>byM[b]-byM[a]).map(m=>`${escH(m)} ${byM[m]}`).join(" · ")}</div>${top}${L.length>7?`<div class="md-more">+${L.length-7} unit lainnya</div>`:""}`:`<div class="md-sub md-oktxt">✅ Semua unit yang PLOD-nya sudah lewat sudah masuk EKY — tidak ada unit terlambat.</div>`}</div>`;
 }
 /* Display TV: susun ulang jadi 3 kolom mandiri (kolom kiri tidak lagi bolong mengikuti tinggi peta) */
 function dispTvLayout(html, d){
@@ -12708,14 +12720,14 @@ function dispTvLayout(html, d){
     const w=t.content.querySelector(".yardwrap"); if(!w) return html;
     const q=s=>w.querySelector(s), alert=w.querySelector(":scope > .alertcard"), foot=w.querySelector(":scope > .footnote");
     const sum=q(".y-sum"), cc=q(".y-cc"), off=q(".y-off"), queue=q(".y-queue"), sched=q(".y-sched"), stall=q(".stallblock"), yl=q(".yleft");
-    const others=yl?[...yl.children].filter(e=>![sum,cc,off,queue].includes(e)):[];
+    const dpp=q(".y-dpp"), others=yl?[...yl.children].filter(e=>![sum,cc,off,queue,dpp].includes(e)):[];
     const mk=c=>{ const e=document.createElement("div"); e.className="dc "+c; return e; };
     const L=mk("dc-l"), M=mk("dc-m"), R=mk("dc-r"), tmp=document.createElement("template");
     tmp.innerHTML=ccProgressHtml(d, true)+dispMdlHtml(d)+dispFlowHtml(d);
     const prog=tmp.content.querySelector(".y-prog"), mdl=tmp.content.querySelector(".y-mdl"), flow=tmp.content.querySelector(".y-flow");
-    [alert, cc, mdl, ...others, queue, off].forEach(e=>{ if(e) L.appendChild(e); });   /* 21 Nov 03.50: peringatan Batam ke kolom kiri supaya Progress CC tidak tertutup */
+    [alert, cc, ...others, queue, off].forEach(e=>{ if(e) L.appendChild(e); });   /* 21 Nov 03.50: peringatan Batam ke kolom kiri supaya Progress CC tidak tertutup */
     [stall, prog, flow].forEach(e=>{ if(e) M.appendChild(e); });   /* 21 Nov 04.20: grafik Input vs Delivery mengisi celah bawah */
-    [sum, sched].forEach(e=>{ if(e) R.appendChild(e); });
+    [dpp, mdl, sum, sched].forEach(e=>{ if(e) R.appendChild(e); });   /* 21 Nov 04.40: DPP vs Input + Delay MDP di atas Ritase CC */
     const cols=document.createElement("div"); cols.className="disp-cols"; cols.append(L, M, R);
     while(w.firstChild) w.removeChild(w.firstChild);
     w.appendChild(cols); if(foot) w.appendChild(foot);
@@ -17747,13 +17759,13 @@ function renderDisplay(){
     <div class="yardwrap">
       ${batamAlertHtml(data)}
       <div class="ydesk"><div class="yleft">
+      ${dispDppHtml(data)}
       <div class="card y-sum">
-        <div class="stalltitle"><h3>📊 Ringkasan ${shiftLabel(_sh)}</h3></div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:140px;"><div style="font-size:12px;color:var(--text-dim);">TOTAL UNIT TERPARKIR</div><div style="font-size:30px;font-weight:800;">${filledCount}<span style="font-size:16px;color:var(--text-dim);">/${totalSlots}</span></div></div>
+        <div class="stalltitle"><h3>🚚 Ritase CC · ${shiftLabel(_sh)}</h3></div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
           <div style="flex:1;min-width:140px;"><div style="font-size:12px;color:var(--text-dim);">TOTAL RITASE CC (shift ini)</div><div style="font-size:30px;font-weight:800;">${totalRitase}</div>${rsCatHtml(_RS.cat)}</div>
+          <div style="flex:1;min-width:140px;"><div style="font-size:12px;color:var(--text-dim);">UNIT TERPARKIR</div><div style="font-size:22px;font-weight:800;">${filledCount}<span style="font-size:14px;color:var(--text-dim);">/${totalSlots}</span></div></div>
         </div>
-        ${planDisplayHtml}
         ${rsLegendHtml(_rows)}
         ${_rows.length?`<table style="margin-top:10px;"><tr><th>Plat CC</th><th>Ritase</th><th></th></tr>${_rows.map(x=>{ const w=whyMap(data)[x.k]; const askBtn=(x.late&&whyAskRoleOk()&&!(w&&w.status==="ask"&&Date.now()-w.ts<10*60000))?` <button type="button" onclick="whyAsk('${x.plat}')" style="border:1.5px solid #E60012;background:#fff;color:#E60012;border-radius:8px;padding:3px 8px;font-weight:800;font-size:11px;">❓ Tanya KR</button>`:"";
           const st=w&&w.status==="ask"&&Date.now()-w.ts<6*3600000?`<div style="font-size:11px;color:#B4570E;">⏳ menunggu jawaban Koordinator (tanya ${whyHm(w.ts)})</div>`:(w&&w.status==="done"&&Date.now()-(w.ansTs||0)<12*3600000?`<div style="font-size:11px;color:#17803d;">💬 ${escH(w.reason)} <span style="color:var(--text-dim);">— ${escH(w.ansBy||"KR")} ${whyHm(w.ansTs)}</span></div>`:"");
