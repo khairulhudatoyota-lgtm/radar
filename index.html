@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="20 Nov 2026 23.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="20 Nov 2026 23.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2040,10 +2040,10 @@ const TABS_BY_ROLE = {
   cc:          [{key:"orderstall", label:"Order Stall"}, {key:"ccmap", label:"Peta & Chat"}, {key:"display", label:"Display"}],
   delivery:    [{key:"delivery", label:"Delivery"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
-  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}],
-  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"drvview", label:"Layar Driver"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
+  leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
+  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"drvview", label:"Layar Driver"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
   rci:         [{key:"rci", label:"📡 Ringkasan"}, {key:"ccmap", label:"🗺️ Peta"}, {key:"ccplan", label:"🚚 DCCP"}, {key:"rcidpp", label:"🏭 DPP"}, {key:"rcidef", label:"🛠️ Defect"}, {key:"rcimdp", label:"⏰ Delay MDP"}, {key:"display", label:"🅿️ Display"}],
-  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}],
+  admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
 };
 
 let selectedRole = null;
@@ -2926,6 +2926,7 @@ function renderInner(){
   else if(activeTab==="ccreport" && TRIP_ON){ setVP(vp, renderCcReport()); if(_vpChanged) setTimeout(()=>tripLoad().then(rptUpdate),0); }
   else if(activeTab==="admin"){ setVP(vp, renderAdmin()); if(adminTab==="users") usrRender(); }
   else if(activeTab==="display") setVP(vp, renderDisplay());
+  else if(activeTab==="unduh") setVP(vp, renderDownloadHub());
   try{ rciAfterRender(); }catch(e){}
   try{ if(_dispIn){ _rciSeen.display=true; setTimeout(rciCountUp, 20); } dispHudTick(); }catch(e){}
 }
@@ -10004,14 +10005,7 @@ function renderLeaderDashboard(){
   const modelRows = R.models.map(m=>{ const x=R.byModel[m]||{inp:0,out:0,wip:0}; return {m,...x}; }).sort((a,b)=>b.inp-a.inp);
   const mxModel = Math.max(1,...modelRows.map(r=>Math.max(r.inp,r.out,r.wip)));
   return `
-  ${spdLogHtml(10,false)}
-  <div class="card">
-    <h3>🔎 Cari No. Rangka</h3>
-    <input id="ldrSearchInput" type="search" placeholder="Ketik No. Rangka (min. 3 karakter)" value="${ldrSearch.replace(/"/g,'&quot;')}" oninput="ldrOnSearch(this.value)" style="width:100%;margin-top:8px;font-size:16px;" autocomplete="off" autocapitalize="characters">
-    <div id="ldrResults" style="margin-top:10px;">${ldrSearchResultsHtml()}</div>
-  </div>
-
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 10px;">
+  <div class="card ldr-main"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 10px;">
     <h3 style="margin:0;">📊 Dashboard Produksi</h3>
     <div style="display:flex;gap:8px;align-items:center;">
       <select onchange="ldrPeriod=this.value;render()">
@@ -10020,7 +10014,7 @@ function renderLeaderDashboard(){
         <option value="24h" ${ldrPeriod==='24h'?'selected':''}>24 jam terakhir</option>
       </select>
       ${ldrShiftSelect()}
-      <button class="btn btn-sm" onclick="const c=document.getElementById('rkCard'); if(c) c.scrollIntoView({behavior:'smooth'});">📥 Downloader rekap</button>
+      <button class="btn btn-sm" style="width:auto;" onclick="switchTab('unduh')">⬇️ Download</button>
     </div>
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
@@ -10028,35 +10022,10 @@ function renderLeaderDashboard(){
     ${tile("Delivery by Unit", R.tOut, "#1E9E5A", "periode terpilih")}
     ${tile("Delivery by CC", R.tCC, "#0E7C66", "jumlah CC · periode terpilih")}
     ${tile("WIP (belum terkirim)", R.wipTotal, "#E8833A", PROD_LINES.map(l=>rkArea(l)+" "+(R.wipByLine[l]||0)).join(" · ")+" · stok unit di stall / luar stall"+(oldest?" · tertua "+ldrAge(oldest.parkedTs):""))}
-  </div>
-
+  </div></div>
   ${batamAlertHtml(data)}
-  ${planVsInputHtml(data, R)}
-  ${mdlCardHtml(data)}
-  ${pdCardHtml(data)}
-  ${pdmCardHtml(data)}
+  ${ldrDppHtml(data)}
   ${rptShiftHtml(data)}
-  ${inputXlCardHtml(data,'all')}
-
-  <div class="card"><h3>Input vs Delivery per 30 menit</h3>${ldrChartSVG(R.slots)}</div>
-
-  <div class="card"><h3>Rincian per 30 menit</h3>
-    <div style="overflow-x:auto;max-height:360px;overflow-y:auto;"><table style="font-size:13px;">
-      <tr><th style="${th}">Jam</th><th style="${th}">Input</th><th style="${th}line-height:1.25;">Delivery<br>by Unit</th><th style="${th}line-height:1.25;">Delivery<br>by CC</th><th style="${th}">WIP</th></tr>
-      ${R.slots.map(s=>`<tr style="border-top:1px solid var(--border);"><td style="${td}">${s.label}–${ldrHM(s.b)}</td><td style="${td}"><b>${s.inp}</b></td><td style="${td}"><b>${s.out}</b></td><td style="${td}"><b>${s.cc}</b></td><td style="${td}">${s.wip}</td></tr>`).join("")}
-      <tr style="border-top:2px solid var(--gold);font-weight:800;"><td style="${td}">TOTAL</td><td style="${td}">${totIn}</td><td style="${td}">${totOut}</td><td style="${td}">${R.tCC}</td><td style="${td}">${R.wipTotal}</td></tr>
-    </table></div>
-  </div>
-
-  <div class="card"><h3>Input per Model (per 30 menit)</h3>
-    ${ldrStackSVG(R.slots, R.models, data)}
-    <div style="overflow-x:auto;margin-top:10px;"><table style="font-size:12px;">
-      <tr><th style="${th}">Model</th>${R.slots.map(s=>`<th style="${th}">${s.label}</th>`).join("")}<th style="${th}">Total</th></tr>
-      ${R.models.map(m=>{ const tot=R.slots.reduce((a,s)=>a+(s.byModel[m]||0),0); if(!tot) return "";
-        return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><i style="display:inline-block;width:10px;height:10px;background:${getModelColor(m,data)};border-radius:2px;"></i> <b>${m}</b></td>${R.slots.map(s=>`<td style="${td}">${s.byModel[m]||"·"}</td>`).join("")}<td style="${td}"><b>${tot}</b></td></tr>`; }).join("")}
-    </table></div>
-  </div>
-
   <div class="card"><h3>Ringkasan per Model</h3>
     ${modelRows.map(r=>`<div style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;font-size:13px;"><b style="color:${getModelColor(r.m,data)};">${r.m}</b><span>Input <b>${r.inp}</b> · Delivery <b>${r.out}</b> · WIP <b>${r.wip}</b></span></div>
@@ -10065,7 +10034,33 @@ function renderLeaderDashboard(){
     </div>`).join("")}
     <div style="font-size:11px;color:var(--text-dim);">Bar atas = input, bar bawah hijau = delivery by unit.</div>
   </div>
-
+  ${ldrLpHtml(data)}
+  ${mdlCardHtml(data)}
+  <div class="card"><h3>Input vs Delivery per 30 menit</h3>${ldrChartSVG(R.slots)}</div>
+  <div class="card ldr-stall">${dispStallMapHtml(data)}</div>
+  ${pdmCardHtml(data)}
+  <div class="ldr-more"><details ${ldrMoreOpen?"open":""} ontoggle="ldrMoreOpen=this.open"><summary>➕ Data lainnya <span>cari No. Rangka · input per driver · rincian per 30 menit · input per model · WIP · pelanggaran kecepatan</span></summary>
+  <div class="card">
+    <h3>🔎 Cari No. Rangka</h3>
+    <input id="ldrSearchInput" type="search" placeholder="Ketik No. Rangka (min. 3 karakter)" value="${ldrSearch.replace(/"/g,'&quot;')}" oninput="ldrOnSearch(this.value)" style="width:100%;margin-top:8px;font-size:16px;" autocomplete="off" autocapitalize="characters">
+    <div id="ldrResults" style="margin-top:10px;">${ldrSearchResultsHtml()}</div>
+  </div>
+  ${pdCardHtml(data)}
+  <div class="card"><h3>Rincian per 30 menit</h3>
+    <div style="overflow-x:auto;max-height:360px;overflow-y:auto;"><table style="font-size:13px;">
+      <tr><th style="${th}">Jam</th><th style="${th}">Input</th><th style="${th}line-height:1.25;">Delivery<br>by Unit</th><th style="${th}line-height:1.25;">Delivery<br>by CC</th><th style="${th}">WIP</th></tr>
+      ${R.slots.map(s=>`<tr style="border-top:1px solid var(--border);"><td style="${td}">${s.label}–${ldrHM(s.b)}</td><td style="${td}"><b>${s.inp}</b></td><td style="${td}"><b>${s.out}</b></td><td style="${td}"><b>${s.cc}</b></td><td style="${td}">${s.wip}</td></tr>`).join("")}
+      <tr style="border-top:2px solid var(--gold);font-weight:800;"><td style="${td}">TOTAL</td><td style="${td}">${totIn}</td><td style="${td}">${totOut}</td><td style="${td}">${R.tCC}</td><td style="${td}">${R.wipTotal}</td></tr>
+    </table></div>
+  </div>
+  <div class="card"><h3>Input per Model (per 30 menit)</h3>
+    ${ldrStackSVG(R.slots, R.models, data)}
+    <div style="overflow-x:auto;margin-top:10px;"><table style="font-size:12px;">
+      <tr><th style="${th}">Model</th>${R.slots.map(s=>`<th style="${th}">${s.label}</th>`).join("")}<th style="${th}">Total</th></tr>
+      ${R.models.map(m=>{ const tot=R.slots.reduce((a,s)=>a+(s.byModel[m]||0),0); if(!tot) return "";
+        return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><i style="display:inline-block;width:10px;height:10px;background:${getModelColor(m,data)};border-radius:2px;"></i> <b>${m}</b></td>${R.slots.map(s=>`<td style="${td}">${s.byModel[m]||"·"}</td>`).join("")}<td style="${td}"><b>${tot}</b></td></tr>`; }).join("")}
+    </table></div>
+  </div>
   <div class="card"><h3>📦 WIP — Unit Belum Terkirim (${R.wipTotal})${_wipB?` <span style="display:inline-block;white-space:nowrap;background:#E8833A;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:800;vertical-align:2px;">${_wipB} BATAM</span>`:""}</h3>
     ${R.wip0?`<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">WIP awal ${R.wip0} unit (diisi Admin: ${PROD_LINES.map(l=>l+" "+((R.wipL&&R.wipL[l])||0)).join(", ")}) = input pagi yang bukan produksi; dikurangkan dari Input, bukan ditambah ke WIP.</div>`:""}${R.wipList.length===0 ? `<div class="emptystate">${R.wip0?"Tidak ada WIP dari input RADAR.":"Tidak ada WIP."}</div>` : `
     <div style="overflow-x:auto;max-height:420px;overflow-y:auto;"><table style="font-size:13px;">
@@ -10074,10 +10069,42 @@ function renderLeaderDashboard(){
         return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${e.frame}</b>${ldrWipBatam(data,e,_wipU)?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:800;vertical-align:1px;">BATAM</span>`:""}</td><td style="${td}"><span style="color:${getModelColor(e.model,data)};font-weight:700;">${e.model}</span></td><td style="${td}">${e.slot}</td><td style="${td}">${ldrDT(e.parkedTs)}</td><td style="${td};color:${col};font-weight:700;">${ldrAge(e.parkedTs)}</td><td style="${td}">${e.status==="ils"?`ILS ${ldrHM(e.ilsTs)} · ${e.ccPlat||""}`:"Menunggu ILS"}</td></tr>`; }).join("")}
     </table></div>`}
   </div>
+  ${spdLogHtml(10,false)}
   <div class="footnote">Data dihitung dari log input Dispatcher & ILS Delivery. Data sebelum fitur ini aktif hanya memuat unit terkirim (tanpa jam masuk).</div>
-  <div style="margin-top:12px;">${rkCardHtml()}</div>`;
+  </details></div>`;
 }
 
+let ldrMoreOpen=false;
+function ldrPeriodTxt(){ return (ldrPeriod==="yesterday"?"Hari produksi kemarin":(ldrPeriod==="24h"?"24 jam terakhir":"Hari produksi ini"))+(ldrPeriod==="24h"?"":" · "+(ldrShift==="1"?"Shift Day":(ldrShift==="2"?"Shift Night":"Semua shift"))); }
+/* 2) DPP vs Input — per shift & KAP (hari produksi ini / kemarin) */
+function ldrDppHtml(data){
+  try{ rciCss();
+    const key=ldrPeriod==="yesterday"?ekyAddDays(prodDateKey(),-1):prodDateKey(), R=drCompute(data, key), a=R.act, has=R.dpp.has;
+    const kp=(i,w)=>["KP1","KP2"].map(l=>({l:l==="KP1"?"KAP 1":"KAP 2", p:has?R.dpp[l][i]:null, a:a&&a[w][l]!=null?a[w][l]:null}));
+    const dD=has?R.dpp.KP1[0]+R.dpp.KP2[0]:null, dN=has?R.dpp.KP1[1]+R.dpp.KP2[1]:null;
+    const day=rciShiftCard("☀ DAY · 07.00–20.00", "#F59E0B,#EA580C", dD, a?a.D.t:null, kp(0,"D"), true, R.mSp?R.mSp[0]:null);
+    const night=rciShiftCard("🌙 NIGHT · 20.00–07.00", "#4338CA,#1E1B4B", dN, a&&R.nightOn?a.N.t:null, kp(1,"N"), R.nightOn, R.mSp?R.mSp[1]:null);
+    const dt=new Date(ekyBaseOf(key)).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});
+    return `<div class="card ldr-dpp"><h3>🏭 DPP vs Input · ${escH(dt)}</h3>${has?"":`<div style="background:#FEF3C7;color:#92400E;border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:10px;">DPP bulan ini belum diupload (Admin › Plan), jadi plan DPP kosong.</div>`}
+      <div class="ldr-2col">${day}${night}</div>
+      <div style="font-size:11.5px;color:var(--text-dim);">Input = unit masuk EKY (input Dispatcher${R.A&&R.A._ach?", dilengkapi Achievement PDI":""}). Ikut pilihan "Hari produksi ini / kemarin" di atas.</div></div>`;
+  }catch(e){ return ""; }
+}
+/* 5) Delivery per LP — ritase & unit (ikut periode/shift di atas) */
+function ldrLpHtml(data){
+  let R; try{ R=ccplanCompute(data); }catch(e){ return ""; }
+  const L=Object.entries(R.lp||{}).sort((a,b)=>(b[1].plan-b[1].act)-(a[1].plan-a[1].act));
+  if(!L.length) return `<div class="card"><h3>🚛 Delivery per LP</h3><div class="emptystate">Jadwal DCCP belum ada.</div></div>`;
+  const T=R.T, mx=Math.max(1, ...L.map(([k,o])=>Math.max(o.plan,o.act))), pal=["#4F46E5","#0EA5E9","#14B8A6","#F59E0B","#EC4899","#8B5CF6","#22C55E","#F97316","#06B6D4","#E11D48"];
+  const mfmt=m=>m>0?`<b style="color:#DC2626;">−${m}</b>`:(m<0?`<b style="color:#16A34A;">+${-m}</b>`:`<b style="color:#16A34A;">0</b>`);
+  const rows=L.map(([k,o],i)=>{ const m=o.plan-o.act, c=pal[i%pal.length];
+    return `<div class="lp-row"><div class="lp-n"><i style="background:${c};"></i>${escH(k)}</div>
+      <div class="lp-bar"><b style="width:${o.plan*100/mx}%;background:${c}33;"></b><b style="width:${o.act*100/mx}%;background:${c};"></b></div>
+      <div class="lp-v"><b>${o.act}</b>/${o.plan} rit<span>${o.actUnit}/${o.unit} unit</span></div><div class="lp-m">${mfmt(m)}${o.lebih?`<span>kurang ${o.kurang} · lebih ${o.lebih}</span>`:""}</div></div>`; }).join("");
+  return `<div class="card ldr-lp"><h3>🚛 Delivery per LP</h3><div style="font-size:12px;color:var(--text-dim);margin:-4px 0 8px;">${escH(ldrPeriodTxt())} · plan dari jadwal DCCP</div>
+    ${rows}<div class="lp-row lp-tot"><div class="lp-n">TOTAL</div><div class="lp-bar"><b style="width:${T.planTrip?100:0}%;background:#CBD5E1;"></b><b style="width:${T.planTrip?Math.min(100,T.act*100/T.planTrip):0}%;background:#16213E;"></b></div>
+      <div class="lp-v"><b>${T.act}</b>/${T.planTrip} rit<span>${T.actUnit}/${T.planUnit} unit</span></div><div class="lp-m">${mfmt(T.minus)}</div></div></div>`;
+}
 /* ======================================================================
    DASHBOARD PLANNING CAR CARRIER (plan DCCP vs aktual ritase)
 ====================================================================== */
@@ -10821,7 +10848,7 @@ function pdmCardHtml(data){
       </div>
       ${legend}${pdmChartSVG(R, pdmMode)}${tbl}
       <button class="btn btn-outline btn-sm" style="width:auto;margin-top:8px;" onclick="mdpDownload('${ym}')">⬇ Download Excel (rekap DPP · MDP · Aktual)</button>
-      <div class="footnote" style="margin-top:6px;">Aktual = input Dispatcher per hari produksi 07:00–06:59 (riwayat harian dicatat RADAR mulai 12 Nov 2026). DPP tampil sampai tanggal terakhir yang sudah diestimasi. Sentuh / arahkan ke tanggal untuk melihat angkanya.</div>`}
+      <div class="footnote" style="margin-top:6px;">Aktual = unit masuk EKY per hari produksi 07:00–06:59: input Dispatcher RADAR, dilengkapi file <b>Achievement PDI</b> (diupload di Delay MDP) untuk hari yang belum tercatat lengkap di RADAR. DPP tampil sampai tanggal terakhir yang sudah diestimasi. Sentuh / arahkan ke tanggal untuk melihat angkanya.</div>`}
     </div>`;
   }catch(e){ console.warn("grafik DPP/MDP", e); return ""; }
 }
@@ -10907,8 +10934,10 @@ function ekyMore(c, s){
 /* data satu hari: riwayat tersimpan, untuk hari ini (dan kemarin s.d. 2 jam setelah selesai) digabung dengan hitungan langsung */
 function ekyDayData(data, key){
   const P=(data.prodAct||{})[key]||null, today=prodDateKey(), base=ekyBaseOf(key), live=key===today || (key===ekyAddDays(today,-1) && Date.now()<ekyBaseOf(today)+2*3600000);
-  if(!P && !live) return null;
+  const AC=(data.achDaily||{})[key]||null;
+  if(!P && !live && !AC) return null;
   const o=ekyMergeMax(Object.assign({}, P||{}), live?ekyDay(data, base):{});
+  ekyAchMerge(o, AC);
   if(key===today){ o.w=ekyWipNow(data); try{ ekyDpLive(data, key).forEach(dp=>{ o.dp=Object.assign({}, o.dp||{}, {[dp.s]:dp.v}); }); }catch(e){} }
   return o;
 }
@@ -11176,6 +11205,43 @@ function mdlMergeInp(old, nw){
   const g=[...G.entries()].map(([pk,S])=>{ n+=S.size; const i=pk.indexOf("|"); return {p:+pk.slice(0,i)||0, k:pk.slice(i+1), f:[...S].join(",")}; });
   return Object.assign({}, nw, {n, from:Math.min(old.from||nw.from||0, nw.from||old.from||0), to:Math.max(old.to||0, nw.to||0), g});
 }
+/* 20 Nov 23.50: Achievement PDI juga dipakai sebagai AKTUAL harian (input per hari produksi · shift · KAP · model),
+   supaya grafik DPP·MDP·Aktual, Daily Report, dll. sudah terisi sejak tgl 1 (riwayat RADAR baru mulai 12 Nov).
+   Hari produksi 07.00–06.59: unit jam < 07.00 masuk hari sebelumnya. Shift dari jam input (07.00–19.59 = Day).
+   KAP dari model (Avanza = KAP 2). Disimpan ringkas di /radar/achDaily/<tgl> (digabung nilai terbesar, aman kalau file lebih pendek). */
+function achDailyFromH(H){
+  const c=H.ci; if(c.PDIACTUALDATE==null) return null;
+  const out={};
+  for(let r=H.hr+1;r<H.g.length;r++){
+    const row=H.g[r]||[]; if(!normVin(mdlNul(row[c.FRAMENUMBER]))) continue;
+    const dk=mdpDate(mdlNul(row[c.PDIACTUALDATE])); if(!dk) continue;
+    const tv=c.PDIACTUALTIME!=null?row[c.PDIACTUALTIME]:null; let hh=NaN;
+    if(typeof tv==="number") hh=Math.floor((tv%1)*24+1e-6); else { const m=String(mdlNul(tv)).match(/(\d{1,2})[:.]/); if(m) hh=+m[1]; }
+    const key=(!isNaN(hh) && hh<SHIFT_START_H) ? ekyAddDays(dk,-1) : dk;
+    const st=c.PDIACTUALSHIFT!=null?String(mdlNul(row[c.PDIACTUALSHIFT])).toUpperCase():"";
+    /* shift = JAM input (sama dengan cara RADAR menghitung input Dispatcher). Kolom PDIActualShift = shift produksi ADM
+       (unit KAP 1 "MALAM" banyak diinput siang hari), jadi hanya dipakai kalau jam tidak ada. */
+    const w=!isNaN(hh) ? ((hh>=SHIFT_START_H && hh<SHIFT2_START_H)?"1":"2") : (st==="MALAM"?"2":"1");
+    /* KAP dari MODEL (pengaturan "Model produksi KP2" di MDP, default Avanza) — kolom PDIActualLineNumber = jalur PDI,
+       bukan KAP (contoh 20 Nov: semua tercatat LINE 1, padahal 208 unit dari KAP 2) */
+    const md=dppSafeKey(ekyMKey(mdlNul(row[c.MODELNAME])||"LAINNYA")), L=mdpLineOf(md);
+    const o=out[key]=out[key]||{s1:{},s2:{},m1:{},m2:{}};
+    ekyAdd(o["s"+w], L); ekyAdd(o["m"+w], md);
+  }
+  return out;
+}
+function achDailySave(AD){
+  if(!AD || !Object.keys(AD).length) return 0;
+  DB.set(d=>{ const o=Object.assign({}, d.achDaily||{}); Object.keys(AD).forEach(k=>{ o[k]=ekyMergeMax(Object.assign({}, o[k]||{}), AD[k]); o[k].ts=Date.now(); });
+    const cut=ekyAddDays(prodDateKey(),-100); Object.keys(o).forEach(k=>{ if(k<cut) delete o[k]; }); d.achDaily=o; });
+  return Object.keys(AD).length;
+}
+/* pakai Achievement untuk satu shift kalau jumlahnya lebih besar dari catatan RADAR (bukan dijumlah, supaya tidak dobel) */
+function ekyAchMerge(o, AC){
+  if(!AC) return o;
+  ["1","2"].forEach(w=>{ const a=AC["s"+w]||{}, r=o["s"+w]||{}; if(ekySum(a)>ekySum(r)){ o["s"+w]=Object.assign({}, a); o["m"+w]=Object.assign({}, AC["m"+w]||{}); o._ach=(o._ach||"")+w; } });
+  return o;
+}
 /* Pencocokan: hasil = unit MDP yang masih belum input (termasuk PLOD yang belum lewat — besok-besok bisa jadi delay) */
 function mdlCompute(MD, IN, RD){
   const inF=new Set(), pool=new Map(), mdpF=new Set();
@@ -11240,6 +11306,7 @@ function mdlUpload(msgId){
           out.push(`<div class="msg" style="background:var(--green-bg);color:var(--green);">✔ MDP ${escH(dppMonthName(P.ym))}: plan <b>${P.units.toLocaleString('id-ID')}</b> unit${P.hasBranch?` (<b>${(P.nB||0).toLocaleString('id-ID')}</b> dealer Batam)`:" (kolom BranchName tidak ada, Batam tidak bisa dipisah)"}${ok?` · <b>${M.nDone.toLocaleString('id-ID')}</b> sudah input menurut file MDP`:""}.</div>`);
         } else {
           const I=mdlParseInp(H); if(!I) throw new Error("kolom FrameNumber tidak ditemukan / tidak ada baris unit");
+          try{ achDailySave(achDailyFromH(H)); }catch(e){ console.warn("achDaily", e); }
           if(!(FBS.enabled && FBS.db)) throw new Error("butuh koneksi server");
           const old=(await FBS.db.ref(MDL_PATH+"/inp/"+I.ym).once("value")).val();
           const rec=mdlMergeInp(old, Object.assign({file:f.name, out:H.out||"", ts:Date.now(), by:(currentUser&&currentUser.name)||""}, I));
@@ -11995,10 +12062,11 @@ const UI_HERO={
   ccmap:        {t:"Peta Car Carrier", s:"Posisi CC ADM KAP ⇄ NVDC Karawang", e:"🗺️", g:"linear-gradient(135deg,#0284C7 0%,#0EA5E9 45%,#14B8A6 100%)"},
   ccreport:     {t:"Laporan Perjalanan CC", s:"Rekap perjalanan car carrier", e:"🧾", g:"linear-gradient(135deg,#0F766E 0%,#0D9488 50%,#22C55E 100%)"},
   admin:        {t:"Admin Panel", s:"Akun, data & konfigurasi RADAR", e:"🔐", g:"linear-gradient(135deg,#0F172A 0%,#334155 50%,#4F46E5 100%)"},
-  display:      {t:"Display Yard EKY", s:"Isi stall & antrian saat ini", e:"🅿️", g:"linear-gradient(135deg,#047857 0%,#10B981 55%,#0D9488 100%)"}
+  display:      {t:"Display Yard EKY", s:"Isi stall & antrian saat ini", e:"🅿️", g:"linear-gradient(135deg,#047857 0%,#10B981 55%,#0D9488 100%)"},
+  unduh:        {t:"Pusat Download", s:"Semua data & laporan Excel dalam satu tempat", e:"⬇️", g:"linear-gradient(135deg,#0F766E 0%,#0891B2 50%,#4F46E5 100%)"}
 };
 const UI_TAB_EMO={pdi:"🔍", dispatcher:"🚙", defect:"⚠️", display:"🅿️", orderstall:"🚚", ccmap:"🗺️", delivery:"📦", ekyrep:"📊", speedlog:"⚡",
-  confirmdefect:"✅", dccp:"📅", ccplan:"🚛", batam:"🏝️", prio:"⭐", koordinator:"🧭", dashboard:"📈", datadefect:"🛠️", drvview:"📱", admin:"🔐", ccreport:"🧾"};
+  confirmdefect:"✅", dccp:"📅", ccplan:"🚛", batam:"🏝️", prio:"⭐", koordinator:"🧭", dashboard:"📈", datadefect:"🛠️", drvview:"📱", admin:"🔐", ccreport:"🧾", unduh:"⬇️"};
 (function(){ try{ Object.values(TABS_BY_ROLE).forEach(L=>(L||[]).forEach(t=>{ const e=UI_TAB_EMO[t.key]; if(e && t.label.indexOf(e)!==0 && !/^[☀-➿\uD83C-\uDBFF]/.test(t.label)) t.label=e+" "+t.label; })); }catch(e){} })();
 function uiTabLabel(key){ try{ const L=TABS_BY_ROLE[currentUser&&currentUser.role]||[]; const t=L.find(x=>x.key===key); return t?t.label:key; }catch(e){ return key; } }
 const UI_NO_HERO=new Set(["pdi","rci","rcidpp","rcidef","rcimdp"]);
@@ -12130,6 +12198,29 @@ function dispCss(){
   `;
 }
 
+let dlYm="";
+function renderDownloadHub(){
+  const data=DB.get(), ym=dlYm||prodDateKey().slice(0,7), key=drKey||drDefaultKey(); mdlListen();
+  const row=(ico,t,s,btn)=>`<div class="dl-row"><div class="dl-ico">${ico}</div><div class="dl-tx"><b>${t}</b><span>${s}</span></div><div class="dl-act">${btn}</div></div>`;
+  const b=(oc,l,p)=>`<button type="button" class="btn ${p?"btn-primary":"btn-outline"} btn-sm" style="width:auto;" onclick="${oc}">${l}</button>`;
+  const mshift=n=>{ const [y,m]=ym.split("-").map(Number), d=new Date(y,m-1+n,1); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
+  const nav=`<div style="display:flex;align-items:center;gap:6px;"><button type="button" class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="dlYm='${mshift(-1)}';render()">◀</button><b style="min-width:120px;text-align:center;">${escH(dppMonthName(ym))}</b><button type="button" class="btn btn-sm" style="width:auto;padding:5px 10px;" onclick="dlYm='${mshift(1)}';render()">▶</button></div>`;
+  const nMdp=MDL.res?(mdlLate(data)||[]).length:null;
+  return `<div class="card"><h3>🗒 Laporan harian</h3>
+      ${row("🗓️","Daily Report EKY",`Tanggal <input type="date" value="${key}" onchange="drKey=this.value;render()" style="font-size:13px;padding:3px 6px;">`, b("drDownload()","⬇ Excel",1))}
+      ${row("📋","Laporan produksi per shift","Plan · input · minus · terkirim · WIP (Day & Night hari ini)", b("rptShiftCSV()","⬇ CSV",0))}
+    </div>
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">📅 Laporan bulanan</h3>${nav}</div>
+      ${row("🛠️","Problem Plant Update","Catatan problem Day/Night + kategori, format file Problem Plant", b(`ppuDownload('${ym}')`,"⬇ Excel",1))}
+      ${row("📈","DPP · MDP · Aktual + Tabel MDP","Rekap harian sebulan & MDP per model Day/Night", b(`mdpDownload('${ym}')`,"⬇ Excel",1))}
+      ${row("🏗️","Yard Stock","Simulasi stok reguler & Batam", b(`ysDownload('${ym}')`,"⬇ Excel",0))}
+    </div>
+    <div class="card"><h3>⏰ Delay MDP</h3>
+      ${row("⏰","Daftar unit lewat PLOD", nMdp==null?"memuat data MDP…":`${nMdp} unit · No. rangka, model, PLOD, lewat berapa hari`, b("mdlDownload()","⬇ Excel",nMdp?1:0))}
+    </div>
+    ${inputXlCardHtml(data,'all')}
+    <div>${rkCardHtml()}</div>`;
+}
 function uiCssExtra(){
   return `
   .card{border-radius:16px; box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 26px -20px rgba(15,23,42,.55);}
@@ -12138,6 +12229,21 @@ function uiCssExtra(){
   .tabbtn.active{background:linear-gradient(135deg,#16213E,#4338CA);border-color:transparent;color:#fff;box-shadow:0 6px 14px -8px rgba(67,56,202,.9);}
   @media(min-width:1100px){ .tabbtn{border-radius:12px;} }
   #viewport>.ui-hero{grid-column:1/-1;}
+  #viewport.v-dashboard button[onclick^="mdpDownload"],#viewport.v-dashboard button[onclick^="mdlDownload"],#viewport.v-dashboard button[onclick^="rptShiftCSV"]{display:none !important;}
+  .ldr-2col{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;} @media(min-width:640px){.ldr-2col{grid-template-columns:repeat(2,minmax(0,1fr));}}
+  .ldr-2col .rci-sh{margin-bottom:0;}
+  .ldr-stall .stallblock{margin:0;}
+  .lp-row{display:grid;grid-template-columns:68px minmax(0,1fr) auto 64px;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--border);font-size:12.5px;}
+  .lp-row .lp-n{font-weight:800;display:flex;align-items:center;gap:6px;} .lp-row .lp-n i{width:9px;height:9px;border-radius:3px;display:inline-block;}
+  .lp-row .lp-bar{position:relative;height:12px;border-radius:99px;background:var(--panel3);overflow:hidden;} .lp-row .lp-bar b{position:absolute;left:0;top:0;bottom:0;border-radius:99px;}
+  .lp-row .lp-v{text-align:right;white-space:nowrap;} .lp-row .lp-v span,.lp-row .lp-m span{display:block;font-size:10.5px;color:var(--text-dim);font-weight:500;}
+  .lp-row .lp-m{text-align:right;white-space:nowrap;} .lp-tot{border-top:2px solid var(--gold);font-weight:800;}
+  .ldr-more{grid-column:1/-1;} .ldr-more>details>summary{list-style:none;cursor:pointer;background:var(--panel);border:1px dashed var(--border);border-radius:16px;padding:12px 14px;font-weight:800;margin-bottom:12px;}
+  .ldr-more>details>summary span{display:block;font-weight:500;font-size:12px;color:var(--text-dim);margin-top:2px;}
+  .ldr-more>details>summary::-webkit-details-marker{display:none;}
+  .dl-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--border);} .dl-row:first-of-type{border-top:0;}
+  .dl-ico{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:20px;background:linear-gradient(135deg,#EEF2FF,#FCE7F3);}
+  .dl-tx{flex:1;min-width:0;} .dl-tx b{display:block;font-size:14px;} .dl-tx span{font-size:12px;color:var(--text-dim);}
   .rci-auto select[onchange^="ldrPeriod"],.rci-auto select[onchange^="ldrShift"],.rci-auto #ccmapShiftBar{display:none !important;}
   .rci-autochip{position:relative;display:inline-flex;align-items:center;gap:6px;margin-top:10px;background:rgba(255,255,255,.2);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;}
   @media(min-width:900px){
@@ -16813,6 +16919,44 @@ function openCCDetail(num){
   showModal(`<h3>🚚 Detail Stall CC ${ccLbl(num)}</h3>${body}`);
 }
 
+/* 20 Nov: peta stall (sama dengan Display) untuk Dashboard Leader */
+function dispStallMapHtml(data){
+  data=data||DB.get();
+  const totalSlots = CONFIG.STALL_GROUPS.length*CONFIG.SLOTS_PER_STALL;
+  const filledCount = Object.entries(data.units).filter(([k,u])=>u && !isOffKey(k)).length;
+  const stallNums = [...new Set(CONFIG.STALL_GROUPS.map(g=>g.slice(0,-1)))];
+  function stallColHtml(num, side){
+    const groupId = num+side;
+    let cells = "";
+    for(let i=1;i<=CONFIG.SLOTS_PER_STALL;i++){
+      const id = groupId+i;
+      const v = data.units[id];
+      const mc = v ? getModelColor(v.model, data) : null;
+      cells += `<div class="yardcell ${v?'filled':'empty'}" ${v?`style="${slotFillStyle(mc)}"`:''} onclick="openSlotDetail('${id}')">
+        <div class="id">${id}${v&&ppbjOf(data,v.frame)?' <span class="ppbjb">PPBJ</span>':''}</div>
+        <div class="v">${v ? v.model : 'KOSONG'}${v&&v.prio?' ⭐':''}${v&&v.batam?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 3px;font-size:9px;">B</span>':''}</div>
+      </div>`;
+    }
+    const occ = [1,2,3,4,5,6].filter(i=>data.units[groupId+i]).length;
+    return `<div class="stallcol side${side}">
+      <div class="colhead">${groupId}${isBatamStall(data,groupId)?' <span style="background:#E8833A;color:#fff;border-radius:3px;padding:0 4px;font-size:9px;">BATAM</span>':""}<span class="n">${occ}/6</span></div>
+      <div class="cellstack">${cells}</div>
+    </div>`;
+  }
+
+  const colsA = stallNums.map(n=>stallColHtml(n,"A")).join("");
+  const colsB = stallNums.map(n=>stallColHtml(n,"B")).join("");
+  return `<div class="stallblock">
+        <div class="stalltitle"><h3>🅿️ Peta Stall Unit</h3><span class="cnt">${filledCount}/${totalSlots} terisi</span></div>
+        <div class="stallmap">
+          <div class="mapcol">
+            <div class="gridblock front"><div class="glabel">● DEPAN (A)</div><div class="stallcolset">${colsA}</div></div>
+            <div class="gridblock back"><div class="glabel">● BELAKANG (B)</div><div class="stallcolset">${colsB}</div></div>
+          </div>
+          <div class="laneV"><span class="arw">↑</span><span class="turn">↩ JALUR MASUK</span><span class="arw">↑</span></div>
+        </div>
+      </div>`;
+}
 function renderDisplay(){
   const data = DB.get();
   const totalSlots = CONFIG.STALL_GROUPS.length*CONFIG.SLOTS_PER_STALL;
