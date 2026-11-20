@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="20 Nov 2026 06.15";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="20 Nov 2026 18.35";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2776,7 +2776,18 @@ function syncCcProfileFromAccount(){
     localStorage.setItem(CCP_KEY, JSON.stringify({plat:pr.plat||"", lp:u.lp||pr.lp||"", drvCode:u.drvCode||pr.drvCode||""}));
   }catch(e){}
 }
-function appExit(){ if(!window.AndroidTLS||!AndroidTLS.exitApp) return; if(confirm("Keluar dari aplikasi?\n\nRADAR akan berhenti di latar belakang dan absen otomatis tidak jalan. Pakai Minimize kalau mau tetap online.")) { try{AndroidTLS.exitApp();}catch(e){} } }
+/* 20 Nov 07.45: KELUAR APLIKASI harus benar-benar mati. APK lama hanya menutup layar; JS RADAR di dalamnya tetap jalan
+   (tetap terhubung ke server, tercatat online). Jadi sebelum APK menutup: lepas tanda online, putus dari server, hentikan
+   pengiriman posisi, lalu kosongkan halaman (semua timer berhenti). APK v70 juga menghapus dari Recent & mengakhiri proses. */
+function appExit(){ if(!window.AndroidTLS||!AndroidTLS.exitApp) return;
+  if(!confirm("Keluar dari aplikasi?\n\nRADAR akan berhenti di latar belakang dan absen otomatis tidak jalan. Pakai Minimize kalau mau tetap online.")) return;
+  try{ presenceOff(); }catch(e){}
+  try{ if(AndroidTLS.trkConfig) AndroidTLS.trkConfig("","",""); }catch(e){}
+  try{ if(AndroidTLS.keepStop) AndroidTLS.keepStop(); }catch(e){}
+  try{ if(FBS && FBS.db) FBS.db.goOffline(); }catch(e){}
+  try{ AndroidTLS.exitApp(); }catch(e){}
+  setTimeout(()=>{ try{ location.replace("about:blank"); }catch(e){} }, 400);
+}
 function appMinimize(){ try{ if(window.AndroidTLS&&AndroidTLS.minimizeApp) AndroidTLS.minimizeApp(); }catch(e){} }
 /* Akun yang tidak boleh menyimpan / memakai plat: akun "user" dan semua akun non-Driver CC. Dibersihkan tiap login supaya tidak ikut absen / mengirim posisi truk. */
 const NO_PLAT_USERS=["user"];
@@ -9678,6 +9689,35 @@ const RETAIN_MS = 26*3600*1000;   // lama simpan data unit terkirim (jam)
 const ULOG_RETAIN_MS = 48*3600*1000;   /* 19 Nov 10.45: log unit (hanya di HP, tidak lewat Firebase) disimpan 2×24 jam untuk Rekap Kerja Unit. ILS tetap aturan lama. */
 const ILS_PRUNE_N=40, ILS_PRUNE_LAG=6*3600000;
 function ilsExpAt(b){ const t=b.doneTs||b.ts||0; return Math.max(t+RETAIN_MS, b.sj ? (b.outTs||t)+SJ_KEEP_MS : 0); }   /* sama dengan aturan lama: 26 jam, atau 7 hari kalau ada surat jalan */
+/* 20 Nov 18.30: log unit hanya ada di HP masing-masing dan hanya mencatat unit yang "terlihat" selama HP itu terbuka.
+   HP yang tidak terbuka sepanjang shift (mis. Pengamat) tidak tahu unit yang masuk lalu terkirim selama HP tertutup,
+   sehingga Dashboard Produksi (Unit Diinput, Delivery by Unit/CC, per 30 menit, Laporan per Shift, Excel) jauh lebih kecil dari kenyataan.
+   Dilengkapi dari data ILS di server (tersimpan ≥26 jam): unit di ILS yang sudah Loading Selesai / Delout dicatat sebagai terkirim,
+   jam input = jam unit diparkir (tercatat di ILS). Unit yang tercatat "dikeluarkan" padahal ikut ILS yang sudah loading dibetulkan jadi terkirim
+   (data units & ILS bisa tiba di HP tidak bersamaan). Tidak ada baca/tulis Firebase tambahan. */
+let _ulogSig="";
+function ulogFill(log, d, now){
+  const ucut = now - ULOG_RETAIN_MS, clr = d.logClearTs||0, byF = new Map();
+  { let n=0, mx=0, rm=0; (d.ils||[]).forEach(b=>{ if(b && (b.status==="done"||b.loadTs)){ n++; const t=b.loadTs||b.doneTs||0; if(t>mx) mx=t; } });   /* tidak ada yang berubah → lewati (hemat baterai) */
+    log.forEach(e=>{ if(e.status==="removed") rm++; }); const sg=n+"|"+mx+"|"+log.length+"|"+rm+"|"+clr+"|"+Math.floor(now/600000);
+    if(sg===_ulogSig) return; _ulogSig=sg; }
+  (d.ils||[]).forEach(b=>{ if(!b || !Array.isArray(b.units) || !(b.status==="done" || b.loadTs)) return;
+    const st = b.loadTs||b.doneTs||b.outTs||b.ts||0; if(!st || st<ucut || (clr && st<=clr)) return;
+    b.units.forEach(u=>{ if(!u || !u.frame) return; const f=normVin(u.frame), L=byF.get(f)||[]; L.push({b, u, st}); byF.set(f, L); }); });
+  if(!byF.size) return;
+  const kTs = new Set(), kIls = new Set();
+  log.forEach(e=>{ const f=normVin(e.frame);
+    if(e.status==="removed" && byF.has(f)){   /* "dikeluarkan" padahal ikut CC */
+      const z=byF.get(f).find(z=>e.ilsId===z.b.id || (z.u.ts && e.parkedTs===z.u.ts));
+      if(z){ e.status="sent"; e.sentTs=z.st; delete e.removedTs; e.ilsId=z.b.id; e.ilsTs=z.b.ts; e.ccPlat=z.b.ccPlat; e.lp=z.b.lp; } }
+    if(e.parkedTs!=null) kTs.add(f+"|"+e.parkedTs); if(e.ilsId!=null) kIls.add(f+"|"+e.ilsId); });
+  byF.forEach((L, f)=>{ L.sort((p,q)=>(q.b.id||0)-(p.b.id||0)).forEach(({b, u, st})=>{
+    const ts = +u.ts||null;
+    if(kIls.has(f+"|"+b.id) || (ts && kTs.has(f+"|"+ts))) return;
+    log.push({frame:u.frame, model:u.model, parkedTs:ts, parkedBy:u.by||"", slot:u.slot?slotText(u.slot,u):"", line:u.line||"", batam:!!(u.batam||b.batam), prio:!!u.prio,
+      status:"sent", ilsId:b.id, ilsTs:b.ts, sentTs:st, ccPlat:b.ccPlat, lp:b.lp});
+    kIls.add(f+"|"+b.id); if(ts) kTs.add(f+"|"+ts); }); });
+}
 function syncUnitLog(d){
   try{ dfSync(d); }catch(e){}
   try{ pdiOpenSync(d); }catch(e){}
@@ -9713,6 +9753,7 @@ function syncUnitLog(d){
       else { e.status="removed"; e.removedTs=now; }
     }
   }
+  if(typeof _fbMode==="undefined" || _fbMode!=="cc"){ try{ ulogFill(log, d, now); }catch(e){ fbErrNote("ulogFill", e); } }
   /* Retensi: data unit yang sudah TERKIRIM / dikeluarkan + manifest ILS selesai disimpan 26 jam saja, lalu dihapus otomatis */
   const cut = now - RETAIN_MS;
   const clr = d.logClearTs||0;
@@ -10071,7 +10112,11 @@ function ccplanCompute(data){
   T.minus = T.planTrip - T.act; T.dueMinus = Math.max(0, T.due - T.act);
   // per LP
   const lp = {};
-  rows.forEach(x=>{ if(x.isSpot) return; const o=lp[x.r.lp]=lp[x.r.lp]||{plan:0,act:0,due:0,unit:0,actUnit:0}; o.plan+=x.planTrip; o.act+=x.act; o.due+=x.dueNow; o.unit+=x.planUnit; o.actUnit+=x.actUnit; });
+  rows.forEach(x=>{ if(x.isSpot) return; const o=lp[x.r.lp]=lp[x.r.lp]||{plan:0,act:0,due:0,unit:0,actUnit:0,kurang:0,lebih:0}; o.plan+=x.planTrip; o.act+=x.act; o.due+=x.dueNow; o.unit+=x.planUnit; o.actUnit+=x.actUnit;
+    if(x.minus>0) o.kurang+=x.minus; else if(x.minus<0) o.lebih+=-x.minus; });
+  /* 20 Nov 18.05: minus per LP = plan − aktual SEMUA CC di LP itu (bersih). Ritase lebih dari satu CC menutup kurang CC lain,
+     jadi ikut ditampilkan rinciannya: "kurang X · lebih Y" supaya cocok dengan tabel Per Car Carrier. */
+  T.kurang=Object.values(lp).reduce((q,o)=>q+o.kurang,0); T.lebih=Object.values(lp).reduce((q,o)=>q+o.lebih,0);
   // kurva kumulatif per 30 menit
   const allTimes = []; rows.forEach(x=>{ if(!x.isSpot) x.times.forEach(t=>allTimes.push(ccTimeToTs(t,dayStart))); });
   const slots = [];
@@ -10139,9 +10184,11 @@ function ccplanCopy(btn){
     let t="*PLANNING CAR CARRIER*\n"+pad(now.getDate())+"/"+pad(now.getMonth()+1)+"/"+now.getFullYear()+" "+pad(now.getHours())+":"+pad(now.getMinutes())+"\n\n";
     t+="Plan: "+T.planTrip+" rit ("+T.planUnit+" unit)\nAktual: "+T.act+" rit ("+T.actUnit+" unit)\nMinus: "+m(T.minus)+" rit\nMinus vs jadwal saat ini: "+T.dueMinus+"\n\n*Per LP*\n";
     Object.entries(R.lp).forEach(([k,o])=>{ t+=k+": "+o.act+"/"+o.plan+" rit (minus "+m(o.plan-o.act)+") · "+o.actUnit+"/"+o.unit+" unit\n"; });
-    t+="TOTAL: "+T.act+"/"+T.planTrip+" rit (minus "+m(T.minus)+") · "+T.actUnit+"/"+T.planUnit+" unit\n";
+    t+="TOTAL: "+T.act+"/"+T.planTrip+" rit (minus "+m(T.minus)+(T.lebih?" = kurang "+T.kurang+", lebih "+T.lebih:"")+") · "+T.actUnit+"/"+T.planUnit+" unit\n";
     const lt=R.rows.filter(x=>!x.isSpot && x.minus>0).sort((a,b)=>b.dueMinus-a.dueMinus||b.minus-a.minus);
     if(lt.length){ t+="\n*CC yang masih minus*\n"; lt.forEach(x=>{ t+=platFmt(x.r.police)+" · "+(x.r.lp||"-")+" · "+x.act+"/"+x.planTrip+" rit"+(x.dueMinus>0?" (terlambat)":"")+"\n"; }); }
+    const lb=R.rows.filter(x=>!x.isSpot && x.minus<0);
+    if(lb.length){ t+="\n*CC lebih dari plan*\n"; lb.forEach(x=>{ t+=platFmt(x.r.police)+" · "+(x.r.lp||"-")+" · "+x.act+"/"+x.planTrip+" rit (+"+(-x.minus)+")\n"; }); }
     if(T.spotAct) t+="\nSpot Order: "+T.spotAct+" rit ("+T.spotUnit+" unit)\n";
     tlsCopy(t.trim(), btn);
   }catch(e){ alert("Gagal menyalin: "+e.message); }
@@ -10236,9 +10283,9 @@ function renderCCPlan(){
 
   <div class="card"><h3>Per LP</h3><div style="overflow-x:auto;"><table style="font-size:13px;">
     <tr><th style="${th}">LP</th><th style="${th}">Plan</th><th style="${th}">Aktual</th><th style="${th}">Minus</th><th style="${th}">Unit (akt/plan)</th><th style="${th}">Progres</th></tr>
-    ${Object.entries(R.lp).map(([k,o])=>{ const m=o.plan-o.act; return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${k}</b></td><td style="${td}">${o.plan}</td><td style="${td}"><b>${o.act}</b></td><td style="${td};font-weight:800;color:${m>0?"#D64545":"#1E9E5A"};">${m>0?"−"+m:(m<0?"+"+(-m):"0")}</td><td style="${td}">${o.actUnit}/${o.unit}</td><td style="${td}">${bar(o.act,o.plan,m>0?"#E8833A":"#1E9E5A")}</td></tr>`; }).join("")}
-    <tr style="border-top:2px solid var(--gold);font-weight:800;"><td style="${td}">TOTAL</td><td style="${td}">${T.planTrip}</td><td style="${td}">${T.act}</td><td style="${td};color:${T.minus>0?"#D64545":"#1E9E5A"};">${T.minus>0?"−"+T.minus:(T.minus<0?"+"+(-T.minus):"0")}</td><td style="${td}">${T.actUnit}/${T.planUnit}</td><td style="${td}">${bar(T.act,T.planTrip,"#16213E")}</td></tr>
-  </table></div></div>
+    ${Object.entries(R.lp).map(([k,o])=>{ const m=o.plan-o.act; return `<tr style="border-top:1px solid var(--border);"><td style="${td}"><b>${k}</b></td><td style="${td}">${o.plan}</td><td style="${td}"><b>${o.act}</b></td><td style="${td};font-weight:800;color:${m>0?"#D64545":"#1E9E5A"};">${m>0?"−"+m:(m<0?"+"+(-m):"0")}${o.lebih?`<div style="font-size:10px;font-weight:600;color:var(--text-dim);white-space:nowrap;">kurang ${o.kurang} · lebih ${o.lebih}</div>`:""}</td><td style="${td}">${o.actUnit}/${o.unit}</td><td style="${td}">${bar(o.act,o.plan,m>0?"#E8833A":"#1E9E5A")}</td></tr>`; }).join("")}
+    <tr style="border-top:2px solid var(--gold);font-weight:800;"><td style="${td}">TOTAL</td><td style="${td}">${T.planTrip}</td><td style="${td}">${T.act}</td><td style="${td};color:${T.minus>0?"#D64545":"#1E9E5A"};">${T.minus>0?"−"+T.minus:(T.minus<0?"+"+(-T.minus):"0")}${T.lebih?`<div style="font-size:10px;font-weight:600;color:var(--text-dim);white-space:nowrap;">kurang ${T.kurang} · lebih ${T.lebih}</div>`:""}</td><td style="${td}">${T.actUnit}/${T.planUnit}</td><td style="${td}">${bar(T.act,T.planTrip,"#16213E")}</td></tr>
+  </table></div>${T.lebih?`<div style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.5;">Minus per LP = plan − aktual semua CC di LP itu. Ada CC yang ritasenya <b style="color:#1E9E5A;">lebih</b> dari plan (+), jadi menutup CC lain yang kurang. Rinciannya di tabel Per Car Carrier (baris +, paling bawah).</div>`:""}</div>
 
   <div class="card"><h3>Per Car Carrier</h3><div style="overflow-x:auto;"><table style="font-size:13px;">
     <tr><th style="${th}">Plat</th><th style="${th}">LP</th><th style="${th}">Driver</th><th style="${th}">Plan</th><th style="${th}">Aktual</th><th style="${th}">Minus</th><th style="${th}">Harusnya s.d. kini</th><th style="${th}">Jam ritase hari ini</th><th style="${th}">Status</th></tr>
