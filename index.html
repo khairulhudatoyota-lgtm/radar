@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="21 Nov 2026 00.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="21 Nov 2026 00.35";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -11923,7 +11923,7 @@ function rciCss(){
   @keyframes rciPulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.75);}70%{box-shadow:0 0 0 9px rgba(74,222,128,0);}100%{box-shadow:0 0 0 0 rgba(74,222,128,0);}}
   @keyframes rciBob{0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-6px) rotate(4deg);}}
   @media (prefers-reduced-motion: reduce){.rci-hero *,.rci-in *{animation:none!important;}}
-  `+uiCssExtra()+dispCss()+progCss();
+  `+uiCssExtra()+dispCss()+progCss()+rsCss();
   document.head.appendChild(st);
 }
 function rciHero(tab, extra){
@@ -12189,8 +12189,8 @@ function dispCss(){
     body.disp-tv .dc>*{margin:0 !important;min-width:0;}
     body.disp-tv .dc-l .y-queue{max-height:30vh;overflow:auto;}
     body.disp-tv .dc-l>.card:not(.y-cc):not(.y-mdl):not(.y-queue){max-height:32vh;overflow:auto;}
-    body.disp-tv .dc-r .y-sum{max-height:44vh;overflow:auto;}
-    body.disp-tv .dc-r .y-sched{max-height:48vh;overflow:auto;}
+    body.disp-tv .dc-r .y-sum{max-height:52vh;overflow:auto;}
+    body.disp-tv .dc-r .y-sched{max-height:none;overflow:visible;}
     body.disp-tv .yardwrap .card::-webkit-scrollbar{width:6px;} body.disp-tv .yardwrap .card::-webkit-scrollbar-thumb{background:rgba(103,232,249,.35);border-radius:6px;}
   }
   `;
@@ -12270,9 +12270,9 @@ function dispTvLayout(html, d){
     const L=mk("dc-l"), M=mk("dc-m"), R=mk("dc-r"), tmp=document.createElement("template");
     tmp.innerHTML=ccProgressHtml(d, true)+dispMdlHtml(d);
     const prog=tmp.content.querySelector(".y-prog"), mdl=tmp.content.querySelector(".y-mdl");
-    [cc, mdl, ...others, queue].forEach(e=>{ if(e) L.appendChild(e); });
+    [cc, mdl, ...others, queue, off].forEach(e=>{ if(e) L.appendChild(e); });
     [stall, prog].forEach(e=>{ if(e) M.appendChild(e); });
-    [sum, sched, off].forEach(e=>{ if(e) R.appendChild(e); });
+    [sum, sched].forEach(e=>{ if(e) R.appendChild(e); });
     const cols=document.createElement("div"); cols.className="disp-cols"; cols.append(L, M, R);
     while(w.firstChild) w.removeChild(w.firstChild);
     if(alert) w.appendChild(alert); w.appendChild(cols); if(foot) w.appendChild(foot);
@@ -17079,6 +17079,147 @@ function dispStallMapHtml(data){
         </div>
       </div>`;
 }
+/* ======================================================================
+   RINGKASAN SHIFT: KETERANGAN STATUS CC + SUMMARY PER LP (21 Nov 2026, permintaan Khairul)
+   • Tiap CC di Ringkasan diberi keterangan: Change Shift (lanjutan shift lalu / dilanjut shift berikut),
+     Spot Order, CC Pengganti (menggantikan siapa), Diganti, Tukar jam, Ritase dikoreksi manual, Di luar jadwal,
+     plus posisi sekarang (Stall / Antri / OTW NVDC / di NVDC / balik).
+   • Jadwal CC di Display diganti Summary per LP (jadwal lengkap tetap ada di menu DCCP / Planning CC).
+====================================================================== */
+function rsGantiInfo(r){
+  const from=r.gantiDari||r.origPolice||""; let rit="", why="", f2="";
+  const ms=[...String(r.note||"").matchAll(/pengganti\s+(.+?)(?:\s*\(rit ([^)]*)\))?(?:\s+-\s+(.*?))?\s*(?=;|$)/gi)];
+  const m=ms.length?ms[ms.length-1]:null; if(m){ f2=(m[1]||"").trim(); rit=m[2]||""; why=(m[3]||"").trim(); }
+  return {from:from||f2, rit, why};
+}
+function rsSwapWhy(d, plat){ const k=normPlat(plat); const L=(d.swapLog||[]).filter(x=>x && (normPlat(x.a)===k || normPlat(x.b)===k)).sort((a,b)=>(b.ts||0)-(a.ts||0)); return L[0]||null; }
+function rsShiftName(sh){ return sh==="1"?"Day":"Night"; }
+/* rows: baris Ringkasan (sudah termasuk Spot, Change Shift, di luar jadwal). Mengembalikan {rows, cat:{dccp,spot,cs,luar}} */
+function rsBuildRows(data, sh, w, ilsShift){
+  const now=Date.now(), mt=data.dccpMeta||{}, dd=mt.dateTs||dccpFileDate(mt.fileName)||prodMidnight(), rows=[], byK=new Map();
+  const other=rsShiftName(sh==="1"?"2":"1");
+  let P=null; try{ P=ccProgress(data); }catch(e){}
+  const road={}; if(P){ P.otw.forEach(x=>road[x.k]="otw"); P.nvdc.forEach(x=>road[x.k]="nvdc"); P.back.forEach(x=>road[x.k]="back"); }
+  const mk=(k,o)=>{ const x=Object.assign({k, plat:"", lp:"", driver:"", done:0, tot:0, dueN:0, late:false, kind:"dccp", csDone:0, tags:[], planU:0}, o); rows.push(x); byK.set(k,x); return x; };
+  /* 1. CC terjadwal DCCP */
+  (data.dccpSchedule||[]).forEach(r=>{ if(!r || r.extra) return; const k=normPlat(r.police); if(byK.has(k)) return;
+    const T=dccpTripList(r), done=dccpDoneCount(r,data), dueN=T.filter(t=>ccTimeToTs(t,dd)<=now).length;
+    const pt=(r.planTrip!=null?Number(r.planTrip):T.length)||T.length, pu=r.planUnit!=null?Number(r.planUnit):pt*6;
+    const x=mk(k,{plat:platFmt(r.police), lp:r.lp||"", driver:r.driver||"", done, tot:T.length, dueN, late: done<dueN && !csRowPaused(data, r.police), r, planU:pu}); });
+  /* 2. Spot Order */
+  (data.dccpSchedule||[]).forEach(r=>{ if(!r || !r.extra) return; const k=normPlat(r.police), T=dccpTripList(r); let x=byK.get(k);
+    if(!x){ const done=dccpDoneCount(r,data), dueN=T.filter(t=>ccTimeToTs(t,dd)<=now).length; x=mk(k,{plat:platFmt(r.police), lp:r.lp||"", driver:r.driver||"", done, tot:T.length, dueN, late:done<dueN, kind:"spot", r}); }
+    x.tags.push({c:"spot", t:"SPOT ORDER", s:(x.kind==="spot"?"di luar DCCP":"tambahan di luar DCCP")+(T.length?` · ${T.length} rit (${T.join(", ")})`:""), w:String(r.note||"").replace(/pengganti[^;]*/gi,"").replace(/^[;\s]+|[;\s]+$/g,"")}); });
+  /* 3. Change Shift */
+  csArr(data).forEach(e=>{ if(!e || !(+e.until>now)) return; const k=normPlat(e.plat), n=e.n||1, carryIn=(+e.ts||0)<w[0];
+    const csDone=Math.min(n,(data.ils||[]).filter(b=>b && normPlat(b.ccPlat)===k && (+b.ts||0)>=(+e.ts||0)).length);
+    const owner=csOwnerName(data, e.plat, e)||e.driver||"", sisa=(e.sisa||[]).join(", ");
+    let x=byK.get(k);
+    if(carryIn){
+      if(!x) x=mk(k,{plat:platFmt(e.plat), lp:e.lp||"", driver:owner, done:csDone, tot:n, kind:"cs"}); else x.csDone+=csDone;
+      const busy=!!csBusy(data, e.plat);
+      x.tags.push({c:"cs", t:"CHANGE SHIFT", s:`lanjutan Shift ${other} · ${csDone}/${n} rit selesai${sisa?` (jam ${sisa})`:""}${owner?` · 👤 ${owner}`:""}`, w:e.why||"", n2:(busy && x.kind!=="cs")?"jadwal DCCP plat ini aktif setelah rit Change Shift Delout":""});
+    } else {
+      if(!x) x=mk(k,{plat:platFmt(e.plat), lp:e.lp||"", driver:owner, kind:"cs0"});
+      x.tags.push({c:"cs", t:"CHANGE SHIFT ➜", s:`${n} rit${sisa?` (jam ${sisa})`:""} dilanjut ke Shift ${other}${owner?` · 👤 ${owner}`:""}`, w:e.why||""});
+    }
+  });
+  /* 4. CC yang ILS di shift ini tetapi tidak ada di jadwal */
+  const cntLuar={}; (ilsShift||[]).forEach(b=>{ const k=normPlat(b.ccPlat); if(!byK.has(k)){ cntLuar[k]=cntLuar[k]||{n:0, plat:platFmt(b.ccPlat), lp:b.lp||""}; cntLuar[k].n++; } });
+  Object.keys(cntLuar).forEach(k=>{ const o=cntLuar[k]; const x=mk(k,{plat:o.plat, lp:o.lp, done:o.n, kind:"luar"}); x.tags.push({c:"luar", t:"DI LUAR JADWAL", s:"tidak ada di DCCP / Spot / Change Shift"}); });
+  /* 5. Pengganti, Diganti, Tukar, Koreksi manual, posisi sekarang */
+  rows.forEach(x=>{ const r=x.r;
+    if(r){
+      if(r.pengganti){ const g=rsGantiInfo(r); x.tags.push({c:"pg", t:"PENGGANTI", s:`menggantikan ${g.from?platFmt(g.from):"CC lain"}${g.rit?` · rit ${g.rit}`:""}`, w:g.why}); }
+      (Array.isArray(r.gantiLog)?r.gantiLog:[]).forEach(g=>{ if(!g) return; x.tags.push({c:"dg", t:"DIGANTI", s:`rit ${(g.trips||[]).join(", ")||"-"} dibawa ${platFmt(g.to||"-")}`, w:g.why||""}); });
+      if(r.tukar){ const s=rsSwapWhy(data, r.police); x.tags.push({c:"tk", t:"TUKAR JAM", s:`dengan ${platFmt(r.tukar)}${s&&s.cross?" (beda LP)":""}`, w:(s&&s.why)||""}); }
+      try{ const f=(data.dccpFix||{})[x.k]; if(f && f.ts>=dccpShiftFrom(r)) x.tags.push({c:"fx", t:"DIKOREKSI", s:`ritase diisi manual ${f.n}${f.by?` oleh ${f.by}`:""}`}); }catch(e){}
+    }
+    const a=findActualArrival(x.plat, data);
+    x.pos = a ? (a.stall?{c:"in", t:`📍 Stall ${ccLbl(a.stall)}`}:{c:"q", t:"⏳ Antri"}) : (road[x.k]==="otw"?{c:"otw", t:"🚚 OTW NVDC"}:road[x.k]==="nvdc"?{c:"nv", t:"🏁 di NVDC"}:road[x.k]==="back"?{c:"bk", t:"↩️ balik ke EKY"}:null);
+  });
+  const cat={dccp:0, spot:0, cs:0, luar:0};
+  rows.forEach(x=>{ cat.cs+=x.csDone||0; if(x.kind==="dccp") cat.dccp+=x.done; else if(x.kind==="spot") cat.spot+=x.done; else if(x.kind==="cs") cat.cs+=x.done; else if(x.kind==="luar") cat.luar+=x.done; });
+  rows.sort((a,b)=>((b.tags.length>0)-(a.tags.length>0))||(b.late-a.late)||(b.done-a.done)||String(a.plat).localeCompare(String(b.plat)));   /* yang punya keterangan (CS/Spot/Pengganti…) paling atas */
+  return {rows, cat, P};
+}
+function rsTagsHtml(x){
+  return (x.tags||[]).map(g=>`<div class="rs-tag rs-${g.c}"><b>${escH(g.t)}</b> ${escH(g.s||"")}${g.w?`<i>alasan: ${escH(g.w)}</i>`:""}${g.n2?`<i>${escH(g.n2)}</i>`:""}</div>`).join("");
+}
+function rsLegendHtml(rows){
+  const c={}; rows.forEach(x=>x.tags.forEach(g=>{ c[g.c]=(c[g.c]||0)+1; }));
+  const L=[["cs","🔁 Change Shift"],["spot","🟥 Spot Order"],["pg","🔄 Pengganti"],["dg","↪ Diganti"],["tk","🔀 Tukar jam"],["fx","✏️ Dikoreksi"],["luar","⚠ Di luar jadwal"]].filter(([k])=>c[k]);
+  return L.length?`<div class="rs-legend">${L.map(([k,t])=>`<span class="rs-lg rs-${k}">${t} <b>${c[k]}</b></span>`).join("")}</div>`:"";
+}
+function rsCatHtml(cat){
+  const p=[`DCCP ${cat.dccp}`]; if(cat.spot) p.push(`Spot ${cat.spot}`); if(cat.cs) p.push(`Change Shift ${cat.cs}`); if(cat.luar) p.push(`luar jadwal ${cat.luar}`);
+  return p.length>1?`<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">${p.join(" · ")}</div>`:"";
+}
+/* Summary per LP (pengganti Jadwal CC di Display) */
+function dispLpSumHtml(data, rows, ilsShift, sh){
+  const lpOf={}; rows.forEach(x=>{ lpOf[x.k]=x.lp||""; });
+  const L={}, get=lp=>L[lp]=L[lp]||{truk:0, done:0, tot:0, due:0, kur:0, late:0, unit:0, planU:0, spot:0, spotRit:0, cs:0, pg:0, eky:0, jalan:0, extra:0};
+  rows.forEach(x=>{ const lp=String(x.lp||"").trim().toUpperCase()||"–", o=get(lp);
+    if(x.kind==="dccp"){ o.truk++; o.done+=x.done; o.tot+=x.tot; const due=Math.min(x.dueN,x.tot); o.due+=due; o.kur+=Math.max(0,due-x.done); if(x.late) o.late++; o.planU+=x.planU||0; }
+    else if(x.kind==="spot"){ o.spot++; o.spotRit+=x.done; }
+    o.extra+=(x.kind==="dccp"?0:x.done)+(x.csDone||0);
+    x.tags.forEach(g=>{ if(g.c==="cs") o.cs++; else if(g.c==="pg") o.pg++; else if(g.c==="spot" && x.kind!=="spot") o.spot++; });
+    if(x.pos){ if(x.pos.c==="in"||x.pos.c==="q") o.eky++; else o.jalan++; } });
+  (ilsShift||[]).forEach(b=>{ const k=normPlat(b.ccPlat), lp=String(lpOf[k]||b.lp||"").trim().toUpperCase()||"–"; get(lp).unit+=(b.units||[]).length; });
+  const E=Object.entries(L).filter(([k,o])=>o.truk||o.spot||o.cs||o.unit);
+  if(!E.length) return `<div class="card y-sched y-lpsum"><div class="stalltitle"><h3>🚛 Summary per LP</h3></div><div class="emptystate">Jadwal DCCP shift ini belum ada.</div></div>`;
+  E.sort((a,b)=>(b[1].kur-a[1].kur)||(b[1].tot-a[1].tot)||a[0].localeCompare(b[0]));
+  const pal=["#6366F1","#0EA5E9","#14B8A6","#F59E0B","#EC4899","#8B5CF6","#22C55E","#F97316","#06B6D4","#E11D48"], T={truk:0,done:0,tot:0,due:0,kur:0,late:0,unit:0,planU:0,spot:0,spotRit:0,cs:0,pg:0,eky:0,jalan:0,extra:0};
+  E.forEach(([k,o])=>Object.keys(T).forEach(f=>{ T[f]+=o[f]; }));
+  const mx=Math.max(1,...E.map(([k,o])=>Math.max(o.tot,o.done+o.spotRit)));
+  const row=(name,o,c,tot)=>{ const pct=o.tot?Math.min(100,(o.done)*100/mx):0, dueP=o.tot?Math.min(100,o.due*100/mx):0;
+    const chips=[]; if(o.truk) chips.push(`🚛 ${o.truk} CC`); chips.push(`📦 ${o.unit}${o.planU?`/${o.planU}`:""} unit`); if(o.extra && o.tot) chips.push(`➕ ${o.extra} rit di luar DCCP`); if(o.late) chips.push(`<span class="ls-bad">⏰ ${o.late} telat</span>`); if(o.eky) chips.push(`📍 ${o.eky} di EKY`); if(o.jalan) chips.push(`🚚 ${o.jalan} di jalan`);
+    if(o.spot) chips.push(`<span class="ls-spot">SPOT ${o.spot}${o.spotRit?` · ${o.spotRit} rit`:""}</span>`); if(o.cs) chips.push(`<span class="ls-cs">🔁 CS ${o.cs}</span>`); if(o.pg) chips.push(`<span class="ls-pg">🔄 Pengganti ${o.pg}</span>`);
+    return `<div class="ls-row${tot?" ls-tot":""}"><div class="ls-top"><span class="ls-n">${tot?"":`<i style="background:${c};"></i>`}${escH(name)}</span>
+      <span class="ls-bar"><b class="ls-due" style="width:${tot?(T.tot?Math.min(100,o.due*100/o.tot):0):dueP}%;"></b><b style="width:${tot?(o.tot?Math.min(100,o.done*100/o.tot):0):pct}%;background:${tot?"#22D3EE":c};"></b></span>
+      <span class="ls-v">${o.tot?`<b>${o.done}</b>/${o.tot} rit`:(o.truk?`<b>${o.done+o.extra}</b> rit`:`<b>${o.extra}</b> rit<small>di luar DCCP</small>`)}</span><span class="ls-m">${!o.tot?"":(o.kur>0?`<b class="ls-bad">−${o.kur}</b>`:`<b class="ls-ok">✓</b>`)}</span></div>
+      <div class="ls-chips">${chips.map(t=>`<span>${t}</span>`).join("")}</div></div>`; };
+  return `<div class="card y-sched y-lpsum"><div class="stalltitle"><h3>🚛 Summary per LP · ${rsShiftName(sh)}</h3><span class="cnt">${E.length} LP · ${T.truk} CC</span></div>
+    <div class="ls-note">Batang tipis = ritase yang sudah waktunya menurut jadwal · angka merah = kurang dari jadwal saat ini</div>
+    ${E.map(([k,o],i)=>row(k,o,pal[i%pal.length],false)).join("")}${E.length>1?row("TOTAL",T,"",true):""}</div>`;
+}
+function rsCss(){
+  return `
+  .rs-legend{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px;}
+  .rs-lg{font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;border:1px solid currentColor;}
+  .rs-tag{font-size:11px;line-height:1.4;margin-top:4px;padding:4px 7px;border-radius:8px;border-left:3px solid currentColor;background:rgba(148,163,184,.10);color:var(--text);}
+  .rs-tag b{font-size:10px;letter-spacing:.04em;margin-right:2px;}
+  .rs-tag i{display:block;font-style:normal;opacity:.8;font-size:10.5px;}
+  .rs-cs{color:#6D28D9;} .rs-tag.rs-cs{background:rgba(124,58,237,.09);} .rs-tag.rs-cs b{color:#6D28D9;}
+  .rs-spot{color:#DC2626;} .rs-tag.rs-spot{background:rgba(230,0,18,.07);} .rs-tag.rs-spot b{color:#DC2626;}
+  .rs-pg{color:#0369A1;} .rs-tag.rs-pg{background:rgba(14,165,233,.09);} .rs-tag.rs-pg b{color:#0369A1;}
+  .rs-dg{color:#B45309;} .rs-tag.rs-dg{background:rgba(245,158,11,.10);} .rs-tag.rs-dg b{color:#B45309;}
+  .rs-tk{color:#4338CA;} .rs-tag.rs-tk{background:rgba(99,102,241,.09);} .rs-tag.rs-tk b{color:#4338CA;}
+  .rs-fx{color:#475569;} .rs-tag.rs-fx b{color:#475569;}
+  .rs-luar{color:#C2410C;} .rs-tag.rs-luar{background:rgba(249,115,22,.09);} .rs-tag.rs-luar b{color:#C2410C;}
+  .rs-pos{display:inline-block;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;margin-top:3px;background:rgba(148,163,184,.16);}
+  .rs-pos.rs-p-in{background:rgba(34,197,94,.14);color:#15803D;} .rs-pos.rs-p-q{background:rgba(245,158,11,.15);color:#B45309;}
+  .rs-pos.rs-p-otw{background:rgba(6,182,212,.14);color:#0E7490;} .rs-pos.rs-p-nv{background:rgba(16,185,129,.14);color:#047857;} .rs-pos.rs-p-bk{background:rgba(245,158,11,.15);color:#B45309;}
+  .y-lpsum .ls-note{font-size:11px;color:var(--text-dim);margin:-2px 0 6px;}
+  .ls-row{padding:8px 0;border-top:1px solid var(--border);}
+  .ls-top{display:grid;grid-template-columns:64px minmax(0,1fr) auto 34px;gap:8px;align-items:center;font-size:13px;}
+  .ls-n{font-weight:800;display:flex;align-items:center;gap:6px;min-width:0;} .ls-n i{width:9px;height:9px;border-radius:3px;flex:none;}
+  .ls-bar{position:relative;height:12px;border-radius:99px;background:rgba(148,163,184,.18);overflow:hidden;}
+  .ls-bar b{position:absolute;left:0;top:0;bottom:0;border-radius:99px;} .ls-bar b.ls-due{top:auto;height:3px;bottom:0;background:#F87171;opacity:.85;z-index:1;}
+  .ls-v{white-space:nowrap;text-align:right;} .ls-v small{display:block;font-size:10px;color:var(--text-dim);font-weight:500;} .ls-m{text-align:right;}
+  .ls-bad{color:#DC2626;} .ls-ok{color:#16A34A;}
+  .ls-chips{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--text-dim);margin-top:4px;padding-left:2px;}
+  .ls-chips .ls-spot{color:#DC2626;font-weight:700;} .ls-chips .ls-cs{color:#7C3AED;font-weight:700;} .ls-chips .ls-pg{color:#0369A1;font-weight:700;}
+  .ls-tot{border-top:2px solid var(--gold,#C9A227);} .ls-tot .ls-n{letter-spacing:.06em;}
+  body.disp-tv .rs-tag{color:#E2E8F0;}
+  body.disp-tv .rs-cs,body.disp-tv .rs-tag.rs-cs b{color:#C4B5FD;} body.disp-tv .rs-spot,body.disp-tv .rs-tag.rs-spot b{color:#FCA5A5;}
+  body.disp-tv .rs-pg,body.disp-tv .rs-tag.rs-pg b{color:#7DD3FC;} body.disp-tv .rs-dg,body.disp-tv .rs-tag.rs-dg b{color:#FCD34D;}
+  body.disp-tv .rs-tk,body.disp-tv .rs-tag.rs-tk b{color:#A5B4FC;} body.disp-tv .rs-fx,body.disp-tv .rs-tag.rs-fx b{color:#CBD5E1;} body.disp-tv .rs-luar,body.disp-tv .rs-tag.rs-luar b{color:#FDBA74;}
+  body.disp-tv .rs-pos.rs-p-in{color:#86EFAC;} body.disp-tv .rs-pos.rs-p-q,body.disp-tv .rs-pos.rs-p-bk{color:#FCD34D;} body.disp-tv .rs-pos.rs-p-otw{color:#67E8F9;} body.disp-tv .rs-pos.rs-p-nv{color:#6EE7B7;}
+  body.disp-tv .ls-bad{color:#F87171;} body.disp-tv .ls-ok{color:#34D399;} body.disp-tv .ls-chips .ls-spot{color:#FCA5A5;} body.disp-tv .ls-chips .ls-cs{color:#C4B5FD;} body.disp-tv .ls-chips .ls-pg{color:#7DD3FC;}
+  `;
+}
+
 function renderDisplay(){
   const data = DB.get();
   const totalSlots = CONFIG.STALL_GROUPS.length*CONFIG.SLOTS_PER_STALL;
@@ -17107,18 +17248,12 @@ function renderDisplay(){
   const colsA = stallNums.map(n=>stallColHtml(n,"A")).join("");
   const colsB = stallNums.map(n=>stallColHtml(n,"B")).join("");
 
-  const ritaseByPlat = {};
   const _sh = currentShift(), _w = shiftWindow(prodDayStart(), _sh);
   const _ilsShift = data.ils.filter(b=>b.ts>=_w[0] && b.ts<_w[1]);
-  _ilsShift.forEach(b=>{ const k=platFmt(b.ccPlat); ritaseByPlat[k]=(ritaseByPlat[k]||0)+1; });
-  /* semua CC terjadwal ikut tampil (0 rit juga), ritase dihitung sama dengan jadwal DCCP (dobel/koreksi ikut) */
-  const _now0=Date.now(), _mt=data.dccpMeta||{}, _dd=_mt.dateTs||dccpFileDate(_mt.fileName)||prodMidnight(), _rows=[], _seenK=new Set();
-  (data.dccpSchedule||[]).forEach(r=>{ if(r.extra) return; const k=normPlat(r.police); if(_seenK.has(k)) return; _seenK.add(k);
-    const T=dccpTripList(r), done=dccpDoneCount(r,data), dueN=T.filter(t=>ccTimeToTs(t,_dd)<=_now0).length;
-    _rows.push({k, plat:platFmt(r.police), lp:r.lp||"", driver:r.driver||"", done, tot:T.length, dueN, late: done<dueN && !csRowPaused(data, r.police)}); });
-  Object.keys(ritaseByPlat).forEach(pl=>{ const k=normPlat(pl); if(_seenK.has(k)) return; _seenK.add(k); _rows.push({k, plat:pl, lp:"", driver:"", done:ritaseByPlat[pl], tot:0, dueN:0, late:false}); });
-  _rows.sort((a,b)=>(b.late-a.late)||(b.done-a.done));
-  const totalRitase = _rows.reduce((q,x)=>q+x.done,0);
+  /* semua CC terjadwal ikut tampil (0 rit juga), ritase dihitung sama dengan jadwal DCCP (dobel/koreksi ikut).
+     21 Nov: + Spot Order, Change Shift, Pengganti/Diganti/Tukar, di luar jadwal, posisi sekarang (rsBuildRows) */
+  const _RS = rsBuildRows(data, _sh, _w, _ilsShift), _rows = _RS.rows;
+  const totalRitase = _RS.cat.dccp+_RS.cat.spot+_RS.cat.cs+_RS.cat.luar;
   const _inpByModel = {}, _inpByLine = {}; let _inpTot = 0;
   (data.unitLog||[]).forEach(e=>{ if(e.parkedTs!=null && e.parkedTs>=_w[0] && e.parkedTs<_w[1]){ _inpTot++; _inpByModel[e.model]=(_inpByModel[e.model]||0)+1; if(e.line) _inpByLine[e.line]=(_inpByLine[e.line]||0)+1; } });
   const _plan = getPlanFor(data, _w[0]+1000, _sh);
@@ -17132,18 +17267,8 @@ function renderDisplay(){
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${Object.keys(_plan.byLine).map(l=>{ const mi=_plan.byLine[l]-(_inpByLine[l]||0); return `<span style="border:1px solid #16213E;color:#16213E;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;">${l} ${_inpByLine[l]||0}/${_plan.byLine[l]}${mi>0?` · −${mi}`:" ✓"}</span>`; }).join("")}${Object.keys(_plan.byModel).map(m=>{ const mi=_plan.byModel[m]-(_inpByModel[m]||0); return `<span style="border:1px solid ${getModelColor(m,data)};color:${getModelColor(m,data)};border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;">${m} ${_inpByModel[m]||0}/${_plan.byModel[m]}${mi>0?` · −${mi}`:" ✓"}</span>`; }).join("")}</div>
         </div>` : "";
-  const sched = data.dccpSchedule||[];
-  const schedHtml = sched.length ? `
-      <div class="card y-sched">
-        <div class="stalltitle"><h3>📋 Jadwal CC Hari Ini (East Karawang)</h3><span class="cnt">${sched.length} truk</span></div>
-        <div style="overflow-x:auto;"><table>
-          <tr><th>Plat</th><th>LP / Driver</th><th>Jam Ritase</th><th>Aktual Datang</th><th>Status</th></tr>
-          ${dccpSortedIdx(sched).map(([r])=>{ const a=findActualArrival(r.police,data);
-            return `<tr${csRowPaused(data, r.police)?` style="background:#FAF7FF;"`:""}><td><b>${platFmt(r.police)}</b>${r.extra?` <span style="background:#E60012;color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;">SPOT</span>`:""}${csPausedBadge(data, r.police)}${r.origPolice?`<div style="font-size:10px;color:var(--text-dim);">ganti ${r.origPolice}</div>`:""}</td><td>${r.lp}<div style="font-size:11px;color:var(--text-dim);">${r.driver||""}</div></td><td>${ccTripChipsHtml(r,data)}</td>
-            <td>${a?new Date(a.ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):"-"}</td>
-            <td>${a?(a.stall?`Stall ${ccLbl(a.stall)} `:"Antri ")+dccpDelayBadge(r.trips&&r.trips.length?r.trips:r.schedTime,a):"<span style='color:var(--text-dim)'>belum datang</span>"}</td></tr>`;}).join("")}
-        </table></div>
-      </div>` : "";
+  /* 21 Nov: Jadwal CC di Display diganti Summary per LP (jadwal lengkap ada di menu DCCP / Planning CC) */
+  const schedHtml = dispLpSumHtml(data, _rows, _ilsShift, _sh);
   return `
     <div class="yardwrap">
       ${batamAlertHtml(data)}
@@ -17152,12 +17277,13 @@ function renderDisplay(){
         <div class="stalltitle"><h3>📊 Ringkasan ${shiftLabel(_sh)}</h3></div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;">
           <div style="flex:1;min-width:140px;"><div style="font-size:12px;color:var(--text-dim);">TOTAL UNIT TERPARKIR</div><div style="font-size:30px;font-weight:800;">${filledCount}<span style="font-size:16px;color:var(--text-dim);">/${totalSlots}</span></div></div>
-          <div style="flex:1;min-width:140px;"><div style="font-size:12px;color:var(--text-dim);">TOTAL RITASE CC (shift ini)</div><div style="font-size:30px;font-weight:800;">${totalRitase}</div></div>
+          <div style="flex:1;min-width:140px;"><div style="font-size:12px;color:var(--text-dim);">TOTAL RITASE CC (shift ini)</div><div style="font-size:30px;font-weight:800;">${totalRitase}</div>${rsCatHtml(_RS.cat)}</div>
         </div>
         ${planDisplayHtml}
+        ${rsLegendHtml(_rows)}
         ${_rows.length?`<table style="margin-top:10px;"><tr><th>Plat CC</th><th>Ritase</th><th></th></tr>${_rows.map(x=>{ const w=whyMap(data)[x.k]; const askBtn=(x.late&&whyAskRoleOk()&&!(w&&w.status==="ask"&&Date.now()-w.ts<10*60000))?` <button type="button" onclick="whyAsk('${x.plat}')" style="border:1.5px solid #E60012;background:#fff;color:#E60012;border-radius:8px;padding:3px 8px;font-weight:800;font-size:11px;">❓ Tanya KR</button>`:"";
           const st=w&&w.status==="ask"&&Date.now()-w.ts<6*3600000?`<div style="font-size:11px;color:#B4570E;">⏳ menunggu jawaban Koordinator (tanya ${whyHm(w.ts)})</div>`:(w&&w.status==="done"&&Date.now()-(w.ansTs||0)<12*3600000?`<div style="font-size:11px;color:#17803d;">💬 ${escH(w.reason)} <span style="color:var(--text-dim);">— ${escH(w.ansBy||"KR")} ${whyHm(w.ansTs)}</span></div>`:"");
-          return `<tr><td>${escH(x.plat)}${x.lp?` <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)}</span>`:""}${x.driver?`<div style="font-size:11px;color:var(--text-dim);">👤 ${escH(x.driver)}</div>`:""}${st}</td><td style="white-space:nowrap;"><b style="${x.late?"color:#D64545;":""}">${x.done}</b>${x.tot?`<span style="font-size:11px;color:var(--text-dim);"> /${x.tot}</span>`:""}${x.late?`<div style="font-size:10px;color:#D64545;">jadwal ${x.dueN}</div>`:""}</td><td>${askBtn}</td></tr>`; }).join("")}</table>`:""}
+          return `<tr><td>${escH(x.plat)}${x.lp?` <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)}</span>`:""}${x.driver?`<div style="font-size:11px;color:var(--text-dim);">👤 ${escH(x.driver)}</div>`:""}${x.pos?`<span class="rs-pos rs-p-${x.pos.c}">${x.pos.t}</span>`:""}${rsTagsHtml(x)}${st}</td><td style="white-space:nowrap;"><b style="${x.late?"color:#D64545;":""}">${x.done}</b>${x.tot?`<span style="font-size:11px;color:var(--text-dim);"> /${x.tot}</span>`:""}${x.late?`<div style="font-size:10px;color:#D64545;">jadwal ${x.dueN}</div>`:""}</td><td>${askBtn}</td></tr>`; }).join("")}</table>`:""}
       </div>
       <div class="card y-cc">
         <div class="stalltitle"><h3>🚚 Stall Car Carrier</h3><span class="cnt" id="dispClock"></span></div>
