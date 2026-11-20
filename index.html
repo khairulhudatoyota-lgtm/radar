@@ -992,8 +992,8 @@ window.RSnd=(function(){
     <button class="btn btn-primary" onclick="doLogin()">➜ Masuk</button>
     <button type="button" class="btn btn-outline" style="margin-top:10px;" onclick="regOpen()">📝 Belum punya akun? Daftar</button>
 
-    <div style="text-align:center; margin-top:18px;">
-      <button class="btn-outline btn btn-sm" style="width:auto; padding:10px 18px;" onclick="enterDisplay()">📺 Buka Display (tanpa login)</button>
+    <div style="text-align:center; margin-top:14px;">
+      <button class="btn btn-primary" style="background:linear-gradient(135deg,#0E7490,#0891B2 55%,#14B8A6);border-color:#0891B2;color:#fff;" onclick="enterDisplay()">📺 Buka Display (tanpa login)</button>
     </div>
     <div id="appCtl" style="display:none;gap:8px;justify-content:center;margin-top:14px;">
       <button type="button" class="btn-outline btn btn-sm" style="width:auto;padding:10px 16px;" onclick="appMinimize()">⬇ Minimize</button>
@@ -1745,7 +1745,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="21 Nov 2026 03.25";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="21 Nov 2026 03.59";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2042,7 +2042,7 @@ const TABS_BY_ROLE = {
   delivery:    [{key:"delivery", label:"Delivery"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}],
   koordinator: [{key:"koordinator", label:"Koordinator"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"display", label:"Display"}],
   leader:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"datadefect", label:"Data Defect"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
-  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"drvview", label:"Layar Driver"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
+  viewer:      [{key:"dashboard", label:"Dashboard"}, {key:"rci", label:"📡 RCI NVDC"}, {key:"rciorder", label:"📦 Order Unit NVDC"}, {key:"rcidpp", label:"🏭 DPP vs Aktual (RCI)"}, {key:"rcidef", label:"🛠️ Defect EKY (RCI)"}, {key:"rcimdp", label:"⏰ Delay MDP"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"delivery", label:"Delivery"}, {key:"koordinator", label:"Koordinator"}, {key:"drvview", label:"Layar Driver"}, {key:"dccp", label:"Jadwal DCCP"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"defect", label:"Unit Defect/NG"}, {key:"confirmdefect", label:"Konfirmasi Defect"}, {key:"datadefect", label:"Data Defect"}, {key:"speedlog", label:"Riwayat Kecepatan"}, {key:"batam", label:"Unit Batam"}, {key:"prio", label:"Unit Prioritas"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
   rci:         [{key:"rci", label:"📡 Ringkasan"}, {key:"rciorder", label:"📦 Order Unit"}, {key:"ccmap", label:"🗺️ Peta"}, {key:"ccplan", label:"🚚 DCCP"}, {key:"rcidpp", label:"🏭 DPP"}, {key:"rcidef", label:"🛠️ Defect"}, {key:"rcimdp", label:"⏰ Delay MDP"}, {key:"display", label:"🅿️ Display"}],
   admin:       [{key:"admin", label:"Admin Panel"}, {key:"dashboard", label:"Dashboard"}, {key:"ekyrep", label:"Laporan EKY"}, {key:"ccmap", label:"Peta CC"}, {key:"ccplan", label:"Planning CC"}, {key:"display", label:"Display"}, {key:"unduh", label:"Download"}],
 };
@@ -2750,6 +2750,7 @@ function doLogout(){
   try{ presenceOff(); }catch(e){}
   try{ mdlStop(); }catch(e){}
   try{ nvoStop(); }catch(e){}
+  try{ pgMapClose(); }catch(e){}
   try{ ilsSeatRelease(); }catch(e){}
   try{ devSeatRelease(); }catch(e){}
   try{ koSeatRelease(); }catch(e){}   /* kursi Koordinator LP dilepas: HP berikutnya langsung bisa memakai */   /* kursi pembuat ILS dilepas supaya HP lain bisa memakai */
@@ -10783,8 +10784,11 @@ function pdmCompute(data, ym){
   /* DPP hanya sampai tanggal terakhir yang sudah diestimasi Daihatsu (setelah itu belum ada angka, bukan nol) */
   let lastD=-1; rows.forEach((r,i)=>{ if(r.dpp) lastD=i; }); rows.forEach((r,i)=>{ if(i>lastD) r.dpp=null; });
   const upTo=rows.filter(r=>!r.future), sum=(L,k)=>L.reduce((s,r)=>s+(r[k]||0),0);
-  return {ym, nd, rows, M, dLines, tot:{mdpMonth:M?sum(rows,"mdp"):null, mdpTD:M?sum(upTo,"mdp"):null, dppTD:dLines.length?sum(upTo,"dpp"):null, act:sum(upTo,"act")}, anyMdpAct:rows.some(r=>r.src==="mdp")};
+  const achK=Object.keys(data.achDaily||{}).filter(k=>k.slice(0,7)===ym).sort(), achA=achK[0]||"", achB=achK[achK.length-1]||"";   /* rentang tanggal file Achievement yang sudah diupload */
+  const miss=upTo.filter(r=>!r.today && ((dLines.length ? (r.dpp||0) : (r.mdp||0))>0) && !((r.act||0)>0) && !(achA && r.key>=achA && r.key<=achB)).map(r=>r.day);   /* hari kerja tanpa aktual sama sekali */
+  return {ym, nd, rows, M, dLines, tot:{mdpMonth:M?sum(rows,"mdp"):null, mdpTD:M?sum(upTo,"mdp"):null, dppTD:dLines.length?sum(upTo,"dpp"):null, act:sum(upTo,"act")}, anyMdpAct:rows.some(r=>r.src==="mdp"), miss};
 }
+function pdmMissTxt(L){ const out=[]; let a=null,b=null; (L||[]).forEach(d=>{ if(a==null){ a=b=d; } else if(d===b+1) b=d; else { out.push(a===b?""+a:a+"–"+b); a=b=d; } }); if(a!=null) out.push(a===b?""+a:a+"–"+b); return out.join(", "); }
 function pdmChartSVG(R, mode){
   const C={act:"#1E9E5A", dpp:"#2F6FB5", mdp:"#D9731F", ink:"#475467", dim:"#6B7686", grid:"#E2E6ED"};
   const cum=mode==="cum", rows=R.rows.map(r=>Object.assign({},r));
@@ -10855,6 +10859,9 @@ function pdmCardHtml(data){
         ${tile("Aktual s.d. hari ini", fmt(T.act), "#1E9E5A", [T.dppTD!=null?"vs DPP "+gap(T.act,T.dppTD)+pct(T.act,T.dppTD):"", T.mdpTD!=null?"vs MDP "+gap(T.act,T.mdpTD)+pct(T.act,T.mdpTD):""].filter(Boolean).join(" · "))}
         ${T.mdpMonth!=null?tile("Sisa plan MDP", fmt(Math.max(0,T.mdpMonth-T.act)), "#6B7686", "sampai akhir bulan"):""}
       </div>
+      ${R.miss && R.miss.length?`<div class="msg" style="background:#FEF3C7;color:#92400E;margin:0 0 8px;">⚠ Aktual tgl <b>${pdmMissTxt(R.miss)}</b> belum ada di RADAR (input Dispatcher baru tercatat lengkap sejak tgl 12). Upload file <b>Achievement PDI</b> dari Datalizer (mulai tgl 1) supaya grafik terisi${mdlCanUpload()?":":" — upload oleh akun Leader / Admin di kartu Delay MDP."}
+        ${mdlCanUpload()?`<div style="margin-top:6px;"><button class="btn btn-primary btn-sm" style="width:auto;" onclick="mdlUpload('pdmMsg')">📂 Upload Achievement PDI</button></div>`:""}</div>`:""}
+      <div id="pdmMsg">${mdlMsgHtml('pdmMsg')}</div>
       ${legend}${pdmChartSVG(R, pdmMode)}${tbl}
       <button class="btn btn-outline btn-sm" style="width:auto;margin-top:8px;" onclick="mdpDownload('${ym}')">⬇ Download Excel (rekap DPP · MDP · Aktual)</button>
       <div class="footnote" style="margin-top:6px;">Aktual = unit masuk EKY per hari produksi 07:00–06:59: input Dispatcher RADAR, dilengkapi file <b>Achievement PDI</b> (diupload di Delay MDP) untuk hari yang belum tercatat lengkap di RADAR. DPP tampil sampai tanggal terakhir yang sudah diestimasi. Sentuh / arahkan ke tanggal untuk melihat angkanya.</div>`}
@@ -11315,11 +11322,17 @@ function mdlUpload(msgId){
           out.push(`<div class="msg" style="background:var(--green-bg);color:var(--green);">✔ MDP ${escH(dppMonthName(P.ym))}: plan <b>${P.units.toLocaleString('id-ID')}</b> unit${P.hasBranch?` (<b>${(P.nB||0).toLocaleString('id-ID')}</b> dealer Batam)`:" (kolom BranchName tidak ada, Batam tidak bisa dipisah)"}${ok?` · <b>${M.nDone.toLocaleString('id-ID')}</b> sudah input menurut file MDP`:""}.</div>`);
         } else {
           const I=mdlParseInp(H); if(!I) throw new Error("kolom FrameNumber tidak ditemukan / tidak ada baris unit");
-          try{ achDailySave(achDailyFromH(H)); }catch(e){ console.warn("achDaily", e); }
+          let achKs=[]; try{ const AD=achDailyFromH(H); if(achDailySave(AD)) achKs=Object.keys(AD).sort(); }catch(e){ console.warn("achDaily", e); }
           if(!(FBS.enabled && FBS.db)) throw new Error("butuh koneksi server");
           const old=(await FBS.db.ref(MDL_PATH+"/inp/"+I.ym).once("value")).val();
           const rec=mdlMergeInp(old, Object.assign({file:f.name, out:H.out||"", ts:Date.now(), by:(currentUser&&currentUser.name)||""}, I));
           await FBS.db.ref(MDL_PATH+"/inp/"+I.ym).set(rec); srv++;
+          if(achKs.length){   /* 21 Nov 03.55: pastikan Aktual harian (grafik DPP·MDP·Aktual) benar-benar tersimpan di server */
+            const dt=k=>{ const [y,m,d]=k.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("id-ID",{day:"numeric",month:"short"}); };
+            let okS=false, why=""; for(let i=0;i<8 && !okS;i++){ await new Promise(r=>setTimeout(r,800)); try{ const v=(await FBS.db.ref(FB_ROOT+"/achDaily/"+achKs[0]).once("value")).val(); okS=!!v; }catch(e){ why=fbDenied(e)?"server menolak (aturan Firebase)":String(e&&e.message||e); break; } }
+            out.push(okS?`<div class="msg" style="background:var(--green-bg);color:var(--green);">📈 Grafik Aktual harian terisi dari file ini: <b>${achKs.length}</b> hari (${escH(dt(achKs[0]))} – ${escH(dt(achKs[achKs.length-1]))}).</div>`
+              :`<div class="msg err">⚠ Aktual harian untuk grafik belum terkonfirmasi tersimpan di server${why?` (${escH(why)})`:""}. Cek koneksi lalu upload file ini sekali lagi.</div>`);
+          }
           out.push(`<div class="msg" style="background:var(--green-bg);color:var(--green);">✔ Achievement PDI: <b>${I.n.toLocaleString('id-ID')}</b> unit (PDI ${escH(mdlDateTxt(I.from))} – ${escH(mdlDateTxt(I.to))})${old && (+rec.n||0)>I.n?` · digabung dengan upload sebelumnya jadi <b>${(+rec.n||0).toLocaleString('id-ID')}</b> unit`:""}.</div>`);
         }
       }catch(e){ const m=String(e&&e.message||e); out.push(`<div class="msg err">✖ ${escH(f.name)}: ${escH(m==="PASSWORD"?"password salah":(fbDenied(e)?"server menolak menyimpan (aturan Firebase radar_foto)":m))}</div>`); }
@@ -12202,6 +12215,24 @@ function dispCss(){
     body.disp-tv .dc-l>.card:not(.y-cc):not(.y-mdl):not(.y-queue){max-height:32vh;overflow:auto;}
     body.disp-tv .dc-r .y-sum{max-height:52vh;overflow:auto;}
     body.disp-tv .dc-r .y-sched{max-height:none;overflow:visible;}
+    body.disp-tv .dc-l>.alertcard{max-height:30vh;overflow:auto;}
+    body.disp-tv .dc-m .stallblock{padding:10px 12px;}
+    body.disp-tv .dc-m .stalltitle{margin-bottom:4px;}
+    body.disp-tv .dc-m .mapcol{flex-direction:row;gap:10px;}
+    body.disp-tv .dc-m .gridblock{flex:1 1 0;min-width:0;padding:6px 6px 8px;}
+    body.disp-tv .dc-m .gridblock .glabel{margin-bottom:12px;}
+    body.disp-tv .dc-m .stallcolset{gap:5px;}
+    body.disp-tv .dc-m .colhead{font-size:15px !important;line-height:1.05;padding:0 0 3px !important;}
+    body.disp-tv .dc-m .colhead .n{font-size:10px !important;}
+    body.disp-tv .dc-m .cellstack{gap:4px;}
+    body.disp-tv .dc-m .yardcell{min-height:0 !important;padding:5px 2px !important;border-radius:8px !important;}
+    body.disp-tv .dc-m .yardcell .id{font-size:10px !important;line-height:1.1;}
+    body.disp-tv .dc-m .yardcell .v{font-size:11.5px !important;margin-top:1px !important;line-height:1.15;}
+    body.disp-tv .dc-m .sm-legend{margin:0 0 6px;}
+    body.disp-tv .dc-m .y-prog{padding:12px 14px;}
+    body.disp-tv .dc-m .y-prog .pg-road{margin:6px 2px 2px;}
+    body.disp-tv .dc-m .y-prog .pg-list{max-height:96px;}
+    body.disp-tv .dc-m .y-prog .pg-col{padding:7px 9px;}
     body.disp-tv .yardwrap .card::-webkit-scrollbar{width:6px;} body.disp-tv .yardwrap .card::-webkit-scrollbar-thumb{background:rgba(103,232,249,.35);border-radius:6px;}
   }
   `;
@@ -12287,7 +12318,7 @@ function nvoPick(g){ const d=DB.get(), s=nvoStallInfo(d).find(x=>x.g===g); if(!s
   NVO.sel[g]=!NVO.sel[g]; if(!NVO.sel[g]) delete NVO.sel[g]; render(); }
 function nvoPickModel(m){ NVO.mdl[m]=!NVO.mdl[m]; if(!NVO.mdl[m]) delete NVO.mdl[m]; render(); }
 function nvoPesan(){
-  if(!nvoCanOrder()) return;
+  if(!nvoCanOrder()){ miniToast("👁 Contoh tampilan — order unit hanya bisa dari akun RCI NVDC (atau Delivery/Admin).", 6000); return; }
   const d=DB.get(), G=Object.keys(NVO.sel).filter(g=>NVO.sel[g]);
   if(!G.length){ alert("Contreng dulu stall yang mau di-order."); return; }
   if(!FBS.enabled || !FBS.db || !FBS.authed){ alert("Belum tersambung ke server. Coba lagi sebentar."); return; }
@@ -12353,12 +12384,13 @@ function rciOrderHtml(d){
   const nU=Object.values(tot).reduce((a,b)=>a+b,0);
   const body=`<div class="nvo-ok">
     <div class="card nvo-how"><b>📦 Order unit model tertentu dari EKY</b><div>1. Pilih model yang dibutuhkan (boleh lebih dari satu) — stall paling banyak model itu tampil paling atas.<br>2. Contreng stall yang mau diambil.<br>3. Tekan <b>Order</b>. Delivery EKY langsung mendapat notifikasi dan stall itu didahulukan saat membuat ILS. Setelah unitnya terangkut, urutan kembali FIFO normal.</div></div>
+    ${nvoCanOrder()?"":`<div class="msg info" style="margin-bottom:10px;">👁 <b>Mode Pengamat</b> — ini tampilan yang dipakai RCI NVDC untuk order unit ke EKY. Stall boleh dicoba dicontreng, tapi order hanya bisa dikirim dari akun RCI NVDC.</div>`}
     ${NVO.state==="denied"?`<div class="msg err">Server menolak akses data order (rule radar_foto). Hubungi Admin.</div>`:""}
     <div class="card"><h3 style="margin:0 0 8px;">🎯 Model yang dibutuhkan</h3><div class="nvo-mdls">${mdlChips||`<span style="color:var(--text-dim);font-size:13px;">Belum ada unit siap di stall.</span>`}</div></div>
     <div class="nvo-grid">${ord.map(card).join("")||`<div class="nvo-empty">Stall kosong.</div>`}</div>
     <div class="nvo-bar"><div class="nvo-bi"><b>${G.length} stall dipilih</b>${nU?` · ${nU} unit: ${escH(Object.entries(tot).sort((a,b)=>b[1]-a[1]).map(([m,n])=>m+" "+n).join(", "))}`:""}</div>
       <input id="nvoNote" type="text" maxlength="200" placeholder="Catatan untuk EKY (mis. line NVDC kekurangan Avanza)">
-      <button class="btn btn-primary" ${G.length&&!NVO.busy?"":"disabled"} onclick="nvoPesan()">${NVO.busy?"⏳ Menyimpan…":`📦 Order ke EKY${G.length?` (${G.length} stall)`:""}`}</button></div>
+      <button class="btn btn-primary" ${(G.length||!nvoCanOrder())&&!NVO.busy?"":"disabled"} onclick="nvoPesan()">${NVO.busy?"⏳ Menyimpan…":`📦 Order ke EKY${G.length?` (${G.length} stall)`:""}${nvoCanOrder()?"":" · contoh"}`}</button></div>
     <div class="card"><h3 style="margin:0 0 8px;">🧾 Order 24 jam terakhir</h3>${nvoOrderListHtml(d)}</div></div>`;
   return rciWrap("rciorder", body);
 }
@@ -12372,11 +12404,11 @@ function stallLiveMarks(d){
 function stallMarkCls(m){ if(!m) return ""; const c=[]; if(m.ils.length) c.push(m.ils.some(x=>!x.load)?"sm-ils":"sm-load"); if(m.ord) c.push("sm-ord"); return c.join(" "); }
 function stallMarkTags(m){ if(!m) return ""; let h="";
   if(m.ord) h+=`<span class="sm-tag sm-t-ord" title="Order NVDC oleh ${escH(m.ord.by)}">📦 ORDER</span>`;
-  if(m.ils.length){ const b=m.ils[0], short=String(b.plat||"").replace(/^[A-Z]+\s*/,"").replace(/\s+[A-Z]+$/,""); h+=`<span class="sm-tag ${b.load?"sm-t-load":"sm-t-ils"}" title="ILS #${b.id} · ${escH(b.plat)}">${b.load?"🚚 DELOUT":"🔄 LOADING"} ${escH(short)}</span>`; }
+  if(m.ils.length){ const b=m.ils[0], short=String(b.plat||"").replace(/^[A-Z]+\s*/,"").replace(/\s+[A-Z]+$/,""); h+=`<span class="sm-tag ${b.load?"sm-t-load":"sm-t-ils"}" title="ILS #${b.id} · ${escH(b.plat)} · ${b.load?"loading selesai, siap Delout":"sedang loading"}">${b.load?"🚚":"🔄"} ${escH(short)}</span>`; }
   return h?`<div class="sm-tags">${h}</div>`:""; }
 function stallMarkLegend(M){ const v=Object.values(M||{}); if(!v.length) return "";
   const nI=v.filter(m=>m.ils.some(x=>!x.load)).length, nL=v.filter(m=>m.ils.length && m.ils.every(x=>x.load)).length, nO=v.filter(m=>m.ord).length;
-  const p=[]; if(nI) p.push(`<span class="sm-lg sm-t-ils">🔄 ILS dibuat / loading ${nI}</span>`); if(nL) p.push(`<span class="sm-lg sm-t-load">🚚 Loading selesai, siap Delout ${nL}</span>`); if(nO) p.push(`<span class="sm-lg sm-t-ord">📦 Order NVDC ${nO}</span>`);
+  const p=[]; if(nI) p.push(`<span class="sm-lg sm-t-ils">🔄 + plat = ILS dibuat / sedang loading · ${nI}</span>`); if(nL) p.push(`<span class="sm-lg sm-t-load">🚚 + plat = loading selesai, siap Delout · ${nL}</span>`); if(nO) p.push(`<span class="sm-lg sm-t-ord">📦 Order NVDC ${nO}</span>`);
   return p.length?`<div class="sm-legend">${p.join("")}</div>`:""; }
 function nvoCss(){
   return `
@@ -12502,14 +12534,14 @@ function ccProgressHtml(d, dark, opt){
     return it.dY!=null?`${it.dY.toFixed(1)} km ke EKY`:"belum absen";
   };
   const btn=(it,kind)=>!opt.mark?"":(kind==="done"?(it.mk?`<button class="pg-btn" onclick="ccDoneUnset('${it.k}')">↺ Batal tanda</button>`:""):(["otw","nvdc","back","belum"].includes(kind)?`<button class="pg-btn" onclick="ccDoneSet('${it.k}')">✅ Selesai ritase</button>`:""));
-  const chip=(it,kind)=>`<span class="pg-chip pg-${kind}"><span class="pg-p"><b>${escH(it.plat)}</b>${it.lp?` <i>${escH(it.lp)}</i>`:""}</span><em>${escH(sub(it,kind))}</em>${btn(it,kind)}</span>`;
+  const chip=(it,kind)=>`<span class="pg-chip pg-${kind}${it.gps?" pg-gps":""}" ${it.gps?`onclick="if(!event.target.closest('button')) pgMap('${it.k}')" title="Lihat posisi ${escH(it.plat)} di peta"`:""}><span class="pg-p"><b>${escH(it.plat)}</b>${it.lp?` <i>${escH(it.lp)}</i>`:""}${it.gps?` <span class="pg-pin">📍</span>`:""}</span><em>${escH(sub(it,kind))}</em>${btn(it,kind)}</span>`;
   const col=(kind,ico,lbl,L)=>`<div class="pg-col pg-${kind}"><div class="pg-h"><span class="pg-ico">${ico}</span><span class="pg-l">${lbl}</span><span class="pg-n">${rciN(L.length)}</span></div>
     <div class="pg-list">${L.length?L.map(it=>chip(it,kind)).join(""):`<span class="pg-none">–</span>`}</div></div>`;
   const short=p=>String(p).replace(/^[A-Z]+\s*/,"").replace(/\s+[A-Z]+$/,"");
   const dots=[].concat(P.otw.map(x=>[x,"otw"]), P.back.map(x=>[x,"back"])).filter(([x])=>x.t!=null)
     .map(([x,k])=>`<span class="pg-dot pg-${k}" style="left:calc(${(Math.max(0,Math.min(1,x.t))*100).toFixed(1)}% - 6px);" title="${escH(x.plat)}"><b>${escH(short(x.plat))}</b></span>`).join("");
   const shN=P.sh==="1"?"Day":"Night";
-  return `<div class="card y-prog ${dark?"pg-dark":""}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">🛣️ Progress CC EKY</h3><span class="pg-tot">${P.total} CC shift ${shN} · real-time</span></div>
+  return `<div class="card y-prog ${dark?"pg-dark":""}"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">🛣️ Progress CC EKY</h3><span class="pg-hr"><span class="pg-tot">${P.total} CC shift ${shN} · real-time</span><button class="pg-mapbtn" onclick="pgMap('')">🗺️ Peta</button></span></div>
     ${hasMap?`<div class="pg-road"><span class="pg-end pg-a">EKY <b>${P.eky.length}</b></span><div class="pg-line"><div class="pg-flow"></div>${dots}</div><span class="pg-end pg-b">NVDC <b>${P.nvdc.length}</b></span></div>`:""}
     <div class="pg-cols">${col("eky","🅿️","Di EKY",P.eky)}${col("otw","🚚","Arah NVDC",P.otw)}${col("nvdc","🏁","Di NVDC",P.nvdc)}${col("back","↩️","Arah balik EKY",P.back)}${col("done","✅","Selesai ritase",P.done)}</div>
     ${P.belum.length?`<div class="pg-belum"><b>⏳ Belum datang (${P.belum.length}):</b> ${P.belum.map(it=>`${escH(it.plat)}${it.lp?` <i>${escH(it.lp)}</i>`:""}${it.dY!=null?` <i>· ${it.dY.toFixed(1)} km</i>`:""}${opt.mark?` <button class="pg-btn pg-btn-i" onclick="ccDoneSet('${it.k}')">✅</button>`:""}`).join(" · ")}</div>`:""}
@@ -12541,6 +12573,38 @@ function ccTripOpen(d, plat, lo){
     return true; }catch(e){ return false; }
 }
 function ccKeepOn(d, plat){ try{ if(!plat) return false; if(csActive(d, plat)) return "cs"; if(ccTripOpen(d, plat)) return "trip"; }catch(e){} return false; }
+/* 21 Nov 03.50: tombol 🗺️ Peta di Progress CC — lihat posisi real CC. Role yang punya Peta CC: pindah ke menu Peta (mengikuti CC yang diklik).
+   Display tanpa login: peta muncul di atas layar, tertutup sendiri setelah 3 menit supaya TV kembali ke Display. */
+let _pgMapT=0, _pgMapT2=0;
+function pgMap(k){
+  try{
+    const plat=k?platFmt(k):null, tabs=(currentUser && TABS_BY_ROLE[currentUser.role])||[];
+    if(currentUser && currentUser.role!=="display" && tabs.some(t=>t.key==="ccmap")){
+      ccFollow=plat||null;
+      if(activeTab!=="ccmap") switchTab("ccmap"); else { try{ ccFollowBar(); updateTrackUI(); }catch(e){} }
+      setTimeout(()=>{ try{ const e=document.getElementById("ccmap"); if(e) e.scrollIntoView({behavior:"smooth",block:"center"}); }catch(e){} }, 350);
+      return;
+    }
+    pgMapOpen(plat);
+  }catch(e){}
+}
+function pgMapOpen(plat){
+  pgMapClose();
+  const ov=document.createElement("div"); ov.id="pgMapOv";
+  ov.innerHTML=`<div class="pgm-box"><div class="pgm-h"><b>🗺️ Posisi CC real-time${plat?` · ${escH(plat)}`:""}</b><span class="pgm-s">ADM KAP ⇄ NVDC Karawang · tertutup sendiri setelah 3 menit</span><button class="pgm-x" onclick="pgMapClose()">✖ Tutup</button></div><div id="ccmapMsg"></div><div id="ccmap" class="pgm-map"></div></div>`;
+  ov.addEventListener("click", e=>{ if(e.target===ov) pgMapClose(); });
+  document.body.appendChild(ov);
+  ccFollow=plat||null;
+  try{ initCcMap(); }catch(e){}
+  _pgMapT=setInterval(()=>{ if(!document.getElementById("pgMapOv")){ clearInterval(_pgMapT); return; } try{ updateTrackUI(); }catch(e){} }, 5000);
+  _pgMapT2=setTimeout(()=>{ try{ if(document.getElementById("pgMapOv")===ov) pgMapClose(); }catch(e){} }, 180000);
+}
+function pgMapClose(){
+  clearInterval(_pgMapT); clearTimeout(_pgMapT2);
+  const ov=document.getElementById("pgMapOv"); if(!ov) return;
+  try{ if(ccMapObj) ccMapObj.remove(); }catch(e){} ccMapObj=null; ccMapLayer=null; ccFollow=null; ov.remove();
+}
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && document.getElementById("pgMapOv")) pgMapClose(); });
 /* Delay MDP ringkas untuk Display tanpa login */
 function dispMdlHtml(d){
   try{ mdlListen(); }catch(e){}
@@ -12562,12 +12626,12 @@ function dispTvLayout(html, d){
     const L=mk("dc-l"), M=mk("dc-m"), R=mk("dc-r"), tmp=document.createElement("template");
     tmp.innerHTML=ccProgressHtml(d, true)+dispMdlHtml(d);
     const prog=tmp.content.querySelector(".y-prog"), mdl=tmp.content.querySelector(".y-mdl");
-    [cc, mdl, ...others, queue, off].forEach(e=>{ if(e) L.appendChild(e); });
+    [alert, cc, mdl, ...others, queue, off].forEach(e=>{ if(e) L.appendChild(e); });   /* 21 Nov 03.50: peringatan Batam ke kolom kiri supaya Progress CC tidak tertutup */
     [stall, prog].forEach(e=>{ if(e) M.appendChild(e); });
     [sum, sched].forEach(e=>{ if(e) R.appendChild(e); });
     const cols=document.createElement("div"); cols.className="disp-cols"; cols.append(L, M, R);
     while(w.firstChild) w.removeChild(w.firstChild);
-    if(alert) w.appendChild(alert); w.appendChild(cols); if(foot) w.appendChild(foot);
+    w.appendChild(cols); if(foot) w.appendChild(foot);
     return t.innerHTML;
   }catch(e){ return html; }
 }
@@ -12593,6 +12657,16 @@ function progCss(){
   .pg-end b{margin-left:4px;padding:0 6px;border-radius:6px;background:rgba(255,255,255,.25);}
   .pg-btn{display:inline-block;margin-top:4px;font-size:10.5px;font-weight:800;border-radius:7px;border:1px solid currentColor;background:rgba(255,255,255,.6);color:#15803D;padding:2px 7px;cursor:pointer;}
   .pg-dark .pg-btn{background:rgba(0,0,0,.25);color:#86EFAC;} .pg-btn-i{margin:0 0 0 2px;padding:0 5px;}
+  .pg-hr{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .pg-mapbtn{font:800 12.5px system-ui,sans-serif;border:none;border-radius:999px;padding:6px 14px;color:#fff;cursor:pointer;background:linear-gradient(135deg,#0284C7,#14B8A6);box-shadow:0 4px 14px -4px rgba(14,165,233,.7);}
+  .pg-mapbtn:hover{filter:brightness(1.1);}
+  .pg-chip.pg-gps{cursor:pointer;} .pg-chip.pg-gps:hover .pg-p b{text-decoration:underline;} .pg-pin{font-size:10px;}
+  #pgMapOv{position:fixed;inset:0;z-index:2147481000;background:rgba(2,6,23,.72);display:flex;align-items:center;justify-content:center;padding:2vh 2vw;}
+  #pgMapOv .pgm-box{width:min(1400px,100%);height:min(900px,100%);background:#0B1222;border:1px solid rgba(103,232,249,.35);border-radius:18px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.8);}
+  #pgMapOv .pgm-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;color:#E2E8F0;font-size:15px;}
+  #pgMapOv .pgm-h b{color:#67E8F9;} #pgMapOv .pgm-s{font-size:12px;opacity:.7;flex:1;}
+  #pgMapOv .pgm-x{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;border-radius:10px;padding:8px 16px;font-weight:800;cursor:pointer;}
+  #pgMapOv #ccmapMsg{padding:0 16px;} #pgMapOv .pgm-map{flex:1;min-height:0;background:#e8eef5;}
   .pg-belum{font-size:11.5px;margin-top:8px;padding:6px 9px;border-radius:10px;background:rgba(148,163,184,.12);line-height:1.5;max-height:64px;overflow:auto;}
   .pg-belum i{font-style:normal;opacity:.7;font-size:10.5px;}
   .pg-col{border-radius:14px;padding:9px 10px;min-width:0;}
