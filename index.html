@@ -1744,7 +1744,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="20 Nov 2026 23.25";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="20 Nov 2026 23.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2744,6 +2744,7 @@ function ccLastOutBackstop(){
 }
 function ccLastOutSave(){ const v=(document.getElementById("ccLastOutM")||{}).value; const n=Math.max(0,Math.min(240,Math.round(+v||0))); DB.set(d=>{ d.ccLastOutM=n; }); alert(n?("Driver CC otomatis keluar "+ccLastOutFmtM(n)+" sesudah Delout ritase terakhir (DCCP)."):"Keluar otomatis sesudah ritase terakhir dimatikan."); render(); }
 function doLogout(){
+  try{ document.body.classList.remove("disp-tv"); }catch(e){}
   try{ presenceOff(); }catch(e){}
   try{ mdlStop(); }catch(e){}
   try{ ilsSeatRelease(); }catch(e){}
@@ -2811,7 +2812,7 @@ function cleanPlatForUser(){
   }catch(e){}
 }
 function enterApp(forceTab){
-  try{ _rciSeen={}; rciCss(); }catch(e){}
+  try{ _rciSeen={}; rciCss(); document.body.classList.toggle("disp-tv", !!(currentUser && currentUser.role==="display")); }catch(e){}
   fbModeSync();   /* hemat data: listener mengikuti role yang login */
   if(!isViewer()) viewerUnclean();
   else { try{ if(window.AndroidTLS){ if(AndroidTLS.alarmStop) AndroidTLS.alarmStop(); if(AndroidTLS.ccWatch) AndroidTLS.ccWatch(false,"","",0); } }catch(e){} }   /* Pengamat: matikan alarm / pantauan giliran native sisa sesi akun lain di HP ini */
@@ -2884,7 +2885,7 @@ function renderFail(e){
   }catch(_){}
 }
 function setVP(vp, html){
-  try{ html=uiHeroHtml(activeTab)+html; }catch(e){}   /* banner warna per menu (20 Nov) */
+  try{ html=(isDispTv() && activeTab==="display" ? dispHudHtml(DB.get()) : uiHeroHtml(activeTab))+html; }catch(e){}   /* banner warna per menu / HUD display (20 Nov) */
   // Auto-refresh: kalau hasil HTML sama persis, jangan sentuh layar sama sekali
   if(_autoRender && html === _lastVPHtml && _lastVPTab === activeTab){ _vpChanged = false; return; }
   _vpChanged = true; _lastVPHtml = html; _lastVPTab = activeTab;
@@ -2898,7 +2899,8 @@ function renderInner(){
   const vp = document.getElementById("viewport");
   try{ if(isRci()){ ldrPeriod="today"; ldrShift=currentShift(); ccMapShift=currentShift()==="1"?"day":"night"; } }catch(e){}   /* RCI: selalu hari ini & shift berjalan */
   let _uiAnim=false; try{ _uiAnim=!!(currentUser && !uiLite() && currentUser.role!=="display" && !_rciSeen[activeTab] && !UI_NO_HERO.has(activeTab)); }catch(e){}
-  vp.className = "view v-"+activeTab+(_uiAnim?" ui-in":"")+(isRci()?" rci-auto":"");
+  const _dispIn=!!(isDispTv() && !_rciSeen.display);
+  vp.className = "view v-"+activeTab+(_uiAnim?" ui-in":"")+(isRci()?" rci-auto":"")+(_dispIn?" disp-in":"");
   if(activeTab==="dispatcher"){ setVP(vp, pdiCardSafe()+renderDispatcher()); if(_vpChanged && vinDraft) setTimeout(()=>{ if(document.getElementById("vinInput")) onVinInput(); },0); }
   else if(activeTab==="orderstall") setVP(vp, renderOrderStall());
   else if(activeTab==="drvview") setVP(vp, renderDrvView());
@@ -2925,6 +2927,7 @@ function renderInner(){
   else if(activeTab==="admin"){ setVP(vp, renderAdmin()); if(adminTab==="users") usrRender(); }
   else if(activeTab==="display") setVP(vp, renderDisplay());
   try{ rciAfterRender(); }catch(e){}
+  try{ if(_dispIn){ _rciSeen.display=true; setTimeout(rciCountUp, 20); } dispHudTick(); }catch(e){}
 }
 
 /* ======================================================================
@@ -11853,7 +11856,7 @@ function rciCss(){
   @keyframes rciPulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.75);}70%{box-shadow:0 0 0 9px rgba(74,222,128,0);}100%{box-shadow:0 0 0 0 rgba(74,222,128,0);}}
   @keyframes rciBob{0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-6px) rotate(4deg);}}
   @media (prefers-reduced-motion: reduce){.rci-hero *,.rci-in *{animation:none!important;}}
-  `+uiCssExtra();
+  `+uiCssExtra()+dispCss();
   document.head.appendChild(st);
 }
 function rciHero(tab, extra){
@@ -12019,6 +12022,114 @@ function uiTile(lbl, val, col, sub, minW){
   const v=(typeof val==="number" && isFinite(val)) ? rciN(val) : val, c2=UI_SHADE[String(col).toUpperCase()]||UI_SHADE[col]||col;
   return `<div class="ui-tile" style="flex:1;min-width:${minW||130}px;background:radial-gradient(circle at 100% 0,rgba(255,255,255,.28),rgba(255,255,255,0) 55%),linear-gradient(135deg,${col} 0%,${c2} 100%);"><div class="ui-tl">${lbl}</div><div class="ui-tv">${v}</div>${sub?`<div class="ui-ts">${sub}</div>`:""}</div>`;
 }
+/* ======================================================================
+   DISPLAY TANPA LOGIN — tampilan "command center" futuristik (20 Nov 2026, permintaan Khairul)
+   Hanya untuk role Display (TV / monitor yard). Isi & data sama; yang berubah: tema gelap neon, HUD atas
+   (jam besar, KPI yard), dan di layar lebar (≥1100px) tata letak 3 kolom yang muat satu layar:
+   kiri = Stall CC · CC sudah absen · antrian · parkir luar, tengah = peta stall, kanan = ringkasan shift · jadwal CC
+   (daftar panjang bisa di-scroll di dalam kotaknya).
+====================================================================== */
+function isDispTv(){ return !!(currentUser && currentUser.role==="display"); }
+function dispHudHtml(data){
+  const total=CONFIG.STALL_GROUPS.length*CONFIG.SLOTS_PER_STALL, U=data.units||{};
+  let filled=0, off=0, bt=0; Object.entries(U).forEach(([k,u])=>{ if(!u) return; if(isOffKey(k)) off++; else filled++; if(u.batam) bt++; });
+  const ccIn=Object.values(data.cc||{}).filter(Boolean).length, ccTot=Object.keys(data.cc||{}).length, q=(data.queue||[]).length;
+  let rit=null; try{ const dp=ekyDpNow(data); if(dp) rit=dp.v; }catch(e){}
+  const pct=total?Math.round(filled*100/total):0, sh=currentShift()==="1"?"DAY · 07.00–20.00":"NIGHT · 20.00–07.00";
+  const r=30, c=2*Math.PI*r, off2=c*(1-pct/100);
+  const pod=(lbl,val,sub,col)=>`<div class="dh-pod" style="--pc:${col};"><div class="dh-pl">${lbl}</div><div class="dh-pv">${val}</div><div class="dh-ps">${sub}</div></div>`;
+  return `<div class="disp-hud"><div class="dh-scan"></div>
+    <div class="dh-brand"><div class="dh-logo">R</div><div><div class="dh-t">RADAR EKY</div><div class="dh-s">YARD COMMAND DISPLAY</div><div class="dh-live"><i></i>LIVE · ${sh}</div></div></div>
+    <div class="dh-pods">
+      <div class="dh-pod dh-gauge" style="--pc:#22D3EE;"><svg width="74" height="74" viewBox="0 0 74 74"><circle cx="37" cy="37" r="${r}" fill="none" stroke="rgba(34,211,238,.15)" stroke-width="8"/><circle class="dh-arc" cx="37" cy="37" r="${r}" fill="none" stroke="#22D3EE" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off2.toFixed(1)}" transform="rotate(-90 37 37)"/><text x="37" y="40" text-anchor="middle" dominant-baseline="middle">${pct}%</text></svg>
+        <div><div class="dh-pl">Stall terisi</div><div class="dh-pv">${rciN(filled)}<small>/${total}</small></div><div class="dh-ps">${total-filled} slot kosong</div></div></div>
+      ${pod("CC di stall", `${rciN(ccIn)}${ccTot?`<small>/${ccTot}</small>`:""}`, "siap loading", "#A78BFA")}
+      ${pod("Antrian CC", rciN(q), "menunggu stall", "#F472B6")}
+      ${pod("Ritase shift", rit?`${rciN(rit.a)}<small>/${rit.t}</small>`:"–", rit?`${rit.au} / ${rit.u} unit`:"jadwal DCCP belum ada", "#34D399")}
+      ${pod("Unit Batam", rciN(bt), off?`${off} unit parkir luar`:"di yard", "#FB923C")}
+    </div>
+    <div class="dh-clock"><div id="hudClock" class="dh-time"></div><div class="dh-date">${new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div></div>
+  </div>`;
+}
+function dispHudTick(){ try{ const el=document.getElementById("hudClock"); if(!el) return; const d=new Date(), p=n=>String(n).padStart(2,"0"); el.innerHTML=p(d.getHours())+":"+p(d.getMinutes())+"<span>:"+p(d.getSeconds())+"</span>"; }catch(e){} }
+setInterval(dispHudTick, 1000);
+function dispCss(){
+  return `
+  body.disp-tv{--bg:#050A18;--panel:rgba(13,22,44,.82);--panel2:rgba(30,41,59,.72);--panel3:rgba(51,65,85,.55);--border:rgba(125,211,252,.16);--text:#E2E8F0;--text-dim:#94A3B8;--gold:#67E8F9;--gold-dim:#334155;--green-bg:rgba(34,197,94,.16);--green:#34D399;--red:#F87171;--red-bg:rgba(239,68,68,.16);
+    background-color:#050A18;color:#E2E8F0;
+    background-image:radial-gradient(1100px 600px at 8% -12%,rgba(34,211,238,.16),transparent 60%),radial-gradient(900px 520px at 108% 6%,rgba(168,85,247,.16),transparent 62%),linear-gradient(rgba(148,163,184,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.045) 1px,transparent 1px);
+    background-size:auto,auto,44px 44px,44px 44px;background-attachment:fixed;}
+  body.disp-tv .topbar{background:rgba(5,10,24,.85);border-bottom:1px solid rgba(103,232,249,.18);}
+  body.disp-tv .topbar{color:#CBD5E1;}
+  body.disp-tv #sndBn{top:auto !important;bottom:18px !important;left:auto !important;right:18px !important;margin:0 !important;max-width:460px !important;background:rgba(8,47,73,.96) !important;border:1px solid rgba(103,232,249,.45) !important;border-left:6px solid #22D3EE !important;box-shadow:0 0 34px -8px rgba(34,211,238,.75) !important;}
+  body.disp-tv .topbar .btn,body.disp-tv .topbar button{background:rgba(30,41,59,.8) !important;border-color:rgba(103,232,249,.25) !important;color:#E2E8F0 !important;}
+  body.disp-tv .card{background:linear-gradient(180deg,rgba(15,23,42,.9),rgba(10,17,34,.78)) !important;border:1px solid rgba(103,232,249,.16) !important;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 14px 34px -22px rgba(0,0,0,.9) !important;color:#E2E8F0;}
+  body.disp-tv .card h3,body.disp-tv .stalltitle h3{color:#67E8F9 !important;text-shadow:0 0 14px rgba(103,232,249,.45);}
+  body.disp-tv .card h3::before{background:linear-gradient(180deg,#22D3EE,#A855F7);box-shadow:0 0 10px rgba(34,211,238,.7);}
+  body.disp-tv .card b,body.disp-tv .card strong{color:#F1F5F9;}
+  body.disp-tv table th{color:#7DD3FC !important;border-color:rgba(125,211,252,.18) !important;}
+  body.disp-tv table td,body.disp-tv table tr{border-color:rgba(125,211,252,.12) !important;}
+  body.disp-tv .alertcard{background:linear-gradient(180deg,rgba(127,29,29,.55),rgba(69,10,10,.55)) !important;border-color:rgba(248,113,113,.55) !important;}
+  body.disp-tv .alertcard h3{color:#FCA5A5 !important;text-shadow:0 0 12px rgba(248,113,113,.5);}
+  body.disp-tv .stallblock{background:linear-gradient(180deg,rgba(15,23,42,.9),rgba(10,17,34,.78));border:1px solid rgba(103,232,249,.22);border-radius:18px;padding:12px;box-shadow:0 0 0 1px rgba(103,232,249,.05) inset,0 0 40px -18px rgba(34,211,238,.6);}
+  body.disp-tv .stallmap,body.disp-tv .gridblock{background:transparent !important;}
+  body.disp-tv .yardcell{border-radius:10px !important;}
+  body.disp-tv .yardcell.filled{box-shadow:inset 0 0 0 1px rgba(255,255,255,.22),0 8px 18px -10px rgba(0,0,0,.9),0 0 14px -6px rgba(255,255,255,.35);filter:saturate(1.15) brightness(1.05);}
+  body.disp-tv .yardcell.empty{background:rgba(15,23,42,.6) !important;border:1px dashed rgba(103,232,249,.32) !important;color:#64748B !important;}
+  body.disp-tv .yardcell.empty *{color:#64748B !important;}
+  body.disp-tv .colhead,body.disp-tv .glabel,body.disp-tv .laneV,body.disp-tv .footnote{color:#7DD3FC !important;}
+  body.disp-tv .emptystate{color:#94A3B8 !important;background:transparent !important;}
+  body.disp-tv input,body.disp-tv select{background:rgba(15,23,42,.8);color:#E2E8F0;border-color:rgba(125,211,252,.25);}
+  body.disp-tv [style*="background:#fff"],body.disp-tv [style*="background: #fff"],body.disp-tv [style*="background:#FFF"],body.disp-tv [style*="background:var(--panel)"]{background:rgba(30,41,59,.65) !important;}
+  body.disp-tv [style*="color:#16213E"],body.disp-tv [style*="color:var(--gold)"]{color:#67E8F9 !important;}
+  .disp-hud{position:relative;overflow:hidden;display:flex;align-items:center;gap:18px;flex-wrap:wrap;border-radius:20px;padding:14px 18px;margin-bottom:14px;color:#E2E8F0;
+    background:linear-gradient(120deg,rgba(8,47,73,.9),rgba(30,27,75,.9) 55%,rgba(59,7,100,.85));border:1px solid rgba(103,232,249,.28);box-shadow:0 0 0 1px rgba(103,232,249,.06) inset,0 0 50px -20px rgba(34,211,238,.75);}
+  .disp-hud .dh-scan{position:absolute;top:0;bottom:0;width:30%;left:-30%;background:linear-gradient(90deg,transparent,rgba(103,232,249,.14),transparent);animation:dhScan 5.5s linear infinite;pointer-events:none;}
+  .dh-brand{display:flex;align-items:center;gap:12px;min-width:230px;}
+  .dh-logo{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font:800 30px 'Barlow Condensed',sans-serif;color:#05101F;background:linear-gradient(135deg,#22D3EE,#A78BFA);box-shadow:0 0 22px rgba(34,211,238,.65);}
+  .dh-t{font:800 28px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em;text-shadow:0 0 16px rgba(103,232,249,.55);}
+  .dh-s{font-size:11px;letter-spacing:.32em;color:#7DD3FC;margin-top:3px;}
+  .dh-live{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;font-weight:800;letter-spacing:.12em;color:#A7F3D0;}
+  .dh-live i{width:8px;height:8px;border-radius:50%;background:#34D399;box-shadow:0 0 10px #34D399;animation:dhBlink 1.4s ease-in-out infinite;}
+  .dh-pods{display:flex;gap:10px;flex:1;flex-wrap:wrap;}
+  .dh-pod{flex:1;min-width:130px;border-radius:14px;padding:9px 12px;background:rgba(2,6,23,.45);border:1px solid rgba(148,163,184,.25);border-color:color-mix(in srgb,var(--pc) 45%,transparent);box-shadow:inset 0 0 18px -10px var(--pc);}
+  .dh-gauge{display:flex;align-items:center;gap:10px;min-width:220px;}
+  .dh-gauge text{font:800 16px 'Barlow Condensed',sans-serif;fill:#A5F3FC;}
+  .dh-pl{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--pc);}
+  .dh-pv{font:800 34px/1.05 'Barlow Condensed',sans-serif;color:#F8FAFC;text-shadow:0 0 14px color-mix(in srgb,var(--pc) 70%,transparent);}
+  .dh-pv small{font-size:18px;opacity:.7;margin-left:2px;}
+  .dh-ps{font-size:11px;color:#94A3B8;}
+  .dh-clock{text-align:right;min-width:200px;margin-left:auto;}
+  .dh-time{font:700 50px/1 'Space Mono','Barlow Condensed',monospace;letter-spacing:.02em;color:#E0F2FE;text-shadow:0 0 18px rgba(103,232,249,.6);}
+  .dh-time span{font-size:26px;opacity:.7;}
+  .dh-date{font-size:13px;color:#93C5FD;margin-top:4px;}
+  .disp-in .disp-hud,.disp-in .card,.disp-in .stallblock{animation:rciUp .6s cubic-bezier(.2,.8,.2,1) backwards;}
+  .disp-in .dh-arc{animation:rciRing 1.4s cubic-bezier(.2,.8,.2,1) backwards .2s;--c:188.5;}
+  @media(max-width:1500px){ .dh-pod{min-width:112px;padding:8px 10px;} .dh-gauge{min-width:190px;} .dh-pv{font-size:30px;} .dh-time{font-size:42px;} .dh-brand{min-width:200px;} .dh-t{font-size:24px;} }
+  @keyframes dhScan{from{left:-30%;}to{left:110%;}}
+  @keyframes dhBlink{0%,100%{opacity:1;}50%{opacity:.35;}}
+  @media (prefers-reduced-motion: reduce){.disp-hud *,.disp-in *{animation:none !important;}}
+  @media(min-width:1100px){
+    body.disp-tv .view{max-width:none;padding:16px 20px 28px;}
+    body.disp-tv .yardwrap{display:grid !important;grid-template-columns:minmax(0,1fr) minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start;
+      grid-template-areas:"alert alert alert" "cc map sum" "absen map sum" "queue map sched" "off map sched" "foot foot foot";}
+    body.disp-tv .yardwrap>.ydesk,body.disp-tv .yardwrap .yleft,body.disp-tv .yardwrap .ymap{display:contents !important;}
+    body.disp-tv .yardwrap .card,body.disp-tv .yardwrap .stallblock{margin-bottom:0 !important;min-width:0;}
+    body.disp-tv .yardwrap>.alertcard{grid-area:alert;column-count:3;column-gap:28px;}
+    body.disp-tv .yardwrap>.alertcard h3{column-span:all;}
+    body.disp-tv .yardwrap .y-cc{grid-area:cc;}
+    body.disp-tv .yardwrap .yleft>.card:not(.y-sum):not(.y-cc):not(.y-queue){grid-area:absen;max-height:34vh;overflow:auto;}
+    body.disp-tv .yardwrap .y-queue{grid-area:queue;max-height:30vh;overflow:auto;}
+    body.disp-tv .yardwrap .y-off{grid-area:off;}
+    body.disp-tv .yardwrap .stallblock{grid-area:map;}
+    body.disp-tv .yardwrap .y-sum{grid-area:sum;max-height:44vh;overflow:auto;}
+    body.disp-tv .yardwrap>.y-sched{grid-area:sched;max-height:46vh;overflow:auto;}
+    body.disp-tv .yardwrap>.footnote{grid-area:foot;}
+    body.disp-tv .yardwrap .card::-webkit-scrollbar{width:6px;} body.disp-tv .yardwrap .card::-webkit-scrollbar-thumb{background:rgba(103,232,249,.35);border-radius:6px;}
+  }
+  `;
+}
+
 function uiCssExtra(){
   return `
   .card{border-radius:16px; box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 26px -20px rgba(15,23,42,.55);}
