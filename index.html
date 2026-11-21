@@ -1745,7 +1745,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="21 Nov 2026 04.54";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="21 Nov 2026 09.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -12715,15 +12715,17 @@ function ldrTvCss(){
   `;
 }
 /* ======================================================================
-   21 Nov 04.55 (permintaan Khairul): animasi jalan di HUD Display / Mode TV — car carrier "balapan" dari kiri ke kanan,
-   dengan rumah & pohon di pinggir jalan. Hanya hiasan (CSS, ringan). Fase animasi disamakan dengan jam supaya tidak
-   meloncat ke awal setiap layar diperbarui. Mati otomatis kalau perangkat minta "kurangi gerakan".
+   21 Nov 04.55 → 09.30 (permintaan Khairul & anaknya): animasi jalan di HUD Display / Mode TV.
+   Car carrier "balapan" kiri → kanan, ditambah bis, mobil kecil, motor, kereta lewat di rel belakang,
+   orang jalan kaki & bersepeda di trotoar melewati pom bensin (SPBU) dan warung pecel lele.
+   Hanya hiasan (CSS ringan). Fase animasi disamakan dengan jam supaya tidak meloncat ke awal setiap layar diperbarui.
+   Mati otomatis kalau perangkat minta "kurangi gerakan".
 ====================================================================== */
-const RD_FAR="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='40' viewBox='0 0 520 40'%3E%3Cpath d='M0 34 Q60 24 130 32 T260 30 T390 33 T520 34 V40 H0Z' fill='%230F1A33'/%3E%3Crect x='10' y='24' width='34' height='16' fill='%231E293B'/%3E%3Cpolygon points='7,24 27.0,15 47,24' fill='%23334155'/%3E%3Crect x='15' y='29' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='28' y='29' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='60' y='18' width='26' height='22' fill='%231F2A44'/%3E%3Cpolygon points='57,18 73.0,9 89,18' fill='%233B4A6B'/%3E%3Crect x='65' y='23' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='96' y='28' width='40' height='12' fill='%23172036'/%3E%3Cpolygon points='93,28 116.0,19 139,28' fill='%232E3B5C'/%3E%3Crect x='101' y='33' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='114' y='33' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='160' y='20' width='30' height='20' fill='%231E293B'/%3E%3Cpolygon points='157,20 175.0,11 193,20' fill='%23334155'/%3E%3Crect x='165' y='25' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='178' y='25' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='220' y='26' width='46' height='14' fill='%231B2540'/%3E%3Cpolygon points='217,26 243.0,17 269,26' fill='%23334155'/%3E%3Crect x='225' y='31' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='238' y='31' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='251' y='31' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='300' y='16' width='24' height='24' fill='%231F2A44'/%3E%3Cpolygon points='297,16 312.0,7 327,16' fill='%233B4A6B'/%3E%3Crect x='305' y='21' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='340' y='30' width='36' height='10' fill='%23172036'/%3E%3Cpolygon points='337,30 358.0,21 379,30' fill='%232E3B5C'/%3E%3Crect x='345' y='35' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='358' y='35' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='410' y='22' width='32' height='18' fill='%231E293B'/%3E%3Cpolygon points='407,22 426.0,13 445,22' fill='%23334155'/%3E%3Crect x='415' y='27' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='428' y='27' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='460' y='25' width='40' height='15' fill='%231B2540'/%3E%3Cpolygon points='457,25 480.0,16 503,25' fill='%233B4A6B'/%3E%3Crect x='465' y='30' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='478' y='30' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3C/svg%3E", RD_NEAR="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='44' viewBox='0 0 360 44'%3E%3Crect x='18.5' y='30' width='3' height='12' fill='%233F2A1D'/%3E%3Ccircle cx='20' cy='26' r='9' fill='%23166534'/%3E%3Ccircle cx='15' cy='29' r='6' fill='%2315803D'/%3E%3Ccircle cx='25' cy='28' r='6' fill='%2314532D'/%3E%3Crect x='68.5' y='32' width='3' height='10' fill='%233F2A1D'/%3E%3Cpolygon points='70,12 62,33 78,33' fill='%2314532D'/%3E%3Cpolygon points='70,18 64,30 76,30' fill='%23166534'/%3E%3Crect x='103.5' y='30' width='3' height='12' fill='%233F2A1D'/%3E%3Ccircle cx='105' cy='26' r='9' fill='%23166534'/%3E%3Ccircle cx='100' cy='29' r='6' fill='%2315803D'/%3E%3Ccircle cx='110' cy='28' r='6' fill='%2314532D'/%3E%3Crect x='168.5' y='32' width='3' height='10' fill='%233F2A1D'/%3E%3Cpolygon points='170,12 162,33 178,33' fill='%2314532D'/%3E%3Cpolygon points='170,18 164,30 176,30' fill='%23166534'/%3E%3Crect x='203.5' y='30' width='3' height='12' fill='%233F2A1D'/%3E%3Ccircle cx='205' cy='26' r='9' fill='%23166534'/%3E%3Ccircle cx='200' cy='29' r='6' fill='%2315803D'/%3E%3Ccircle cx='210' cy='28' r='6' fill='%2314532D'/%3E%3Crect x='260.5' y='30' width='3' height='12' fill='%233F2A1D'/%3E%3Ccircle cx='262' cy='26' r='9' fill='%23166534'/%3E%3Ccircle cx='257' cy='29' r='6' fill='%2315803D'/%3E%3Ccircle cx='267' cy='28' r='6' fill='%2314532D'/%3E%3Crect x='298.5' y='32' width='3' height='10' fill='%233F2A1D'/%3E%3Cpolygon points='300,12 292,33 308,33' fill='%2314532D'/%3E%3Cpolygon points='300,18 294,30 306,30' fill='%23166534'/%3E%3Crect x='333.5' y='30' width='3' height='12' fill='%233F2A1D'/%3E%3Ccircle cx='335' cy='26' r='9' fill='%23166534'/%3E%3Ccircle cx='330' cy='29' r='6' fill='%2315803D'/%3E%3Ccircle cx='340' cy='28' r='6' fill='%2314532D'/%3E%3C/svg%3E";
+const RD_FAR="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='40' viewBox='0 0 520 40'%3E%3Cpath d='M0 34 Q60 24 130 32 T260 30 T390 33 T520 34 V40 H0Z' fill='%230F1A33'/%3E%3Crect x='10' y='24' width='34' height='16' fill='%231E293B'/%3E%3Cpolygon points='7,24 27.0,15 47,24' fill='%23334155'/%3E%3Crect x='15' y='29' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='28' y='29' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='60' y='18' width='26' height='22' fill='%231F2A44'/%3E%3Cpolygon points='57,18 73.0,9 89,18' fill='%233B4A6B'/%3E%3Crect x='65' y='23' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='96' y='28' width='40' height='12' fill='%23172036'/%3E%3Cpolygon points='93,28 116.0,19 139,28' fill='%232E3B5C'/%3E%3Crect x='101' y='33' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='114' y='33' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='160' y='20' width='30' height='20' fill='%231E293B'/%3E%3Cpolygon points='157,20 175.0,11 193,20' fill='%23334155'/%3E%3Crect x='165' y='25' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='178' y='25' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='220' y='26' width='46' height='14' fill='%231B2540'/%3E%3Cpolygon points='217,26 243.0,17 269,26' fill='%23334155'/%3E%3Crect x='225' y='31' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='238' y='31' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='251' y='31' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='300' y='16' width='24' height='24' fill='%231F2A44'/%3E%3Cpolygon points='297,16 312.0,7 327,16' fill='%233B4A6B'/%3E%3Crect x='305' y='21' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='340' y='30' width='36' height='10' fill='%23172036'/%3E%3Cpolygon points='337,30 358.0,21 379,30' fill='%232E3B5C'/%3E%3Crect x='345' y='35' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='358' y='35' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='410' y='22' width='32' height='18' fill='%231E293B'/%3E%3Cpolygon points='407,22 426.0,13 445,22' fill='%23334155'/%3E%3Crect x='415' y='27' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='428' y='27' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='460' y='25' width='40' height='15' fill='%231B2540'/%3E%3Cpolygon points='457,25 480.0,16 503,25' fill='%233B4A6B'/%3E%3Crect x='465' y='30' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3Crect x='478' y='30' width='5' height='5' rx='1' fill='%23FCD34D' opacity='.85'/%3E%3C/svg%3E", RD_NEAR="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='50' viewBox='0 0 1600 50'%3E%3Crect x='18.5' y='34' width='3' height='14' fill='%233F2A1D'/%3E%3Ccircle cx='20' cy='29' r='9' fill='%23166534'/%3E%3Ccircle cx='15' cy='32' r='6' fill='%2315803D'/%3E%3Ccircle cx='25' cy='31' r='6' fill='%2314532D'/%3E%3Crect x='58.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='60,14 52,37 68,37' fill='%2314532D'/%3E%3Cpolygon points='60,20 54,34 66,34' fill='%23166534'/%3E%3Crect x='108.5' y='34' width='3' height='14' fill='%233F2A1D'/%3E%3Ccircle cx='110' cy='29' r='9' fill='%23166534'/%3E%3Ccircle cx='105' cy='32' r='6' fill='%2315803D'/%3E%3Ccircle cx='115' cy='31' r='6' fill='%2314532D'/%3E%3Crect x='163.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='165,14 157,37 173,37' fill='%2314532D'/%3E%3Cpolygon points='165,20 159,34 171,34' fill='%23166534'/%3E%3Crect x='203.5' y='34' width='3' height='14' fill='%233F2A1D'/%3E%3Ccircle cx='205' cy='29' r='9' fill='%23166534'/%3E%3Ccircle cx='200' cy='32' r='6' fill='%2315803D'/%3E%3Ccircle cx='210' cy='31' r='6' fill='%2314532D'/%3E%3Crect x='256' y='24' width='92' height='24' fill='%23E2E8F0'/%3E%3Crect x='262' y='30' width='16' height='10' fill='%2393C5FD'/%3E%3Crect x='324' y='30' width='18' height='18' fill='%23475569'/%3E%3Crect x='246' y='12' width='112' height='7' fill='%2316A34A'/%3E%3Crect x='246' y='17' width='112' height='2' fill='%23FFFFFF'/%3E%3Crect x='254' y='19' width='3' height='29' fill='%23CBD5E1'/%3E%3Crect x='347' y='19' width='3' height='29' fill='%23CBD5E1'/%3E%3Crect x='284' y='34' width='9' height='14' rx='1' fill='%23DC2626'/%3E%3Crect x='285.5' y='36' width='6' height='4' fill='%23F8FAFC'/%3E%3Cpath d='M293 38 q4 1 3 6' stroke='%231F2937' stroke-width='1' fill='none'/%3E%3Crect x='310' y='34' width='9' height='14' rx='1' fill='%23DC2626'/%3E%3Crect x='311.5' y='36' width='6' height='4' fill='%23F8FAFC'/%3E%3Cpath d='M319 38 q4 1 3 6' stroke='%231F2937' stroke-width='1' fill='none'/%3E%3Crect x='372' y='4' width='3' height='44' fill='%2394A3B8'/%3E%3Crect x='360' y='-2' width='27' height='14' rx='2' fill='%2316A34A' stroke='%23F8FAFC' stroke-width='1'/%3E%3Ctext x='373.5' y='8' font-family='Arial, Helvetica, sans-serif' font-size='8' font-weight='700' fill='%23FFFFFF' text-anchor='middle'%3ESPBU%3C/text%3E%3Crect x='428.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='430,14 422,37 438,37' fill='%2314532D'/%3E%3Cpolygon points='430,20 424,34 436,34' fill='%23166534'/%3E%3Cpath d='M470 48 Q472 30 469 18' stroke='%235B4636' stroke-width='2.5' fill='none'/%3E%3Cpath d='M469 18 q-9 -2 -14 5 M469 18 q9 -3 14 4 M469 18 q-4 -8 -12 -9 M469 18 q5 -8 12 -8' stroke='%2315803D' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Crect x='523.5' y='34' width='3' height='14' fill='%233F2A1D'/%3E%3Ccircle cx='525' cy='29' r='9' fill='%23166534'/%3E%3Ccircle cx='520' cy='32' r='6' fill='%2315803D'/%3E%3Ccircle cx='530' cy='31' r='6' fill='%2314532D'/%3E%3Crect x='578.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='580,14 572,37 588,37' fill='%2314532D'/%3E%3Cpolygon points='580,20 574,34 586,34' fill='%23166534'/%3E%3Crect x='638.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='640,14 632,37 648,37' fill='%2314532D'/%3E%3Cpolygon points='640,20 634,34 646,34' fill='%23166534'/%3E%3Crect x='688.5' y='34' width='3' height='14' fill='%233F2A1D'/%3E%3Ccircle cx='690' cy='29' r='9' fill='%23166534'/%3E%3Ccircle cx='685' cy='32' r='6' fill='%2315803D'/%3E%3Ccircle cx='695' cy='31' r='6' fill='%2314532D'/%3E%3Crect x='743.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='745,14 737,37 753,37' fill='%2314532D'/%3E%3Cpolygon points='745,20 739,34 751,34' fill='%23166534'/%3E%3Cpath d='M800 48 Q802 30 799 18' stroke='%235B4636' stroke-width='2.5' fill='none'/%3E%3Cpath d='M799 18 q-9 -2 -14 5 M799 18 q9 -3 14 4 M799 18 q-4 -8 -12 -9 M799 18 q5 -8 12 -8' stroke='%2315803D' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Crect x='848.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='850,14 842,37 858,37' fill='%2314532D'/%3E%3Cpolygon points='850,20 844,34 856,34' fill='%23166534'/%3E%3Cpolygon points='905,18 985,18 978,8 912,8' fill='%232563EB'/%3E%3Cpolygon points='912,8 978,8 975,5 915,5' fill='%23F97316'/%3E%3Crect x='908' y='18' width='2.5' height='30' fill='%2378350F'/%3E%3Crect x='979.5' y='18' width='2.5' height='30' fill='%2378350F'/%3E%3Crect x='911' y='18' width='68' height='13' fill='%23FFFBEB'/%3E%3Cellipse cx='920' cy='24.5' rx='6' ry='2.6' fill='%2364748B'/%3E%3Cpolygon points='925,24.5 929,21.5 929,27.5' fill='%2364748B'/%3E%3Cpath d='M914 24 l-3 -2 M914 25 l-3 2' stroke='%23334155' stroke-width='.7'/%3E%3Ctext x='953' y='27.5' font-family='Arial, Helvetica, sans-serif' font-size='8' font-weight='800' fill='%23DC2626' text-anchor='middle'%3EPECEL LELE%3C/text%3E%3Ccircle cx='939' cy='35' r='2.6' fill='%23F2C29B'/%3E%3Crect x='936.5' y='37.5' width='5' height='7' rx='1.5' fill='%230EA5E9'/%3E%3Crect x='927' y='40' width='28' height='7' rx='1' fill='%23B45309'/%3E%3Ccircle cx='931' cy='47.2' r='1.8' fill='%231F2937'/%3E%3Ccircle cx='951' cy='47.2' r='1.8' fill='%231F2937'/%3E%3Ccircle cx='933' cy='34' r='1.6' fill='%23CBD5E1' opacity='.7'/%3E%3Ccircle cx='931' cy='30' r='2.2' fill='%23CBD5E1' opacity='.5'/%3E%3Ccircle cx='933' cy='25' r='2.8' fill='%23CBD5E1' opacity='.3'/%3E%3Crect x='961' y='43' width='16' height='2' fill='%2392400E'/%3E%3Crect x='962' y='45' width='1.5' height='3' fill='%2392400E'/%3E%3Crect x='974' y='45' width='1.5' height='3' fill='%2392400E'/%3E%3Ccircle cx='968' cy='35' r='2.4' fill='%23E0AC7E'/%3E%3Crect x='965.5' y='37.4' width='5' height='6' rx='1.5' fill='%23A855F7'/%3E%3Crect x='987' y='38' width='7' height='10' rx='1' fill='%23FDE68A'/%3E%3Ctext x='990.5' y='45' font-family='Arial, sans-serif' font-size='4' font-weight='700' fill='%23B91C1C' text-anchor='middle'%3EBUKA%3C/text%3E%3Crect x='1028.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='1030,14 1022,37 1038,37' fill='%2314532D'/%3E%3Cpolygon points='1030,20 1024,34 1036,34' fill='%23166534'/%3E%3Crect x='1078.5' y='34' width='3' height='14' fill='%233F2A1D'/%3E%3Ccircle cx='1080' cy='29' r='9' fill='%23166534'/%3E%3Ccircle cx='1075' cy='32' r='6' fill='%2315803D'/%3E%3Ccircle cx='1085' cy='31' r='6' fill='%2314532D'/%3E%3Cpath d='M1130 48 Q1132 30 1129 18' stroke='%235B4636' stroke-width='2.5' fill='none'/%3E%3Cpath d='M1129 18 q-9 -2 -14 5 M1129 18 q9 -3 14 4 M1129 18 q-4 -8 -12 -9 M1129 18 q5 -8 12 -8' stroke='%2315803D' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M1190 48 Q1192 30 1189 18' stroke='%235B4636' stroke-width='2.5' fill='none'/%3E%3Cpath d='M1189 18 q-9 -2 -14 5 M1189 18 q9 -3 14 4 M1189 18 q-4 -8 -12 -9 M1189 18 q5 -8 12 -8' stroke='%2315803D' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M1250 48 Q1252 30 1249 18' stroke='%235B4636' stroke-width='2.5' fill='none'/%3E%3Cpath d='M1249 18 q-9 -2 -14 5 M1249 18 q9 -3 14 4 M1249 18 q-4 -8 -12 -9 M1249 18 q5 -8 12 -8' stroke='%2315803D' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Crect x='1298.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='1300,14 1292,37 1308,37' fill='%2314532D'/%3E%3Cpolygon points='1300,20 1294,34 1306,34' fill='%23166534'/%3E%3Crect x='1358.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='1360,14 1352,37 1368,37' fill='%2314532D'/%3E%3Cpolygon points='1360,20 1354,34 1366,34' fill='%23166534'/%3E%3Crect x='1418.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='1420,14 1412,37 1428,37' fill='%2314532D'/%3E%3Cpolygon points='1420,20 1414,34 1426,34' fill='%23166534'/%3E%3Crect x='1478.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='1480,14 1472,37 1488,37' fill='%2314532D'/%3E%3Cpolygon points='1480,20 1474,34 1486,34' fill='%23166534'/%3E%3Crect x='1538.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='1540,14 1532,37 1548,37' fill='%2314532D'/%3E%3Cpolygon points='1540,20 1534,34 1546,34' fill='%23166534'/%3E%3Crect x='1583.5' y='37' width='3' height='11' fill='%233F2A1D'/%3E%3Cpolygon points='1585,14 1577,37 1593,37' fill='%2314532D'/%3E%3Cpolygon points='1585,20 1579,34 1591,34' fill='%23166534'/%3E%3C/svg%3E";
+const RD_WH=(x,y,r,cls)=>`<g class="rd-wh"><circle cx="${x}" cy="${y}" r="${r}" fill="#0B1222" stroke="#94A3B8" stroke-width="1.2"/><line x1="${x-r+1}" y1="${y}" x2="${x+r-1}" y2="${y}" stroke="#94A3B8" stroke-width="1"/><line x1="${x}" y1="${y-r+1}" x2="${x}" y2="${y+r-1}" stroke="#94A3B8" stroke-width="1"/></g>`;
 function rdCar(x, yb, c){ return `<rect x="${x}" y="${yb-6}" width="26" height="5.5" rx="2.2" fill="${c}"/><polygon points="${x+5},${yb-6} ${x+9},${yb-10.5} ${x+18},${yb-10.5} ${x+22},${yb-6}" fill="${c}"/><polygon points="${x+7},${yb-6.4} ${x+10},${yb-9.6} ${x+17},${yb-9.6} ${x+20},${yb-6.4}" fill="rgba(226,232,240,.75)"/><circle cx="${x+6}" cy="${yb-0.6}" r="1.9" fill="#0F172A"/><circle cx="${x+20}" cy="${yb-0.6}" r="1.9" fill="#0F172A"/>`; }
 function rdTruck(cab, cars, night){
-  const wh=(x)=>`<g class="rd-wh"><circle cx="${x}" cy="35" r="4.4" fill="#0B1222" stroke="#94A3B8" stroke-width="1.3"/><line x1="${x-3}" y1="35" x2="${x+3}" y2="35" stroke="#94A3B8" stroke-width="1.1"/><line x1="${x}" y1="32" x2="${x}" y2="38" stroke="#94A3B8" stroke-width="1.1"/></g>`;
-  return `<svg class="rd-tk" viewBox="0 0 156 42" width="156" height="42" aria-hidden="true">
+  return `<svg class="rd-tk" viewBox="0 0 156 42" aria-hidden="true">
     ${night?`<polygon points="134,27 156,20 156,36" fill="rgba(253,230,138,.22)"/>`:""}
     <ellipse cx="68" cy="40" rx="64" ry="2" fill="rgba(0,0,0,.35)"/>
     <rect x="4" y="29" width="100" height="3" rx="1" fill="#475569"/><rect x="4" y="16" width="98" height="2" fill="#64748B"/>
@@ -12732,47 +12734,123 @@ function rdTruck(cab, cars, night){
     <path d="M105 33 V19 q0-5 5-5 h11 q4 0 6 4 l5 8 q1.5 2 1.5 4.5 V33 Z" fill="${cab}"/>
     <path d="M121 17 h1.5 q2 0 3 2 l3.2 6.5 h-7.7 Z" fill="#BAE6FD"/><rect x="108" y="18" width="9" height="6" rx="1" fill="#BAE6FD" opacity=".85"/>
     <rect x="131" y="27" width="2.6" height="2.4" rx=".6" fill="#FDE68A"/>
-    ${wh(14)}${wh(28)}${wh(62)}${wh(112)}${wh(127)}</svg>`;
+    ${RD_WH(14,35,4.4)}${RD_WH(28,35,4.4)}${RD_WH(62,35,4.4)}${RD_WH(112,35,4.4)}${RD_WH(127,35,4.4)}</svg>`;
+}
+function rdBus(c, night){
+  let w=""; for(let i=0;i<7;i++) w+=`<rect x="${6+i*7.6}" y="6" width="5.6" height="6" rx="1" fill="#BAE6FD" opacity=".9"/>`;
+  return `<svg class="rd-bus" viewBox="0 0 84 28" aria-hidden="true">${night?`<polygon points="70,18 84,13 84,24" fill="rgba(253,230,138,.22)"/>`:""}
+    <ellipse cx="36" cy="26.5" rx="33" ry="1.4" fill="rgba(0,0,0,.35)"/>
+    <rect x="2" y="3" width="66" height="19" rx="3.5" fill="${c}"/>${w}<rect x="61" y="5" width="6" height="9" rx="1.5" fill="#BAE6FD"/>
+    <rect x="2" y="15" width="66" height="2.2" fill="rgba(255,255,255,.65)"/><rect x="53" y="8" width="5" height="13" rx="1" fill="rgba(15,23,42,.35)"/>
+    <rect x="66.5" y="17.5" width="2" height="2" fill="#FDE68A"/>${RD_WH(14,22.5,3.8)}${RD_WH(55,22.5,3.8)}</svg>`;
+}
+function rdMini(c, night){
+  return `<svg class="rd-mini" viewBox="0 0 48 18" aria-hidden="true">${night?`<polygon points="37,10 48,6 48,15" fill="rgba(253,230,138,.22)"/>`:""}
+    <ellipse cx="19" cy="16.6" rx="17" ry="1.1" fill="rgba(0,0,0,.3)"/>
+    <path d="M2 14 v-4.5 q0-2.5 2.5-2.5 h4.5 l5-4.5 h10.5 l5.5 4.5 h3.5 q3.5 0 3.5 3.5 v3.5 z" fill="${c}"/>
+    <path d="M11 7 l3.8-3.3 h4.2 v3.3 z" fill="#BAE6FD"/><path d="M20.5 3.7 h3.8 l4 3.3 h-7.8 z" fill="#BAE6FD"/>
+    <rect x="35" y="9" width="2" height="1.8" fill="#FDE68A"/>${RD_WH(9,14.2,3)}${RD_WH(28,14.2,3)}</svg>`;
+}
+function rdMotor(c, helm, night){
+  return `<svg class="rd-motor" viewBox="0 0 34 22" aria-hidden="true">${night?`<polygon points="25,12 34,9 34,17" fill="rgba(253,230,138,.22)"/>`:""}
+    ${RD_WH(5,17.5,3.6)}${RD_WH(21,17.5,3.6)}<path d="M6 15.5 L11 11.5 H18.5 L22 15.5 Z" fill="${c}"/>
+    <line x1="18" y1="11.5" x2="20.5" y2="7.5" stroke="#CBD5E1" stroke-width="1.3"/><rect x="22" y="12" width="1.8" height="1.6" fill="#FDE68A"/>
+    <path d="M11.5 11.5 L13.5 5.2 L16.2 6 L15.4 11.5 Z" fill="#1E3A8A"/><line x1="14.5" y1="7" x2="19.8" y2="8.2" stroke="#1E3A8A" stroke-width="1.5"/>
+    <line x1="13.4" y1="11.5" x2="16" y2="15.5" stroke="#334155" stroke-width="1.8"/><circle cx="14.6" cy="3.6" r="2.5" fill="${helm}"/></svg>`;
+}
+function rdBike(c, shirt){
+  return `<svg class="rd-bike" viewBox="0 0 26 26" aria-hidden="true">
+    ${RD_WH(5,20,4)}${RD_WH(20,20,4)}
+    <path d="M5 20 L10.5 13.5 L17.5 13.5 L20 20 M10.5 13.5 L12.5 20 L17.5 13.5 M10 12 h3 M17.5 13.5 L18.6 10.5 h2" stroke="${c}" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <path d="M11.5 12 L14.2 5.5" stroke="${shirt}" stroke-width="3.2" stroke-linecap="round"/><line x1="14" y1="7" x2="19" y2="10.4" stroke="${shirt}" stroke-width="1.4"/>
+    <g class="rd-pd"><line x1="11.8" y1="12.5" x2="12.5" y2="17" stroke="#334155" stroke-width="1.6"/><line x1="12.5" y1="17" x2="12.8" y2="20" stroke="#334155" stroke-width="1.4"/></g>
+    <circle cx="15" cy="3.3" r="2.3" fill="#F2C29B"/><path d="M12.6 2.6 q2.4 -2.4 4.9 0" fill="${c}"/></svg>`;
+}
+function rdWalker(shirt, pants, skin){
+  return `<svg class="rd-wk" viewBox="0 0 12 24" aria-hidden="true">
+    <line class="rd-lg1" x1="6" y1="14" x2="6" y2="22" stroke="${pants}" stroke-width="2" stroke-linecap="round"/>
+    <line class="rd-lg2" x1="6" y1="14" x2="6" y2="22" stroke="${pants}" stroke-width="2" stroke-linecap="round"/>
+    <rect x="3.6" y="6.5" width="4.8" height="8" rx="2" fill="${shirt}"/>
+    <line class="rd-ar1" x1="6" y1="8" x2="6" y2="13.5" stroke="${skin}" stroke-width="1.4" stroke-linecap="round"/>
+    <circle cx="6" cy="3.6" r="2.6" fill="${skin}"/><path d="M3.4 3.2 q2.6 -3 5.2 0" fill="#1F2937"/></svg>`;
+}
+function rdTrain(night){
+  let h=`<path d="M3 21 V11 q0-7 10-8 h55 v18 z" fill="#E2E8F0"/><path d="M7 10.5 q1.5-4.8 7-5 h6 v5 z" fill="#1E293B"/><rect x="3" y="15" width="65" height="2.6" fill="#F97316"/><rect x="2" y="18.5" width="4" height="2" fill="#FDE68A"/>`;
+  for(let i=0;i<4;i++){ const x=71+i*67; h+=`<rect x="${x-3}" y="12" width="3" height="3" fill="#64748B"/><rect x="${x}" y="3" width="64" height="18" rx="2" fill="#E2E8F0"/><rect x="${x}" y="15" width="64" height="2.6" fill="#F97316"/>`;
+    for(let j=0;j<6;j++) h+=`<rect x="${x+4+j*10}" y="6" width="7" height="6" rx="1" fill="${night?"#FDE68A":"#1E293B"}" opacity="${night?".9":".85"}"/>`;
+    h+=`<circle cx="${x+9}" cy="22" r="2.2" fill="#334155"/><circle cx="${x+15}" cy="22" r="2.2" fill="#334155"/><circle cx="${x+49}" cy="22" r="2.2" fill="#334155"/><circle cx="${x+55}" cy="22" r="2.2" fill="#334155"/>`; }
+  h+=`<circle cx="14" cy="22" r="2.2" fill="#334155"/><circle cx="20" cy="22" r="2.2" fill="#334155"/><circle cx="54" cy="22" r="2.2" fill="#334155"/><circle cx="60" cy="22" r="2.2" fill="#334155"/>`;
+  return `<svg class="rd-tr" viewBox="0 0 340 25" aria-hidden="true">${night?`<polygon points="2,19 -18,13 -18,25" fill="rgba(253,230,138,.25)"/>`:""}${h}</svg>`;
 }
 function roadStripHtml(){
   if(typeof matchMedia==="function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return "";
   const night=currentShift()==="2";
-  const T=[["#22D3EE",["#8B5CF6","#EF4444","#EAB308","#3B82F6"]],["#EC4899",["#F97316","#EAB308","#8B5CF6","#22C55E"]],["#F59E0B",["#3B82F6","#EF4444","#E2E8F0","#8B5CF6"]]];
+  const mv=(cls, d, o, inner)=>`<div class="rd-mv ${cls}" style="--d:${d}s" data-d="${d}" data-o="${o}">${inner}</div>`;
   return `<div class="dh-road ${night?"rd-night":"rd-day"}" aria-hidden="true">
     <div class="rd-sky">${night?`<i class="rd-moon"></i><i class="rd-stars"></i>`:`<i class="rd-sun"></i>`}</div>
-    <div class="rd-far" data-d="60"></div><div class="rd-near" data-d="16"></div>
+    <div class="rd-far" data-d="60"></div>
+    <div class="rd-rail"></div>
+    <div class="rd-train" style="--d:46s" data-d="46" data-o="8">${rdTrain(night)}</div>
+    <div class="rd-near" data-d="70"></div>
     <div class="rd-asph"><div class="rd-dash" data-d="0.8"></div></div>
-    <div class="rd-car rd-l1" data-d="17" data-o="0">${rdTruck(T[0][0],T[0][1],night)}</div>
-    <div class="rd-car rd-l2" data-d="13" data-o="5">${rdTruck(T[1][0],T[1][1],night)}</div>
-    <div class="rd-car rd-l1" data-d="21" data-o="12">${rdTruck(T[2][0],T[2][1],night)}</div>
+    <div class="rd-walk"><div class="rd-tile" data-d="2.4"></div></div>
+    ${mv("rd-far-l","19","8", rdBus("#0D9488", night))}
+    ${mv("rd-far-l","17","0", rdTruck("#22D3EE",["#8B5CF6","#EF4444","#EAB308","#3B82F6"],night))}
+    ${mv("rd-far-l","12","9", rdMini("#F8FAFC", night))}
+    ${mv("rd-far-l","21","12", rdTruck("#F59E0B",["#3B82F6","#EF4444","#E2E8F0","#8B5CF6"],night))}
+    ${mv("rd-near-l","13","5", rdTruck("#EC4899",["#F97316","#EAB308","#8B5CF6","#22C55E"],night))}
+    ${mv("rd-near-l","10","3", rdMini("#DC2626", night))}
+    ${mv("rd-near-l rd-m1","7.5","2", rdMotor("#1D4ED8","#FACC15",night))}
+    ${mv("rd-near-l rd-m2","9","6", rdMotor("#B91C1C","#F8FAFC",night))}
+    ${mv("rd-side","34","4", rdBike("#22D3EE","#F97316"))}
+    ${mv("rd-side","41","20", rdBike("#FACC15","#16A34A"))}
+    ${mv("rd-side","70","10", rdWalker("#EF4444","#1E3A8A","#E0AC7E"))}
+    ${mv("rd-side","82","45", rdWalker("#A855F7","#334155","#F2C29B"))}
+    ${mv("rd-side rd-rev","76","30", rdWalker("#0EA5E9","#3F3F46","#C68B59"))}
   </div>`;
 }
 function roadSync(){ try{ const t=Date.now()/1000; document.querySelectorAll(".dh-road [data-d]").forEach(e=>{ if(e.dataset.s) return; const d=+e.dataset.d||1, o=+e.dataset.o||0; e.style.animationDelay=(-((t+o)%d)).toFixed(2)+"s"; e.dataset.s="1"; }); }catch(e){} }
 function roadCss(){
   return `
-  .dh-road{position:relative;flex:1 1 100%;height:68px;margin:4px -18px -14px;overflow:hidden;border-top:1px solid rgba(103,232,249,.18);}
+  .dh-road{position:relative;flex:1 1 100%;height:104px;margin:4px -18px -14px;overflow:hidden;border-top:1px solid rgba(103,232,249,.18);}
   .rd-sky{position:absolute;inset:0;background:linear-gradient(180deg,rgba(15,23,42,.0),rgba(30,58,138,.35));}
   .rd-day .rd-sky{background:linear-gradient(180deg,rgba(56,189,248,.18),rgba(125,211,252,.10));}
   .rd-moon{position:absolute;right:16%;top:6px;width:14px;height:14px;border-radius:50%;background:#FDE68A;box-shadow:0 0 14px rgba(253,230,138,.8);}
   .rd-moon::after{content:"";position:absolute;left:4px;top:-2px;width:13px;height:13px;border-radius:50%;background:#1E1B4B;}
   .rd-stars{position:absolute;inset:0;background-image:radial-gradient(1px 1px at 12% 20%,#fff,transparent),radial-gradient(1px 1px at 33% 12%,#fff,transparent),radial-gradient(1px 1px at 58% 25%,#fff,transparent),radial-gradient(1px 1px at 72% 10%,#fff,transparent),radial-gradient(1px 1px at 90% 30%,#fff,transparent);opacity:.7;animation:rdTw 3s ease-in-out infinite;}
   .rd-sun{position:absolute;right:16%;top:5px;width:16px;height:16px;border-radius:50%;background:#FBBF24;box-shadow:0 0 18px rgba(251,191,36,.9);}
-  .rd-far,.rd-near{position:absolute;left:0;top:0;height:100%;will-change:transform;}
-  .rd-far{width:calc(100% + 520px);bottom:17px;top:auto;height:40px;background:url("${RD_FAR}") repeat-x left bottom;opacity:.9;animation:rdScroll520 60s linear infinite;}
-  .rd-near{width:calc(100% + 360px);bottom:15px;top:auto;height:44px;background:url("${RD_NEAR}") repeat-x left bottom;animation:rdScroll360 16s linear infinite;}
-  .rd-asph{position:absolute;left:0;right:0;bottom:0;height:19px;background:linear-gradient(180deg,#1F2937,#111827);border-top:1px solid rgba(148,163,184,.35);overflow:hidden;}
-  .rd-dash{position:absolute;left:0;top:8px;height:2px;width:calc(100% + 40px);background:repeating-linear-gradient(90deg,#FDE68A 0 20px,transparent 20px 40px);opacity:.7;animation:rdScroll40 .8s linear infinite;}
-  .rd-car{position:absolute;left:0;bottom:3px;will-change:transform;animation:rdRun 17s linear infinite;}
-  .rd-car.rd-l2{bottom:-2px;z-index:2;} .rd-car.rd-l1{z-index:1;}
-  .rd-car .rd-tk{display:block;width:182px;height:49px;animation:rdBob .38s ease-in-out infinite alternate;}
+  .rd-far,.rd-near,.rd-train,.rd-mv{position:absolute;left:0;will-change:transform;}
+  .rd-far{width:calc(100% + 520px);bottom:52px;height:40px;background:url("${RD_FAR}") repeat-x left bottom;opacity:.9;animation:rdScroll520 60s linear infinite;z-index:1;}
+  .rd-rail{position:absolute;left:0;right:0;bottom:46px;height:6px;z-index:2;background:linear-gradient(180deg,#94A3B8 0 1px,transparent 1px 4px,#94A3B8 4px 5px,transparent 5px),repeating-linear-gradient(90deg,#57534E 0 3px,transparent 3px 10px);opacity:.8;}
+  .rd-train{bottom:49px;z-index:2;animation:rdTrain var(--d,46s) linear infinite;}
+  .rd-train .rd-tr{display:block;width:340px;height:25px;overflow:visible;}
+  .rd-near{width:calc(100% + 1600px);bottom:34px;height:50px;background:url("${RD_NEAR}") repeat-x left bottom;animation:rdScroll1600 70s linear infinite;z-index:3;}
+  .rd-asph{position:absolute;left:0;right:0;bottom:12px;height:24px;z-index:4;background:linear-gradient(180deg,#1F2937,#111827);border-top:2px solid #4B5563;overflow:hidden;}
+  .rd-dash{position:absolute;left:0;top:10px;height:2px;width:calc(100% + 40px);background:repeating-linear-gradient(90deg,#FDE68A 0 20px,transparent 20px 40px);opacity:.7;animation:rdScroll40 .8s linear infinite;}
+  .rd-walk{position:absolute;left:0;right:0;bottom:0;height:12px;z-index:7;background:#475569;border-top:2px solid #94A3B8;overflow:hidden;}
+  .rd-walk .rd-tile{position:absolute;left:0;top:0;bottom:0;width:calc(100% + 24px);background:repeating-linear-gradient(90deg,rgba(15,23,42,.35) 0 1px,transparent 1px 24px);animation:rdScroll24 2.4s linear infinite;}
+  .rd-mv{animation:rdRun var(--d,17s) linear infinite;}
+  .rd-mv.rd-far-l{bottom:21px;z-index:5;} .rd-mv.rd-near-l{bottom:11px;z-index:6;} .rd-mv.rd-m2{bottom:15px;}
+  .rd-mv.rd-side{bottom:2px;z-index:8;} .rd-mv.rd-rev{animation-name:rdRunRev;} .rd-mv.rd-rev svg{transform:scaleX(-1);}
+  .rd-tk{display:block;width:182px;height:49px;animation:rdBob .38s ease-in-out infinite alternate;}
+  .rd-bus{display:block;width:100px;height:33px;animation:rdBob .5s ease-in-out infinite alternate;}
+  .rd-mini{display:block;width:56px;height:21px;animation:rdBob .3s ease-in-out infinite alternate;}
+  .rd-motor{display:block;width:36px;height:23px;animation:rdBob .22s ease-in-out infinite alternate;}
+  .rd-bike{display:block;width:31px;height:31px;}
+  .rd-wk{display:block;width:15px;height:30px;animation:rdStep .32s ease-in-out infinite alternate;}
   .rd-wh{transform-box:fill-box;transform-origin:center;animation:rdSpin .45s linear infinite;}
-  .rd-car[data-d="13"]{animation-duration:13s;} .rd-car[data-d="21"]{animation-duration:21s;}
+  .rd-bike .rd-wh{animation-duration:.9s;} .rd-bike .rd-pd{transform-origin:12px 13px;animation:rdLeg .45s ease-in-out infinite alternate;}
+  .rd-lg1,.rd-lg2,.rd-ar1{transform-origin:6px 14px;animation:rdLeg .64s ease-in-out infinite alternate;} .rd-lg2{animation-direction:alternate-reverse;} .rd-ar1{transform-origin:6px 8px;animation-direction:alternate-reverse;}
   @keyframes rdRun{0%{transform:translateX(-200px);}100%{transform:translateX(calc(100vw + 20px));}}
-  @keyframes rdScroll520{to{transform:translateX(-520px);}} @keyframes rdScroll360{to{transform:translateX(-360px);}} @keyframes rdScroll40{to{transform:translateX(-40px);}}
+  @keyframes rdRunRev{0%{transform:translateX(calc(100vw + 20px));}100%{transform:translateX(-200px);}}
+  @keyframes rdTrain{0%{transform:translateX(calc(100vw + 30px));}42%{transform:translateX(-380px);}100%{transform:translateX(-380px);}}
+  @keyframes rdScroll520{to{transform:translateX(-520px);}} @keyframes rdScroll1600{to{transform:translateX(-1600px);}}
+  @keyframes rdScroll40{to{transform:translateX(-40px);}} @keyframes rdScroll24{to{transform:translateX(-24px);}}
   @keyframes rdBob{from{transform:translateY(0);}to{transform:translateY(-1.2px);}}
+  @keyframes rdStep{from{transform:translateY(0);}to{transform:translateY(-1px);}}
+  @keyframes rdLeg{from{transform:rotate(-22deg);}to{transform:rotate(22deg);}}
   @keyframes rdSpin{to{transform:rotate(360deg);}} @keyframes rdTw{50%{opacity:.35;}}
   @media(prefers-reduced-motion: reduce){ .dh-road *{animation:none !important;} }
-  @media(max-width:700px){ .dh-road{height:50px;} .rd-car .rd-tk{width:124px;height:33px;} }
   `;
 }
 /* Delay MDP ringkas untuk Display tanpa login */
