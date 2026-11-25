@@ -1220,13 +1220,23 @@ function fbDownBar(){
 }
 setInterval(()=>{ try{ fbDownBar(); }catch(e){} }, 20000);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && !FBS.conn) _fbDownSince=Date.now(); try{ fbDownBar(); }catch(e){} });   /* baru kembali dari latar: hitung ulang, beri waktu menyambung */
+/* ===== JAM SERVER & DATA SEGAR (25 Nov 2026, kasus Khairul: jadwal DCCP kedip Day↔Night jam 20.00, CC hilang dari waiting list, perintah masuk lama muncul saat RADAR dibuka) =====
+   • srvNow(): jam server Firebase (.info/serverTimeOffset). Jam HP yang salah / zona waktu lain tidak boleh menentukan pergantian shift.
+   • fbFresh(): data di HP ini sudah pasti terbaru — sudah menerima data server, tersambung ≥3 detik, dan ≥3,5 detik sesudah kembali dari latar.
+     Selama belum segar, otomasi (pelepasan Parkir Luar, pembersihan antrean, ganti jadwal shift) dan popup perintah masuk TIDAK dijalankan
+     dari data simpanan lama di HP. */
+let _srvOff=0, _srvOffOk=false, _fbConnTs=0, _fbVisTs=0, _fbHidTs=0;
+function srvNow(){ return Date.now()+(_srvOffOk?_srvOff:0); }
+document.addEventListener("visibilitychange", ()=>{ try{ if(document.visibilityState==="hidden") _fbHidTs=Date.now(); else { if(_fbHidTs && Date.now()-_fbHidTs>30000) _fbVisTs=Date.now(); _fbHidTs=0; } }catch(e){} });
+function fbFresh(){ if(!FBS.enabled) return true; if(fbCurrentState()!=="online") return false; const n=Date.now(); return n-_fbConnTs>=3000 && n-_fbVisTs>=3500; }
 function fbStart(){
   if(typeof firebase === "undefined" || !/^https?:/.test(location.protocol)){ fbState("off"); return; }
   try{
     firebase.initializeApp(FB_CONFIG);
     try{ fbMeterBoot(); }catch(e){}
     FBS.db = firebase.database(); FBS.enabled = true; fbState("connecting");
-    FBS.db.ref(".info/connected").on("value", s=>{ FBS.conn = !!s.val(); if(FBS.conn) _fbDownSince=0; else if(!_fbDownSince) _fbDownSince=Date.now(); fbState(fbCurrentState()); try{ fbDownBar(); }catch(e){} try{ if(FBS.conn) presenceOn(true); }catch(e){} });
+    FBS.db.ref(".info/connected").on("value", s=>{ const _wc=FBS.conn; FBS.conn = !!s.val(); if(FBS.conn && !_wc) _fbConnTs=Date.now(); if(FBS.conn) _fbDownSince=0; else if(!_fbDownSince) _fbDownSince=Date.now(); fbState(fbCurrentState()); try{ fbDownBar(); }catch(e){} try{ if(FBS.conn) presenceOn(true); }catch(e){} });
+    try{ FBS.db.ref(".info/serverTimeOffset").on("value", s=>{ const v=+s.val(); if(isFinite(v)){ _srvOff=v; _srvOffOk=true; } }); }catch(e){}
     firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); trackAttach(); try{ presenceOn(true); }catch(e){} })
       .catch(e=>{ console.warn("login anonim gagal", e); fbState("offline"); });
     /* Sesi Firebase hilang di tengah jalan (mis. penyimpanan WebView terhapus saat Logout penuh TLS): login ulang otomatis lalu pasang ulang semua listener */
@@ -1745,7 +1755,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="21 Nov 2026 09.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="25 Nov 2026 09.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4538,11 +4548,18 @@ function ccStaleFind(d){
   if(!(d.dccpSchedule||[]).length) return false;
   return (d.queue||[]).some(q=>q && !q.manual && !ccRegIn(d,q.plat)) || (d.hold||[]).some(q=>q && !q.manual && !ccRegIn(d,q.plat)) || Object.keys(d.earlyOk||{}).some(k=>!ccRegIn(d,k));
 }
-function ccPurgeStale(d){
-  if(!(d.dccpSchedule||[]).length) return 0; let n=0;
-  d.queue=(d.queue||[]).filter(q=>{ const bad=q && !q.manual && !ccRegIn(d,q.plat); if(bad) n++; return !bad; });
-  d.hold=(d.hold||[]).filter(q=>{ const bad=q && !q.manual && !ccRegIn(d,q.plat); if(bad) n++; return !bad; });
-  Object.keys(d.earlyOk||{}).forEach(k=>{ if(!ccRegIn(d,k)){ delete d.earlyOk[k]; n++; } });
+function ccPurgeStale(d, only, shLbl){
+  if(!(d.dccpSchedule||[]).length) return 0; let n=0; const out=[];
+  const hit=q=>q && !q.manual && !ccRegIn(d,q.plat) && (!only || only.has(normPlat(q.plat)));
+  d.queue=(d.queue||[]).filter(q=>{ const bad=hit(q); if(bad){ n++; out.push([q,"waiting list"]); } return !bad; });
+  d.hold=(d.hold||[]).filter(q=>{ const bad=hit(q); if(bad){ n++; out.push([q,"Parkir Luar"]); } return !bad; });
+  Object.keys(d.earlyOk||{}).forEach(k=>{ if(!ccRegIn(d,k) && (!only || only.has(normPlat(k)))){ delete d.earlyOk[k]; n++; } });
+  if(out.length){ const now=Date.now();
+    d.ccOutLog=d.ccOutLog||[];
+    out.forEach(([q,w])=>{ const k=normPlat(q.plat);
+      d.ccOutLog.push({ts:now, plat:q.plat, lp:q.lp||"", ccNum:0, why:"otomatis: plat tidak ada di Jadwal DCCP aktif"+(shLbl?" ("+shLbl+")":"")+" ("+w+")", by:"Sistem"});
+      const L=d.absenLog||[]; for(let i=L.length-1;i>=0;i--){ const x=L[i]; if(x && !x.dup && !x.rejected && normPlat(x.plat)===k){ x.drop=now; break; } } });   /* absen ulang plat ini tidak kena aturan "baru absen < 20 menit" */
+    d.ccOutLog=capLog(d.ccOutLog,200); }
   return n;
 }
 /* CC di waiting list / Parkir Luar yang di peta (posisi segar) terbukti sudah jauh di luar area >= 10 menit: dikeluarkan dari antrean (CC yang sudah pergi tidak boleh menahan urutan). */
@@ -4586,7 +4603,28 @@ function ccQueueFarPurge(){
     gone.forEach(([k])=>delete QFAR[k]);
   }catch(e){}
 }
-function ccPurgeStaleCheck(){ try{ if(currentUser && currentUser.role!=="display" && ccStaleFind(DB.get())) DB.set(d=>{ ccPurgeStale(d); }); }catch(e){} }
+/* 25 Nov 2026 (kasus Khairul: driver sudah absen & masuk waiting list, tiba-tiba hilang dan tidak bisa absen otomatis lagi).
+   Dulu pembersihan ini jalan di SEMUA HP (termasuk HP Driver) dan langsung menghapus begitu plat tidak terlihat di jadwal aktif HP itu —
+   termasuk dari data simpanan lama saat RADAR baru dibuka, atau saat jadwal sempat kedip ke shift lain. Hapusnya diam-diam (tanpa log),
+   lalu absen ulang ditolak "baru absen <20 menit". Sekarang:
+   • hanya HP berdata lengkap (Delivery/Admin/Koordinator/Leader), data harus segar;
+   • plat baru dikeluarkan kalau ≥90 detik berturut-turut tetap tidak ada di jadwal aktif (kedip sesaat tidak menghapus);
+   • tercatat di Log CC Keluar (Sistem) + kabar ke HP driver, dan absen ulang langsung boleh (tidak kena aturan 20 menit). */
+const _psSeen={};
+function ccPurgeStaleCheck(){ try{
+  if(!currentUser || currentUser.role==="display" || currentUser.role==="cc" || isViewer()) return;
+  if(FBS.enabled && (_fbMode!=="full" || !fbFresh())) return;
+  const d0=DB.get(), now=Date.now();
+  if(!ccStaleFind(d0)){ Object.keys(_psSeen).forEach(k=>delete _psSeen[k]); return; }
+  const bad=new Set(); [...(d0.queue||[]), ...(d0.hold||[])].forEach(q=>{ if(q && !q.manual && !ccRegIn(d0,q.plat)) bad.add(normPlat(q.plat)); });
+  Object.keys(d0.earlyOk||{}).forEach(k=>{ if(!ccRegIn(d0,k)) bad.add(normPlat(k)); });
+  Object.keys(_psSeen).forEach(k=>{ if(!bad.has(k)) delete _psSeen[k]; });
+  bad.forEach(k=>{ if(!_psSeen[k]) _psSeen[k]=now; });
+  const ripe=[...bad].filter(k=>now-_psSeen[k]>=90000); if(!ripe.length) return;
+  const s0=((d0.dccpMeta||{}).shift)||"", sh=s0==="night"?"Night":s0==="day"?"Day":"";
+  DB.set(d=>{ ccPurgeStale(d, new Set(ripe), sh); });
+  ripe.forEach(k=>delete _psSeen[k]);
+}catch(e){} }
 function holdLepas(plat){
   if(!canKeluarkanCC()) return;
   if(!confirm("Naikkan "+plat+" dari Parkir Luar ke waiting list sekarang walau belum waktu jadwalnya?")) return;
@@ -4773,7 +4811,7 @@ function registerCC(plat, lp, dist, auto, manual, src){
         res={dup:true, stale:true}; d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, stale:true}); return; } }
     { const _o6=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin"));
       if(!_o6){ const la=(d.absenLog||[]).slice().reverse().find(x=>x && !x.dup && !x.rejected && !x.far && normPlat(x.plat)===k);
-        if(la && Date.now()-(la.ts||0)<20*60000 && !(((d.ccLeft||{})[k]||0)>la.ts)){ res={dup:true, recent:true}; d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, recent:true}); return; } } }
+        if(la && !la.drop && Date.now()-(la.ts||0)<20*60000 && !(((d.ccLeft||{})[k]||0)>la.ts)){ res={dup:true, recent:true}; d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:platFmt(plat), lp:lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dup:true, recent:true}); return; } } }
     { const bz=ccDriverBusy(d, plat, lp); if(bz){ res={dup:true, driverBusy:bz}; return; } }   /* driver sama + LP sama sudah membawa truk lain */
     /* 17 Nov 17.45 (permintaan Khairul): kunci "belum tiba di NVDC" hanya untuk absen OTOMATIS (HP driver & peta).
        Absenkan manual oleh Delivery/Admin tetap bisa (jaga-jaga HP driver mati / GPS tidak terbaca di NVDC) → dicatat sebagai sudah kembali dari NVDC. */
@@ -4823,7 +4861,7 @@ function ccDedupe(d){
   if(dropH.size) d.hold=d.hold.filter((q,i)=>!dropH.has(i));
   return dropCc.length+dropQ.size+dropH.size;
 }
-setInterval(()=>{ try{ if(currentUser && ccDupFind(DB.get())) DB.set(d=>{ ccDedupe(d); }); }catch(e){} }, 4000);
+setInterval(()=>{ try{ if(FBS.enabled && !fbFresh()) return; if(currentUser && ccDupFind(DB.get())) DB.set(d=>{ ccDedupe(d); }); }catch(e){} }, 4000);   /* 25 Nov: tidak dari data lama (baru dibuka / kembali dari latar) */
 /* PENJAGA (tiap 5 detik, data server terbaru): plat yang tidak boleh ada di daftar masuk dikeluarkan otomatis.
    - stall: sudah Delout / "sudah jalan" & belum tiba di NVDC, atau ritase shift ini sudah habis — kecuali sedang punya ILS aktif (sedang rit terakhir)
    - waiting list / Parkir Luar: alasan di atas, atau plat sudah punya ILS aktif
@@ -4853,7 +4891,7 @@ function ccGuardTick(){
   try{
     if(!currentUser || isViewer()) return;
     if(FBS.enabled && _fbMode!=="full") return;   /* 17 Nov 2026: hanya HP berdata lengkap (Delivery/Admin/Koordinator/Display/Leader). HP Driver/Dispatcher mode hemat tidak lagi mengeluarkan CC dari stall berdasarkan data sebagian */   // aturan ketat mati: hanya penjaga yang selalu berlaku (ILS aktif, absen lagi sesudah Delout); aturan ketat dicek di ccGuardWhy
-    if(FBS.enabled && fbCurrentState()!=="online") return;
+    if(FBS.enabled && (fbCurrentState()!=="online" || !fbFresh())) return;
     if(!ccGuardScan(DB.get()).length) return;
     DB.set(d=>{
       const bad=ccGuardScan(d); if(!bad.length) return;
@@ -5217,7 +5255,7 @@ function ilsLinkPlan(d){
 function ilsOrphanTick(){
   try{
     if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer()) return;
-    if(FBS.enabled && fbCurrentState()!=="online") return;
+    if(FBS.enabled && (fbCurrentState()!=="online" || !fbFresh())) return;
     const now=Date.now(), todo=ilsLinkPlan(DB.get()), seen=new Set();
     const due=todo.filter(t=>{ const key=t.join("|"); seen.add(key); if(!_ilsOrph[key]){ _ilsOrph[key]=now; return false; } return now-_ilsOrph[key]>20000; });
     Object.keys(_ilsOrph).forEach(key=>{ if(!seen.has(key)) delete _ilsOrph[key]; });
@@ -8433,6 +8471,7 @@ function ccCallCheck(){
   }
   if(isViewer()){ if(_ccCallId!==null) ccCallClose(); return; }   /* 18 Nov: Pengamat hanya melihat popup giliran di menu Layar Driver / Peta untuk driver yang dipilih (permintaan Khairul) */
   if(!currentUser || currentUser.role!=="cc"){ if(_ccCallId!==null) ccCallClose(); return; }
+  if(FBS.enabled && !fbFresh()) return;   /* 25 Nov: RADAR baru dibuka → data simpanan di HP bisa berisi panggilan lama; tunggu data server */
   const d=DB.get(), pl=myCcPlatKey(); if(!pl) return;
   const c=ccCallsList(d).filter(x=>x && !x.ack && normPlat(x.plat)===pl && Date.now()-x.ts<3*3600000).sort((a,b)=>b.ts-a.ts)
     .find(x=>{ const cur=d.cc[x.stall]; return cur && normPlat(cur.plat)===pl; });
@@ -9172,7 +9211,7 @@ function parseDccpGrid(grid){
   return out;
 }
 /* Jadwal DCCP disimpan terpisah: dccpStore.day dan dccpStore.night. Yang "aktif" (dccpSchedule + dccpMeta) dipakai seluruh aplikasi; ganti shift => jadwal shift itu otomatis diaktifkan. */
-function dccpShiftNow(){ return currentShift()==="1" ? "day" : "night"; }
+function dccpShiftNow(){ if(_srvOffOk) return wibShiftAt(srvNow()); return currentShift()==="1" ? "day" : "night"; }   /* 25 Nov: jam server (WIB) kalau sudah diketahui */
 function dccpActivate(d, sh){
   d.dccpStore = d.dccpStore||{};
   const act = (d.dccpMeta&&d.dccpMeta.shift)||"";
@@ -9208,16 +9247,38 @@ function dccpActivateNow(sh){
   try{ holdRelease(); }catch(e){}
   render();
 }
+/* 25 Nov 2026: ganti jadwal otomatis memakai JAM SERVER (WIB), bukan jam HP. Kasus: jam 20.00 jadwal kedip Night↔Day terus —
+   HP Delivery/Koordinator yang jamnya mundur/maju (atau zona waktunya lain) menganggap shift masih Day lalu mengembalikan jadwal Day,
+   HP lain mengaktifkan Night lagi, dst. Sekarang:
+   • shift ditentukan dari jam server Firebase (WIB), sama untuk semua HP;
+   • hanya berjalan kalau data HP ini segar (bukan data simpanan saat RADAR baru dibuka / baru kembali dari latar);
+   • anti bolak-balik: jadwal yang baru saja (≤2 jam) dipindah otomatis TIDAK boleh dikembalikan ke shift asalnya oleh HP lain;
+   • setiap pindah otomatis dicatat di dccpMeta.swLog (jam server, jam HP, akun) supaya kalau terjadi lagi kelihatan HP mana penyebabnya. */
+function wibShiftAt(ts){ const h=new Date(ts+7*3600000).getUTCHours(); return (h>=SHIFT_START_H && h<SHIFT2_START_H) ? "day" : "night"; }
+function wibProdMidnight(ts){ const t=ts+7*3600000; let day=Math.floor(t/86400000); if(new Date(t).getUTCHours()<SHIFT_START_H) day-=1; return day*86400000-7*3600000; }
+let _dccpPpWarn=0;
 function dccpAutoSwitch(){
   try{
     if(!currentUser || !["delivery","admin","koordinator"].includes(currentUser.role)) return;
-    const d0 = DB.get(), cur = dccpShiftNow(), st = (d0.dccpStore||{})[cur];
+    if(FBS.enabled && (!fbFresh() || !_srvOffOk && Date.now()-_fbConnTs<20000)) return;   /* tunggu jam server (maks. 20 detik sesudah tersambung, lalu pakai jam HP) */
+    const now=srvNow(), d0 = DB.get(), cur = wibShiftAt(now), st = (d0.dccpStore||{})[cur];
     if(!st || !st.rows || !st.rows.length) return;
-    if(((d0.dccpMeta||{}).shift||"")===cur) return;
-    if(dccpPlayedLive(d0.dccpMeta)) return;   /* jadwal yang dijalankan manual tetap aktif sampai shift-nya selesai */
-    const dt = st.meta && st.meta.dateTs, pm = prodMidnight();
-    if(dt && Math.abs(dt-pm) > 12*3600000) return;   // file jadwal basi (tanggal bukan hari produksi ini): jangan diaktifkan
-    DB.set(d=>{ if(((d.dccpMeta||{}).shift||"")!==cur && !dccpPlayedLive(d.dccpMeta)) dccpActivate(d, cur); });
+    const m0=d0.dccpMeta||{};
+    if((m0.shift||"")===cur) return;
+    if(dccpPlayedLive(m0)) return;
+    if(m0.autoFrom===cur && now-(+m0.autoTs||0) < 2*3600000){   /* HP lain baru saja memindah jadwal DARI shift ini: jam HP ini kemungkinan salah */
+      if(Date.now()-_dccpPpWarn>10*60000){ _dccpPpWarn=Date.now(); try{ errReport("dccp", "tolak pindah balik ke "+cur+" (jam HP "+new Date().toLocaleTimeString('id-ID')+", selisih server "+Math.round(_srvOff/1000)+" dtk)"); }catch(e){} }
+      return; }
+    const dt = st.meta && st.meta.dateTs, pm = wibProdMidnight(now);
+    if(dt && Math.abs(dt-pm) > 12*3600000) return;
+    const by=(currentUser.name||currentUser.username||"")+" ("+currentUser.role+")";
+    DB.set(d=>{ const m=d.dccpMeta||{}, t=srvNow();
+      if((m.shift||"")===cur || dccpPlayedLive(m) || (m.autoFrom===cur && t-(+m.autoTs||0)<2*3600000)) return;
+      const from=m.shift||"", log=(Array.isArray(m.swLog)?m.swLog:[]).slice(-7);
+      dccpActivate(d, cur);
+      if(!d.dccpMeta || (d.dccpMeta.shift||"")!==cur) return;
+      d.dccpMeta.autoTs=t; d.dccpMeta.autoFrom=from; d.dccpMeta.autoBy=by;
+      d.dccpMeta.swLog=log.concat([{ts:t, hp:Date.now(), off:Math.round((_srvOffOk?_srvOff:0)/1000), from, to:cur, by}]); });
   }catch(e){}
 }
 setInterval(dccpAutoSwitch, 15000); setTimeout(dccpAutoSwitch, 6000);
@@ -9349,9 +9410,16 @@ function dccpDoneList(r,data){ const from=dccpShiftFrom(r), k=normPlat(r.police)
   /* ILS dobel (nomor rangka sama, belum keluar, ada yang lebih baru) tidak dihitung */
   for(let i=L.length-1;i>=0;i--){ const b=L[i]; if(!b||b.outTs||b.status!=="open") continue; const fr=new Set((b.units||[]).map(u=>String(u.frame||"").toUpperCase()).filter(Boolean)); if(!fr.size) continue;
     if(_all.some(o=>o&&o.id>b.id&&(o.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())))) L.splice(i,1); }
-  try{ csArr(data).filter(x=>x && normPlat(x.plat)===k).forEach(x=>{ for(let c=0;c<(x.n||1);c++){ const i=L.findIndex(b=>b.ts>=x.ts); if(i>=0) L.splice(i,1); } }); }catch(e){}
+  /* 25 Nov 2026 (kasus B 9959 KEH "rit pertama tidak terbaca"): dulu SETIAP catatan Change Shift plat ini — termasuk yang sudah kedaluwarsa
+     berhari-hari / yang ritnya sudah selesai sebelum shift ini — membuang ILS pertama shift ini. Sekarang yang dibuang hanya ILS yang memang
+     rit Change Shift: n ILS pertama plat ini sesudah Change Shift dibuat dan sebelum masa berlakunya habis. Jumlahnya disimpan di L.cs. */
+  let _csN=0;
+  try{ const P=_all.filter(b=>b && normPlat(b.ccPlat)===k).sort((a,b)=>(+a.ts||0)-(+b.ts||0));
+    csArr(data).filter(x=>x && normPlat(x.plat)===k).forEach(x=>{ const xs=+x.ts||0, xu=+x.until||(xs+26*3600000);
+      P.filter(b=>(+b.ts||0)>=xs && (+b.ts||0)<xu).slice(0, x.n||1).forEach(b=>{ const i=L.indexOf(b); if(i>=0){ L.splice(i,1); _csN++; } }); }); }catch(e){}
   /* koreksi manual Delivery: jumlah ritase selesai shift ini; ILS baru sesudahnya tetap menambah */
   try{ const f=(data.dccpFix||{})[k]; if(f && f.ts>=from){ const t=Math.max(0,f.n+Math.max(0,L.length-(f.base||0))); if(t<L.length) L.length=t; else while(L.length<t) L.push({ts:f.ts,fix:1,units:[]}); } }catch(e){}
+  if(_csN) L.cs=_csN;
   return L; }
 function dccpFixOpen(plat){
   if(!canKeluarkanCC()) return;
@@ -9672,7 +9740,7 @@ function dccpUpCard(sh, data, pv, meta){
   return `<div style="border:1px solid var(--border);border-left:5px solid ${col};border-radius:10px;padding:12px;margin-bottom:10px;background:var(--panel);">
     <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;"><b>${sh==="day"?"☀️ Upload DCCP Day (07:00–20:00)":"🌙 Upload DCCP Night (20:00–07:00)"}</b>
       ${isAct?`<span style="background:#1E9E5A;color:#fff;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;">AKTIF SEKARANG</span>`:(info?`<span style="background:#E8833A;color:#fff;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;">⏳ MENUNGGU SHIFT</span>`:`<span style="font-size:11px;color:var(--text-dim);">belum ada file</span>`)}</div>
-    ${info?`<div style="font-size:12px;color:var(--text-dim);margin:6px 0;">${info.m.fileName||"-"} · ${info.n} truk${info.m.uploadedAt?" · diunggah "+new Date(info.m.uploadedAt).toLocaleString('id-ID')+" oleh "+(info.m.uploadedBy||"-"):""}${(canAct && (!isAct || !dccpCurrentOk(data)))?` <button class="btn btn-sm" onclick="dccpActivateNow('${sh}')">▶ Jalankan sekarang</button>`:""}${(isAct && dccpPlayedLive(meta))?`<div style="margin-top:4px;color:#17803d;font-weight:700;">▶ Dijalankan ${new Date(+meta.playTs).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${meta.playBy?" oleh "+escH(meta.playBy):""}</div>`:""}</div>`:""}
+    ${info?`<div style="font-size:12px;color:var(--text-dim);margin:6px 0;">${info.m.fileName||"-"} · ${info.n} truk${info.m.uploadedAt?" · diunggah "+new Date(info.m.uploadedAt).toLocaleString('id-ID')+" oleh "+(info.m.uploadedBy||"-"):""}${(isAct && info.m.autoTs)?` · 🔄 aktif otomatis ${new Date(+info.m.autoTs).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} (jam server) dari HP ${xlEsc(info.m.autoBy||"-")}`:""}${(canAct && (!isAct || !dccpCurrentOk(data)))?` <button class="btn btn-sm" onclick="dccpActivateNow('${sh}')">▶ Jalankan sekarang</button>`:""}${(isAct && dccpPlayedLive(meta))?`<div style="margin-top:4px;color:#17803d;font-weight:700;">▶ Dijalankan ${new Date(+meta.playTs).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${meta.playBy?" oleh "+escH(meta.playBy):""}</div>`:""}</div>`:""}
     <input type="file" accept=".xlsx,.xls" onchange="handleDccpFile(event,'${sh}')">
     <div id="dccpMsg_${sh}" style="margin-top:8px;"></div>
     ${mine?`<h4 style="margin:12px 0 6px;">Pratinjau — ${pv.fileName} (${pv.rows.length} truk)</h4>
@@ -15154,7 +15222,7 @@ function ccTabbarSync(){
 }
 /* pantau: plat masuk jadwal → bunyi + masuk normal; DCCP baru diupload tapi plat belum ada → bunyi sekali */
 setInterval(()=>{ try{
-  if(!ccWaitOn() || document.getElementById("cgPlat")) return;
+  if(!ccWaitOn() || document.getElementById("cgPlat") || (FBS.enabled && !fbFresh())) return;
   const w=ccWaitGet(), d=DB.get(), al=(tit,txt)=>{ try{ funStopAll(); }catch(e){} try{ soundEv('jadwal',txt); }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([300,150,300]); }catch(e){} try{ ringBg(tit, txt); }catch(e){} try{ if('Notification' in window && Notification.permission==='granted') new Notification(tit,{body:txt}); }catch(e){} };
   if(w.mode==="cs"){   /* rit Change Shift driver lain selesai (Delout) / serah terima disetujui → masuk normal */
     if(!csBlockMe(w.plat)){ const q=(d.takeReq||{})[normPlat(w.plat)], ok=q && q.to===currentUser.username && q.status==="ok";
@@ -15923,7 +15991,7 @@ function mapAbsenWhy(d, r, km){   // alasan CC di dalam radius belum tercatat (u
 }
 function mapAbsenTick(){
   try{
-    if(!currentUser || !trkLive()) return;   /* hemat data: absen-peta dijalankan HP yang menerima posisi realtime (Delivery/Koordinator/Display atau Driver yang membuka peta) */   // perangkat apa pun yang sedang terbuka (semua role + Display) ikut membaca peta; cek dobel di registerCC menjamin satu catatan
+    if(!currentUser || !trkLive() || (FBS.enabled && !fbFresh())) return;   /* hemat data: absen-peta dijalankan HP yang menerima posisi realtime (Delivery/Koordinator/Display atau Driver yang membuka peta) */   // perangkat apa pun yang sedang terbuka (semua role + Display) ikut membaca peta; cek dobel di registerCC menjamin satu catatan
     const d=DB.get(), y=d.yardLocation||{}; if(y.lat==null || y.radiusKm==null || !(d.dccpSchedule||[]).length) return;
     const now=Date.now(), rad=+y.radiusKm;
     const have=new Set([...Object.values(d.cc||{}).filter(Boolean).map(c=>normPlat(c.plat)), ...(d.queue||[]).map(q=>normPlat(q.plat)), ...(d.hold||[]).map(q=>normPlat(q.plat))]);
@@ -16454,11 +16522,11 @@ function trkRit(plat, dir){
   try{ const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r || csRowPaused(data, plat)) return null;
     { const mt=data.dccpMeta||{}, dd=mt.dateTs||dccpFileDate(mt.fileName);   // jadwal DCCP sudah lewat (>1 jam setelah shift berakhir): jangan tampilkan nomor ritase dari jadwal basi
       if(dd && mt.shift){ const st=dd+(mt.shift==="night"?SHIFT2_START_H:SHIFT_START_H)*3600000, en=st+(mt.shift==="night"?11:13)*3600000; if(Date.now()>en+3600000 || Date.now()<st-3*3600000) return null; } }   // lewat, atau shift-nya baru mulai besok (CC istirahat hari ini): tidak ada label ritase
-    const spot=!!r.extra, tot=Math.max(dccpTripList(r).length,spot?1:0), done=dccpDoneCount(r,data); if(!tot) return null;
+    const spot=!!r.extra, tot=Math.max(dccpTripList(r).length,spot?1:0), _dl=dccpDoneList(r,data), done=_dl.length, csN=+_dl.cs||0; if(!tot) return null;
     const cap=v=>spot?v:Math.min(v,tot);
     const back=(dir==="back"&&done>0); let n=back?cap(done):(done>0&&dir==="out"?cap(done):cap(done+1)); if(!spot && done===0) n=0;   // belum ambil unit (belum ada ILS shift ini): Rit 0 = sedang menuju Rit 1
     const adj=(data.ritAdj||{})[k]; if(adj && adj.ts>=dccpShiftFrom(r) && adj.n>=1){ n=cap(adj.n+Math.max(0,done-(adj.base||0))); }   // setelah dikoreksi, ILS/delout berikutnya tetap menambah nomor ritase   // koreksi manual Delivery berlaku sampai shift ini habis
-    return {n:n,tot:tot,spot:spot,max:spot?Math.max(tot,n+2,3):tot,back:back,all:!spot&&done>=tot,txt:(spot?"SPOT Rit "+n:"Rit "+n+"/"+tot+(back&&!(adj&&adj.ts>=dccpShiftFrom(r))?" ✓":""))}; }catch(e){ return null; }
+    return {n:n,tot:tot,spot:spot,max:spot?Math.max(tot,n+2,3):tot,back:back,all:!spot&&done>=tot,txt:(spot?"SPOT Rit "+n:"Rit "+n+"/"+tot+(back&&!(adj&&adj.ts>=dccpShiftFrom(r))?" ✓":""))+(csN?" · +"+csN+" CS":"")}; }catch(e){ return null; }
 }
 function ritEditOpen(plat){
   if(!(currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))) return;
@@ -17993,8 +18061,22 @@ try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
 /* tiap pengecekan berdiri sendiri: satu error tidak boleh menghentikan yang lain (mis. popup giliran / dikeluarkan di HP driver) */
 const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>ccLastOutCheck(), ()=>ccLastOutBackstop(), ()=>spdAutoPrune(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck(), ()=>koSeatCheck(), ()=>ritNSync(), ()=>lpRepairTick()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
-setInterval(()=>{ if(_koBlk || _dvBlk){ try{ koSeatCheck(); }catch(e){} try{ devSeatCheck(); }catch(e){} return; } _tick3.forEach(f=>{ try{ f(); }catch(e){} }); try{ devSeatCheck(); }catch(e){} }, 3000);   /* Koordinator dijeda: tidak ada pengecekan lain */
+setInterval(()=>{ if(_koBlk || _dvBlk){ try{ koSeatCheck(); }catch(e){} try{ devSeatCheck(); }catch(e){} return; }
+  if(FBS.enabled && !fbFresh()){ try{ devSeatCheck(); }catch(e){} return; }   /* 25 Nov: data HP belum pasti terbaru (baru dibuka / baru kembali dari latar / sinyal putus): otomasi & popup ditunda, tidak bekerja dari data lama */
+  _tick3.forEach(f=>{ try{ f(); }catch(e){} }); try{ devSeatCheck(); }catch(e){} }, 3000);   /* Koordinator dijeda: tidak ada pengecekan lain */
 setInterval(()=>{ try{ if(currentUser && !sessionAccountOk()){ alert("Akun ini sudah tidak aktif. Silakan login ulang."); doLogout(); } }catch(e){} }, 60000);
+/* 25 Nov 2026: jam HP selisih > 2 menit dari server → peringatan kecil (jam salah bikin jadwal shift, absen, & waktu ILS kacau) */
+let _clkHideTo=0;
+function clkWarnTick(){ try{
+  let el=document.getElementById("clkWarn");
+  const bad=_srvOffOk && Math.abs(_srvOff)>120000 && Date.now()>_clkHideTo;
+  if(!bad){ if(el) el.remove(); return; }
+  const mn=Math.round(Math.abs(_srvOff)/60000), txt=`⚠ Jam HP ini ${_srvOff>0?"lebih lambat":"lebih cepat"} ±${mn} menit dari jam server. Nyalakan <b>Tanggal &amp; waktu otomatis</b> di Setelan HP.`;
+  if(!el){ el=document.createElement("div"); el.id="clkWarn"; el.style.cssText="position:fixed;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);z-index:9990;background:#7C2D12;color:#fff;border-radius:12px;padding:9px 34px 9px 12px;font-size:13px;line-height:1.35;box-shadow:0 6px 20px rgba(0,0,0,.25);"; document.body.appendChild(el); }
+  const h=txt+`<button type="button" onclick="_clkHideTo=Date.now()+30*60000;clkWarnTick();" style="position:absolute;right:6px;top:6px;border:0;background:transparent;color:#fff;font-size:18px;line-height:1;cursor:pointer;" aria-label="Tutup">×</button>`;
+  if(el.dataset.h!==txt){ el.dataset.h=txt; el.innerHTML=h; }
+}catch(e){} }
+setInterval(clkWarnTick, 20000); setTimeout(clkWarnTick, 8000);
 setInterval(()=>{
   const c = document.getElementById("dispClock"); if(c) c.textContent = new Date().toLocaleTimeString('id-ID');
 }, 1000);
