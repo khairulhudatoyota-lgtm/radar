@@ -829,6 +829,11 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
   <div class="skip">ketuk untuk lewati</div>
 </div>
 <script>
+/* 25 Nov 2026: JAM KOREKSI. HP yang jamnya salah (selisih > 20 detik dari server Firebase) tetap mencatat jam yang benar:
+   Date.now() dikoreksi dengan selisih jam server (lihat .info/serverTimeOffset di fbStart). Kasus: absen dari HP driver yang jamnya
+   mundur tercatat "lebih lama dari Delout terakhir" lalu dibuang Sistem sebagai catatan lama → CC hilang dari waiting list. */
+var _rawNow=Date.now.bind(Date), _clkFix=0;
+try{ Date.now=function(){ return _rawNow()+_clkFix; }; }catch(e){}
 /* ===== suara RADAR (sintesis Web Audio, tanpa file) ===== */
 window.RSnd=(function(){
   var ctx=null, master=null, muted=false, t0=performance.now(), played=false, splashOn=true, rideTimer=null;
@@ -1226,7 +1231,7 @@ document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState=
      Selama belum segar, otomasi (pelepasan Parkir Luar, pembersihan antrean, ganti jadwal shift) dan popup perintah masuk TIDAK dijalankan
      dari data simpanan lama di HP. */
 let _srvOff=0, _srvOffOk=false, _fbConnTs=0, _fbVisTs=0, _fbHidTs=0;
-function srvNow(){ return Date.now()+(_srvOffOk?_srvOff:0); }
+function srvNow(){ return Date.now()+(_srvOffOk?_srvOff-_clkFix:0); }   /* _srvOff = selisih jam server terhadap jam ASLI HP; Date.now() sudah memuat koreksi _clkFix */
 document.addEventListener("visibilitychange", ()=>{ try{ if(document.visibilityState==="hidden") _fbHidTs=Date.now(); else { if(_fbHidTs && Date.now()-_fbHidTs>30000) _fbVisTs=Date.now(); _fbHidTs=0; } }catch(e){} });
 function fbFresh(){ if(!FBS.enabled) return true; if(fbCurrentState()!=="online") return false; const n=Date.now(); return n-_fbConnTs>=3000 && n-_fbVisTs>=3500; }
 function fbStart(){
@@ -1236,7 +1241,8 @@ function fbStart(){
     try{ fbMeterBoot(); }catch(e){}
     FBS.db = firebase.database(); FBS.enabled = true; fbState("connecting");
     FBS.db.ref(".info/connected").on("value", s=>{ const _wc=FBS.conn; FBS.conn = !!s.val(); if(FBS.conn && !_wc) _fbConnTs=Date.now(); if(FBS.conn) _fbDownSince=0; else if(!_fbDownSince) _fbDownSince=Date.now(); fbState(fbCurrentState()); try{ fbDownBar(); }catch(e){} try{ if(FBS.conn) presenceOn(true); }catch(e){} });
-    try{ FBS.db.ref(".info/serverTimeOffset").on("value", s=>{ const v=+s.val(); if(isFinite(v)){ _srvOff=v; _srvOffOk=true; } }); }catch(e){}
+    try{ FBS.db.ref(".info/serverTimeOffset").on("value", s=>{ const v=+s.val(); if(isFinite(v)){ const tot=_clkFix+v;   /* SDK mengukur terhadap Date.now yang sudah dikoreksi */
+        _srvOff=tot; _srvOffOk=true; _clkFix=Math.abs(tot)>20000 ? tot : 0; } }); }catch(e){}
     firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); trackAttach(); try{ presenceOn(true); }catch(e){} })
       .catch(e=>{ console.warn("login anonim gagal", e); fbState("offline"); });
     /* Sesi Firebase hilang di tengah jalan (mis. penyimpanan WebView terhapus saat Logout penuh TLS): login ulang otomatis lalu pasang ulang semua listener */
@@ -1517,9 +1523,9 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
+const FB_KEYS_ALL=["unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
 const FB_LITE={
-  cc:         { skip:["online","errDev","manifest","unitOutLog","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
+  cc:         { skip:["online","errDev","manifest","unitOutLog","unitScrap","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
   dispatcher: { skip:["funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
   pdi:        { skip:["funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
 let _fbMode="", _fbRefs=[], _fbRaw={}, _fbGot=new Set(), _fbNeed=0, _fbWinKeys={}, _fbGen=0, _fbLiteOff=false;
@@ -1755,7 +1761,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="25 Nov 2026 09.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="25 Nov 2026 11.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -3222,6 +3228,7 @@ function quickParkOK(){
   const vin = document.getElementById("vinInput").value.trim().toUpperCase();
   const data = DB.get();
   if(!vin){ alert("Isi No. Rangka dulu."); return; }
+  if(unitScrapBlock(vin, data)) return;
   const dupSlot = findVinSlot(vin, data);
   if(dupSlot && !isOffKey(dupSlot)){ alert(`No. Rangka ini masih terparkir di stall ${dupSlot}. Keluarkan/scan-out dulu sebelum input ulang.`); return; }
   const offKey = dupSlot || null;
@@ -3255,7 +3262,7 @@ function openDispatcherSlotEdit(id){
     <div class="msg info">Diparkir oleh ${v.driver||'-'} · ${new Date(v.ts).toLocaleString('id-ID')}</div>
     <button class="btn btn-primary" style="margin-top:10px;" onclick="saveSlotEdit('${id}')">💾 Simpan Perubahan No. Rangka</button>
     ${v.ilsId?"":`<button class="btn btn-outline" style="margin-top:8px;${v.batam?"":"color:#E8833A;border-color:#E8833A;"}" onclick="setUnitBatam(['${id}'], ${v.batam?"false":"true"})">${v.batam?"Ubah jadi Reguler (bukan Batam)":"🟠 Tandai unit ini BATAM"}</button>`}
-    <button class="btn btn-danger" style="margin-top:8px;" onclick="clearSlotForRepair('${id}')">🔧 Keluarkan Unit (Servis / Ganti / Batal)</button>
+    <button class="btn btn-danger" style="margin-top:8px;" onclick="clearSlotForRepair('${id}')">🗑 Hapus / Keluarkan Unit dari Stall</button>
   `);
 }
 function saveSlotEdit(id){
@@ -3294,17 +3301,74 @@ async function pwConfirmGo(){
   if(!ok){ btn.disabled=false; btn.textContent="Lanjutkan"; msg.innerHTML=`<div class="msg err">Password salah.</div>`; return; }
   pwConfirmEnd(true);
 }
-function unitOutLogAdd(d, slot, v, kind){
+function unitOutLogAdd(d, slot, v, kind, extra){
   const L=xlArr(d.unitOutLog).filter(x=>Date.now()-x.ts<7*24*3600*1000);
-  L.push({ts:Date.now(), slot, frame:(v&&v.frame)||"", model:(v&&v.model)||"", kind, by:(currentUser&&currentUser.name)||"", user:(currentUser&&currentUser.username)||"", role:(currentUser&&currentUser.role)||""});
+  L.push(Object.assign({ts:Date.now(), slot, frame:(v&&v.frame)||"", model:(v&&v.model)||"", pts:(v&&+v.ts)||0, kind, by:(currentUser&&currentUser.name)||"", user:(currentUser&&currentUser.username)||"", role:(currentUser&&currentUser.role)||""}, extra||{}));
   d.unitOutLog=capLog(L,300);
 }
-async function clearSlotForRepair(id){
+/* ===== HAPUS / KELUARKAN UNIT: PILIH ALASAN (25 Nov 2026, permintaan Khairul) =====
+   Kasus: dispatcher salah ketik No. Rangka (kelebihan huruf E), unit dihapus lalu diinput ulang — No. Rangka yang salah tetap
+   tercatat "Dikeluarkan (servis/batal)" dan ikut data input. Sekarang saat menghapus unit dipilih alasannya:
+   • 🔧 Repair  — unit keluar sementara untuk diperbaiki, nanti bisa diinput lagi (tetap tercatat sudah diinput, status "Repair").
+   • ✏️ Salah input — typo / dobel: dianggap TIDAK PERNAH diinput (hilang dari Data Input Unit, Rekap, hitungan input, Cari No. Rangka).
+   • ⛔ Insiden / scrap — unit tidak bisa masuk lagi: No. Rangka ini ditolak kalau diinput lagi (Admin/Delivery bisa membatalkan
+     lewat Admin → Riwayat unit dikeluarkan → ubah alasan).
+   Alasan dicatat di d.unitOutLog (tersinkron, 7 hari); daftar scrap di d.unitScrap (tersinkron, permanen). Log unit di tiap HP
+   (unitLog, lokal) membaca alasan itu di syncUnitLog. */
+const UOUT_KINDS={repair:"🔧 Repair", salah:"✏️ Salah input", scrap:"⛔ Insiden / scrap"};
+function unitOutChoose(key, isOff){
   if(!geoGuard()) return;
-  const v=(DB.get().units||{})[id]; closeModal();
-  if(!(await pwConfirm("Keluarkan unit dari Stall "+id, v?("No. Rangka <b>"+xlEsc(v.frame||"-")+"</b> · "+xlEsc(v.model||"")+". Slot akan kosong lagi."):"Slot akan kosong lagi."))) return;
-  DB.set(d=>{ unitOutLogAdd(d, id, d.units[id], "stall"); d.units[id] = null; });
+  const v=(DB.get().units||{})[key]; if(!v){ closeModal(); return; }
+  if(v.ilsId){ alert("Unit ini sudah masuk ILS. Urus lewat ILS (batalkan ILS dulu)."); return; }
+  const k=JSON.stringify(key).replace(/"/g,"&quot;");
+  const bt=(kind, title, sub, col)=>`<button type="button" class="btn btn-outline" style="width:100%;margin-bottom:8px;text-align:left;${col?`color:${col};border-color:${col};`:""}" onclick="unitOutGo(${k},${isOff?"true":"false"},'${kind}')"><b>${title}</b><br><span style="font-size:11px;font-weight:500;">${sub}</span></button>`;
+  showModal(`<h3 style="margin:0 0 6px;">🗑 Hapus / keluarkan unit · ${isOff?"Parkir Luar":"Stall "+escH(key)}</h3>
+    <div style="font-size:13px;margin-bottom:10px;">No. Rangka <b class="mono">${escH(v.frame||"-")}</b> · ${escH(v.model||"")}<br><span style="font-size:11px;color:var(--text-dim);">diinput ${escH(v.driver||"-")} · ${new Date(v.ts).toLocaleString('id-ID')}</span></div>
+    ${bt("repair","🔧 Repair / servis","Unit keluar sementara untuk diperbaiki. Nanti bisa diinput lagi. Tetap terhitung sudah diinput.")}
+    <div style="font-size:12px;font-weight:800;margin:4px 0 6px;">🚪 Keluarkan</div>
+    ${bt("salah","✏️ Salah input (typo / dobel)","Dianggap TIDAK PERNAH diinput: hilang dari Data Input Unit, Rekap, dan hitungan input. Setelah ini input ulang No. Rangka yang benar.","#2F6FB5")}
+    ${bt("scrap","⛔ Unit insiden / scrap","Unit tidak bisa masuk lagi. Kalau No. Rangka ini diinput lagi, RADAR menolak.","var(--red)")}
+    <button type="button" class="btn btn-sm" style="width:100%;" onclick="closeModal()">Batal</button>`);
 }
+async function unitOutGo(key, isOff, kind){
+  const v=(DB.get().units||{})[key]; closeModal(); if(!v) return;
+  let why="";
+  if(kind==="scrap"){ why=prompt("Unit "+(v.frame||"")+" INSIDEN / SCRAP.\n\nKetik keterangannya (wajib, mis. penyok berat / terbakar / batal produksi):",""); if(why===null) return;
+    why=String(why).trim(); if(why.length<3){ alert("Keterangan wajib diketik (minimal 3 huruf). Unit tidak jadi dikeluarkan."); return; } }
+  const lbl=UOUT_KINDS[kind]||kind;
+  if(!(await pwConfirm(lbl+" · "+(isOff?"Parkir Luar":"Stall "+key), "No. Rangka <b>"+xlEsc(v.frame||"-")+"</b> · "+xlEsc(v.model||"")+(why?" · "+xlEsc(why):"")+". Slot akan kosong lagi."))) return;
+  DB.set(d=>{ const u=d.units[key]; if(!u || u.ilsId) return;
+    unitOutLogAdd(d, key, u, kind, Object.assign({from:isOff?"luar":"stall"}, why?{why}:{}));
+    if(kind==="scrap"){ d.unitScrap=(d.unitScrap&&typeof d.unitScrap==="object")?d.unitScrap:{}; d.unitScrap[normVin(u.frame)]={ts:Date.now(), frame:u.frame, model:u.model||"", why, by:(currentUser&&currentUser.name)||""}; }
+    if(isOff) delete d.units[key]; else d.units[key]=null; });
+  render();
+}
+/* alasan unit dikeluarkan untuk log unit: "FRAME|jamParkir" → kind (yang terbaru menang) */
+function unitOutReasons(d){
+  const M=new Map();
+  xlArr(d.unitOutLog).slice().sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(x=>{ if(!x || !UOUT_KINDS[x.kind] || !x.frame) return; const f=normVin(x.frame);
+    M.set(f+"|"+((+x.pts)||"*"), x.kind); });   /* catatan lama (sebelum 25 Nov) tanpa jam parkir: berlaku untuk No. Rangka itu */
+  return M;
+}
+function unitScrapOf(data, vin){ const S=data.unitScrap; return (S && typeof S==="object") ? (S[normVin(vin)]||null) : null; }
+function unitScrapBlock(vin, data){ const s=unitScrapOf(data, vin); if(!s) return false;
+  alert("⛔ No. Rangka "+(s.frame||vin)+" tercatat UNIT INSIDEN / SCRAP"+(s.why?" ("+s.why+")":"")+" oleh "+(s.by||"-")+", "+new Date(+s.ts||Date.now()).toLocaleString('id-ID')+".\n\nUnit ini tidak bisa diinput lagi. Kalau ini keliru, minta Admin/Delivery mengubah alasannya di Admin → Riwayat unit dikeluarkan.");
+  return true; }
+/* Admin/Delivery: ubah alasan unit yang sudah dikeluarkan (mis. data kemarin yang terlanjur tercatat servis padahal salah ketik) */
+function unitOutRekind(ts, kind){
+  if(!(currentUser && ["admin","delivery"].includes(currentUser.role)) || isViewer()) return;
+  const x0=xlArr(DB.get().unitOutLog).find(x=>x && x.ts===ts); if(!x0) return;
+  if(!confirm("Ubah alasan "+(x0.frame||"")+" menjadi "+(UOUT_KINDS[kind]||kind)+"?"+(kind==="salah"?"\n\nUnit ini dianggap TIDAK PERNAH diinput (hilang dari Data Input Unit & Rekap).":kind==="scrap"?"\n\nNo. Rangka ini akan DITOLAK kalau diinput lagi.":""))) return;
+  let why=x0.why||"";
+  if(kind==="scrap" && !why){ const w=prompt("Keterangan insiden / scrap (wajib):",""); if(w===null) return; why=String(w).trim(); if(why.length<3){ alert("Keterangan wajib diketik."); return; } }
+  DB.set(d=>{ const L=xlArr(d.unitOutLog), x=L.find(y=>y && y.ts===ts); if(!x) return; const f=normVin(x.frame);
+    x.kind=kind; if(why) x.why=why; x.rekBy=(currentUser&&currentUser.name)||""; x.rekTs=Date.now(); d.unitOutLog=L;
+    d.unitScrap=(d.unitScrap&&typeof d.unitScrap==="object")?d.unitScrap:{};
+    if(kind==="scrap") d.unitScrap[f]={ts:Date.now(), frame:x.frame, model:x.model||"", why, by:(currentUser&&currentUser.name)||""};
+    else delete d.unitScrap[f]; });
+  render();
+}
+function clearSlotForRepair(id){ unitOutChoose(id, false); }
 /* Kosongkan isi 1 stall (g="12A"), luar stall (g="OFF") atau semua stall (g="*").
    Unit yang sudah masuk ILS tidak disentuh (urus lewat ILS). CC di stall tidak berubah. Tercatat di riwayat unit dikeluarkan. */
 async function clearStallUnits(g){
@@ -3450,6 +3514,7 @@ function confirmPark(){
   const data = DB.get();
   const model = detectModel(vin, data.models);
   if(!vin || !pickedSlot){ return; }
+  if(unitScrapBlock(vin, data)) return;
   const dupSlot = findVinSlot(vin, data);
   if(dupSlot && !isOffKey(dupSlot)){ alert(`No. Rangka ini masih terparkir di stall ${dupSlot}. Keluarkan/scan-out dulu sebelum input ulang.`); return; }
   const offKey = dupSlot || null;
@@ -4069,7 +4134,7 @@ function renderOrderStall(){
         <div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp}${qDrv(data,q.plat)} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}${(()=>{const dk=ccDistNow(data,q.plat); return dk!=null?` · 📍 ${dk.toFixed(1)} km dari yard${ccFarNow(data,q.plat)?" (masih jauh, belum dipanggil)":""}`:"";})()}</span></div>
         ${ccQueueCtl(data,idx,q)}
       </div>
-      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
+      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}${ccLockFlagHtml(data,q.plat,q)}
     </div>
   `).join("");
 
@@ -4395,7 +4460,7 @@ function ccQueueAuto(){
 function ccQueueCtl(data, idx, q){
   if(!canQueueMove()) return ""; const n=(data.queue||[]).length, pl=escH(q.plat).replace(/'/g,"");
   const bt=(dir,l,off)=>`<button type="button" ${off?"disabled":""} onclick="ccQueueMove('${pl}',${dir})" style="border:1px solid var(--border);background:#fff;border-radius:8px;padding:4px 10px;font-weight:900;font-size:14px;${off?"opacity:.35;":""}">${l}</button>`;
-  return `<div style="display:flex;gap:6px;align-items:center;">${q.mo!=null?`<span title="urutan diatur manual" style="font-size:12px;">📌</span>`:""}${bt(-1,"▲",idx===0)}${bt(1,"▼",idx===n-1)}</div>`;
+  return `<div style="display:flex;gap:6px;align-items:center;">${q.mo!=null?`<span title="urutan diatur manual" style="font-size:12px;">📌</span>`:""}${bt(-1,"▲",idx===0)}${bt(1,"▼",idx===n-1)}${canKeluarkanCC()&&!isViewer()?`<button type="button" onclick="keluarkanQ('${pl}')" title="Keluarkan dari waiting list" style="border:1px solid var(--red);color:var(--red);background:#fff;border-radius:8px;padding:4px 8px;font-weight:900;font-size:13px;">🚪</button>`:""}</div>`;
 }
 function ccQueueAutoBar(data){
   if(!canQueueMove() || !(data.queue||[]).some(x=>x&&x.mo!=null)) return "";
@@ -4557,13 +4622,13 @@ function ccPurgeStale(d, only, shLbl){
   if(out.length){ const now=Date.now();
     d.ccOutLog=d.ccOutLog||[];
     out.forEach(([q,w])=>{ const k=normPlat(q.plat);
-      d.ccOutLog.push({ts:now, plat:q.plat, lp:q.lp||"", ccNum:0, why:"otomatis: plat tidak ada di Jadwal DCCP aktif"+(shLbl?" ("+shLbl+")":"")+" ("+w+")", by:"Sistem"});
+      d.ccOutLog.push({ts:now, plat:q.plat, lp:q.lp||"", ccNum:0, why:"otomatis: plat tidak ada di Jadwal DCCP aktif"+(shLbl?" ("+shLbl+")":"")+" ("+w+")", by:"Sistem", wl:true, sch:true});   /* wl: bukan "keluar" (absen otomatis tidak dikunci) */
       const L=d.absenLog||[]; for(let i=L.length-1;i>=0;i--){ const x=L[i]; if(x && !x.dup && !x.rejected && normPlat(x.plat)===k){ x.drop=now; break; } } });   /* absen ulang plat ini tidak kena aturan "baru absen < 20 menit" */
     d.ccOutLog=capLog(d.ccOutLog,200); }
   return n;
 }
 /* CC di waiting list / Parkir Luar yang di peta (posisi segar) terbukti sudah jauh di luar area >= 10 menit: dikeluarkan dari antrean (CC yang sudah pergi tidak boleh menahan urutan). */
-const QFAR={};
+const QFAR={}, QFARKM={};
 const QFAR_MIN=10;
 function ccQueueFarPurge(){
   try{
@@ -4578,11 +4643,14 @@ function ccQueueFarPurge(){
       /* satu plat bisa punya >1 titik (HP/akun lain): dianggap jauh hanya kalau SEMUA titik segarnya jauh; ada satu saja di yard = masih di yard */
       /* 17 Nov 2026: hanya posisi GPS (bukan posisi jaringan yang bisa meleset km-an) dari HP driver pemegang plat di shift ini */
       const fr=Object.values(TRACK||{}).filter(t=>t && typeof t.lat==="number" && normPlat(t.plat)===k && now-(t.ts||0)<=120000 && !trkCoarse(t) && !(t.u && absenHolderWhy(t.u, t.plat)));
-      if(!fr.length){ delete QFAR[k]; return; }
+      if(!fr.length){ delete QFAR[k]; delete QFARKM[k]; return; }
       const km=Math.min(...fr.map(t=>haversineKm(t.lat,t.lng,y.lat,y.lng)));
-      if(km>rad+1){ if(!QFAR[k]) QFAR[k]=now; if(now-QFAR[k]>=QFAR_MIN*60000) gone.push([k,km]); } else delete QFAR[k];
+      if(km>rad+1){ if(!QFAR[k]) QFAR[k]=now; QFARKM[k]=km; if(now-QFAR[k]>=QFAR_MIN*60000) gone.push([k,km]); } else { delete QFAR[k]; delete QFARKM[k]; }
     });
-    Object.keys(QFAR).forEach(k=>{ if(!ks.includes(k)) delete QFAR[k]; });
+    Object.keys(QFAR).forEach(k=>{ if(!ks.includes(k)){ delete QFAR[k]; delete QFARKM[k]; } });
+    /* 25 Nov 2026: TIDAK dihapus otomatis lagi (CC sudah absen = terkunci sampai Delout / dikeluarkan). Hanya ditandai ⚠ + kabar ke Delivery (ccLockNotify).
+       CC yang jauh tetap tidak dipanggil ke stall (ccQueueTake). */
+    return;
     if(!gone.length) return;
     DB.set(d2=>{
       gone.forEach(([k,km])=>{
@@ -4603,15 +4671,51 @@ function ccQueueFarPurge(){
     gone.forEach(([k])=>delete QFAR[k]);
   }catch(e){}
 }
-/* 25 Nov 2026 (kasus Khairul: driver sudah absen & masuk waiting list, tiba-tiba hilang dan tidak bisa absen otomatis lagi).
-   Dulu pembersihan ini jalan di SEMUA HP (termasuk HP Driver) dan langsung menghapus begitu plat tidak terlihat di jadwal aktif HP itu —
-   termasuk dari data simpanan lama saat RADAR baru dibuka, atau saat jadwal sempat kedip ke shift lain. Hapusnya diam-diam (tanpa log),
-   lalu absen ulang ditolak "baru absen <20 menit". Sekarang:
-   • hanya HP berdata lengkap (Delivery/Admin/Koordinator/Leader), data harus segar;
-   • plat baru dikeluarkan kalau ≥90 detik berturut-turut tetap tidak ada di jadwal aktif (kedip sesaat tidak menghapus);
-   • tercatat di Log CC Keluar (Sistem) + kabar ke HP driver, dan absen ulang langsung boleh (tidak kena aturan 20 menit). */
+/* ===== CC TERJADWAL YANG SUDAH ABSEN = TERKUNCI (25 Nov 2026, permintaan Khairul) =====
+   "Kalau sudah absen udah ngunci sampai Delout atau dikeluarkan" — untuk CC yang ADA di Jadwal DCCP. Kasus: driver komplain sudah
+   datang dari tadi tapi tidak ada perintah masuk — ternyata namanya hilang dari waiting list, padahal Delivery tidak selalu memantau.
+   • Plat TIDAK ada di Jadwal DCCP aktif → tetap dihapus otomatis (sesuai permintaan), dengan pengaman: hanya HP berdata lengkap & segar,
+     baru dihapus kalau 90 detik berturut-turut tidak ada di jadwal (kedip sesaat tidak menghapus), tercatat "Sistem" + kabar ke driver.
+   • Plat ADA di jadwal: TIDAK dihapus karena GPS di peta jauh dari yard (dulu dihapus + absen ulang dikunci ±45 menit) atau karena
+     "ritase sudah selesai". Hanya ditandai ⚠ + kartu "⚠ Perlu dicek Delivery" (tombol 🚪 Keluarkan) + bunyi ke HP Delivery/Admin.
+     CC yang jauh tetap tidak dipanggil ke stall sampai posisinya dekat.
+   • Yang tetap mengeluarkan: Delout, tombol Keluarkan (Delivery), pengaman catatan dobel/hantu yang terkait Delout. */
+const _lkSeen=new Set();
+function ccLockFlags(d, plat, it){
+  const k=normPlat(plat), f=[]; if(!k) return f;
+  try{ const s0=QFAR[k]; if(s0 && Date.now()-s0>=QFAR_MIN*60000) f.push({t:"jauh", txt:"GPS ±"+(+QFARKM[k]||0).toFixed(1)+" km dari yard sejak "+holdHm(s0)}); }catch(e){}
+  return f;
+}
+function ccLockList(d){
+  const L=[];
+  Object.keys(d.cc||{}).forEach(n=>{ const c=d.cc[n]; if(!c) return; if((d.ils||[]).some(b=>b && b.status==="open" && !b.outTs && b.ccNum==n)) return; const f=ccLockFlags(d, c.plat, c); if(f.length) L.push({w:"cc", n:+n, plat:c.plat, lp:c.lp||"", ts:+c.absenTs||+c.ts||0, f}); });
+  (d.queue||[]).forEach((q,i)=>{ if(!q) return; const f=ccLockFlags(d, q.plat, q); if(f.length) L.push({w:"queue", i, plat:q.plat, lp:q.lp||"", ts:+q.ts||0, f}); });
+  (d.hold||[]).forEach(q=>{ if(!q) return; const f=ccLockFlags(d, q.plat, q); if(f.length) L.push({w:"hold", plat:q.plat, lp:q.lp||"", ts:+q.ts||0, f}); });
+  return L;
+}
+function ccLockFlagHtml(d, plat, it){ const f=ccLockFlags(d, plat, it); return f.length?`<div style="font-size:11px;color:#B45309;font-weight:700;margin-top:3px;">⚠ ${f.map(x=>escH(x.txt)).join(" · ")}</div>`:""; }
+function ccLockCardHtml(d){
+  try{ if(!canKeluarkanCC() || isViewer()) return ""; const L=ccLockList(d); if(!L.length) return "";
+    const where=x=>x.w==="cc"?"Stall "+ccLbl(x.n):x.w==="queue"?"Waiting #"+(x.i+1):"Parkir Luar";
+    return `<div class="card" style="border-left:5px solid #D97706;background:#FFFBEB;"><h3>⚠ Perlu dicek Delivery (${L.length})</h3>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">CC terjadwal yang sudah absen tidak dihapus otomatis walau GPS-nya jauh (tidak dipanggil ke stall sampai dekat). Kalau CC ini memang tidak jadi masuk / sudah pergi, tekan Keluarkan. Kalau masih ada di lokasi, biarkan saja.</div>
+      ${L.map(x=>`<div style="padding:7px 0;border-top:1px solid #FDE68A;display:flex;justify-content:space-between;gap:8px;align-items:center;"><div style="font-size:13px;"><b>${escH(x.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)} · ${where(x)}${x.ts?" · absen "+holdHm(x.ts):""}</span><div style="font-size:11px;color:#B45309;font-weight:700;">${x.f.map(y=>escH(y.txt)).join(" · ")}</div></div>
+        <button type="button" class="btn btn-outline btn-sm" style="flex-shrink:0;color:var(--red);border-color:var(--red);" onclick="${x.w==="cc"?`keluarkanCC(${x.n})`:`keluarkanQ('${escH(x.plat).replace(/'/g,"")}')`}">🚪 Keluarkan</button></div>`).join("")}</div>`;
+  }catch(e){ return ""; }
+}
+/* bunyi + notifikasi ke HP Delivery/Admin, sekali per CC per kejadian */
+function ccLockNotify(){ try{
+  if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer()) return;
+  if(FBS.enabled && !fbFresh()) return;
+  const d=DB.get(), L=ccLockList(d); let fired=false;
+  L.forEach(x=>{ x.f.forEach(f=>{ const key=f.t+"|"+normPlat(x.plat)+"|"+x.ts; if(_lkSeen.has(key)) return; _lkSeen.add(key); if(fired) return; fired=true;
+    const where=x.w==="cc"?"Stall "+ccLbl(x.n):x.w==="queue"?"waiting list":"Parkir Luar";
+    const txt="CC "+x.plat+" ("+where+") "+f.txt+". Cek di Display → ⚠ Perlu dicek Delivery: keluarkan kalau memang tidak jadi masuk.";
+    try{ soundEv('ilstls', txt); }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([250,120,250]); }catch(e){} try{ ringBg("⚠ CC perlu dicek", txt); }catch(e){}
+    try{ if('Notification' in window && Notification.permission==='granted') new Notification("⚠ CC perlu dicek",{body:txt}); }catch(e){} }); });
+}catch(e){} }
 const _psSeen={};
-function ccPurgeStaleCheck(){ try{
+function ccPurgeStaleCheck(){ try{ ccLockNotify(); }catch(e){} try{
   if(!currentUser || currentUser.role==="display" || currentUser.role==="cc" || isViewer()) return;
   if(FBS.enabled && (_fbMode!=="full" || !fbFresh())) return;
   const d0=DB.get(), now=Date.now();
@@ -4625,6 +4729,19 @@ function ccPurgeStaleCheck(){ try{
   DB.set(d=>{ ccPurgeStale(d, new Set(ripe), sh); });
   ripe.forEach(k=>delete _psSeen[k]);
 }catch(e){} }
+/* Delivery/Admin/Koordinator: keluarkan CC dari waiting list / Parkir Luar (dengan alasan, tercatat, driver dapat kabar) */
+function keluarkanQ(plat){
+  if(!(canKeluarkanCC() || (currentUser && currentUser.role==="koordinator"))) return;
+  const k=normPlat(plat), d0=DB.get(), inQ=(d0.queue||[]).some(q=>q && normPlat(q.plat)===k), inH=(d0.hold||[]).some(q=>q && normPlat(q.plat)===k);
+  if(!inQ && !inH){ alert(plat+" sudah tidak ada di waiting list / Parkir Luar."); render(); return; }
+  const why=prompt("Keluarkan "+plat+" dari "+(inQ?"WAITING LIST":"PARKIR LUAR")+"?\n\nDriver dapat kabar di HP-nya. Ketik alasannya (wajib):", ""); if(why===null) return;
+  if(String(why).trim().length<3){ alert("Alasan wajib diketik (minimal 3 huruf). CC tidak jadi dikeluarkan."); return; }
+  DB.set(d=>{ const it=(d.queue||[]).find(q=>q && normPlat(q.plat)===k) || (d.hold||[]).find(q=>q && normPlat(q.plat)===k); if(!it) return;
+    const w=(d.queue||[]).some(q=>q && normPlat(q.plat)===k)?"waiting list":"Parkir Luar";
+    ccDropPlat(d, plat); ccMarkLeft(d, {plat:it.plat});
+    d.ccOutLog=d.ccOutLog||[]; d.ccOutLog.push({ts:Date.now(), plat:it.plat, lp:it.lp||"", ccNum:0, why:String(why).trim()+" ("+w+")", by:(currentUser&&currentUser.name)||""}); d.ccOutLog=capLog(d.ccOutLog,200); });
+  render();
+}
 function holdLepas(plat){
   if(!canKeluarkanCC()) return;
   if(!confirm("Naikkan "+plat+" dari Parkir Luar ke waiting list sekarang walau belum waktu jadwalnya?")) return;
@@ -4728,7 +4845,7 @@ function ccHoldRowsHtml(data){
     const H=(data.hold||[]).slice().sort((a,b)=>ccEffTs(data,a.plat,a.ts)-ccEffTs(data,b.plat,b.ts)); if(!H.length) return "";
     const hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}), em=ccEarlyMin(data)*60000;
     return `<div style="margin-top:10px;padding-top:8px;border-top:2px dashed var(--border);"><div style="font-size:12px;font-weight:800;color:#B4570E;margin-bottom:4px;">🅿️ Sudah absen, di luar waiting list (${H.length})</div>`+
-      H.map(q=>{ const du=ccNextDue(data,q.plat); return `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>${escH(q.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(q.lp||"")}${qDrv(data,q.plat)}${q.ts?" · absen "+hm(q.ts):""}${q.absenDistKm!=null?" · "+q.absenDistKm.toFixed(1)+" km":""}</span></div><div style="text-align:right;"><span style="background:#E8833A;color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;">Parkir Luar</span>${du!=null?`<div style="font-size:11px;color:var(--text-dim);">jadwal ${holdHm(du)} · masuk antrian ±${holdHm(du-em)}</div>`:""}</div></div>`; }).join("")+`</div>`;
+      H.map(q=>{ const du=ccNextDue(data,q.plat); return `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>${escH(q.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(q.lp||"")}${qDrv(data,q.plat)}${q.ts?" · absen "+hm(q.ts):""}${q.absenDistKm!=null?" · "+q.absenDistKm.toFixed(1)+" km":""}</span>${ccLockFlagHtml(data,q.plat,q)}</div><div style="text-align:right;"><span style="background:#E8833A;color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;">Parkir Luar</span>${du!=null?`<div style="font-size:11px;color:var(--text-dim);">jadwal ${holdHm(du)} · masuk antrian ±${holdHm(du-em)}</div>`:""}${canKeluarkanCC()&&!isViewer()?`<button type="button" onclick="keluarkanQ('${escH(q.plat).replace(/'/g,"")}')" title="Keluarkan dari Parkir Luar" style="margin-top:4px;border:1px solid var(--red);color:var(--red);background:#fff;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:800;">🚪 Keluarkan</button>`:""}</div></div>`; }).join("")+`</div>`;
   }catch(e){ return ""; }
 }
 function ccSemuaAbsenHtml(data){
@@ -4788,9 +4905,23 @@ function dccpCurrentOk(d){
   return !!m.uploadedAt && Date.now()-m.uploadedAt < 30*3600000;
 }
 let _nvdcOv=false;
+/* jam absen awal yang boleh dipakai lagi: absen ≤3 jam lalu, sesudahnya tidak ada Delout/ILS/keluar, dan
+   (a) dikeluarkan otomatis oleh Sistem (tanda drop), atau (b) Delivery/Admin memilih "kembalikan ke urutan awal" saat Absenkan */
+function absenLost(d, k){ try{
+  const la=(d.absenLog||[]).slice().reverse().find(x=>x && !x.dup && !x.rejected && !x.far && normPlat(x.plat)===k);
+  if(!la || Date.now()-(+la.ts||0)>=3*3600000) return null;
+  if((((d.ccLeft||{})[k])||0)>la.ts) return null;
+  if((d.ils||[]).some(b=>b && normPlat(b.ccPlat)===k && (+b.ts||0)>=la.ts)) return null;
+  if(Object.values(d.cc||{}).some(c=>c && normPlat(c.plat)===k) || (d.queue||[]).some(q=>q && normPlat(q.plat)===k) || (d.hold||[]).some(q=>q && normPlat(q.plat)===k)) return null;
+  return la; }catch(e){ return null; } }
+function absenRestoreTs(d, k, pick){ const la=absenLost(d, k); if(!la) return null;
+  if(la.drop || pick) return +la.ts;
+  return null; }
 function registerCC(plat, lp, dist, auto, manual, src){
   if(FBS.enabled && fbCurrentState()!=="online") return {offline:true};   /* sinyal putus: absen tidak disimpan di HP lalu dikirim belakangan dengan data lama */
+  if(FBS.enabled && !_srvOffOk && Date.now()-_fbConnTs<20000) return {offline:true};   /* 25 Nov: tunggu jam server dulu (maks. 20 detik) supaya jam absen benar walau jam HP salah */
   let res = null; const k = normPlat(plat); _nvdcOv=false;
+  const _rsPick = !!(manual && window._absenRestore && window._absenRestore===k);   /* dibaca sekali di luar DB.set: kiriman ulang ke server memakai pilihan yang sama */
   DB.set(d=>{
     if(!src && currentUser && currentUser.role==="cc"){   /* HP driver yang bukan pemegang plat di shift ini: absen ditolak (dicatat di log maks. 10 menit sekali) */
       const hw=absenHolderWhy(currentUser.username, plat);
@@ -4829,7 +4960,11 @@ function registerCC(plat, lp, dist, auto, manual, src){
     { const _own2=!!(manual && currentUser && (currentUser.role==="delivery"||currentUser.role==="admin")); const _dn=ccDistNow(d, plat); const _y=d.yardLocation||{}; if(!_own2 && _dn!=null && _y.radiusKm!=null && _dn > (+_y.radiusKm)+0.3){ res={far:true, dist:_dn, radius:+_y.radiusKm, map:true}; return; } }   // peta (segar < 5 menit) menunjukkan CC masih jauh: absen apa pun dari HP/otomatis ditolak   // di luar radius: ditolak, apa pun jalurnya (otomatis / manual)
     const _pr = getCcProfile(), drvCode = (normPlat(_pr.plat)===k ? (_pr.drvCode||"") : "");
     const _sr=(d.dccpSchedule||[]).find(r=>normPlat(r.police)===k); if(_sr && _sr.lp) lp=_sr.lp;   // LP resmi dari jadwal DCCP (sama seperti absen admin)
-    const item = {plat: platFmt(plat), lp, drvCode, ts: Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
+    /* 25 Nov 2026: CC yang sudah absen lalu hilang dari waiting list / Parkir Luar (dikeluarkan Sistem, atau hilang tanpa Delout/keluar)
+       saat absen lagi dikembalikan ke URUTAN ABSEN AWAL-nya (jam absen pertama), bukan antre dari belakang. */
+    const _rts=absenRestoreTs(d, k, _rsPick);
+    const item = {plat: platFmt(plat), lp, drvCode, ts: _rts||Date.now(), absenDistKm: dist, auto:!!auto, manual:!!manual};
+    if(_rts) item.back=Date.now();
     if(!(d.absenLog||[]).some(x=>x && !x.dup && !x.rejected && normPlat(x.plat)===k && Date.now()-(x.ts||0)<60000)) d.absenLog=absenAdd(d.absenLog, {ts:Date.now(), plat:item.plat, lp:item.lp||"", u:src?"peta":((currentUser&&currentUser.username)||""), name:src||(currentUser&&currentUser.name)||"", role:src?"peta":((currentUser&&currentUser.role)||""), auto:!!auto, manual:!!manual, dist:(dist==null?null:Math.round(dist*10)/10), via:(!src && auto && window._absenVia) ? window._absenVia.via : undefined, acc:(!src && auto && window._absenVia) ? window._absenVia.acc : undefined, su:(src && window._absenVia && window._absenVia.su) ? window._absenVia.su : undefined});
     const hd = ccHoldDue(d, plat);
     if(hd!=null && !ccFirstBatchIn(d, plat)){ d.hold=(d.hold||[]).concat([item]); res = {hold:true, due:hd}; return; }   /* batch pertama + stall kosong: langsung masuk */
@@ -4877,7 +5012,8 @@ function ccGuardWhy(d, plat, inStall, it){
   if(it && !csActive(d,plat) && ccLoadedNear(d, plat)){ const lo=ccLastDelout(d, plat);
     if(!(d.absenLog||[]).some(a=>a && a.manual && !a.dup && !a.rejected && normPlat(a.plat)===k && (a.ts||0)>lo)) return "otomatis: absen lagi sesudah Delout, CC belum menjauh dari yard (masih bawa muatan)"; }
   if(ccNeedNvdc(d, plat)) return "otomatis: sudah Delout, belum tiba di NVDC";
-  if(ccRitHabis(d, plat)) return "otomatis: ritase shift ini sudah selesai";
+  /* 25 Nov 2026: "ritase shift ini sudah selesai" tidak lagi mengeluarkan CC yang sudah absen (terkunci sampai Delout / dikeluarkan).
+     Absen baru untuk CC yang ritnya habis tetap ditolak di registerCC. */
   return "";
 }
 function ccGuardScan(d){
@@ -5038,6 +5174,7 @@ function renderDelivery(){
     ${ilsSeatBanner(data)}
     ${dfAlertHtml(data)}
     ${takeCardHtml(data)}
+    ${ccLockCardHtml(data)}
     ${csCardHtml(data)}
     ${earlyBox}
     ${batamAlertHtml(data)}
@@ -6145,7 +6282,7 @@ function renderKoordinator(){
   const queueCards = data.queue.map((q,idx)=>`
     <div class="card" style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp}${qDrv(data,q.plat)} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>${ccQueueCtl(data,idx,q)}</div>
-      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
+      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}${ccLockFlagHtml(data,q.plat,q)}
     </div>`).join("");
 
   return `
@@ -7704,9 +7841,12 @@ async function wipeGateConfirm(actionLabel){
 }
 function unitOutLogHtml(){
   const L=xlArr(DB.get().unitOutLog).slice().sort((a,b)=>b.ts-a.ts).slice(0,50);
+  const can=!!(currentUser && ["admin","delivery"].includes(currentUser.role) && !isViewer());
+  const kl=x=>UOUT_KINDS[x.kind]||(x.kind==="delout"?"otomatis: sudah Delout":x.kind==="hapus-stall"?"Kosongkan stall":"Dikeluarkan (alasan belum dipilih)");
+  const btn=(x,k)=>`<button type="button" onclick="unitOutRekind(${x.ts},'${k}')" style="margin:2px 4px 0 0;border:1px solid var(--border);background:#fff;border-radius:7px;padding:1px 6px;font-size:10px;font-weight:700;">${UOUT_KINDS[k]}</button>`;
   return `<div class="card"><h3>🔧 Riwayat unit dikeluarkan (7 hari)</h3>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Keluarkan unit dari stall / parkir luar wajib password akun yang login.</div>
-    ${L.length?`<table><thead><tr><th>Waktu</th><th>No. Rangka</th><th>Dari</th><th>Oleh</th></tr></thead><tbody>${L.map(x=>`<tr><td style="white-space:nowrap;">${xlTime(x.ts)}</td><td class="mono">${xlEsc(x.frame)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.model)}</span></td><td>${x.kind==="luar"?"Parkir luar":"Stall "+xlEsc(x.slot)}${x.kind==="delout"?`<br><span style="font-size:10px;color:var(--text-dim);">otomatis: sudah Delout</span>`:""}</td><td>${xlEsc(x.by)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.role)}</span></td></tr>`).join("")}</tbody></table>`:`<div style="font-size:12px;color:var(--text-dim);">Belum ada.</div>`}</div>`;
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Hapus / keluarkan unit dari stall / parkir luar wajib pilih alasan + password akun yang login. <b>✏️ Salah input</b> = dianggap tidak pernah diinput (hilang dari Data Input Unit &amp; Rekap). <b>⛔ Scrap</b> = No. Rangka ditolak kalau diinput lagi.${can?" Alasan bisa diubah dengan tombol di kolom Alasan.":""}</div>
+    ${L.length?`<table><thead><tr><th>Waktu</th><th>No. Rangka</th><th>Dari</th><th>Alasan</th><th>Oleh</th></tr></thead><tbody>${L.map(x=>`<tr><td style="white-space:nowrap;">${xlTime(x.ts)}</td><td class="mono">${xlEsc(x.frame)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.model)}</span></td><td>${(x.kind==="luar"||x.from==="luar")?"Parkir luar":"Stall "+xlEsc(x.slot)}</td><td style="font-size:12px;"><b>${xlEsc(kl(x))}</b>${x.why?`<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.why)}</span>`:""}${x.rekBy?`<br><span style="font-size:10px;color:var(--text-dim);">diubah ${xlEsc(x.rekBy)}</span>`:""}${(can && x.kind!=="delout")?`<br>${Object.keys(UOUT_KINDS).filter(k=>k!==x.kind).map(k=>btn(x,k)).join("")}`:""}</td><td>${xlEsc(x.by)}<br><span style="font-size:10px;color:var(--text-dim);">${xlEsc(x.role)}</span></td></tr>`).join("")}</tbody></table>`:`<div style="font-size:12px;color:var(--text-dim);">Belum ada.</div>`}</div>`;
 }
 function wipeLogHtml(){
   const L=wipeLogList();
@@ -8136,7 +8276,7 @@ function ixRows(data, o){
   } else {
     const w=shiftWindow(ixPdOf(o.date), o.shift||"all");
     (data.unitLog||[]).forEach(e=>{ if(!e || e.parkedTs==null || e.parkedTs<w[0] || e.parkedTs>=w[1]) return;
-      const st=e.status==="sent"?"Terkirim":e.status==="ils"?"ILS dibuat (belum kirim)":e.status==="removed"?"Dikeluarkan (servis/batal)":(/^Luar stall/.test(e.slot||"")?"Luar stall":"Di stall");
+      const st=e.status==="sent"?"Terkirim":e.status==="ils"?"ILS dibuat (belum kirim)":e.status==="removed"?(e.rsn==="repair"?"Repair":e.rsn==="scrap"?"Insiden / scrap":"Dikeluarkan"):(/^Luar stall/.test(e.slot||"")?"Luar stall":"Di stall");
       L.push({frame:e.frame, model:e.model, batam:isB(e.frame,e.batam), prio:!!e.prio, line:e.line||"", ts:e.parkedTs, by:e.parkedBy||"", loc:e.slot||"", status:st, cc:e.ccPlat||"", lp:e.lp||"", out:e.status==="sent"?(e.sentTs||0):0}); });
   }
   const R=L.filter(x=>o.kind==="batam"?x.batam:(o.kind==="reg"?!x.batam:true)).sort((a,b)=>(a.ts||0)-(b.ts||0));
@@ -8148,11 +8288,11 @@ function ixRows(data, o){
 const IX_HEAD=["No","No. Rangka","Model","Jenis","Prioritas","Line","Tgl Input","Jam Input","Diinput oleh","Lokasi","Status","PPBJ","No. PPBJ","Tgl PPBJ","ETD","No. Polisi CC","LP","Jam Kirim"];
 function ixSummary(R, data){
   const g={}; R.forEach(x=>{ const k=(x.batam?"Batam":"Reguler")+"|"+mfTitle(x.model); const o=g[k]=g[k]||{n:0,stk:0,ils:0,out:0,rm:0,pp:0,np:0};
-    o.n++; if(/^Terkirim/.test(x.status)) o.out++; else if(/^Dikeluarkan/.test(x.status)) o.rm++; else if(/^ILS/.test(x.status)) o.ils++; else o.stk++;
+    o.n++; if(/^Terkirim/.test(x.status)) o.out++; else if(/^(Dikeluarkan|Repair|Insiden)/.test(x.status)) o.rm++; else if(/^ILS/.test(x.status)) o.ils++; else o.stk++;
     if(x.batam){ if(ppbjOf(data,x.frame)) o.pp++; else o.np++; } });
   const rows=Object.keys(g).sort().map(k=>{ const [j,m]=k.split("|"), o=g[k]; return [j,m,o.n,o.stk,o.ils,o.out,o.rm, j==="Batam"?o.pp:"", j==="Batam"?o.np:""]; });
   const t=rows.reduce((a,r)=>{ [2,3,4,5,6].forEach(i=>a[i]+=r[i]); if(r[7]!=="") { a[7]+=r[7]; a[8]+=r[8]; } return a; }, ["TOTAL","",0,0,0,0,0,0,0]);
-  return [["Jenis","Model","Total","Di stall / luar stall","ILS (belum kirim)","Terkirim","Dikeluarkan","Sudah PPBJ","Belum PPBJ"]].concat(rows).concat(rows.length?[t]:[]);
+  return [["Jenis","Model","Total","Di stall / luar stall","ILS (belum kirim)","Terkirim","Dikeluarkan (repair / scrap)","Sudah PPBJ","Belum PPBJ"]].concat(rows).concat(rows.length?[t]:[]);
 }
 function ixDownload(){
   const g=id=>((document.getElementById(id)||{}).value||"");
@@ -8219,7 +8359,7 @@ function rkCollect(data, from, to){
     rows.push({frame:u.frame, model:u.model||"", jenis:(u.batam?"Batam":"Reguler")+(u.prio?" · Prioritas":""), st:"Parkir", pTs:u.ts||0, pBy:u.driver||"", line:u.line||"", slot:slotText(k,u)}); });
   /* 3. unit dikeluarkan tanpa ILS (log di HP ini) */
   log.filter(e=>e.status==="removed" && (inW(e.parkedTs)||inW(e.removedTs))).forEach(e=>{
-    rows.push({frame:e.frame, model:e.model||"", jenis:(e.batam?"Batam":"Reguler"), st:"Dikeluarkan", pTs:e.parkedTs||0, pBy:e.parkedBy||"", line:e.line||"", slot:e.slot||"", oTs:e.removedTs||0}); });
+    rows.push({frame:e.frame, model:e.model||"", jenis:(e.batam?"Batam":"Reguler"), st:e.rsn==="repair"?"Repair":e.rsn==="scrap"?"Insiden / scrap":"Dikeluarkan", pTs:e.parkedTs||0, pBy:e.parkedBy||"", line:e.line||"", slot:e.slot||"", oTs:e.removedTs||0}); });
   rows.sort((a,b)=>(a.pTs||a.iTs||0)-(b.pTs||b.iTs||0));
   return rows;
 }
@@ -8228,13 +8368,13 @@ const RK_W=[20,12,12,15,16,16,10,12,16,16,13,10,16,8,16,16,16,16,16,16,16,16,26,
 function rkSheetRows(R){
   const D=t=>t?rkSerial(t):"";
   return [RK_HEAD].concat(R.map(r=>[r.frame, r.model, r.jenis, r.st, D(r.pTs), r.pBy||"", rkArea(r.line), r.slot||"", D(r.iTs), r.iBy||"", r.plat||"", r.lp||"", r.drv||"", r.ccStall||"", D(r.abs), D(r.ccIn),
-    D(r.lTs), r.lBy||"", D(r.vsTs), r.vsBy||"", D(r.vTs), r.vBy||"", r.sjkb||"", D(r.sjTs), r.sjBy||"", D(r.oTs), r.st==="Delout"?(r.oBy||""):(r.st==="Dikeluarkan"?"(dikeluarkan)":""), r.st==="Delout"?rkShiftOf(r.oTs):"",
+    D(r.lTs), r.lBy||"", D(r.vsTs), r.vsBy||"", D(r.vTs), r.vBy||"", r.sjkb||"", D(r.sjTs), r.sjBy||"", D(r.oTs), r.st==="Delout"?(r.oBy||""):(/^(Dikeluarkan|Repair|Insiden)/.test(r.st)?"("+r.st.toLowerCase()+")":""), r.st==="Delout"?rkShiftOf(r.oTs):"",
     rkMin(r.pTs,r.iTs), rkMin(r.iTs,r.lTs), rkMin(r.lTs,r.st==="Delout"?r.oTs:0), rkMin(r.pTs,r.st==="Delout"?r.oTs:0), r.ils?String(r.ils):""]));
 }
 function rkSummary(R, label){
   const avg=a=>{ const v=a.filter(x=>typeof x==="number"); return v.length?Math.round(v.reduce((s,x)=>s+x,0)/v.length):""; };
   const cnt=st=>R.filter(r=>r.st===st).length, out=[["Rekap Data Unit RADAR EKY (Input Driver → Delout)",""],["Periode",label],["Dibuat",new Date().toLocaleString("id-ID")+" oleh "+((currentUser&&currentUser.name)||"")],["",""],
-    ["Total unit",R.length],["Sudah Delout",cnt("Delout")],["Masih proses ILS / loading / validasi",R.filter(r=>/ILS|Loading|Validasi/.test(r.st)).length],["Masih di yard (belum ILS)",cnt("Parkir")],["Dikeluarkan tanpa ILS",cnt("Dikeluarkan")],
+    ["Total unit",R.length],["Sudah Delout",cnt("Delout")],["Masih proses ILS / loading / validasi",R.filter(r=>/ILS|Loading|Validasi/.test(r.st)).length],["Masih di yard (belum ILS)",cnt("Parkir")],["Dikeluarkan tanpa ILS",R.filter(r=>/^(Dikeluarkan|Repair|Insiden)/.test(r.st)).length],["· Repair",cnt("Repair")],["· Insiden / scrap",cnt("Insiden / scrap")],
     ["Rata-rata Input → Delout (menit)",avg(R.filter(r=>r.st==="Delout").map(r=>rkMin(r.pTs,r.oTs)))],["Rata-rata ILS → Delout (menit)",avg(R.filter(r=>r.st==="Delout").map(r=>rkMin(r.iTs,r.oTs)))],["",""]];
   const grp=(key)=>{ const m={}; R.forEach(r=>{ const k=r[key]||"(kosong)"; (m[k]=m[k]||[]).push(r); }); return Object.keys(m).sort((a,b)=>m[b].length-m[a].length).map(k=>[k,m[k]]); };
   out.push(["Per model","Unit","Sudah Delout","Rata-rata Input → Delout (menit)"]); grp("model").forEach(([k,L])=>out.push([k,L.length,L.filter(r=>r.st==="Delout").length,avg(L.filter(r=>r.st==="Delout").map(r=>rkMin(r.pTs,r.oTs)))])); out.push(["",""]);
@@ -8537,6 +8677,7 @@ function ccEvHtml(ev, d){
     const from=x.ccNum?"STALL "+ccLbl(x.ccNum):/waiting list/i.test(x.why||"")?"WAITING LIST":/Parkir Luar/i.test(x.why||"")?"PARKIR LUAR":"ANTREAN";
     const gone=((d.ccGone||{})[normPlat(x.plat)]||0)>=x.ts-60000, kos=!!x.kosong;
     const tip=gone?"Kamu tercatat <b>sudah berangkat ke NVDC</b>. Absen berikutnya setelah tiba di NVDC."
+      : (sys && x.sch)?"Begitu plat kamu ada lagi di jadwal DCCP, absen otomatis jalan sendiri dan kamu kembali ke <b>urutan absen awal</b>. Kalau merasa sudah terjadwal, hubungi Delivery."
       : sys?"Ikuti arahan Delivery kalau masih ada tugas."
       : `Keluar dari ${x.ccNum?"stall":"antrean"} dan ikuti arahan ${kos?"Koordinator":"Delivery"}. Absen ulang dari HP bisa lagi ±${ccReabsenMin(d)} menit lagi; kalau perlu lebih cepat, minta Delivery mengabsenkan.`;
     return `<div class="box"><div class="ttl">${sys?"🚪 KAMU DIKELUARKAN OTOMATIS":kos?"🅿️ STALL KAMU DIKOSONGKAN":"🚪 KAMU DIKELUARKAN"}</div><div class="big">${from}</div><div class="row" style="font-size:17px;margin-top:8px;"><b>${pl}</b></div>
@@ -9278,7 +9419,7 @@ function dccpAutoSwitch(){
       dccpActivate(d, cur);
       if(!d.dccpMeta || (d.dccpMeta.shift||"")!==cur) return;
       d.dccpMeta.autoTs=t; d.dccpMeta.autoFrom=from; d.dccpMeta.autoBy=by;
-      d.dccpMeta.swLog=log.concat([{ts:t, hp:Date.now(), off:Math.round((_srvOffOk?_srvOff:0)/1000), from, to:cur, by}]); });
+      d.dccpMeta.swLog=log.concat([{ts:t, hp:_rawNow(), off:Math.round((_srvOffOk?_srvOff:0)/1000), from, to:cur, by}]); });
   }catch(e){}
 }
 setInterval(dccpAutoSwitch, 15000); setTimeout(dccpAutoSwitch, 6000);
@@ -9513,7 +9654,7 @@ function gantiExec(P){
       old.trips=trips.slice(); old.schedTime=trips[0]||old.schedTime||""; old.planTrip=pt; old.planUnit=pu;
       const prevP=old.police; old.origPolice=old.origPolice||old.police; old.police=plat; if(lp) old.lp=lp; { const od=old.driver||""; if(code) old.drvCode=code; else if(drv!==od) delete old.drvCode; old.driver=drv; }
       old.pengganti=true; old.note=((old.note?old.note+"; ":"")+`pengganti ${old.origPolice}`+(why?" - "+why:""));
-      ccRenameEverywhere(d, prevP, {plat:plat, lp:old.lp, drvCode:old.drvCode, driver:old.driver}); ccPurgeStale(d); holdResync(d); return;
+      ccRenameEverywhere(d, prevP, {plat:plat, lp:old.lp, drvCode:old.drvCode, driver:old.driver}); ccPurgeStale(d, new Set([normPlat(prevP)])); holdResync(d); return;
     }
     const note=`pengganti ${old.police} (rit ${chosen.join(", ")})`+(why?" - "+why:"");
     if(tgt){
@@ -9853,6 +9994,7 @@ function syncUnitLog(d){
   for(const [slot,u] of Object.entries(d.units||{})){
     if(!u) continue;
     let e = log.find(x=>x.parkedTs===u.ts && (x.status==="parked"||x.status==="ils"));
+    if(!e){ e = log.find(x=>x.parkedTs===u.ts && x.status==="removed" && normVin(x.frame)===normVin(u.frame)); if(e){ delete e.removedTs; delete e.rsn; } }   /* 25 Nov: data server datang belakangan (unit masih ada) → catatan yang sama dihidupkan lagi, bukan dobel */
     if(!e){ e = {frame:u.frame, model:u.model, parkedTs:u.ts||now, parkedBy:u.driver||"", slot:slotText(slot,u), line:u.line||"", status:"parked"}; log.push(e); }
     e.frame = u.frame; e.model = u.model; e.slot = slotText(slot,u); e.line = u.line||e.line||""; e.batam = !!u.batam; e.prio = !!u.prio;
     const b = u.ilsId ? (d.ils||[]).find(x=>x && x.id===u.ilsId) : null;
@@ -9867,6 +10009,9 @@ function syncUnitLog(d){
       else { e.status="removed"; e.removedTs=now; }
     }
   }
+  try{ const R=unitOutReasons(d); if(R.size) for(let i=log.length-1;i>=0;i--){ const e=log[i]; if(!e || e.status!=="removed") continue; const f=normVin(e.frame);
+      const r=R.get(f+"|"+(e.parkedTs||"")) || R.get(f+"|*");
+      if(!r) continue; if(r==="salah") log.splice(i,1); else e.rsn=r; } }catch(err){}   /* 25 Nov: alasan hapus unit (salah input = dianggap tidak pernah diinput) */
   if(typeof _fbMode==="undefined" || _fbMode!=="cc"){ try{ ulogFill(log, d, now); }catch(e){ fbErrNote("ulogFill", e); } }
   /* Retensi: data unit yang sudah TERKIRIM / dikeluarkan + manifest ILS selesai disimpan 26 jam saja, lalu dihapus otomatis */
   const cut = now - RETAIN_MS;
@@ -13420,7 +13565,7 @@ function openOffEdit(k){
     <div class="field"><label>Lokasi parkir</label><input id="offEditLoc" type="text" value="${String(v.loc||"").replace(/"/g,'&quot;')}"></div>
     <div class="msg info">${v.model} · diparkir oleh <b>${escH(v.driver||"-")}</b> · ${new Date(v.ts).toLocaleString('id-ID')}</div>
     <button class="btn btn-primary" style="margin-top:10px;" onclick="saveOffEdit('${k}')">💾 Simpan Lokasi</button>
-    ${v.ilsId?"":`<button class="btn btn-danger" style="margin-top:8px;" onclick="removeOff('${k}')">🔧 Keluarkan Unit (Servis / Batal)</button>`}
+    ${v.ilsId?"":`<button class="btn btn-danger" style="margin-top:8px;" onclick="removeOff('${k}')">🗑 Hapus / Keluarkan Unit</button>`}
   `);
 }
 function saveOffEdit(k){
@@ -13430,11 +13575,7 @@ function saveOffEdit(k){
   DB.set(d=>{ if(d.units[k]) d.units[k].loc = loc; });
   closeModal();
 }
-async function removeOff(k){
-  const v=(DB.get().units||{})[k]; closeModal();
-  if(!(await pwConfirm("Keluarkan unit dari Parkir Luar Stall", v?("No. Rangka <b>"+xlEsc(v.frame||"-")+"</b> · "+xlEsc(v.model||"")+(v.loc?" · "+xlEsc(v.loc):"")):""))) return;
-  DB.set(d=>{ unitOutLogAdd(d, k, d.units[k], "luar"); delete d.units[k]; });
-}
+function removeOff(k){ unitOutChoose(k, true); }
 function parkOffStall(){
   if(!requireLine()) return;
   const vin = document.getElementById("vinInput").value.trim().toUpperCase();
@@ -13443,6 +13584,7 @@ function parkOffStall(){
   if(!vin){ alert("Isi No. Rangka dulu."); return; }
   if(!loc){ alert("Ketik lokasi parkir di luar stall dulu (contoh: depan audit)."); return; }
   if(!offLocCheck(loc)) return;
+  if(unitScrapBlock(vin, data)) return;
   const dup = findVinSlot(vin, data);
   if(dup){ alert(isOffKey(dup) ? `No. Rangka ini sudah tercatat parkir di luar stall: ${data.units[dup].loc}. Ketuk unitnya di daftar untuk ubah lokasi.` : `No. Rangka ini masih terparkir di stall ${dup}.`); return; }
   const model = detectModel(vin, data.models);
@@ -16038,8 +16180,13 @@ function absenkanCC(plat, lp){
   if(!canKeluarkanCC()) return;
   const _lock=(()=>{ try{ return ccNeedNvdc(DB.get(), plat); }catch(e){ return false; } })();
   if(_lock && !confirm(plat+" tercatat SUDAH DELOUT dan belum terbaca tiba di NVDC (absen otomatisnya dikunci).\n\nKalau CC ini memang sudah kembali (mis. HP driver mati / GPS tidak terbaca), tekan OK untuk tetap mengabsenkan. CC dianggap sudah kembali dari NVDC.")) return;
-  if(!confirm("Absenkan "+plat+" sekarang (atas nama driver)?\n\nPakai hanya kalau CC sudah ada di lokasi tetapi absen otomatisnya belum jalan.")) return;
-  const r=registerCC(plat, lp||((ccPlatRow(plat)||{}).lp)||"", null, false, true);
+  const _lost=absenLost(DB.get(), normPlat(plat));
+  let _back=false;
+  if(_lost){ _back=confirm(plat+" sudah absen jam "+holdHm(+_lost.ts)+" tetapi sekarang tidak ada di stall / waiting list / Parkir Luar (hilang tanpa Delout).\n\nOK = kembalikan ke URUTAN ABSEN AWAL (jam "+holdHm(+_lost.ts)+")\nBatal = lanjut pilihan absen biasa (antre dari belakang)");
+    if(!_back && !confirm("Absenkan "+plat+" sebagai absen BARU (antre dari belakang)?")) return; }
+  else if(!confirm("Absenkan "+plat+" sekarang (atas nama driver)?\n\nPakai hanya kalau CC sudah ada di lokasi tetapi absen otomatisnya belum jalan.")) return;
+  window._absenRestore=_back?normPlat(plat):null;
+  let r; try{ r=registerCC(plat, lp||((ccPlatRow(plat)||{}).lp)||"", null, false, true); } finally { window._absenRestore=null; }
   if(r.offline){ alert("Sinyal belum Online. Absen tidak dicatat, coba lagi saat pojok atas tertulis ● Online."); return; }
   alert(r.dup?ccAbsenTolakMsg(plat, r):r.hold?plat+" tercatat, menunggu di Parkir Luar sampai jam "+holdHm(r.due)+".":r.stall?plat+" masuk STALL "+ccLbl(r.stall)+".":plat+" masuk antrian no. "+r.queue+".");
   render();
@@ -18007,6 +18154,7 @@ function renderDisplay(){
       </div>
 
       ${offUnitEntries(data).length?`<div class="y-off">${offListHtml(data,false)}</div>`:""}
+      ${ccLockCardHtml(data)}
       ${csCardHtml(data)}
       ${earlyCardHtml(data)}
       ${holdCardHtml(data,false)}
@@ -18017,7 +18165,7 @@ function renderDisplay(){
         ccQueueAutoBar(data)+data.queue.map((q,i)=>`
           <div style="padding:10px 0; border-bottom:1px solid var(--border);">
             <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>#${i+1} · ${q.plat}</b> <span style="font-size:11px; color:var(--text-dim);">${qDrv(data,q.plat)} · ${new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>${ccQueueCtl(data,i,q)}</div>
-            ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}
+            ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}${ccLockFlagHtml(data,q.plat,q)}
           </div>
         `).join("")}
         ${ccHoldRowsHtml(data)}
@@ -18083,7 +18231,7 @@ function clkWarnTick(){ try{
   let el=document.getElementById("clkWarn");
   const bad=_srvOffOk && Math.abs(_srvOff)>120000 && Date.now()>_clkHideTo;
   if(!bad){ if(el) el.remove(); return; }
-  const mn=Math.round(Math.abs(_srvOff)/60000), txt=`⚠ Jam HP ini ${_srvOff>0?"lebih lambat":"lebih cepat"} ±${mn} menit dari jam server. Nyalakan <b>Tanggal &amp; waktu otomatis</b> di Setelan HP.`;
+  const mn=Math.round(Math.abs(_srvOff)/60000), txt=`⚠ Jam HP ini ${_srvOff>0?"lebih lambat":"lebih cepat"} ±${mn} menit dari jam server (RADAR sudah memakai jam server). Nyalakan <b>Tanggal &amp; waktu otomatis</b> di Setelan HP.`;
   if(!el){ el=document.createElement("div"); el.id="clkWarn"; el.style.cssText="position:fixed;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);z-index:9990;background:#7C2D12;color:#fff;border-radius:12px;padding:9px 34px 9px 12px;font-size:13px;line-height:1.35;box-shadow:0 6px 20px rgba(0,0,0,.25);"; document.body.appendChild(el); }
   const h=txt+`<button type="button" onclick="_clkHideTo=Date.now()+30*60000;clkWarnTick();" style="position:absolute;right:6px;top:6px;border:0;background:transparent;color:#fff;font-size:18px;line-height:1;cursor:pointer;" aria-label="Tutup">×</button>`;
   if(el.dataset.h!==txt){ el.dataset.h=txt; el.innerHTML=h; }
