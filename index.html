@@ -1761,7 +1761,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="25 Nov 2026 11.30";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="25 Nov 2026 11.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4680,7 +4680,7 @@ function ccQueueFarPurge(){
      "ritase sudah selesai". Hanya ditandai ⚠ + kartu "⚠ Perlu dicek Delivery" (tombol 🚪 Keluarkan) + bunyi ke HP Delivery/Admin.
      CC yang jauh tetap tidak dipanggil ke stall sampai posisinya dekat.
    • Yang tetap mengeluarkan: Delout, tombol Keluarkan (Delivery), pengaman catatan dobel/hantu yang terkait Delout. */
-const _lkSeen=new Set();
+const _lkSeen=seenSet("radar_lkseen", 300);
 function ccLockFlags(d, plat, it){
   const k=normPlat(plat), f=[]; if(!k) return f;
   try{ const s0=QFAR[k]; if(s0 && Date.now()-s0>=QFAR_MIN*60000) f.push({t:"jauh", txt:"GPS ±"+(+QFARKM[k]||0).toFixed(1)+" km dari yard sejak "+holdHm(s0)}); }catch(e){}
@@ -8565,12 +8565,20 @@ function ccCallShow(c, viewer){
     if(!window.AndroidTLS && document.hidden && Date.now()-_ccCallWn>15000) ccCallWebNotify(c);   // web di latar: getar + notifikasi diulang tiap 15 detik
   }, 2400);
 }
+const _ccCallSeenMe=seenSet("radar_callok", 100);   /* HP driver: panggilan yang sudah di-OK tidak muncul lagi walau tanda OK belum sampai ke server */
 function ccCallOk(id){
   ccCallClose(); if(isViewer()){ _vwCallSeen.add(id); return; }
+  _ccCallSeenMe.add(id);
   try{ DB.set(d=>{ const a=ccCallsList(d).slice(); const x=a.find(y=>y&&y.id===id); if(x) x.ack=Date.now(); d.ccCalls=a; }); }catch(e){}
 }
-const _vwCallSeen=new Set();
-const _naikSeen=new Set();
+/* 25 Nov 2026 (kasus Khairul: ILS sudah dibuat, keluar aplikasi lalu masuk lagi → "CC naik ke stall (buat ILS)" bunyi lagi).
+   Daftar notifikasi yang sudah berbunyi dulu hanya di memori → hilang tiap aplikasi ditutup. Sekarang disimpan di HP (localStorage),
+   dan panggilan stall yang CC-nya sudah dibuatkan ILS tidak dibunyikan / dimunculkan lagi (Delivery maupun HP driver). */
+function seenSet(key, max){ let S; try{ S=new Set(JSON.parse(localStorage.getItem(key)||"[]")); }catch(e){ S=new Set(); }
+  return { has:k=>S.has(k), add:k=>{ if(S.has(k)) return; S.add(k); try{ localStorage.setItem(key, JSON.stringify([...S].slice(-(max||200)))); }catch(e){} } }; }
+function ccCallDone(d, x){ const k=normPlat(x.plat); return (d.ils||[]).some(b=>b && normPlat(b.ccPlat)===k && (+b.ts||0)>=(+x.ts||0)-60000); }   /* CC panggilan ini sudah dibuatkan ILS = sudah di stall */
+const _vwCallSeen=seenSet("radar_vwcallseen", 200);
+const _naikSeen=seenSet("radar_naikseen", 200);
 function naikStallCheck(){
   try{
     if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer()) return;
@@ -8578,6 +8586,7 @@ function naikStallCheck(){
     ccCallsList(d).forEach(x=>{
       if(!x || x.src==="absen" || now-x.ts>10*60000 || _naikSeen.has(x.id)) return;
       const cur=d.cc[x.stall]; if(!cur || normPlat(cur.plat)!==normPlat(x.plat)) return;
+      if(ccCallDone(d, x)){ _naikSeen.add(x.id); return; }   /* ILS sudah dibuat: tidak perlu diingatkan */
       _naikSeen.add(x.id);
       const txt=`CC ${x.plat}${cur.lp?" (LP "+cur.lp+")":""} dapat giliran masuk Stall CC ${ccLbl(x.stall)}. Siapkan unit dan buat ILS.`;
       soundEv('naikstall', txt); if(navigator.vibrate) navigator.vibrate([300,150,300]);
@@ -8604,7 +8613,7 @@ function ccWatchSync(){
 function ccCallCheck(){
   if(vaLive()){   // Pengamat sedang melihat layar satu driver: hanya panggilan untuk driver itu, sama seperti HP-nya
     const dv=DB.get(), pv=normPlat(_va.plat);
-    const cv=ccCallsList(dv).filter(x=>x && !x.ack && !_vwCallSeen.has(x.id) && normPlat(x.plat)===pv && Date.now()-x.ts<3*3600000).sort((a,b)=>b.ts-a.ts).find(x=>{ const cur=dv.cc[x.stall]; return cur && normPlat(cur.plat)===pv; });
+    const cv=ccCallsList(dv).filter(x=>x && !x.ack && !_vwCallSeen.has(x.id) && normPlat(x.plat)===pv && Date.now()-x.ts<3*3600000 && !ccCallDone(dv, x)).sort((a,b)=>b.ts-a.ts).find(x=>{ const cur=dv.cc[x.stall]; return cur && normPlat(cur.plat)===pv; });
     if(!cv){ if(_ccCallId!==null) ccCallClose(); return; }
     if(_ccCallId!==cv.id || !document.getElementById("ccCallOv")) ccCallShow(cv, true);
     return;
@@ -8613,7 +8622,7 @@ function ccCallCheck(){
   if(!currentUser || currentUser.role!=="cc"){ if(_ccCallId!==null) ccCallClose(); return; }
   if(FBS.enabled && !fbFresh()) return;   /* 25 Nov: RADAR baru dibuka → data simpanan di HP bisa berisi panggilan lama; tunggu data server */
   const d=DB.get(), pl=myCcPlatKey(); if(!pl) return;
-  const c=ccCallsList(d).filter(x=>x && !x.ack && normPlat(x.plat)===pl && Date.now()-x.ts<3*3600000).sort((a,b)=>b.ts-a.ts)
+  const c=ccCallsList(d).filter(x=>x && !x.ack && !_ccCallSeenMe.has(x.id) && normPlat(x.plat)===pl && Date.now()-x.ts<3*3600000 && !ccCallDone(d, x)).sort((a,b)=>b.ts-a.ts)
     .find(x=>{ const cur=d.cc[x.stall]; return cur && normPlat(cur.plat)===pl; });
   if(!c){ if(_ccCallId!==null) ccCallClose(); return; }
   if(_ccCallId!==c.id || !document.getElementById("ccCallOv")) ccCallShow(c, false);
@@ -16394,7 +16403,7 @@ function takeCardHtml(data){
    Dari layar isi plat ia bisa: (1) minta dijadwalkan -> berbunyi di Koordinator LP-nya, (2) ingatkan update DCCP -> berbunyi di Delivery.
    Permintaan hilang sendiri begitu plat terdaftar, atau sesudah 3 jam. */
 const SREQ_COOL=3*60000, SREQ_TTL=3*3600000;
-const _sreqSeen=new Set();
+const _sreqSeen=seenSet("radar_sreqseen", 200);
 function schedReqSend(kind){
   const _w=ccWaitOn()?ccWaitGet():null;
   const plat=window._cgPend||ccPlatNorm((document.getElementById("cgPlat")||{}).value)||(_w&&_w.plat), lp=((document.getElementById("cgLp")||{}).value||"").trim()||(_w&&_w.lp)||"", out=document.getElementById("cgReqMsg");
