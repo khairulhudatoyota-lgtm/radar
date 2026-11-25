@@ -1794,7 +1794,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="25 Nov 2026 16.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="25 Nov 2026 17.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4054,7 +4054,7 @@ function onAutoPos(pos){
   }
   if(pos.coords.accuracy > 300){ autoAbsen.warn=`Sinyal GPS kasar (±${Math.round(pos.coords.accuracy)} m) — pindah ke tempat terbuka.`; updateAutoStatus(); return; }     // sinyal GPS terlalu kasar, abaikan
   autoAbsen.warn="";
-  if(pos.timestamp && Date.now()-pos.timestamp > 60000){ autoAbsen.hits=0; autoAbsen.warn="Posisi GPS lama (belum diperbarui). Menunggu posisi terbaru."; updateAutoStatus(); return; }   // posisi basi tidak dipakai absen
+  if(pos.timestamp && _rawNow()-pos.timestamp > 60000){ autoAbsen.hits=0; autoAbsen.warn="Posisi GPS lama (belum diperbarui). Menunggu posisi terbaru."; updateAutoStatus(); return; }   // posisi basi tidak dipakai absen
   if(pos.coords.accuracy > 150 && dist <= y.radiusKm + 0.5){ autoAbsen.hits=0; autoAbsen.warn=`Akurasi GPS kurang (±${Math.round(pos.coords.accuracy)} m). Menunggu posisi yang lebih tepat.`; updateAutoStatus(); return; }
   if(autoOutLock(dist, y)){ autoAbsen.hits = 0; autoAbsen.lock = true; updateAutoStatus(); return; }   // baru Delout: jangan absen lagi sebelum keluar area
   autoAbsen.lock = false;
@@ -4073,7 +4073,7 @@ function trkFetchOwn(plat){
     if(!FBS.enabled || !FBS.db || !FBS.authed) return Promise.resolve();
     const k=trkKey(plat); if(!k) return Promise.resolve();
     return Promise.race([FBS.db.ref(TRK_PATH+"/"+k).once("value"), new Promise(r=>setTimeout(()=>r(null), 4000))]).then(snap=>{
-      if(!snap) return; const v=snap.val(); TRACK_RAW=Object.assign({}, TRACK_RAW||{}); if(v) TRACK_RAW[k]=v; else delete TRACK_RAW[k]; try{ trkApply(); }catch(e){} }).catch(()=>{});
+      if(!snap) return; const v=snap.val(); TRACK_RAW=Object.assign({}, TRACK_RAW||{}); if(v){ TRACK_RAW[k]=v; trkArrNote({[k]:v}); } else delete TRACK_RAW[k]; try{ trkApply(); }catch(e){} }).catch(()=>{});
   }catch(e){ return Promise.resolve(); }
 }
 function withOwnTrack(plat, fn){
@@ -15213,7 +15213,14 @@ const _trkVerSeen={};
 function trkVerNote(raw){ try{ Object.values(raw||{}).forEach(r=>{ if(r && r.v && r.u){ const p=_trkVerSeen[r.u]; if(!p || (+r.ts||0)>=p.ts) _trkVerSeen[r.u]={v:r.v, ts:+r.ts||Date.now()}; } }); }catch(e){} }
 function trkVerOf(o){ if(!o) return {v:"", src:""}; if(o.v) return {v:o.v, src:"web"}; const p=o.u&&_trkVerSeen[o.u]; if(p && Date.now()-p.ts<24*3600000) return {v:p.v, src:"apk"}; return {v:"", src:o.prov?"apk":""}; }
 function trkVerOld(v){ const t=radarBuildTs(v); if(!t) return null; const am=+(((DB.get().appMin)||{}).t)||0, mine=radarBuildTs(RADAR_BUILD); return t < Math.max(am, mine); }
-function trkOnSnap(snap){ TRACK_RAW = (snap && snap.val()) || {}; try{ trkVerNote(TRACK_RAW); }catch(e){} try{ trkApply(); }catch(e){ TRACK = TRACK_RAW; } TRKERR = ""; try{ routeRecTick(); }catch(e){} if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); vaPosUpdate(); }
+/* 25 Nov 2026 17.50: kapan tiap titik terakhir BERUBAH (jam HP ini). HP driver yang jamnya salah (atau layanan latar APK yang memakai
+   jam HP) mengirim cap waktu meleset → dulu dianggap "posisi lama" dan tidak diabsenkan dari peta. Titik yang baru saja berubah = HP-nya aktif. */
+const _trkArr={};
+function trkFreshTs(r){ try{ const a=_trkArr[normPlat(r.plat)+"|"+(r.u||"")]; return Math.max(+r.ts||0, (a && a.ts===r.ts && a.at) || 0); }catch(e){ return +r.ts||0; } }
+function trkArrNote(raw){ try{ const now=Date.now(); Object.values(raw||{}).forEach(v=>{ if(!v || !v.plat) return; const k=normPlat(v.plat)+"|"+(v.u||""), o=_trkArr[k];
+    if(!o) _trkArr[k]={ts:v.ts, at:0};   /* pertama kali terlihat: belum tahu kapan dikirim */
+    else if(o.ts!==v.ts) _trkArr[k]={ts:v.ts, at:now}; }); }catch(e){} }
+function trkOnSnap(snap){ TRACK_RAW = (snap && snap.val()) || {}; trkArrNote(TRACK_RAW); try{ trkVerNote(TRACK_RAW); }catch(e){} try{ trkApply(); }catch(e){ TRACK = TRACK_RAW; } TRKERR = ""; try{ routeRecTick(); }catch(e){} if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate(); vaPosUpdate(); }
 function trkOnErr(err){
   TRKERR = fbDenied(err) ? "Sambungan peta ke server terputus. Menyambung ulang…" : "Peta CC belum diizinkan oleh aturan Firebase (tambahkan node radar_track)."; if(activeTab==="ccmap") updateTrackUI(); shareStatusUpdate();
   if(fbDenied(err)) setTimeout(()=>{ try{ fbReauth().then(ok=>{ if(!ok){ TRKERR="Peta CC terputus dari server. Tutup lalu buka lagi RADAR."; if(activeTab==="ccmap") updateTrackUI(); } }); }catch(e){} }, 1500);   /* sesi hilang: login ulang lalu pasang ulang listener peta */
@@ -16276,7 +16283,7 @@ function mapAbsenTick(){
     const newest={}; Object.values(TRACK||{}).forEach(t=>{ if(!t||typeof t.lat!=="number"||!t.plat) return; const kk=normPlat(t.plat); if(kk && (!newest[kk] || (t.ts||0)>(newest[kk].ts||0))) newest[kk]=t; });   // satu plat bisa punya >1 titik (akun/HP lain): hanya yang TERBARU dipakai
     Object.values(newest).forEach(r=>{
       if(!r || typeof r.lat!=="number" || !r.plat) return; const k=normPlat(r.plat); if(!k) return;
-      if(now-(r.ts||0)>150000){ delete MAPABS.hits[k]; return; }   /* truk diam mengirim tiap 2 menit */
+      if(now-trkFreshTs(r)>150000){ delete MAPABS.hits[k]; return; }   /* truk diam mengirim tiap 2 menit (25 Nov: tahan jam HP pengirim yang meleset) */
       if(typeof trkHasAccount==="function" && !trkHasAccount(r)) return;
       if(r.u && absenHolderWhy(r.u, r.plat)){ delete MAPABS.hits[k]; return; }   /* posisi dari HP driver yang bukan pemegang plat di shift ini: tidak dipakai */
       if(trkCoarse(r)) return;   /* posisi kasar (jaringan/BTS, akurasi > 150 m): bisa meleset km-an — tidak dipakai absen / tanda NVDC */
