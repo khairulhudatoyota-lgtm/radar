@@ -1755,7 +1755,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="25 Nov 2026 09.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="25 Nov 2026 09.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -9408,25 +9408,37 @@ function dccpDoneList(r,data){ const from=dccpShiftFrom(r), k=normPlat(r.police)
   const _all=(data.ils||[]);
   const L=_all.filter(b=>normPlat(b.ccPlat)===k && b.ts>=from).sort((a,b)=>a.ts-b.ts);
   /* ILS dobel (nomor rangka sama, belum keluar, ada yang lebih baru) tidak dihitung */
+  const _dob=[];
   for(let i=L.length-1;i>=0;i--){ const b=L[i]; if(!b||b.outTs||b.status!=="open") continue; const fr=new Set((b.units||[]).map(u=>String(u.frame||"").toUpperCase()).filter(Boolean)); if(!fr.size) continue;
-    if(_all.some(o=>o&&o.id>b.id&&(o.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())))) L.splice(i,1); }
+    if(_all.some(o=>o&&o.id>b.id&&(o.units||[]).some(u=>fr.has(String(u.frame||"").toUpperCase())))){ _dob.push(b.id); L.splice(i,1); } }
   /* 25 Nov 2026 (kasus B 9959 KEH "rit pertama tidak terbaca"): dulu SETIAP catatan Change Shift plat ini — termasuk yang sudah kedaluwarsa
      berhari-hari / yang ritnya sudah selesai sebelum shift ini — membuang ILS pertama shift ini. Sekarang yang dibuang hanya ILS yang memang
      rit Change Shift: n ILS pertama plat ini sesudah Change Shift dibuat dan sebelum masa berlakunya habis. Jumlahnya disimpan di L.cs. */
-  let _csN=0;
+  let _csN=0; const _csIds=[];
   try{ const P=_all.filter(b=>b && normPlat(b.ccPlat)===k).sort((a,b)=>(+a.ts||0)-(+b.ts||0));
     csArr(data).filter(x=>x && normPlat(x.plat)===k).forEach(x=>{ const xs=+x.ts||0, xu=+x.until||(xs+26*3600000);
-      P.filter(b=>(+b.ts||0)>=xs && (+b.ts||0)<xu).slice(0, x.n||1).forEach(b=>{ const i=L.indexOf(b); if(i>=0){ L.splice(i,1); _csN++; } }); }); }catch(e){}
+      P.filter(b=>(+b.ts||0)>=xs && (+b.ts||0)<xu).slice(0, x.n||1).forEach(b=>{ const i=L.indexOf(b); if(i>=0){ L.splice(i,1); _csN++; _csIds.push(b.id); } }); }); }catch(e){}
   /* koreksi manual Delivery: jumlah ritase selesai shift ini; ILS baru sesudahnya tetap menambah */
   try{ const f=(data.dccpFix||{})[k]; if(f && f.ts>=from){ const t=Math.max(0,f.n+Math.max(0,L.length-(f.base||0))); if(t<L.length) L.length=t; else while(L.length<t) L.push({ts:f.ts,fix:1,units:[]}); } }catch(e){}
-  if(_csN) L.cs=_csN;
+  if(_csN){ L.cs=_csN; L.csIds=_csIds; } if(_dob.length) L.dobIds=_dob; L.from=from;
   return L; }
+/* 25 Nov 2026: rincian ILS plat ini — mana yang dihitung ritase jadwal shift ini dan kenapa yang lain tidak (tampil di ✎ Koreksi) */
+function dccpRitExplainHtml(r, data){
+  try{ const k=normPlat(r.police), L=dccpDoneList(r,data), from=+L.from||dccpShiftFrom(r), hm=t=>t?new Date(t).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):"-";
+    const B=(data.ils||[]).filter(b=>b && normPlat(b.ccPlat)===k && (+b.ts||0)>=from-12*3600000).sort((a,b)=>(+a.ts||0)-(+b.ts||0));
+    const cs=new Set(L.csIds||[]), dob=new Set(L.dobIds||[]);
+    const rows=B.map(b=>{ const ok=L.includes(b), why=ok?"✓ dihitung":(+b.ts||0)<from?"sebelum mulai shift ini (milik shift sebelumnya)":cs.has(b.id)?"rit Change Shift (sisa shift sebelumnya)":dob.has(b.id)?"ILS dobel (rangka sama ada di ILS lebih baru)":"dipotong koreksi manual";
+      return `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--border);font-size:12px;"><span>ILS ${hm(b.ts)}${b.outTs?" · Delout "+hm(b.outTs).split(" ").pop():" · belum Delout"} · ${(b.units||[]).filter(Boolean).length} unit</span><b style="color:${ok?"#1E9E5A":"#B45309"};text-align:right;">${why}</b></div>`; }).join("");
+    return `<div style="margin:6px 0 12px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--panel2);"><div style="font-size:12px;font-weight:800;margin-bottom:2px;">ILS plat ini (jadwal shift ini dihitung sejak ${hm(from)})</div>${rows||`<div style="font-size:12px;color:var(--text-dim);">Belum ada ILS plat ini sejak 12 jam sebelum shift.</div>`}</div>`;
+  }catch(e){ return ""; }
+}
 function dccpFixOpen(plat){
   if(!canKeluarkanCC()) return;
   const data=DB.get(), k=normPlat(plat), r=(data.dccpSchedule||[]).find(x=>normPlat(x.police)===k); if(!r) return;
   const tot=dccpTripList(r).length, cur=dccpDoneCount(r,data), f=(data.dccpFix||{})[k];
   showModal(`<h3 style="margin:0 0 6px;">✎ Koreksi ritase selesai</h3><div style="font-size:13px;margin-bottom:4px;"><b>${escH(platFmt(r.police))}</b> · ${escH(r.driver||"")}</div>
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Sekarang tertulis <b>${cur}</b> dari ${tot} rit selesai. Pilih jumlah rit yang sebenarnya sudah selesai. Tidak menghapus ILS; berlaku sampai shift ini habis, ILS baru sesudahnya tetap menambah.</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Sekarang tertulis <b>${cur}</b> dari ${tot} rit selesai. Pilih jumlah rit yang sebenarnya sudah selesai. Tidak menghapus ILS; berlaku sampai shift ini habis, ILS baru sesudahnya tetap menambah.</div>
+    ${dccpRitExplainHtml(r, data)}
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${Array.from({length:tot+1},(_,i)=>`<button type="button" class="btn ${cur===i?"btn-primary":"btn-outline"}" style="width:auto;min-width:56px;" onclick="dccpFixSave('${escH(plat)}',${i})">${i}</button>`).join("")}</div>
     ${f?`<button type="button" class="btn btn-outline" onclick="dccpFixSave('${escH(plat)}',-1)">↺ Kembali otomatis</button>`:""}`);
 }
