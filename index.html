@@ -327,6 +327,7 @@ td{padding:9px 6px; border-bottom:1px solid var(--border);}
 .dispcell .id{font-size:10px; color:var(--text-dim); font-weight:700;}
 .dispcell .v{font-size:10px; font-weight:700; margin-top:4px; word-break:break-all;}
 
+.armtag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#5B3FA8;color:#fff;font-size:10px;font-weight:800;letter-spacing:.03em;vertical-align:middle;white-space:nowrap;}
 .modal-bg{position:fixed; inset:0; background:rgba(0,0,0,0.65); display:flex; align-items:flex-end; justify-content:center; z-index:200;}
 .modal{background:var(--panel); border-radius:18px 18px 0 0; padding:20px; width:100%; max-width:520px; max-height:85vh; overflow-y:auto; border-top:2px solid var(--gold-dim);}
 .modal h3{color:var(--gold); margin-bottom:14px;}
@@ -1194,9 +1195,10 @@ function normalizeData(raw){
 /* Jalankan mutator dengan waktu & random yang DIBEKUKAN → hasil identik di setiap percobaan ulang transaction */
 function runMut(d, fn, T, seed){
   const rn = Date.now, rr = Math.random; let s = seed>>>0;
+  try{ if(!fn._memo) fn._memo={take:[], place:{}}; fn._memo.ti=0; _mutMemo=fn._memo; }catch(e){ _mutMemo=null; }
   Date.now = ()=>T;
   Math.random = ()=>{ s=(s+0x6D2B79F5)>>>0; let t=s; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
-  try{ fn(d); try{ syncUnitLog(d); }catch(e){ fbErrNote("syncUnitLog", e); } } finally { Date.now = rn; Math.random = rr; }   /* 17 Nov: error log unit dulu membatalkan SEMUA perubahan (tombol Buat ILS diam) */
+  try{ fn(d); try{ syncUnitLog(d); }catch(e){ fbErrNote("syncUnitLog", e); } } finally { Date.now = rn; Math.random = rr; _mutMemo=null; }   /* 17 Nov: error log unit dulu membatalkan SEMUA perubahan (tombol Buat ILS diam) */
 }
 function fbState(s){
   const el = document.getElementById("syncBadge"); if(!el) return;
@@ -1204,6 +1206,15 @@ function fbState(s){
   const m = map[s] || map.off; el.className = "syncb "+m[0]; el.textContent = m[1];
 }
 function fbCurrentState(){ return !FBS.enabled ? "off" : (!FBS.authed ? "connecting" : (FBS.conn ? (FBS.ready?"online":"connecting") : "offline")); }
+/* 25 Nov 2026 (kasus Khairul: saat CC di stall Delout, 1–2 CC di waiting list HILANG, tempatnya diisi CC dari Parkir Luar).
+   Penyebab: perubahan yang menyentuh stall + waiting list + Parkir Luar dikirim per bagian dan tiap bagian dihitung ulang di server
+   memakai data bagian LAIN dari HP itu sendiri (bisa sudah basi beberapa detik). Kalau dua HP bergerak bersamaan (Delout oleh Delivery,
+   pelepasan Parkir Luar oleh HP/TV lain), hasil tiap bagian tidak cocok: CC terhapus dari waiting list tapi tidak masuk stall.
+   Sekarang: (1) hitung ulang memakai salinan server terbaru untuk ketiga bagian itu; (2) keputusan "siapa naik ke stall / ke mana CC
+   Parkir Luar ditaruh" dicatat sekali lalu dipakai sama persis di semua hitung ulang; (3) pelepasan Parkir Luar & pemanggilan otomatis
+   hanya dijalankan SATU perangkat (autoLead); (4) pengaman: CC yang sudah absen lalu hilang tanpa Delout/dikeluarkan dipulihkan otomatis. */
+const YARD_KEYS=["cc","queue","hold"];
+let _fbMir={}, _fbMirTs=0, _mutMemo=null;
 function fbPush(k, pre, fn, T, seed, retried){
   if(!FBS.enabled) return;
   if(k==="sigs") return sigsPush(pre, fn, T, seed);
@@ -1211,6 +1222,7 @@ function fbPush(k, pre, fn, T, seed, retried){
   if(!FBS.ready){ FBS.q.push([k,pre,fn,T,seed]); return; }
   FBS.db.ref(FB_ROOT+"/"+k).transaction(cur=>{
     const tmp = cloneJ(pre);
+    if(YARD_KEYS.includes(k) && _fbMirTs){ YARD_KEYS.forEach(g=>{ if(g!==k && Object.prototype.hasOwnProperty.call(_fbMir,g)) tmp[g]=cloneJ(_fbMir[g]); }); }
     if(cur!==null && cur!==undefined) tmp[k] = cur;
     const nt = normalizeData(tmp);
     runMut(nt, fn, T, seed);
@@ -1542,11 +1554,11 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
+const FB_KEYS_ALL=["armada","unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
 const FB_LITE={
-  cc:         { skip:["online","errDev","manifest","unitOutLog","unitScrap","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
-  dispatcher: { skip:["funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
-  pdi:        { skip:["funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
+  cc:         { skip:["autoLead","online","errDev","manifest","unitOutLog","unitScrap","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
+  dispatcher: { skip:["autoLead","funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
+  pdi:        { skip:["autoLead","funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} } };
 let _fbMode="", _fbRefs=[], _fbRaw={}, _fbGot=new Set(), _fbNeed=0, _fbWinKeys={}, _fbGen=0, _fbLiteOff=false;
 let _ilsNewId=0;
 let _fbFullGot=0, _fbRestTs=0, _fbRestBusy=false, _fbReAtt=[], _fbRestOk=0;   /* pengaman mode penuh (lihat fbFullWatch) */
@@ -1701,6 +1713,7 @@ function fbAttach(){
         const o = {}; dbKeys(local).forEach(k=>{ o[k] = cloneJ(local[k]); });
         FBS.ready = true; ref.set(o).catch(e=>console.warn(e)); fbState(fbCurrentState()); return;
       }
+      try{ YARD_KEYS.forEach(g=>{ _fbMir[g]=(v[g]===undefined?null:cloneJ(v[g])); }); _fbMirTs=Date.now(); }catch(e){}   /* 25 Nov: salinan server stall/antrean/Parkir Luar */
       const legacySigs = sigsHasAny(v.sigs) ? v.sigs : null;   /* dicatat SEBELUM normalisasi (sigsAfterSnap bisa mengisi TTD dari simpanan HP) */
       fbAfterData(normalizeData(v), local);
       if(legacySigs){ try{ sigsMigrateCheck(legacySigs); }catch(e){} }
@@ -1725,6 +1738,7 @@ function fbAttach(){
         if(gen!==_fbGen) return;
         if(w){ const ks=[]; snap.forEach(c=>{ if(c.val()!==null) ks.push(c.key); }); _fbWinKeys[k]=ks; }
         _fbRaw[k]=snap.val(); _fbGot.add(k);
+        if(YARD_KEYS.includes(k)){ try{ _fbMir[k]=cloneJ(_fbRaw[k]); _fbMirTs=Date.now(); }catch(e){} }
         if(_fbGot.size>=_fbNeed) fbLiteApply();
       };
       q.on("value", cb, fbListenErr); _fbRefs.push([q, cb]);
@@ -1780,7 +1794,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="25 Nov 2026 13.35";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="25 Nov 2026 16.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -2088,6 +2102,7 @@ let activeTab = null;
 let pickedSlot = null;   // dispatcher: slot dipilih
 let deliverySelUnits = []; // slot ids dipilih buat 1 ILS
 let deliverySelCC = null, deliverySelPlat = "", dlIlsOpen = {};
+function selCap(){ try{ const d=DB.get(), c=deliverySelCC?d.cc[deliverySelCC]:null; return c ? ccCapOf(d, c.plat) : CONFIG.MAX_LOAD_PER_CC; }catch(e){ return CONFIG.MAX_LOAD_PER_CC; } }   /* 25 Nov: Single Carrier = 1 */
 let scanStream = null;
 
 /* ======================================================================
@@ -4151,7 +4166,7 @@ function renderOrderStall(){
         <div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp}${qDrv(data,q.plat)} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}${(()=>{const dk=ccDistNow(data,q.plat); return dk!=null?` · 📍 ${dk.toFixed(1)} km dari yard${ccFarNow(data,q.plat)?" (masih jauh, belum dipanggil)":""}`:"";})()}</span></div>
         ${ccQueueCtl(data,idx,q)}
       </div>
-      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}${ccLockFlagHtml(data,q.plat,q)}
+      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}${armadaTag(data,q.plat)}
     </div>
   `).join("");
 
@@ -4219,7 +4234,7 @@ function ccCardsHtml(data){
     if(!isOpen){
       html += `<div class="cccard closed"><div class="num">STALL ${ccLbl(i)}</div><div class="status" style="color:var(--text-dim);">DITUTUP</div><div class="lp">Cadangan/darurat</div></div>`;
     }else if(occ){
-      html += `<div class="cccard filled"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div></div>`;
+      html += `<div class="cccard filled"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div>${ccIsSC(data,occ.plat)?`<div class="lp" style="color:#5B3FA8;font-weight:800;">${armadaOf(data,occ.plat)==="TOW"?"TOWING":"SINGLE"} · 1 unit</div>`:""}</div>`;
     }else{
       html += `<div class="cccard empty"><div class="num">STALL ${ccLbl(i)}</div><div class="status">KOSONG</div><div class="lp">TERSEDIA</div></div>`;
     }
@@ -4444,11 +4459,22 @@ function ccEntryStale(d, it, inStall){
 }
 function ccDropPlat(d, plat){ const k=normPlat(plat); if(!k) return; d.queue=(d.queue||[]).filter(q=>!q || normPlat(q.plat)!==k); d.hold=(d.hold||[]).filter(q=>!q || normPlat(q.plat)!==k); }
 function ccQueueTake(d){
+  /* 25 Nov: keputusan yang sudah diambil di HP ini dipakai sama persis saat dihitung ulang di server (lihat _mutMemo) */
+  const M=_mutMemo;
+  if(M && M.take && M.ti<M.take.length){ const pl=M.take[M.ti++]; if(!pl) return null;
+    const q0=d.queue||[], i=q0.findIndex(x=>x && normPlat(x.plat)===pl); return i>=0 ? q0.splice(i,1)[0] : null; }
+  const pk=ccQueueTake0(d);
+  if(M && M.take){ M.take.push(pk?normPlat(pk.plat):null); M.ti++; }
+  return pk;
+}
+function ccQueueTake0(d){
   /* CC yang posisinya masih jauh dari yard tidak dipanggil. Kalau semua yang menunggu masih jauh, stall dibiarkan kosong (null). */
-  /* Plat yang sudah Delout / dikeluarkan "sudah jalan" dan belum tiba di NVDC, atau sudah punya ILS aktif, tidak boleh naik ke stall dari antrian (sisa antrian lama / dobel) */
-  if((d.queue||[]).length){ const nq=d.queue.filter(x=>x && !ccEntryStale(d,x,false) && !ccNeedNvdc(d,x.plat) && !ccRitHabis(d,x.plat) && !(d.ils||[]).some(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===normPlat(x.plat))); if(nq.length!==d.queue.length) d.queue=nq; }
+  /* Plat yang sudah Delout / dikeluarkan "sudah jalan" dan belum tiba di NVDC, atau sudah punya ILS aktif, tidak dipanggil dari antrian.
+     25 Nov 2026: dulu catatan seperti itu DIHAPUS diam-diam dari waiting list setiap ada stall kosong (tanpa log) — sekarang hanya
+     dilewati; pembersihan catatan dobel/hantu tetap oleh penjaga (tercatat di Log CC Keluar). */
   const q=d.queue||[]; if(!q.length) return null;
-  const cap=ccLpCap(d), near=q.filter(x=>!ccFarNow(d,x.plat)); if(!near.length) return null;
+  const okQ=x=>x && !(d.ils||[]).some(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===normPlat(x.plat));   /* 25 Nov 16.30: tanpa cek lain — ada di DCCP & sudah absen = dipanggil sesuai urutan */
+  const cap=ccLpCap(d), near=q.filter(x=>okQ(x) && !ccFarNow(d,x.plat)); if(!near.length) return null;
   /* Prioritas jarak: CC urutan terdepan yang perkiraan tiba (jarak / ±30 km/j) masih lebih dari batas menit tidak ditunggu; yang sudah dekat dipanggil lebih dulu supaya stall tidak kosong. Posisi tidak diketahui = dianggap sudah dekat. */
   const etaOf=x=>{ if(x.mo!=null || ccRitDone(d,x.plat)===0) return 0; const km=ccDistNow(d,x.plat); return km==null?0:km/CC_ETA_KMH*60; }, lim=ccEtaSkipMin(d);   // rit pertama: murni urutan DCCP, tidak dilewati karena jarak
   const okLp=x=>csActive(d,x.plat) || ccLpCount(d,x.lp)<cap;
@@ -4548,6 +4574,11 @@ function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut ja
   let order=[...CONFIG.CC_ACTIVE_DEFAULT];
   CONFIG.CC_EMERGENCY.forEach(n=>{ if(d.ccOpen[n]) order.push(n); });
   let assigned=null; for(const n of order){ if(!d.cc[n]){ assigned=n; break; } }
+  { const M=_mutMemo, pk=normPlat(item.plat);   /* 25 Nov: tempat yang dipilih pertama kali (stall n / waiting list) dipakai lagi saat dihitung ulang */
+    if(M && M.place){ const dec=M.place[pk];
+      if(dec===undefined) M.place[pk]=assigned||0;
+      else if(dec && !d.cc[dec]) assigned=dec;
+      else if(dec===0 || (dec && d.cc[dec])) assigned=null; } }
   if(assigned){ d.cc[assigned]={plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:Date.now(), absenTs:item.ts||Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual}; return {stall:assigned}; }
   d.queue.push({plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:item.ts||Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual});
   ccQueueSort(d);
@@ -4572,6 +4603,52 @@ function ccFarNow(d, plat){
   try{ const y=d.yardLocation||{}; if(y.lat==null) return false; const km=ccDistNow(d,plat); if(km==null) return false;   // posisi tidak diketahui: tidak ditahan
     return km > (+y.radiusKm||5)+0.5; }catch(e){ return false; }
 }
+/* ===== SATU PERANGKAT PENGGERAK OTOMATIS (25 Nov 2026) =====
+   Pelepasan Parkir Luar, pemanggilan waiting list ke stall kosong, urut ulang antrean, dan pemulihan CC hilang dulu dijalankan
+   SEMUA HP/TV berdata lengkap bersamaan → saling tabrak. Sekarang hanya satu perangkat pemegang giliran (/radar/autoLead, diperbarui
+   tiap 8 detik, berpindah otomatis kalau pemegangnya mati >25 detik). HP Delivery/Admin didahulukan daripada TV/Koordinator/Leader.
+   Tombol yang ditekan orang (Delout, Lepas paksa, Absenkan, dll.) tetap langsung jalan dari HP mana pun. */
+let _autoLead=false, _autoLeadTs=0;
+function autoLeadTick(){
+  try{
+    if(!FBS.enabled){ _autoLead=true; _autoLeadTs=Date.now(); return; }
+    if(!currentUser || isViewer() || ilsOwnOnly() || _fbMode!=="full" || !FBS.db || !FBS.authed || !fbFresh() || currentUser.role==="cc"){ _autoLead=false; return; }
+    const me=ilsDevId(), rk=["delivery","admin"].includes(currentUser.role)?2:1;
+    FBS.db.ref(FB_ROOT+"/autoLead").transaction(cur=>{
+      const t=Date.now();
+      if(cur && cur.dev && cur.dev!==me && t-(+cur.ts||0)<25000 && !(rk>(+cur.rk||1))) return;   /* masih dipegang perangkat lain yang hidup */
+      return {dev:me, ts:t, rk, r:currentUser.role||"", n:String(currentUser.name||"").slice(0,30), b:RADAR_BUILD};
+    }, (err, ok, snap)=>{ let v=null; try{ v=snap&&snap.val(); }catch(e){} _autoLead=!err && !!v && v.dev===me; if(_autoLead) _autoLeadTs=Date.now(); }, false);
+  }catch(e){ _autoLead=false; }
+}
+setInterval(autoLeadTick, 8000); setTimeout(autoLeadTick, 4000);
+function autoLeader(){ return !FBS.enabled || (_autoLead && Date.now()-_autoLeadTs<20000); }
+/* Pengaman terakhir: CC terjadwal yang TADI terlihat di waiting list / Parkir Luar (oleh perangkat ini, ≤10 menit lalu), sudah absen
+   (≤3 jam), lalu tidak ada di stall / waiting list / Parkir Luar tanpa ILS / Delout / dikeluarkan sesudahnya, selama ≥20 detik →
+   dikembalikan ke URUTAN ABSEN AWAL-nya. Tercatat di riwayat urutan antrean (queueMoveLog, "restore"). */
+const _lostSeen={}, _wlSeen={};
+function ccLostRepair(){
+  try{
+    if(!currentUser || isViewer() || ilsOwnOnly()) return;
+    if(FBS.enabled && (_fbMode!=="full" || !fbFresh())) return;
+    const d0=DB.get(), now=Date.now(), seen=new Set();
+    [...(d0.queue||[]), ...(d0.hold||[])].forEach(q=>{ const k=q&&normPlat(q.plat); if(k) _wlSeen[k]=now; });
+    Object.keys(_wlSeen).forEach(k=>{ if(now-_wlSeen[k]>10*60000) delete _wlSeen[k]; });
+    const plats=new Set(Object.keys(_wlSeen).filter(k=>_wlSeen[k]<now));   /* yang barusan terlihat lalu tidak ada lagi */
+    const lost=[];
+    plats.forEach(k=>{ if(!k) return; const la=absenLost(d0, k); if(!la || la.drop || !ccRegIn(d0, la.plat)) return;
+      seen.add(k); if(!_lostSeen[k]) _lostSeen[k]=now; if(now-_lostSeen[k]>=20000) lost.push(k); });
+    Object.keys(_lostSeen).forEach(k=>{ if(!seen.has(k)) delete _lostSeen[k]; });
+    if(!lost.length) return;
+    DB.set(d=>{ lost.forEach(k=>{ const la=absenLost(d, k); if(!la || la.drop || !ccRegIn(d, la.plat)) return;
+      const item={plat:platFmt(la.plat), lp:la.lp||"", drvCode:la.drvCode||"", ts:+la.ts, absenDistKm:la.dist!=null?la.dist:null, auto:!!la.auto, manual:!!la.manual, back:Date.now()};
+      const hd=ccHoldDue(d, item.plat);
+      let r;
+      if(hd!=null && !item.manual){ d.hold=(d.hold||[]).concat([item]); r={hold:true}; } else { r=placeCC(d, item); if(r && r.stall) pushCcCall(d, item, r.stall); }
+      d.queueMoveLog=capLog((d.queueMoveLog||[]).concat([{ts:Date.now(), plat:item.plat, restore:true, to:r&&r.stall?"stall "+r.stall:r&&r.hold?"Parkir Luar":"waiting list", absenTs:item.ts, by:"Sistem"}]),60); }); });
+    lost.forEach(k=>{ delete _lostSeen[k]; delete _wlSeen[k]; });
+  }catch(e){}
+}
 function holdRelease(force){   // dipanggil berkala; force = daftar plat yang dilepas paksa (Delivery/Admin)
   if(ilsOwnOnly()) return;   /* HP Driver tidak tahu rit CC lain dengan pasti: pelepasan Parkir Luar dijalankan HP berdata lengkap */
   const d0=DB.get(), h0=d0.hold||[]; if(!h0.length) return;
@@ -4580,7 +4657,7 @@ function holdRelease(force){   // dipanggil berkala; force = daftar plat yang di
   if(!fb0 && !h0.some(x=>f.includes(normPlat(x.plat)) || (!ccHoldDue(d0,x.plat) && !ccFarNow(d0,x.plat)))) return;
   DB.set(d=>{
     const all=d.hold||[], keep=[], rel=[];
-    all.forEach(x=>{ if(ccEntryStale(d,x,false) || (!f.includes(normPlat(x.plat)) && (ccHoldDue(d,x.plat) || ccFarNow(d,x.plat)))) keep.push(x); else rel.push(x); });
+    all.forEach(x=>{ if(!f.includes(normPlat(x.plat)) && (ccHoldDue(d,x.plat) || ccFarNow(d,x.plat))) keep.push(x); else rel.push(x); });   /* 25 Nov 16.30: tanpa cek "catatan lama" — sudah absen = dilepas sesuai jadwal */
     const relLog=()=>{ d.holdRel=(Array.isArray(d.holdRel)?d.holdRel:[]).slice(-19); return d.holdRel; };
     if(rel.length){
       d.hold=keep;
@@ -4591,7 +4668,7 @@ function holdRelease(force){   // dipanggil berkala; force = daftar plat yang di
     }
     /* batch pertama: stall kosong & waiting list kosong -> naik langsung ke stall (urut jadwal), sebanyak stall yang kosong */
     if(dccpCurrentOk(d)){
-      const fb=(d.hold||[]).filter(x=>x && !ccEntryStale(d,x,false) && !ccFarNow(d,x.plat) && ccFirstBatch(d,x.plat)).sort((a,b)=>(ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts)) || ((a.ts||0)-(b.ts||0)));
+      const fb=(d.hold||[]).filter(x=>x && !ccFarNow(d,x.plat) && ccFirstBatch(d,x.plat)).sort((a,b)=>(ccEffTs(d,a.plat,a.ts)-ccEffTs(d,b.plat,b.ts)) || ((a.ts||0)-(b.ts||0)));
       for(const x of fb){
         if((d.queue||[]).length || ccFreeStalls(d)<1) break;
         d.hold=(d.hold||[]).filter(h=>h!==x);
@@ -4665,8 +4742,8 @@ function ccQueueFarPurge(){
       if(km>rad+1){ if(!QFAR[k]) QFAR[k]=now; QFARKM[k]=km; if(now-QFAR[k]>=QFAR_MIN*60000) gone.push([k,km]); } else { delete QFAR[k]; delete QFARKM[k]; }
     });
     Object.keys(QFAR).forEach(k=>{ if(!ks.includes(k)){ delete QFAR[k]; delete QFARKM[k]; } });
-    /* 25 Nov 2026: TIDAK dihapus otomatis lagi (CC sudah absen = terkunci sampai Delout / dikeluarkan). Hanya ditandai ⚠ + kabar ke Delivery (ccLockNotify).
-       CC yang jauh tetap tidak dipanggil ke stall (ccQueueTake). */
+    /* 25 Nov 2026: TIDAK dihapus otomatis lagi (CC sudah absen = terkunci sampai Delout / dikeluarkan).
+       CC yang jauh tetap tidak dipanggil ke stall (ccQueueTake) sampai posisinya dekat. */
     return;
     if(!gone.length) return;
     DB.set(d2=>{
@@ -4694,45 +4771,14 @@ function ccQueueFarPurge(){
    • Plat TIDAK ada di Jadwal DCCP aktif → tetap dihapus otomatis (sesuai permintaan), dengan pengaman: hanya HP berdata lengkap & segar,
      baru dihapus kalau 90 detik berturut-turut tidak ada di jadwal (kedip sesaat tidak menghapus), tercatat "Sistem" + kabar ke driver.
    • Plat ADA di jadwal: TIDAK dihapus karena GPS di peta jauh dari yard (dulu dihapus + absen ulang dikunci ±45 menit) atau karena
-     "ritase sudah selesai". Hanya ditandai ⚠ + kartu "⚠ Perlu dicek Delivery" (tombol 🚪 Keluarkan) + bunyi ke HP Delivery/Admin.
+     "ritase sudah selesai". Delivery tetap bisa mengeluarkan dengan tombol 🚪 Keluarkan.
      CC yang jauh tetap tidak dipanggil ke stall sampai posisinya dekat.
    • Yang tetap mengeluarkan: Delout, tombol Keluarkan (Delivery), pengaman catatan dobel/hantu yang terkait Delout. */
-const _lkSeen=seenSet("radar_lkseen", 300);
-function ccLockFlags(d, plat, it){
-  const k=normPlat(plat), f=[]; if(!k) return f;
-  try{ const s0=QFAR[k]; if(s0 && Date.now()-s0>=QFAR_MIN*60000) f.push({t:"jauh", txt:"GPS ±"+(+QFARKM[k]||0).toFixed(1)+" km dari yard sejak "+holdHm(s0)}); }catch(e){}
-  return f;
-}
-function ccLockList(d){
-  const L=[];
-  Object.keys(d.cc||{}).forEach(n=>{ const c=d.cc[n]; if(!c) return; if((d.ils||[]).some(b=>b && b.status==="open" && !b.outTs && b.ccNum==n)) return; const f=ccLockFlags(d, c.plat, c); if(f.length) L.push({w:"cc", n:+n, plat:c.plat, lp:c.lp||"", ts:+c.absenTs||+c.ts||0, f}); });
-  (d.queue||[]).forEach((q,i)=>{ if(!q) return; const f=ccLockFlags(d, q.plat, q); if(f.length) L.push({w:"queue", i, plat:q.plat, lp:q.lp||"", ts:+q.ts||0, f}); });
-  (d.hold||[]).forEach(q=>{ if(!q) return; const f=ccLockFlags(d, q.plat, q); if(f.length) L.push({w:"hold", plat:q.plat, lp:q.lp||"", ts:+q.ts||0, f}); });
-  return L;
-}
-function ccLockFlagHtml(d, plat, it){ const f=ccLockFlags(d, plat, it); return f.length?`<div style="font-size:11px;color:#B45309;font-weight:700;margin-top:3px;">⚠ ${f.map(x=>escH(x.txt)).join(" · ")}</div>`:""; }
-function ccLockCardHtml(d){
-  try{ if(!canKeluarkanCC() || isViewer()) return ""; const L=ccLockList(d); if(!L.length) return "";
-    const where=x=>x.w==="cc"?"Stall "+ccLbl(x.n):x.w==="queue"?"Waiting #"+(x.i+1):"Parkir Luar";
-    return `<div class="card" style="border-left:5px solid #D97706;background:#FFFBEB;"><h3>⚠ Perlu dicek Delivery (${L.length})</h3>
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">CC terjadwal yang sudah absen tidak dihapus otomatis walau GPS-nya jauh (tidak dipanggil ke stall sampai dekat). Kalau CC ini memang tidak jadi masuk / sudah pergi, tekan Keluarkan. Kalau masih ada di lokasi, biarkan saja.</div>
-      ${L.map(x=>`<div style="padding:7px 0;border-top:1px solid #FDE68A;display:flex;justify-content:space-between;gap:8px;align-items:center;"><div style="font-size:13px;"><b>${escH(x.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)} · ${where(x)}${x.ts?" · absen "+holdHm(x.ts):""}</span><div style="font-size:11px;color:#B45309;font-weight:700;">${x.f.map(y=>escH(y.txt)).join(" · ")}</div></div>
-        <button type="button" class="btn btn-outline btn-sm" style="flex-shrink:0;color:var(--red);border-color:var(--red);" onclick="${x.w==="cc"?`keluarkanCC(${x.n})`:`keluarkanQ('${escH(x.plat).replace(/'/g,"")}')`}">🚪 Keluarkan</button></div>`).join("")}</div>`;
-  }catch(e){ return ""; }
-}
-/* bunyi + notifikasi ke HP Delivery/Admin, sekali per CC per kejadian */
-function ccLockNotify(){ try{
-  if(!currentUser || !["delivery","admin"].includes(currentUser.role) || isViewer()) return;
-  if(FBS.enabled && !fbFresh()) return;
-  const d=DB.get(), L=ccLockList(d); let fired=false;
-  L.forEach(x=>{ x.f.forEach(f=>{ const key=f.t+"|"+normPlat(x.plat)+"|"+x.ts; if(_lkSeen.has(key)) return; _lkSeen.add(key); if(fired) return; fired=true;
-    const where=x.w==="cc"?"Stall "+ccLbl(x.n):x.w==="queue"?"waiting list":"Parkir Luar";
-    const txt="CC "+x.plat+" ("+where+") "+f.txt+". Cek di Display → ⚠ Perlu dicek Delivery: keluarkan kalau memang tidak jadi masuk.";
-    try{ soundEv('ilstls', txt); }catch(e){} try{ if(navigator.vibrate) navigator.vibrate([250,120,250]); }catch(e){} try{ ringBg("⚠ CC perlu dicek", txt); }catch(e){}
-    try{ if('Notification' in window && Notification.permission==='granted') new Notification("⚠ CC perlu dicek",{body:txt}); }catch(e){} }); });
-}catch(e){} }
+/* 25 Nov 2026 16.30 (Khairul: "Jangan ada cek-cek lagi — pokoknya ada di DCCP dan sudah absen, tidak ada lagi hilang"):
+   tanda ⚠ / kartu "Perlu dicek Delivery" / bunyinya dihapus. CC terjadwal yang sudah absen tetap di waiting list / Parkir Luar dan
+   dipanggil ke stall sesuai urutan biasa, sampai Delout atau dikeluarkan Delivery (tombol 🚪). */
 const _psSeen={};
-function ccPurgeStaleCheck(){ try{ ccLockNotify(); }catch(e){} try{
+function ccPurgeStaleCheck(){ try{
   if(!currentUser || currentUser.role==="display" || currentUser.role==="cc" || isViewer()) return;
   if(FBS.enabled && (_fbMode!=="full" || !fbFresh())) return;
   const d0=DB.get(), now=Date.now();
@@ -4862,7 +4908,7 @@ function ccHoldRowsHtml(data){
     const H=(data.hold||[]).slice().sort((a,b)=>ccEffTs(data,a.plat,a.ts)-ccEffTs(data,b.plat,b.ts)); if(!H.length) return "";
     const hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}), em=ccEarlyMin(data)*60000;
     return `<div style="margin-top:10px;padding-top:8px;border-top:2px dashed var(--border);"><div style="font-size:12px;font-weight:800;color:#B4570E;margin-bottom:4px;">🅿️ Sudah absen, di luar waiting list (${H.length})</div>`+
-      H.map(q=>{ const du=ccNextDue(data,q.plat); return `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>${escH(q.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(q.lp||"")}${qDrv(data,q.plat)}${q.ts?" · absen "+hm(q.ts):""}${q.absenDistKm!=null?" · "+q.absenDistKm.toFixed(1)+" km":""}</span>${ccLockFlagHtml(data,q.plat,q)}</div><div style="text-align:right;"><span style="background:#E8833A;color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;">Parkir Luar</span>${du!=null?`<div style="font-size:11px;color:var(--text-dim);">jadwal ${holdHm(du)} · masuk antrian ±${holdHm(du-em)}</div>`:""}${canKeluarkanCC()&&!isViewer()?`<button type="button" onclick="keluarkanQ('${escH(q.plat).replace(/'/g,"")}')" title="Keluarkan dari Parkir Luar" style="margin-top:4px;border:1px solid var(--red);color:var(--red);background:#fff;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:800;">🚪 Keluarkan</button>`:""}</div></div>`; }).join("")+`</div>`;
+      H.map(q=>{ const du=ccNextDue(data,q.plat); return `<div style="padding:7px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>${escH(q.plat)}</b> <span style="font-size:11px;color:var(--text-dim);">${escH(q.lp||"")}${qDrv(data,q.plat)}${q.ts?" · absen "+hm(q.ts):""}${q.absenDistKm!=null?" · "+q.absenDistKm.toFixed(1)+" km":""}</span>${armadaTag(data,q.plat)}</div><div style="text-align:right;"><span style="background:#E8833A;color:#fff;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:800;">Parkir Luar</span>${du!=null?`<div style="font-size:11px;color:var(--text-dim);">jadwal ${holdHm(du)} · masuk antrian ±${holdHm(du-em)}</div>`:""}${canKeluarkanCC()&&!isViewer()?`<button type="button" onclick="keluarkanQ('${escH(q.plat).replace(/'/g,"")}')" title="Keluarkan dari Parkir Luar" style="margin-top:4px;border:1px solid var(--red);color:var(--red);background:#fff;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:800;">🚪 Keluarkan</button>`:""}</div></div>`; }).join("")+`</div>`;
   }catch(e){ return ""; }
 }
 function ccSemuaAbsenHtml(data){
@@ -4925,9 +4971,10 @@ let _nvdcOv=false;
 /* jam absen awal yang boleh dipakai lagi: absen ≤3 jam lalu, sesudahnya tidak ada Delout/ILS/keluar, dan
    (a) dikeluarkan otomatis oleh Sistem (tanda drop), atau (b) Delivery/Admin memilih "kembalikan ke urutan awal" saat Absenkan */
 function absenLost(d, k){ try{
-  const la=(d.absenLog||[]).slice().reverse().find(x=>x && !x.dup && !x.rejected && !x.far && normPlat(x.plat)===k);
+  const la=(d.absenLog||[]).slice().reverse().find(x=>x && !x.dup && !x.rejected && !x.far && !/^Peta: CC sudah jauh/.test(x.name||"") && normPlat(x.plat)===k);
   if(!la || Date.now()-(+la.ts||0)>=3*3600000) return null;
   if((((d.ccLeft||{})[k])||0)>la.ts) return null;
+  if(ccLastLeft(d, k)>la.ts) return null;   /* sudah dikeluarkan (Delivery / penjaga) sesudah absen ini */
   if((d.ils||[]).some(b=>b && normPlat(b.ccPlat)===k && (+b.ts||0)>=la.ts)) return null;
   if(Object.values(d.cc||{}).some(c=>c && normPlat(c.plat)===k) || (d.queue||[]).some(q=>q && normPlat(q.plat)===k) || (d.hold||[]).some(q=>q && normPlat(q.plat)===k)) return null;
   return la; }catch(e){ return null; } }
@@ -5023,14 +5070,10 @@ function ccGuardWhy(d, plat, inStall, it){
   const act=(d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k);
   if(inStall && act) return "";
   if(!inStall && act) return "otomatis: plat sudah punya ILS aktif";
-  if(it && ccEntryStale(d, it, inStall)) return "otomatis: catatan lama dari sebelum CC keluar / Delout (bukan absen baru)";
-  /* Tercatat lagi sesudah Delout padahal belum terlihat menjauh / tiba di NVDC (mis. HP driver masih memakai RADAR versi lama yang
-     langsung absen lagi begitu Delout). Absen manual (driver / Delivery) sesudah Delout tetap dihormati. Berlaku walau aturan ketat mati. */
-  if(it && !csActive(d,plat) && ccLoadedNear(d, plat)){ const lo=ccLastDelout(d, plat);
-    if(!(d.absenLog||[]).some(a=>a && a.manual && !a.dup && !a.rejected && normPlat(a.plat)===k && (a.ts||0)>lo)) return "otomatis: absen lagi sesudah Delout, CC belum menjauh dari yard (masih bawa muatan)"; }
-  if(ccNeedNvdc(d, plat)) return "otomatis: sudah Delout, belum tiba di NVDC";
-  /* 25 Nov 2026: "ritase shift ini sudah selesai" tidak lagi mengeluarkan CC yang sudah absen (terkunci sampai Delout / dikeluarkan).
-     Absen baru untuk CC yang ritnya habis tetap ditolak di registerCC. */
+  /* 25 Nov 2026 16.30 (Khairul: "jangan ada cek-cek lagi, pokoknya ada di DCCP dan sudah absen tidak ada lagi hilang"):
+     penjaga hanya membersihkan catatan GANDA — plat yang sedang di stall dengan ILS aktif tapi masih tercatat juga di waiting list /
+     Parkir Luar. Cek "catatan lama dari sebelum Delout", "belum menjauh / belum tiba NVDC", dan "ritase selesai" tidak lagi
+     mengeluarkan CC (baik di stall, waiting list, maupun Parkir Luar). Tetap ada: Delout dan tombol Keluarkan Delivery. */
   return "";
 }
 function ccGuardScan(d){
@@ -5058,7 +5101,7 @@ function ccGuardTick(){
     });
   }catch(e){}
 }
-setInterval(ccGuardTick, 5000);
+setInterval(()=>{ if(autoLeader()) ccGuardTick(); }, 5000);   /* 25 Nov: hanya perangkat penggerak otomatis (tidak saling tabrak) */
 function submitOrderStall(){   /* HP driver: ambil posisi peta plat ini dulu (lihat withOwnTrack) */
   if(window._sosBusy) return; window._sosBusy=true;
   const pl=((document.getElementById("ccPlat")||{}).value||"").trim().toUpperCase();
@@ -5127,7 +5170,7 @@ function renderDelivery(){
     const side=k==="OFF"?"":("side"+k.slice(-1));
     const open = nSel>0 || !!dlUnitOpen[k];
     const cpT = dlCopied[k] && Date.now()-dlCopied[k] < 4*3600000 ? holdHm(dlCopied[k]) : "";
-    const tool = `<div class="ugtool">${nSel<L.length && nSel<CONFIG.MAX_LOAD_PER_CC?`<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();dlSelStall('${k}',true)">☑ Centang semua</button>`:""}${nSel?`<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();dlSelStall('${k}',false)">☐ Hapus centang</button>`:""}<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();dlCopyStall('${k}',this)">📋 Salin No. Rangka (${nSel?nSel+" dicentang":L.length+" unit"})</button></div>`;
+    const tool = `<div class="ugtool">${nSel<L.length && nSel<selCap()?`<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();dlSelStall('${k}',true)">☑ Centang semua</button>`:""}${nSel?`<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();dlSelStall('${k}',false)">☐ Hapus centang</button>`:""}<button type="button" class="btn btn-outline btn-sm" onclick="event.stopPropagation();dlCopyStall('${k}',this)">📋 Salin No. Rangka (${nSel?nSel+" dicentang":L.length+" unit"})</button></div>`;
     return `<details class="ugroup ${side}" ${open?"open":""} ontoggle="dlUnitOpen['${k}']=this.open"><summary><span class="gname">${k==="OFF"?"📍 Luar stall":"Stall "+k}</span>${cpT?`<span class="gcnt" style="background:#E0F2FE;color:#0369a1;" title="No. rangka stall ini sudah disalin di HP/PC ini">📋 ${cpT}</span>`:""}<span class="gcnt">${L.length} unit</span>${nPrio?`<span class="gcnt" style="background:#FFF1C2;color:#8a6100;">⭐ ${nPrio}</span>`:""}${nSel?`<span class="gcnt sel">✔ ${nSel} dipilih</span>`:""}</summary>${tool}${L.map(_unitRow).join("")}${canKeluarkanCC()&&L.some(e=>!e[1].ilsId)?`<button type="button" class="btn btn-outline btn-sm" style="margin:8px 0 2px;color:var(--red);border-color:var(--red);" onclick="event.stopPropagation();clearStallUnits('${k}')">🗑 Kosongkan ${k==="OFF"?"Luar Stall":"Stall "+k} (${L.filter(e=>!e[1].ilsId).length} unit)</button>`:""}</details>`;
   }).join("") + (canKeluarkanCC()&&_gkeys.length>1?`<button type="button" class="btn btn-outline btn-sm" style="margin:10px 0 0;color:var(--red);border-color:var(--red);" onclick="clearStallUnits('*')">🗑 Kosongkan SEMUA Stall</button>`:"");
 
@@ -5169,7 +5212,7 @@ function renderDelivery(){
   const ilsCompact = b=>{ const st=ilsStage(b), op=!!dlIlsOpen[b.id];
     return `<div class="card" style="background:var(--panel2);border-left:8px solid ${ccColor(b.ccPlat)};padding:10px 12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-        <div style="min-width:0;"><b style="font-size:15px;">🚚 ${escH(b.ccPlat)}</b> <span style="font-size:12px;color:var(--text-dim);">· LP ${escH(b.lp||"-")} · Stall ${ccLbl(b.ccNum)} · ${b.units.length} unit${b.batam?" · BATAM":""}</span>
+        <div style="min-width:0;"><b style="font-size:15px;">🚚 ${escH(b.ccPlat)}</b>${b.armada?`<span class="armtag">${b.armada==="TOW"?"TOW":"SC"}</span>`:""} <span style="font-size:12px;color:var(--text-dim);">· LP ${escH(b.lp||"-")} · Stall ${ccLbl(b.ccNum)} · ${b.units.length} unit${b.batam?" · BATAM":""}</span>
           <div style="margin-top:4px;font-size:11px;"><span style="font-weight:800;border-radius:999px;padding:2px 8px;background:${st.bg};color:${st.c};">${st.t}</span> <span style="font-weight:800;color:#17803d;">📄 Surat jalan ✓</span>${b.sjkb?` <span style="background:#EAF2FF;color:#1E3A8A;border-radius:6px;padding:1px 6px;font-weight:800;">${escH(b.sjkb)}</span>`:""}</div>${ilsTrailHtml(b)}</div>
         <button class="btn btn-green btn-sm" style="width:auto;min-width:120px;" onclick="delout(${b.id})">✔ Delout</button>
       </div>
@@ -5191,7 +5234,6 @@ function renderDelivery(){
     ${ilsSeatBanner(data)}
     ${dfAlertHtml(data)}
     ${takeCardHtml(data)}
-    ${ccLockCardHtml(data)}
     ${csCardHtml(data)}
     ${earlyBox}
     ${batamAlertHtml(data)}
@@ -5205,8 +5247,8 @@ function renderDelivery(){
     </div>
 
     <div class="card">
-      <h3>📦 Pilih Unit (maks ${CONFIG.MAX_LOAD_PER_CC})</h3>
-      <p style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">Terpilih: ${deliverySelUnits.length}/${CONFIG.MAX_LOAD_PER_CC}${filledSlots.some(([k])=>isOffKey(k))?` · 📍 ${filledSlots.filter(([k])=>isOffKey(k)).length} unit di luar stall (ditandai 📍)`:""}</p>
+      <h3>📦 Pilih Unit (maks ${selCap()})</h3>
+      <p style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">Terpilih: ${deliverySelUnits.length}/${selCap()}${filledSlots.some(([k])=>isOffKey(k))?` · 📍 ${filledSlots.filter(([k])=>isOffKey(k)).length} unit di luar stall (ditandai 📍)`:""}</p>
       ${filledSlots.length===0 ? `<div class="emptystate">Belum ada unit terparkir.</div>` : `<div class="unitlist">${unitRows}</div>`}
       ${filledSlots.length?`<div style="display:flex;gap:8px;margin-top:10px;"><button type="button" class="btn btn-outline" style="flex:1;" onclick="dlCopyFrames(this)" ${deliverySelUnits.length?"":"disabled"}>📋 Salin No. Rangka (${deliverySelUnits.length} unit)</button>${deliverySelUnits.length?`<button type="button" class="btn btn-outline" style="width:auto;flex:0 0 auto;" onclick="dlSelClear()">✖ Hapus centang</button>`:""}</div>`:""}
     </div>
@@ -5252,21 +5294,21 @@ function dlSelStall(k, on){
   if(new Set(all.map(isB)).size>1){ alert(lbl+" berisi unit BATAM dan reguler — centang manual satu per satu."); return; }
   const others=deliverySelUnits.filter(id=>!all.includes(id));
   let add=all.filter(id=>!deliverySelUnits.includes(id));
-  if(others.length && (isB(others[0])!==isB(all[0]) || deliverySelUnits.length+add.length>CONFIG.MAX_LOAD_PER_CC)){
+  if(others.length && (isB(others[0])!==isB(all[0]) || deliverySelUnits.length+add.length>selCap())){
     if(!confirm(`Ganti centang ke ${lbl}?\nCentang di stall lain (${others.length} unit) akan dihapus.`)) return;
     deliverySelUnits=deliverySelUnits.filter(id=>all.includes(id));
   }
-  const room=CONFIG.MAX_LOAD_PER_CC-deliverySelUnits.length;
+  const room=selCap()-deliverySelUnits.length;
   deliverySelUnits=deliverySelUnits.concat(add.slice(0,room));
   dlUnitOpen[k]=true; render();
-  if(add.length>room) alert(`Maksimal ${CONFIG.MAX_LOAD_PER_CC} unit per Car Carrier — hanya ${room} unit pertama ${lbl} yang dicentang.`);
+  if(add.length>room) alert(`Maksimal ${selCap()} unit per truk ini — hanya ${room} unit pertama ${lbl} yang dicentang.`);
 }
 function dlSelClear(){ deliverySelUnits=[]; render(); }
 function toggleUnitSel(id){
   const idx = deliverySelUnits.indexOf(id);
   if(idx>=0){ deliverySelUnits.splice(idx,1); }
   else{
-    if(deliverySelUnits.length >= CONFIG.MAX_LOAD_PER_CC){ alert(`Maksimal ${CONFIG.MAX_LOAD_PER_CC} unit per Car Carrier.`); return; }
+    if(deliverySelUnits.length >= selCap()){ alert(`Maksimal ${selCap()} unit per truk ini (Carrier.`); return; }
     { const dd = DB.get(), nb = !!(dd.units[id]&&dd.units[id].batam);
       if(deliverySelUnits.length && !!(dd.units[deliverySelUnits[0]]&&dd.units[deliverySelUnits[0]].batam)!==nb){
         alert(nb ? "Unit BATAM tidak boleh dicampur dengan unit reguler dalam satu ILS." : "Unit reguler tidak boleh dicampur dengan unit BATAM dalam satu ILS."); return; } }
@@ -5345,6 +5387,8 @@ function createILS(ccNum, slots){
   if(!ccInfo){ alert("Stall CC tidak valid."); return false; }
   const units = slots.filter(slot=>data.units[slot] && !data.units[slot].ilsId).map(slot=>({slot, loc:data.units[slot].loc||"", frame:data.units[slot].frame, model:data.units[slot].model, batam:!!data.units[slot].batam, prio:!!data.units[slot].prio, ts:data.units[slot].ts||0, line:data.units[slot].line||"", by:data.units[slot].driver||""}));
   if(!units.length){ alert("Unit sudah tidak tersedia."); return false; }
+  const _arm=armadaOf(data, ccInfo.plat), _cap=ccCapOf(data, ccInfo.plat);
+  if(units.length>_cap){ alert(ccInfo.plat+" adalah "+armadaName(_arm)+" — muatan maksimal "+_cap+" unit. ILS ini berisi "+units.length+" unit; pilih 1 unit saja."); return false; }
   const _dupI=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && normPlat(b.ccPlat)===normPlat(ccInfo.plat));
   if(_dupI){ alert("Plat "+ccInfo.plat+" sudah punya ILS #"+_dupI.id+" yang masih aktif di Stall "+ccLbl(_dupI.ccNum)+(_dupI.mp?" (dibuat oleh "+_dupI.mp+")":"")+". Satu CC hanya boleh punya satu ILS aktif. Selesaikan atau batalkan ILS itu dulu."); return false; }
   { const _dupS=(data.ils||[]).find(b=>b && b.status==="open" && !b.outTs && b.ccNum==ccNum);   // stall CC terkunci: 1 stall = 1 plat = 1 ILS aktif
@@ -5376,6 +5420,7 @@ function createILS(ccNum, slots){
     _ilsNewId=id;
     d.ils.push({id, ccNum, ccPlat: platFmt(ccInfo.plat), lp: ccInfo.lp, drvCode: resolveDrvCode(DB.get(), ccInfo.plat, ccInfo.drvCode), units, batam: units.every(u=>u.batam), drvName: ccDriverAny(ccInfo.plat)||"", mp: currentUser.name, shift:(currentUser.shift||""), ts: Date.now(), ccIn: ccInfo.ts||0, ccAbs: ccInfo.absenTs||0, status:"open", dv: _cdv, dp: _cdp});
     if(_cvia) d.ils[d.ils.length-1].via=_cvia;
+    if(_arm!=="CC"){ d.ils[d.ils.length-1].moda="SC"; d.ils[d.ils.length-1].armada=_arm; }   /* 25 Nov: Single Carrier / towing → Moda TLS "SC" */
     units.forEach(u=>{ if(d.units[u.slot] && !d.units[u.slot].ilsId) d.units[u.slot].ilsId = id; });
   });
   notifyILSCreated(ccInfo.plat, units.length);
@@ -5548,6 +5593,32 @@ function generateILS0(){
   }
 }
 
+/* ===== SINGLE CARRIER / TOWING (25 Nov 2026, permintaan Khairul) =====
+   Metode kirim baru: 1 truk bawa 1 unit (Single Carrier / towing). Alurnya SAMA seperti CC (absen → waiting list → stall → ILS → Delout),
+   bedanya: muatan 1 unit, unit diambil URUT (FIFO, unit paling lama), dan Moda di TLS otomatis "SC - SINGLE CARRIER".
+   Jenis armada plat dibaca dari kolom "CC Model" di DCCP (SINGLE CARRIER / SC / TOWING / DEREK / SELF LOADER), atau diatur
+   Delivery/Admin di ✏️ Edit CC Terjadwal → "Jenis armada" (tersimpan permanen per plat di d.armada, berlaku untuk jadwal berikutnya). */
+const SC_RE=/single|^\s*sc\b|\bsc\s*$|towing|\btow\b|derek|self\s*load/i;
+function armadaOf(d, plat){
+  const k=normPlat(plat); if(!k) return "CC";
+  const m=(d && d.armada && typeof d.armada==="object") ? d.armada[k] : null;
+  if(m && (m.t==="SC" || m.t==="TOW" || m.t==="CC")) return m.t;
+  const chk=r=>r && r.model && normPlat(r.police)===k;
+  let r=(d.dccpSchedule||[]).find(chk);
+  if(!r){ const S=d.dccpStore||{}; for(const sh of Object.keys(S)){ r=((S[sh]&&S[sh].rows)||[]).find(chk); if(r) break; } }
+  if(r && SC_RE.test(r.model)) return /tow|derek/i.test(r.model) ? "TOW" : "SC";
+  return "CC";
+}
+function ccIsSC(d, plat){ return armadaOf(d, plat)!=="CC"; }
+function ccCapOf(d, plat){ return ccIsSC(d, plat) ? 1 : CONFIG.MAX_LOAD_PER_CC; }
+function armadaName(t){ return t==="TOW" ? "Towing" : t==="SC" ? "Single Carrier" : "Car Carrier"; }
+function armadaTag(d, plat){ const t=armadaOf(d, plat); return t==="CC" ? "" : `<span class="armtag" title="${armadaName(t)} · 1 unit per rit">${t==="TOW"?"TOW":"SC"} · 1 unit</span>`; }
+function unitPerOf(plat, model){ try{ const m=(DB.get().armada||{})[normPlat(plat)]; if(m && m.t) return m.t==="CC" ? 6 : 1; }catch(e){} return SC_RE.test(model||"") ? 1 : 6; }
+function rowUnitPer(r, d){ try{ return ccIsSC(d||DB.get(), r && r.police) ? 1 : 6; }catch(e){ return 6; } }   /* unit per rit untuk plan default */
+/* 25 Nov 2026: Moda SC di TLS punya Tipe Pengiriman sendiri — SCUT (Single Carrier Unit Reguler), sesuai pilihan Khairul. */
+function tlsTipeOf(d, b){ return tlsModaOf(d, b)==="SC" ? "SCUT" : tlsCfg().tipe; }
+function tlsModaOf(d, b){ return (b && b.moda) || (b && ccIsSC(d, b.ccPlat) ? "SC" : "CC"); }
+
 /* ===== DRAFT ILS OTOMATIS =====
    Aturan: 1 CC = 1 stall penuh (6 unit), urut FIFO (stall yang paling dulu penuh). Batam & reguler tidak dicampur.
    Stall belum penuh → menunggu (kecuali MP pilih "Kirim sisa unit"). */
@@ -5575,11 +5646,13 @@ function ccProposals(data){
     if(want==="NONE"){ manual[n]={none:true}; return; }   /* MP memilih: ILS hanya dari unit luar stall yang dicentang */
     const st = stats.find(x=>String(x.stall)===String(want) && !used.has(x.stall) && okFor(x, wantBOf(n,c)));
     if(st){ used.add(st.stall); manualBy[st.stall]=n; manual[n]=st; } });
+  const scTaken = new Set(), scQ = [];
   for(const {n,c} of ccs){
     if((data.ils||[]).some(b=>b.status==="open" && b.ccNum==n && normPlat(b.ccPlat)===normPlat(c.plat))) continue;
     const row = (data.dccpSchedule||[]).find(r=>normPlat(r.police)===normPlat(c.plat));
     const wantB = wantBOf(n,c);
     const base = {n, plat:c.plat, lp:c.lp||"", driver:ccDriverAny(c.plat)||(row&&row.driver)||"", drvCode:resolveDrvCode(data, c.plat, c.drvCode), batam:wantB, ccTs:c.ts||0, dismissed:!!c.dismissed, waiting:!!c.waiting, manualStall:!!manual[n]};
+    if(ccIsSC(data, c.plat)){ base.sc=armadaOf(data, c.plat); base.cap=1; if(!c.dismissed && !(manual[n] && manual[n].none)){ scQ.push({n, base, wantB, man:manual[n]||null}); continue; } }
     if(c.dismissed){ out.push({...base, ready:false, stall:null, units:[], have:0, cands:[]}); continue; }
     if(manual[n] && manual[n].none){ out.push({...base, ready:false, stall:null, units:[], have:0, noStall:true}); continue; }
     let pick = manual[n] || null;
@@ -5592,8 +5665,26 @@ function ccProposals(data){
     if(pick && pick.n>=CONFIG.SLOTS_PER_STALL) out.push({...base, ready:true, stall:pick.stall, units:pick.units.slice(0,CONFIG.MAX_LOAD_PER_CC), have:pick.n});
     else out.push({...base, ready:false, stall:pick?pick.stall:null, units:pick?pick.units:[], have:pick?pick.n:0});
   }
+  /* Single Carrier / towing: sesudah CC biasa kebagian stall, tiap SC (urut masuk stall) ambil 1 unit PALING LAMA (FIFO) yang jenisnya
+     sesuai (Batam/reguler). Urutan sumber: (1) stall yang tidak sedang dipakai CC — termasuk stall campur Batam+reguler yang tidak bisa
+     diambil CC; (2) kalau tidak ada, stall CC yang belum penuh (CC-nya masih menunggu). Stall order NVDC didahulukan; stall pilihan
+     manual MP dipakai kalau ada. Stall penuh yang sudah jadi jatah CC tidak diganggu. */
+  const uTs = k=>{ const u=data.units[k]; return (u && +u.ts)||0; };
+  const readyStall = new Set(out.filter(x=>x.ready && x.stall).map(x=>String(x.stall)));
+  scQ.forEach(({n, base, wantB, man})=>{
+    const scan = pool=>{ let best=null;
+      pool.forEach(st=>{ (st.units||[]).forEach(k=>{ const u=data.units[k]; if(!u || scTaken.has(k) || !!u.batam!==!!wantB) return;
+        const key=[oRank(st), uTs(k), k];
+        if(!best || key[0]<best.key[0] || (key[0]===best.key[0] && (key[1]<best.key[1] || (key[1]===best.key[1] && String(key[2])<String(best.key[2]))))) best={k, st, key}; }); });
+      return best; };
+    const best = man ? scan([man]) : (scan(stats.filter(x=>!used.has(x.stall))) || scan(stats.filter(x=>used.has(x.stall) && !readyStall.has(String(x.stall)))));
+    if(best){ scTaken.add(best.k); out.push({...base, ready:true, stall:best.st.stall, units:[best.k], have:1}); }
+    else out.push({...base, ready:false, stall:null, units:[], have:0});
+  });
+  out.sort((a,b)=>(a.ccTs||0)-(b.ccTs||0));
   out.forEach(p=>{ if(p.stall && ordM.has(p.stall)) p.nvo=ordM.get(p.stall); });
   out.forEach(p=>{ p.cands = stats.filter(x=>okFor(x,p.batam) && (!manualBy[x.stall] || manualBy[x.stall]===p.n)).map(x=>({stall:x.stall, n:x.n})); });
+  out.forEach(p=>{ if(!p.cap) p.cap=CONFIG.MAX_LOAD_PER_CC; });
   return out;
 }
 /* ===== Unit LUAR STALL langsung masuk ILS dari Draft (centang) =====
@@ -5604,14 +5695,15 @@ let draftOffOpen = {};
 function draftOffList(data, p){ return offUnitEntries(data).filter(([k,u])=>u && !u.ilsId && !dfBlockOf(data,u.frame) && !!u.batam===!!p.batam); }
 function draftOffSel(data, p){ const ok=new Set(draftOffList(data,p).map(e=>e[0])); const s=(draftOff[p.n]||[]).filter(k=>ok.has(k)); if(s.length) draftOff[p.n]=s; else delete draftOff[p.n]; return s; }
 function draftOffTaken(n){ const t=new Set(); Object.entries(draftOff).forEach(([m,a])=>{ if(+m!==+n) (a||[]).forEach(k=>t.add(k)); }); return t; }
-function draftMixUnits(data, p){ const off=draftOffSel(data,p), st=(draftStall[p.n]==="NONE")?[]:(p.units||[]); return off.concat(st.filter(k=>!off.includes(k))).slice(0, CONFIG.MAX_LOAD_PER_CC); }
+function draftMixUnits(data, p){ const off=draftOffSel(data,p), st=(draftStall[p.n]==="NONE")?[]:(p.units||[]); return off.concat(st.filter(k=>!off.includes(k))).slice(0, p.cap||CONFIG.MAX_LOAD_PER_CC); }
 function draftOffToggle(n, k){
   const d=DB.get(), p=ccProposals(d).find(x=>x.n===n); if(!p) return;
   const s=draftOffSel(d,p).slice(), i=s.indexOf(k);
   if(i>=0) s.splice(i,1);
   else{
     if(draftOffTaken(n).has(k)){ alert("Unit ini sudah dicentang untuk CC lain. Hapus centangnya di kartu CC itu dulu."); return; }
-    if(s.length>=CONFIG.MAX_LOAD_PER_CC){ alert(`Maksimal ${CONFIG.MAX_LOAD_PER_CC} unit per Car Carrier.`); return; }
+    const cap=p.cap||CONFIG.MAX_LOAD_PER_CC;
+    if(s.length>=cap){ alert(cap===1 ? `${p.plat} adalah ${armadaName(p.sc)} — maksimal 1 unit.` : `Maksimal ${cap} unit per Car Carrier.`); return; }
     s.push(k);
   }
   if(s.length) draftOff[n]=s; else delete draftOff[n];
@@ -5663,12 +5755,12 @@ function draftCardsHtml(data){
   const drvRow = p=>`<div style="display:flex;gap:6px;margin:6px 0;align-items:center;"><span style="font-size:11px;color:var(--text-dim);white-space:nowrap;">Kode driver TLS:</span><input id="drvIn${p.n}" type="text" value="${escH(p.drvCode||"")}" placeholder="mis. KMDCCDRV302" onchange="draftSetDrv(${p.n},this.value)" style="flex:1;min-width:0;text-transform:uppercase;padding:6px 8px;border:1px solid ${p.drvCode?"var(--border,#ccd)":"#D64545"};border-radius:8px;"></div>${p.drvCode?"":`<div style="font-size:11px;color:#D64545;margin:-2px 0 4px;">Kode driver belum diisi — TLS akan memakai nama driver (bisa tertukar).</div>`}`;
   const outBtn = p=>!canKeluarkanCC()?"":`<button class="btn btn-outline btn-sm" style="flex:1;min-width:110px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`;
   return `<div class="dl-draft">` + P.map(p=>{
-    const who = `LP <b>${p.lp||"-"}</b> · <b>${p.plat}</b>${p.driver?` · Driver <b>${p.driver}</b>`:` · <span style="color:#c0392b;font-weight:700;">⚠ Driver belum ada di jadwal DCCP</span>`}${p.nvo?` <span class="nvo-b" title="Order NVDC oleh ${escH(p.nvo.by)}">📦 ORDER NVDC · Stall ${escH(p.stall)}</span>`:""}`;
+    const who = `LP <b>${p.lp||"-"}</b> · <b>${p.plat}</b>${p.sc?armadaTag(data,p.plat):""}${p.driver?` · Driver <b>${p.driver}</b>`:` · <span style="color:#c0392b;font-weight:700;">⚠ Driver belum ada di jadwal DCCP</span>`}${p.nvo?` <span class="nvo-b" title="Order NVDC oleh ${escH(p.nvo.by)}">📦 ORDER NVDC · Stall ${escH(p.stall)}</span>`:""}`;
     if(!p.dismissed && draftOffSel(data,p).length){
       const mix=draftMixUnits(data,p), nOff=mix.filter(k=>isOffKey(k)).length, nSt=mix.length-nOff;
       return `<div class="card" style="border:2px solid var(--green);background:#F3FBF6;">
       <h3 style="color:var(--green);">🚚 Draft ILS — dengan unit luar stall</h3>
-      <div style="font-size:14px;line-height:1.5;">${who}<br><b style="font-size:17px;">${mix.length} unit</b>: ${nOff} dari luar stall${nSt?` + ${nSt} dari <b>Stall ${p.stall}</b>`:""}${mix.length<CONFIG.MAX_LOAD_PER_CC?` <span style="color:#C9661A;font-weight:700;">(belum ${CONFIG.MAX_LOAD_PER_CC})</span>`:""}${p.batam?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800;">BATAM</span>`:""}</div>
+      <div style="font-size:14px;line-height:1.5;">${who}<br><b style="font-size:17px;">${mix.length} unit</b>: ${nOff} dari luar stall${nSt?` + ${nSt} dari <b>Stall ${p.stall}</b>`:""}${mix.length<(p.cap||CONFIG.MAX_LOAD_PER_CC)?` <span style="color:#C9661A;font-weight:700;">(belum ${p.cap||CONFIG.MAX_LOAD_PER_CC})</span>`:""}${p.batam?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800;">BATAM</span>`:""}</div>
       ${typeSw(p)}${stallSel(p)}${drvRow(p)}<div class="dchips">${chipsOf(mix)}</div>${offBlock(p)}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="draftGoMix(${p.n},'${escH(normPlat(p.plat))}')">✔ Buat ILS (${mix.length} unit)</button>
@@ -5686,7 +5778,7 @@ function draftCardsHtml(data){
       </div></div>`;
     if(p.dismissed) return `<div class="card" style="opacity:.75;"><div style="font-size:13px;">🚚 ${who} — dilewati sementara (stall-nya tidak ditahan).</div><button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="draftDismiss(${p.n},false)">↺ Tampilkan lagi</button>${canKeluarkanCC()?`<button class="btn btn-outline btn-sm" style="margin:8px 0 0 8px;color:var(--red);border-color:var(--red);" onclick="keluarkanCC(${p.n})">🚪 Keluarkan CC</button>`:""}</div>`;
     if(p.ready) return `<div class="card" style="border:2px solid var(--green);background:#F3FBF6;">
-      <h3 style="color:var(--green);">🚚 CC Siap Loading — Draft ILS</h3>
+      <h3 style="color:var(--green);">🚚 ${p.sc?armadaName(p.sc)+" Siap Loading — 1 unit (urut FIFO)":"CC Siap Loading — Draft ILS"}</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>Siap loading unit di <b style="font-size:17px;">Stall ${p.stall}</b> · ${p.units.length} unit${p.batam?` <span style="background:#E8833A;color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:800;">BATAM</span>`:""}</div>
       ${typeSw(p)}${stallSel(p)}${drvRow(p)}<div class="dchips">${chips(p)}</div>${offBlock(p)}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
@@ -5694,7 +5786,7 @@ function draftCardsHtml(data){
         <button class="btn btn-outline" style="flex:1;min-width:110px;" onclick="draftDismiss(${p.n},true)">⏭ Lewati dulu</button>
         ${outBtn(p)}
       </div></div>`;
-    const info = p.units.length ? `Stall <b>${p.stall}</b> baru <b>${p.have}/${CONFIG.SLOTS_PER_STALL}</b> unit.` : `Belum ada unit ${p.batam?"Batam":"reguler"} yang siap (stall masih kosong).`;
+    const info = p.sc ? `Belum ada unit ${p.batam?"Batam":"reguler"} yang bisa diambil (semua stall sedang dipakai CC lain / kosong).` : p.units.length ? `Stall <b>${p.stall}</b> baru <b>${p.have}/${CONFIG.SLOTS_PER_STALL}</b> unit.` : `Belum ada unit ${p.batam?"Batam":"reguler"} yang siap (stall masih kosong).`;
     if(!p.waiting) return `<div class="card" style="border:2px solid #E8833A;background:#FFF8EF;">
       <h3 style="color:#C9661A;">🚚 CC Siap Loading — Stall Belum Penuh</h3>
       <div style="font-size:14px;line-height:1.5;">${who}<br>${info}</div>
@@ -5899,13 +5991,13 @@ function renderAdminTls(){
 const TLS_BM = "javascript:%28async%20%28%29%20%3D%3E%20%7B%20if%20%28window.__radarTlsRun%29%20%7B%20return%3B%20%7D%20window.__radarTlsRun%20%3D%20true%3B%20const%20sleep%20%3D%20ms%20%3D%3E%20new%20Promise%28r%20%3D%3E%20setTimeout%28r%2C%20ms%29%29%3B%20const%20norm%20%3D%20s%20%3D%3E%20String%28s%20%7C%7C%20%22%22%29.toUpperCase%28%29.replace%28%2F%5B%5EA-Z0-9%5D%2Fg%2C%20%22%22%29%3B%20const%20code%20%3D%20t%20%3D%3E%20String%28t%20%7C%7C%20%22%22%29.split%28%22%20-%20%22%29%5B0%5D.trim%28%29%3B%20const%20box%20%3D%20document.createElement%28%22div%22%29%3B%20box.style.cssText%20%3D%20%22position%3Afixed%3Bz-index%3A2147483647%3Bright%3A16px%3Bbottom%3A16px%3Bwidth%3A330px%3Bbackground%3A%230f2a4a%3Bcolor%3A%23fff%3Bfont%3A13px%2F1.45%20Arial%2Csans-serif%3Bborder-radius%3A10px%3Bpadding%3A12px%2014px%3Bbox-shadow%3A0%208px%2028px%20rgba%280%2C0%2C0%2C.4%29%3B%22%3B%20box.innerHTML%20%3D%20%27%3Cdiv%20style%3D%22font-weight%3A700%3Bletter-spacing%3A.04em%3B%22%3ERADAR%20%26rarr%3B%20TLS%3C%2Fdiv%3E%3Cdiv%20id%3D%22rt_msg%22%20style%3D%22margin-top%3A6px%3B%22%3E%3C%2Fdiv%3E%3Cdiv%20style%3D%22margin-top%3A10px%3Btext-align%3Aright%3B%22%3E%3Cbutton%20id%3D%22rt_x%22%20type%3D%22button%22%20style%3D%22border%3A0%3Bborder-radius%3A6px%3Bpadding%3A5px%2012px%3Bcursor%3Apointer%3B%22%3ETutup%3C%2Fbutton%3E%3C%2Fdiv%3E%27%3B%20document.body.appendChild%28box%29%3B%20const%20msgEl%20%3D%20box.querySelector%28%22%23rt_msg%22%29%3B%20box.querySelector%28%22%23rt_x%22%29.onclick%20%3D%20%28%29%20%3D%3E%20%7B%20box.remove%28%29%3B%20window.__radarTlsRun%20%3D%20false%3B%20%7D%3B%20const%20say%20%3D%20%28t%2C%20c%29%20%3D%3E%20%7B%20msgEl.innerHTML%20%3D%20t%3B%20msgEl.style.color%20%3D%20c%20%7C%7C%20%22%23fff%22%3B%20%7D%3B%20const%20fail%20%3D%20m%20%3D%3E%20%7B%20say%28%22%26%239940%3B%20%22%20%2B%20m%2C%20%22%23ffb4a8%22%29%3B%20window.__radarTlsRun%20%3D%20false%3B%20throw%20new%20Error%28%22RADAR-TLS%3A%20%22%20%2B%20m%29%3B%20%7D%3B%20async%20function%20getRaw%28%29%20%7B%20say%28%22Membaca%20data%20dari%20RADAR...%22%29%3B%20try%20%7B%20const%20t%20%3D%20await%20Promise.race%28%5Bnavigator.clipboard.readText%28%29%2C%20new%20Promise%28%28_%2C%20rej%29%20%3D%3E%20setTimeout%28%28%29%20%3D%3E%20rej%28new%20Error%28%22timeout%22%29%29%2C%207000%29%29%5D%29%3B%20if%20%28t%20%26%26%20%2F%5E%5Cs%2ARADAR-TLS%3A%2F.test%28t%29%29%20return%20t%3B%20%7D%20catch%20%28e%29%20%7B%7D%20return%20await%20new%20Promise%28res%20%3D%3E%20%7B%20msgEl.innerHTML%20%3D%20%22Clipboard%20tidak%20terbaca.%20Tempel%20paket%20dari%20RADAR%20di%20kotak%20ini%2C%20lalu%20tekan%20%3Cb%3EJalankan%3C%2Fb%3E%3A%22%3B%20const%20ta%20%3D%20document.createElement%28%22textarea%22%29%3B%20ta.rows%20%3D%203%3B%20ta.style.cssText%20%3D%20%22width%3A100%25%3Bmargin-top%3A6px%3Bbox-sizing%3Aborder-box%3Bfont%3A12px%20monospace%3B%22%3B%20const%20go%20%3D%20document.createElement%28%22button%22%29%3B%20go.type%20%3D%20%22button%22%3B%20go.textContent%20%3D%20%22Jalankan%22%3B%20go.style.cssText%20%3D%20%22margin-top%3A6px%3Bborder%3A0%3Bborder-radius%3A6px%3Bpadding%3A6px%2014px%3Bcursor%3Apointer%3Bfont-weight%3A700%3B%22%3B%20msgEl.appendChild%28ta%29%3B%20msgEl.appendChild%28document.createElement%28%22br%22%29%29%3B%20msgEl.appendChild%28go%29%3B%20go.onclick%20%3D%20%28%29%20%3D%3E%20%7B%20const%20v%20%3D%20ta.value%3B%20msgEl.innerHTML%20%3D%20%22%22%3B%20res%28v%29%3B%20%7D%3B%20%7D%29%3B%20%7D%20const%20raw%20%3D%20window.__RADAR_PKG%20%3F%20window.__RADAR_PKG%20%3A%20await%20getRaw%28%29%3B%20window.__RADAR_PKG%20%3D%20null%3B%20let%20P%3B%20try%20%7B%20P%20%3D%20JSON.parse%28String%28raw%29.replace%28%2F%5E%5Cs%2ARADAR-TLS%3A%2F%2C%20%22%22%29%29%3B%20%7D%20catch%20%28e%29%20%7B%20fail%28%22Isi%20yang%20ditempel%20bukan%20paket%20RADAR.%20Di%20RADAR%20tekan%20%27Salin%20paket%20untuk%20script%20TLS%27%20dulu.%22%29%3B%20%7D%20if%20%28%21P%20%7C%7C%20P.v%20%21%3D%3D%201%20%7C%7C%20%21Array.isArray%28P.frames%29%20%7C%7C%20%21P.frames.length%29%20fail%28%22Paket%20RADAR%20tidak%20valid.%20Salin%20ulang%20dari%20RADAR.%22%29%3B%20if%20%28P.frames.length%20%3E%206%29%20fail%28%22Maksimal%206%20unit%20per%20ILS%20%28ILS%20ini%20%22%20%2B%20P.frames.length%20%2B%20%22%29.%22%29%3B%20if%20%28P.moda%20%3D%3D%3D%20%22SC%22%20%26%26%20P.frames.length%20%21%3D%3D%201%29%20fail%28%22Moda%20SC%20hanya%20untuk%201%20unit.%22%29%3B%20if%20%28%21P.vendor%20%7C%7C%20%21P.plat%29%20fail%28%22Vendor%20atau%20No.%20Polisi%20kosong%20di%20paket%20RADAR.%22%29%3B%20if%20%28%21document.querySelector%28%27form%5Bname%3D%22PembuatanSJKBForm%22%5D%27%29%29%20fail%28%22Buka%20halaman%20Pembuatan%20ILS%20%2F%20SJKB%20di%20TLS%20dulu.%22%29%3B%20const%20visible%20%3D%20el%20%3D%3E%20%21%21%28el%20%26%26%20el.offsetParent%20%21%3D%3D%20null%29%3B%20async%20function%20waitFor%28fn%2C%20ms%29%20%7B%20const%20t%20%3D%20Date.now%28%29%3B%20while%20%28Date.now%28%29%20-%20t%20%3C%20ms%29%20%7B%20let%20v%20%3D%20null%3B%20try%20%7B%20v%20%3D%20fn%28%29%3B%20%7D%20catch%20%28e%29%20%7B%7D%20if%20%28v%29%20return%20v%3B%20await%20sleep%28120%29%3B%20%7D%20return%20null%3B%20%7D%20const%20setVal%20%3D%20%28inp%2C%20v%29%20%3D%3E%20%7B%20const%20d%20%3D%20Object.getOwnPropertyDescriptor%28HTMLInputElement.prototype%2C%20%22value%22%29%3B%20d.set.call%28inp%2C%20v%29%3B%20inp.dispatchEvent%28new%20Event%28%22input%22%2C%20%7B%20bubbles%3A%20true%20%7D%29%29%3B%20inp.dispatchEvent%28new%20Event%28%22change%22%2C%20%7B%20bubbles%3A%20true%20%7D%29%29%3B%20%7D%3B%20const%20key%20%3D%20%28el%2C%20name%2C%20k%2C%20kc%29%20%3D%3E%20%7B%20const%20ev%20%3D%20new%20KeyboardEvent%28name%2C%20%7B%20key%3A%20k%2C%20code%3A%20k%2C%20bubbles%3A%20true%2C%20cancelable%3A%20true%20%7D%29%3B%20Object.defineProperty%28ev%2C%20%22keyCode%22%2C%20%7B%20get%3A%20%28%29%20%3D%3E%20kc%20%7D%29%3B%20Object.defineProperty%28ev%2C%20%22which%22%2C%20%7B%20get%3A%20%28%29%20%3D%3E%20kc%20%7D%29%3B%20el.dispatchEvent%28ev%29%3B%20%7D%3B%20const%20byModel%20%3D%20m%20%3D%3E%20%5B...document.querySelectorAll%28%22.ui-select-container%22%29%5D.find%28c%20%3D%3E%20c.getAttribute%28%22ng-model%22%29%20%3D%3D%3D%20m%29%3B%20const%20chosenText%20%3D%20c%20%3D%3E%20%7B%20const%20t%20%3D%20c.querySelector%28%22.ui-select-match-text%22%29%3B%20return%20t%20%26%26%20%21t.classList.contains%28%22ng-hide%22%29%20%3F%20t.textContent.trim%28%29%20%3A%20%22%22%3B%20%7D%3B%20async%20function%20pick%28model%2C%20label%2C%20query%2C%20match%29%20%7B%20say%28%22Mengisi%20%22%20%2B%20label%20%2B%20%22...%22%29%3B%20const%20c%20%3D%20await%20waitFor%28%28%29%20%3D%3E%20%7B%20const%20x%20%3D%20byModel%28model%29%3B%20return%20x%20%26%26%20%21x.hasAttribute%28%22disabled%22%29%20%3F%20x%20%3A%20null%3B%20%7D%2C%2012000%29%3B%20if%20%28%21c%29%20fail%28label%20%2B%20%22%3A%20kotak%20belum%20aktif%20%28isian%20sebelumnya%20belum%20selesai%29.%22%29%3B%20const%20tog%20%3D%20c.querySelector%28%22.ui-select-toggle%22%29%3B%20if%20%28%21tog%29%20fail%28label%20%2B%20%22%3A%20struktur%20halaman%20berbeda%20dari%20yang%20diharapkan.%22%29%3B%20tog.click%28%29%3B%20const%20inp%20%3D%20await%20waitFor%28%28%29%20%3D%3E%20%7B%20const%20i%20%3D%20c.querySelector%28%22input.ui-select-search%22%29%3B%20return%20visible%28i%29%20%3F%20i%20%3A%20null%3B%20%7D%2C%204000%29%3B%20if%20%28%21inp%29%20fail%28label%20%2B%20%22%3A%20kotak%20cari%20tidak%20terbuka.%22%29%3B%20inp.focus%28%29%3B%20setVal%28inp%2C%20query%29%3B%20let%20rows%20%3D%20%5B%5D%3B%20await%20waitFor%28%28%29%20%3D%3E%20%7B%20rows%20%3D%20%5B...c.querySelectorAll%28%22.ui-select-choices-row%22%29%5D.filter%28visible%29%3B%20return%20rows.length%3B%20%7D%2C%206000%29%3B%20const%20hit%20%3D%20rows.find%28r%20%3D%3E%20match%28r.textContent.trim%28%29%29%29%3B%20if%20%28%21hit%29%20%7B%20key%28inp%2C%20%22keydown%22%2C%20%22Escape%22%2C%2027%29%3B%20fail%28label%20%2B%20%22%20%27%22%20%2B%20query%20%2B%20%22%27%20tidak%20ditemukan%20di%20TLS.%22%29%3B%20%7D%20hit.click%28%29%3B%20const%20ok%20%3D%20await%20waitFor%28%28%29%20%3D%3E%20chosenText%28c%29%2C%205000%29%3B%20if%20%28%21ok%29%20fail%28label%20%2B%20%22%3A%20pilihan%20tidak%20tersimpan.%22%29%3B%20await%20sleep%28350%29%3B%20return%20ok%3B%20%7D%20try%20%7B%20await%20pick%28%22me.pembuatanSjkbViewModel.vendor%22%2C%20%22Vendor%22%2C%20P.vendor%2C%20t%20%3D%3E%20norm%28code%28t%29%29%20%3D%3D%3D%20norm%28P.vendor%29%29%3B%20await%20pick%28%22me.pembuatanSjkbViewModel.moda%22%2C%20%22Moda%22%2C%20P.moda%20%7C%7C%20%22CC%22%2C%20t%20%3D%3E%20norm%28code%28t%29%29%20%3D%3D%3D%20norm%28P.moda%20%7C%7C%20%22CC%22%29%29%3B%20await%20pick%28%22me.pembuatanSjkbViewModel.modaChild%22%2C%20%22Tipe%20Pengiriman%22%2C%20P.tipe%20%7C%7C%20%22CCUT%22%2C%20t%20%3D%3E%20norm%28code%28t%29%29%20%3D%3D%3D%20norm%28P.tipe%20%7C%7C%20%22CCUT%22%29%29%3B%20await%20pick%28%22me.pembuatanSjkbViewModel.noPolisi%22%2C%20%22No.%20Polisi%22%2C%20P.plat%2C%20t%20%3D%3E%20%7B%20const%20a%20%3D%20norm%28t%29%2C%20b%20%3D%20norm%28P.plat%29%3B%20return%20a%20%3D%3D%3D%20b%20%7C%7C%20%28a.indexOf%28b%29%20%3D%3D%3D%200%20%26%26%20a.slice%28b.length%29.indexOf%28%22BLOKIR%22%29%20%3D%3D%3D%200%29%3B%20%7D%29%3B%20const%20dm%20%3D%20byModel%28%22me.pembuatanSjkbViewModel.driver%22%29%3B%20await%20waitFor%28%28%29%20%3D%3E%20dm%20%26%26%20chosenText%28dm%29%2C%201800%29%3B%20const%20cur%20%3D%20dm%20%3F%20chosenText%28dm%29%20%3A%20%22%22%3B%20if%20%28P.driver%29%20%7B%20if%20%28%21%28cur%20%26%26%20norm%28cur%29.indexOf%28norm%28P.driver%29%29%20%3E%3D%200%29%29%20%7B%20await%20pick%28%22me.pembuatanSjkbViewModel.driver%22%2C%20%22Driver%22%2C%20P.driver%2C%20t%20%3D%3E%20norm%28t%29.indexOf%28norm%28P.driver%29%29%20%3E%3D%200%29%3B%20%7D%20%7D%20else%20if%20%28%21cur%29%20fail%28%22Driver%20kosong%20di%20data%20RADAR%20%28jadwal%20DCCP%29%20dan%20belum%20terisi%20di%20TLS.%22%29%3B%20say%28%22Memilih%20Lokasi%20Tujuan...%22%29%3B%20const%20radio%20%3D%20document.querySelector%28%27input%5Btype%3D%22radio%22%5D%5Bname%3D%22sjkbMethod%22%5D%5Bvalue%3D%22Tujuan%22%5D%27%29%3B%20if%20%28%21radio%29%20fail%28%22Pilihan%20%27Lokasi%20Tujuan%27%20tidak%20ditemukan%20di%20halaman.%22%29%3B%20radio.click%28%29%3B%20await%20sleep%28400%29%3B%20await%20pick%28%22me.pembuatanSjkbViewModel.location%22%2C%20%22Tujuan%22%2C%20P.tujuan%20%7C%7C%20%22NVDCKRW%22%2C%20t%20%3D%3E%20norm%28code%28t%29%29%20%3D%3D%3D%20norm%28P.tujuan%20%7C%7C%20%22NVDCKRW%22%29%29%3B%20const%20frames%20%3D%20%28%29%20%3D%3E%20%5B...document.querySelectorAll%28%27input%5Bname%3D%22frameNumber%22%5D%27%29%5D.filter%28visible%29%3B%20if%20%28frames%28%29.some%28i%20%3D%3E%20i.value%29%29%20fail%28%22Tabel%20No.%20Rangka%20sudah%20berisi.%20Tekan%20Batal%20di%20TLS%2C%20lalu%20ulangi.%22%29%3B%20for%20%28let%20i%20%3D%200%3B%20i%20%3C%20P.frames.length%3B%20i%2B%2B%29%20%7B%20const%20fno%20%3D%20String%28P.frames%5Bi%5D%29.trim%28%29.toUpperCase%28%29%3B%20say%28%22No.%20Rangka%20%22%20%2B%20%28i%20%2B%201%29%20%2B%20%22%20%2F%20%22%20%2B%20P.frames.length%20%2B%20%22%3A%20%22%20%2B%20fno%29%3B%20const%20inp%20%3D%20await%20waitFor%28%28%29%20%3D%3E%20frames%28%29.find%28x%20%3D%3E%20%21x.disabled%20%26%26%20%21x.value%29%2C%209000%29%3B%20if%20%28%21inp%29%20fail%28%22Kotak%20No.%20Rangka%20berikutnya%20tidak%20tersedia%20%28baris%20ke-%22%20%2B%20%28i%20%2B%201%29%20%2B%20%22%29.%22%29%3B%20inp.focus%28%29%3B%20setVal%28inp%2C%20fno%29%3B%20await%20sleep%28150%29%3B%20key%28inp%2C%20%22keydown%22%2C%20%22Enter%22%2C%2013%29%3B%20const%20tr%20%3D%20inp.closest%28%22tr%22%29%3B%20const%20done%20%3D%20await%20waitFor%28%28%29%20%3D%3E%20%7B%20const%20st%20%3D%20tr%20%26%26%20tr.querySelector%28%27input%5Bname%3D%22stallName%22%5D%27%29%3B%20return%20st%20%26%26%20st.value%20%3F%20st.value%20%3A%20null%3B%20%7D%2C%2012000%29%3B%20if%20%28%21done%29%20fail%28%22No.%20Rangka%20%22%20%2B%20fno%20%2B%20%22%20tidak%20ditemukan%20atau%20ditolak%20TLS.%22%29%3B%20await%20sleep%28250%29%3B%20%7D%20if%20%28P.dry%29%20%7B%20say%28%22%26%239989%3B%20MODE%20TES%3A%20terisi%20%22%20%2B%20P.frames.length%20%2B%20%22%20unit.%20Tombol%20Simpan%20TIDAK%20ditekan.%20Periksa%20isian%2C%20lalu%20tekan%20%3Cb%3EBatal%3C%2Fb%3E%20di%20TLS.%22%2C%20%22%23ffe9a8%22%29%3B%20window.__radarTlsRun%20%3D%20false%3B%20return%3B%20%7D%20say%28%22Menekan%20Simpan...%22%29%3B%20const%20save%20%3D%20await%20waitFor%28%28%29%20%3D%3E%20%5B...document.querySelectorAll%28%22button%22%29%5D.find%28b%20%3D%3E%20%2F%5E%5Cs%2ASimpan%5Cs%2A%24%2F.test%28b.textContent%29%20%26%26%20%21b.disabled%20%26%26%20visible%28b%29%29%2C%208000%29%3B%20if%20%28%21save%29%20fail%28%22Tombol%20Simpan%20belum%20aktif.%20Periksa%20isian%20yang%20masih%20merah%20di%20TLS.%22%29%3B%20save.click%28%29%3B%20say%28%22%26%239989%3B%20Terisi%20%22%20%2B%20P.frames.length%20%2B%20%22%20unit.%20Periksa%20kotak%20Konfirmasi%20TLS%2C%20lalu%20klik%20%3Cb%3EYA%3C%2Fb%3E.%22%2C%20%22%23b6f2c6%22%29%3B%20window.__radarTlsRun%20%3D%20false%3B%20%7D%20catch%20%28e%29%20%7B%20window.__radarTlsRun%20%3D%20false%3B%20if%20%28%21%2F%5EError%3A%20RADAR-TLS%2F.test%28String%28e%29%29%29%20%7B%20say%28%22%26%239940%3B%20Terjadi%20kesalahan%3A%20%22%20%2B%20%28e%20%26%26%20e.message%20%3F%20e.message%20%3A%20e%29%2C%20%22%23ffb4a8%22%29%3B%20%7D%20%7D%20%7D%29%28%29%3B";
 const TLS_US = "// ==UserScript==\n// @name         RADAR -> TLS\n// @namespace    radar-eky\n// @version      1.1\n// @description  Mengisi form Pembuatan ILS/SJKB di TLS dari paket RADAR (satu ketukan).\n// @match        https://tls.toyota.astra.co.id/PembuatanSJKB*\n// @run-at       document-idle\n// @grant        none\n// ==/UserScript==\n(function () {\n  \"use strict\";\n  function radarTlsRun() {\n    window.__radarTlsRun = false;\n    (async () => {\n  if (window.__radarTlsRun) { return; }\n  window.__radarTlsRun = true;\n  const sleep = ms => new Promise(r => setTimeout(r, ms));\n  const norm = s => String(s || \"\").toUpperCase().replace(/[^A-Z0-9]/g, \"\");\n  const code = t => String(t || \"\").split(\" - \")[0].trim();\n\n  \n  const box = document.createElement(\"div\");\n  box.style.cssText = \"position:fixed;z-index:2147483647;right:16px;bottom:16px;width:330px;background:#0f2a4a;color:#fff;font:13px/1.45 Arial,sans-serif;border-radius:10px;padding:12px 14px;box-shadow:0 8px 28px rgba(0,0,0,.4);\";\n  box.innerHTML = '<div style=\"font-weight:700;letter-spacing:.04em;\">RADAR &rarr; TLS</div><div id=\"rt_msg\" style=\"margin-top:6px;\"></div><div style=\"margin-top:10px;text-align:right;\"><button id=\"rt_x\" type=\"button\" style=\"border:0;border-radius:6px;padding:5px 12px;cursor:pointer;\">Tutup</button></div>';\n  document.body.appendChild(box);\n  const msgEl = box.querySelector(\"#rt_msg\");\n  box.querySelector(\"#rt_x\").onclick = () => { box.remove(); window.__radarTlsRun = false; };\n  const say = (t, c) => { msgEl.innerHTML = t; msgEl.style.color = c || \"#fff\"; };\n  const fail = m => { say(\"&#9940; \" + m, \"#ffb4a8\"); window.__radarTlsRun = false; throw new Error(\"RADAR-TLS: \" + m); };\n\n  \n  async function getRaw() {\n    say(\"Membaca data dari RADAR...\");\n    try {\n      const t = await Promise.race([navigator.clipboard.readText(), new Promise((_, rej) => setTimeout(() => rej(new Error(\"timeout\")), 7000))]);\n      if (t && /RADAR-TLS:|\"v\"\\s*:\\s*1/.test(t)) return t;\n    } catch (e) {}\n    return await new Promise(res => {\n      msgEl.innerHTML = \"Clipboard tidak terbaca. Tempel paket dari RADAR di kotak ini, lalu tekan <b>Jalankan</b>:\";\n      const ta = document.createElement(\"textarea\");\n      ta.rows = 3; ta.style.cssText = \"width:100%;margin-top:6px;box-sizing:border-box;font:12px monospace;\";\n      const go = document.createElement(\"button\");\n      go.type = \"button\"; go.textContent = \"Jalankan\"; go.style.cssText = \"margin-top:6px;border:0;border-radius:6px;padding:6px 14px;cursor:pointer;font-weight:700;\";\n      msgEl.appendChild(ta); msgEl.appendChild(document.createElement(\"br\")); msgEl.appendChild(go);\n      go.onclick = () => { const v = ta.value; msgEl.innerHTML = \"\"; res(v); };\n    });\n  }\n  const raw = await getRaw();\n  let P;\n  try { P = JSON.parse(String(raw).replace(/^\\s*RADAR-TLS:/, \"\")); }\n  catch (e) { fail(\"Isi yang ditempel bukan paket RADAR. Di RADAR tekan 'Salin paket untuk script TLS' dulu.\"); }\n  if (!P || P.v !== 1 || !Array.isArray(P.frames) || !P.frames.length) fail(\"Paket RADAR tidak valid. Salin ulang dari RADAR.\");\n  if (P.frames.length > 6) fail(\"Maksimal 6 unit per ILS (ILS ini \" + P.frames.length + \").\");\n  if (P.moda === \"SC\" && P.frames.length !== 1) fail(\"Moda SC hanya untuk 1 unit.\");\n  if (!P.vendor || !P.plat) fail(\"Vendor atau No. Polisi kosong di paket RADAR.\");\n  if (!document.querySelector('form[name=\"PembuatanSJKBForm\"]')) fail(\"Buka halaman Pembuatan ILS / SJKB di TLS dulu.\");\n\n  \n  const visible = el => !!(el && el.offsetParent !== null);\n  async function waitFor(fn, ms) {\n    const t = Date.now();\n    while (Date.now() - t < ms) { let v = null; try { v = fn(); } catch (e) {} if (v) return v; await sleep(120); }\n    return null;\n  }\n  const setVal = (inp, v) => {\n    const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, \"value\");\n    d.set.call(inp, v);\n    inp.dispatchEvent(new Event(\"input\", { bubbles: true }));\n    inp.dispatchEvent(new Event(\"change\", { bubbles: true }));\n  };\n  const key = (el, name, k, kc) => {\n    const ev = new KeyboardEvent(name, { key: k, code: k, bubbles: true, cancelable: true });\n    Object.defineProperty(ev, \"keyCode\", { get: () => kc });\n    Object.defineProperty(ev, \"which\", { get: () => kc });\n    el.dispatchEvent(ev);\n  };\n  const byModel = m => [...document.querySelectorAll(\".ui-select-container\")].find(c => c.getAttribute(\"ng-model\") === m);\n  const chosenText = c => {\n    const t = c.querySelector(\".ui-select-match-text\");\n    return t && !t.classList.contains(\"ng-hide\") ? t.textContent.trim() : \"\";\n  };\n\n  \n  async function pick(model, label, query, match) {\n    say(\"Mengisi \" + label + \"...\");\n    const c = await waitFor(() => { const x = byModel(model); return x && !x.hasAttribute(\"disabled\") ? x : null; }, 12000);\n    if (!c) fail(label + \": kotak belum aktif (isian sebelumnya belum selesai).\");\n    const tog = c.querySelector(\".ui-select-toggle\");\n    if (!tog) fail(label + \": struktur halaman berbeda dari yang diharapkan.\");\n    tog.click();\n    const inp = await waitFor(() => { const i = c.querySelector(\"input.ui-select-search\"); return visible(i) ? i : null; }, 4000);\n    if (!inp) fail(label + \": kotak cari tidak terbuka.\");\n    inp.focus();\n    setVal(inp, query);\n    let rows = [];\n    await waitFor(() => { rows = [...c.querySelectorAll(\".ui-select-choices-row\")].filter(visible); return rows.length; }, 6000);\n    const hit = rows.find(r => match(r.textContent.trim()));\n    if (!hit) { key(inp, \"keydown\", \"Escape\", 27); fail(label + \" '\" + query + \"' tidak ditemukan di TLS.\"); }\n    hit.click();\n    const ok = await waitFor(() => chosenText(c), 5000);\n    if (!ok) fail(label + \": pilihan tidak tersimpan.\");\n    await sleep(350);\n    return ok;\n  }\n\n  try {\n    \n    await pick(\"me.pembuatanSjkbViewModel.vendor\", \"Vendor\", P.vendor, t => norm(code(t)) === norm(P.vendor));\n    \n    await pick(\"me.pembuatanSjkbViewModel.moda\", \"Moda\", P.moda || \"CC\", t => norm(code(t)) === norm(P.moda || \"CC\"));\n    \n    await pick(\"me.pembuatanSjkbViewModel.modaChild\", \"Tipe Pengiriman\", P.tipe || \"CCUT\", t => norm(code(t)) === norm(P.tipe || \"CCUT\"));\n    \n    await pick(\"me.pembuatanSjkbViewModel.noPolisi\", \"No. Polisi\", P.plat, t => {\n      const a = norm(t), b = norm(P.plat);\n      return a === b || (a.indexOf(b) === 0 && a.slice(b.length).indexOf(\"BLOKIR\") === 0);\n    });\n    \n    const dm = byModel(\"me.pembuatanSjkbViewModel.driver\");\n    await waitFor(() => dm && chosenText(dm), 1800);\n    const cur = dm ? chosenText(dm) : \"\";\n    if (P.driver) {\n      if (!(cur && norm(cur).indexOf(norm(P.driver)) >= 0)) {\n        await pick(\"me.pembuatanSjkbViewModel.driver\", \"Driver\", P.driver, t => norm(t).indexOf(norm(P.driver)) >= 0);\n      }\n    } else if (!cur) fail(\"Driver kosong di data RADAR (jadwal DCCP) dan belum terisi di TLS.\");\n    \n    say(\"Memilih Lokasi Tujuan...\");\n    const radio = document.querySelector('input[type=\"radio\"][name=\"sjkbMethod\"][value=\"Tujuan\"]');\n    if (!radio) fail(\"Pilihan 'Lokasi Tujuan' tidak ditemukan di halaman.\");\n    radio.click();\n    await sleep(400);\n    await pick(\"me.pembuatanSjkbViewModel.location\", \"Tujuan\", P.tujuan || \"NVDCKRW\", t => norm(code(t)) === norm(P.tujuan || \"NVDCKRW\"));\n\n    \n    const frames = () => [...document.querySelectorAll('input[name=\"frameNumber\"]')].filter(visible);\n    if (frames().some(i => i.value)) fail(\"Tabel No. Rangka sudah berisi. Tekan Batal di TLS, lalu ulangi.\");\n    for (let i = 0; i < P.frames.length; i++) {\n      const fno = String(P.frames[i]).trim().toUpperCase();\n      say(\"No. Rangka \" + (i + 1) + \" / \" + P.frames.length + \": \" + fno);\n      const inp = await waitFor(() => frames().find(x => !x.disabled && !x.value), 9000);\n      if (!inp) fail(\"Kotak No. Rangka berikutnya tidak tersedia (baris ke-\" + (i + 1) + \").\");\n      inp.focus();\n      setVal(inp, fno);\n      await sleep(150);\n      key(inp, \"keydown\", \"Enter\", 13);\n      const tr = inp.closest(\"tr\");\n      const done = await waitFor(() => {\n        const st = tr && tr.querySelector('input[name=\"stallName\"]');\n        return st && st.value ? st.value : null;\n      }, 12000);\n      if (!done) fail(\"No. Rangka \" + fno + \" tidak ditemukan atau ditolak TLS.\");\n      await sleep(250);\n    }\n\n    \n    if (P.dry) { say(\"&#9989; MODE TES: terisi \" + P.frames.length + \" unit. Tombol Simpan TIDAK ditekan. Periksa isian, lalu tekan <b>Batal</b> di TLS.\", \"#ffe9a8\"); window.__radarTlsRun = false; return; }\n    say(\"Menekan Simpan...\");\n    const save = await waitFor(() => [...document.querySelectorAll(\"button\")].find(b => /^\\s*Simpan\\s*$/.test(b.textContent) && !b.disabled && visible(b)), 8000);\n    if (!save) fail(\"Tombol Simpan belum aktif. Periksa isian yang masih merah di TLS.\");\n    save.click();\n    say(\"&#9989; Terisi \" + P.frames.length + \" unit. Periksa kotak Konfirmasi TLS, lalu klik <b>YA</b>.\", \"#b6f2c6\");\n    window.__radarTlsRun = false;\n  } catch (e) {\n    window.__radarTlsRun = false;\n    if (!/^Error: RADAR-TLS/.test(String(e))) { say(\"&#9940; Terjadi kesalahan: \" + (e && e.message ? e.message : e), \"#ffb4a8\"); }\n  }\n})();\n  }\n  if (document.getElementById(\"radar_tls_fab\")) return;\n  var b = document.createElement(\"button\");\n  b.id = \"radar_tls_fab\"; b.type = \"button\"; b.textContent = \"\\u26A1 RADAR\\u2192TLS\";\n  b.style.cssText = \"position:fixed;z-index:2147483646;left:14px;bottom:14px;background:#0f2a4a;color:#fff;border:0;border-radius:24px;padding:12px 18px;font:700 14px Arial,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.35);\";\n  b.onclick = function () { radarTlsRun(); };\n  document.body.appendChild(b);\n})();\n";
 function tlsPayload(b){
-  return "RADAR-TLS:"+JSON.stringify({v:1, vendor:tlsVendor(b.lp), plat:b.ccPlat||"", driver:tlsDriver(b), moda:b.moda||"CC", tipe:tlsCfg().tipe, tujuan:tlsCfg().tujuan, frames:b.units.map(u=>String(u.frame||"").trim().toUpperCase())}).replace(/\}$/, tlsCfg().dry?',"dry":true}':"}");
+  return "RADAR-TLS:"+JSON.stringify({v:1, vendor:tlsVendor(b.lp), plat:b.ccPlat||"", driver:tlsDriver(b), moda:tlsModaOf(DB.get(), b), tipe:tlsTipeOf(DB.get(), b), tujuan:tlsCfg().tujuan, frames:b.units.map(u=>String(u.frame||"").trim().toUpperCase())}).replace(/\}$/, tlsCfg().dry?',"dry":true}':"}");
 }
 function tlsCopyPackage(btn){
   const b=window._tlsB; if(!b) return;
   if(b.batam){ alert("ILS Batam diinput manual di TLS."); return; }
   if(b.units.length>6){ alert("Maksimal 6 unit per ILS."); return; }
-  if((b.moda||"CC")==="SC" && b.units.length!==1){ alert("Moda SC hanya untuk 1 unit."); return; }
+  if(tlsModaOf(DB.get(), b)==="SC" && b.units.length!==1){ alert("Moda SC hanya untuk 1 unit."); return; }
   if(!tlsDriver(b) && !confirm("Kode driver belum ada (profil CC / jadwal DCCP). Script akan memakai driver yang terisi otomatis di TLS (kalau ada). Lanjut salin?")) return;
   tlsCopy(tlsPayload(b), btn);
 }
@@ -5920,7 +6012,7 @@ function tlsChromeGo(){
   const b=window._tlsB; if(!b) return;
   if(b.batam){ alert("ILS Batam diinput manual di TLS."); return; }
   if(b.units.length>6){ alert("Maksimal 6 unit per ILS."); return; }
-  if((b.moda||"CC")==="SC" && b.units.length!==1){ alert("Moda SC hanya untuk 1 unit."); return; }
+  if(tlsModaOf(DB.get(), b)==="SC" && b.units.length!==1){ alert("Moda SC hanya untuk 1 unit."); return; }
   if(!tlsDriver(b) && !confirm("Kode driver belum ada (profil CC / jadwal DCCP). Script akan memakai driver yang terisi otomatis di TLS (kalau ada). Lanjut?")) return;
   tlsCopy(encodeURIComponent("window.__RADAR_PKG="+JSON.stringify(tlsPayload(b))+";")+TLS_BM.slice("javascript:".length));
   let u=tlsCfg().ilsUrl||"https://tls.toyota.astra.co.id/PembuatanSJKB"; if(!/^https:\/\//i.test(u)) u="https://tls.toyota.astra.co.id/PembuatanSJKB";
@@ -5951,7 +6043,7 @@ function tlsPcGo(){
   const b=window._tlsB; if(!b) return;
   if(b.batam){ alert("ILS Batam diinput manual di TLS."); return; }
   if(b.units.length>6){ alert("Maksimal 6 unit per ILS."); return; }
-  if((b.moda||"CC")==="SC" && b.units.length!==1){ alert("Moda SC hanya untuk 1 unit."); return; }
+  if(tlsModaOf(DB.get(), b)==="SC" && b.units.length!==1){ alert("Moda SC hanya untuk 1 unit."); return; }
   tlsCopy(tlsPayload(b));
   let u=tlsCfg().ilsUrl||"https://tls.toyota.astra.co.id/PembuatanSJKB"; if(!/^https:\/\//i.test(u)) u="https://tls.toyota.astra.co.id/PembuatanSJKB";
   try{ window.open(u,"_blank"); }catch(e){}
@@ -5963,6 +6055,7 @@ function tlsCopyCode(btn){ const b=window._tlsB; if(!b) return; tlsCopy(encodeUR
 function setTlsModa(id,m){
   const bb=(DB.get().ils||[]).find(x=>x.id===id);
   if(m==="SC" && bb && bb.units.length>1){ alert("Moda SC (Single Carrier) hanya untuk 1 unit. ILS ini berisi "+bb.units.length+" unit, jadi harus CC (1-6 unit)."); return; }
+  { const mm=/^CC([2-5])$/.exec(m); if(mm && bb && bb.units.length!==+mm[1]){ if(!confirm("Moda "+m+" = Car Carrier isi "+mm[1]+", sedangkan ILS ini berisi "+bb.units.length+" unit. Tetap pakai "+m+"?")) return; } }
   DB.set(d=>{ const b=(d.ils||[]).find(x=>x.id===id); if(b) b.moda=m; }); openTLS(id); }
 function openTLS(id){
   const data=DB.get(), b=(data.ils||[]).find(x=>x.id===id); if(!b) return; window._tlsB=b;
@@ -5974,7 +6067,7 @@ function openTLS(id){
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 10px;">Di TLS (halaman Pembuatan ILS / SJKB): ketuk <b>kotak alamat</b>, ketik <b>javascript:</b> lalu <b>tempel</b>, tekan <b>Enter / Go</b>.</p>
     <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:0 0 10px;" onclick="tlsCopyPackage(this)">Salin paket (cara bookmark)</button>
     <p style="font-size:12px;color:var(--text-dim);margin:0 0 8px;">ILS #${b.id} · ${b.units.length} unit. Kalau script tidak jalan, isian di bawah bisa disalin satu per satu ke TLS. Simpan tetap ditekan sendiri di TLS.</p>
-    ${head("vendor","Vendor / LP",tlsVendor(b.lp),"vendor")}<div class="tlsrow"><div class="k">Kode driver</div><div class="v" style="display:flex;gap:6px;"><input id="tlsDrvIn" type="text" value="${escH(tlsDriver(b))}" placeholder="KMDCCDRV302" style="flex:1;min-width:0;text-transform:uppercase;padding:6px 8px;border:1px solid var(--border,#ccd);border-radius:8px;"><button type="button" class="tlscp" onclick="tlsSaveDrv(${b.id},this)">Simpan</button></div></div><div class="tlsrow"><div class="k">Moda</div><div class="v" style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="tlscp ${(b.moda||'CC')==='CC'?'ok':''}" onclick="setTlsModa(${b.id},'CC')">CC - Car Carrier</button><button type="button" class="tlscp ${b.moda==='SC'?'ok':''}" onclick="setTlsModa(${b.id},'SC')">SC - Single Carrier (1 unit)</button></div></div>${head("plat","No. Polisi",b.ccPlat,"plat")}${tlsDriver(b)?head("driver","Driver",tlsDriver(b),"driver"):`<div class="tlsrow"><div class="k">Driver</div><div class="v" style="color:#c0392b;font-size:13px;">Belum ada di jadwal DCCP</div></div>`}${head("tipe","Tipe Pengiriman",tlsCfg().tipe+" - "+tlsCfg().tipeNama,"")}${head("tujuan","Tujuan",tlsCfg().tujuan+" - "+tlsCfg().tujuanNama,"")}
+    ${head("vendor","Vendor / LP",tlsVendor(b.lp),"vendor")}<div class="tlsrow"><div class="k">Kode driver</div><div class="v" style="display:flex;gap:6px;"><input id="tlsDrvIn" type="text" value="${escH(tlsDriver(b))}" placeholder="KMDCCDRV302" style="flex:1;min-width:0;text-transform:uppercase;padding:6px 8px;border:1px solid var(--border,#ccd);border-radius:8px;"><button type="button" class="tlscp" onclick="tlsSaveDrv(${b.id},this)">Simpan</button></div></div><div class="tlsrow"><div class="k">Moda</div><div class="v" style="display:flex;gap:6px;flex-wrap:wrap;">${(()=>{ const md=tlsModaOf(data,b); return [["CC","CC - Car Carrier"],["CC2","CC2"],["CC3","CC3"],["CC4","CC4"],["CC5","CC5"],["SC","SC - Single Carrier (1 unit)"]].map(([k,l])=>`<button type="button" class="tlscp ${md===k?'ok':''}" onclick="setTlsModa(${b.id},'${k}')">${l}</button>`).join(""); })()}${ccIsSC(data,b.ccPlat)?`<div style="width:100%;font-size:11px;color:var(--text-dim);">${escH(b.ccPlat)} terdaftar ${armadaName(armadaOf(data,b.ccPlat))} → otomatis SC.</div>`:""}</div></div>${head("plat","No. Polisi",b.ccPlat,"plat")}${tlsDriver(b)?head("driver","Driver",tlsDriver(b),"driver"):`<div class="tlsrow"><div class="k">Driver</div><div class="v" style="color:#c0392b;font-size:13px;">Belum ada di jadwal DCCP</div></div>`}${head("tipe","Tipe Pengiriman",(()=>{ const t=tlsTipeOf(data,b); return t==="SCUT" ? "SCUT - SINGLE CARRIER UNIT (REGULER)" : t+" - "+tlsCfg().tipeNama; })(),"")}${head("tujuan","Tujuan",tlsCfg().tujuan+" - "+tlsCfg().tujuanNama,"")}
     <div style="display:flex;gap:8px;margin:12px 0 2px;"><button type="button" class="tlscp" style="flex:1;padding:10px;" onclick="tlsCopy(tlsVal(0,'all-frame'),this)">Salin semua Frame No.</button></div>
     <table class="tlstb"><thead><tr><th>No</th><th>Frame No.</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <p style="font-size:11px;color:var(--text-dim);margin:10px 0 0;">Di TLS cukup isi No. Rangka lalu Enter; kolom lain terisi otomatis. Kolom Stall TLS tidak perlu diisi.</p>
@@ -6299,7 +6392,7 @@ function renderKoordinator(){
   const queueCards = data.queue.map((q,idx)=>`
     <div class="card" style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>#${idx+1} · ${q.plat}</b><br><span style="font-size:11px; color:var(--text-dim);">${q.lp}${qDrv(data,q.plat)} · ${ccNextDue(data,q.plat)!=null?"jadwal "+holdHm(ccNextDue(data,q.plat)):new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>${ccQueueCtl(data,idx,q)}</div>
-      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}${ccLockFlagHtml(data,q.plat,q)}
+      ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}${armadaTag(data,q.plat)}
     </div>`).join("");
 
   return `
@@ -9373,7 +9466,7 @@ function parseDccpGrid(grid){
     const nTrip = cTrip>=0 ? Number(row[cTrip]) : NaN;
     const nUnit = cLoad>=0 ? Number(row[cLoad]) : NaN;
     const planTrip = nTrip>0 ? nTrip : (trips.length||1);
-    const planUnit = nUnit>0 ? nUnit : planTrip*6;
+    const planUnit = nUnit>0 ? nUnit : planTrip*unitPerOf(police, cModel>=0?txt(row[cModel]):"");   /* Single Carrier / towing: 1 unit per rit */
     const _dc = cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"";
     out.push({lp: lp || lpFromDrvCode(_dc), police: platFmt(police), model: cModel>=0?txt(row[cModel]):"", driver: cDriver>=0?txt(row[cDriver]):"", drvCode: cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"", schedTime:sched, dest, trips, planTrip, planUnit});
   }
@@ -9486,7 +9579,7 @@ function dccpAddRit(ri){
   const n=(r.planTrip||(trips.length||1));
   if(!confirm("Tambah 1 ritase untuk "+platFmt(r.police)+"?\n\nRitase "+n+" → "+(n+1)+" (unit +6)\nJam ritase tambahan: "+nt+(trips.length?" ("+base+" + "+gap+" menit, "+(G.own?"pola jarak CC ini di DCCP":"jarak umum DCCP")+")":" (sekarang, CC ini belum punya jam ritase)"))) return;
   DB.set(d=>{ const x=(d.dccpSchedule||[])[ri]; if(!x||normPlat(x.police)!==normPlat(r.police)) return;
-    const t=(x.planTrip||((x.trips&&x.trips.length)||1)); x.planTrip=t+1; x.planUnit=(x.planUnit||t*6)+6; x.addRit=(x.addRit||0)+1;
+    const t=(x.planTrip||((x.trips&&x.trips.length)||1)), up=rowUnitPer(x,d); x.planTrip=t+1; x.planUnit=(x.planUnit||t*up)+up; x.addRit=(x.addRit||0)+1;
     const cur=((x.trips&&x.trips.length)?x.trips:(x.schedTime?[x.schedTime]:[])).slice(); if(!cur.includes(nt)) cur.push(nt); x.trips=cur; if(!x.schedTime) x.schedTime=nt; });
   render();
 }
@@ -9497,7 +9590,7 @@ function dccpSubRit(ri){
   if(!confirm("Hapus rit tambahan "+platFmt(r.police)+"?\n\nJam ritase "+last+" dihapus. Ritase "+trips.length+" → "+(trips.length-1)+" (unit -6).")) return;
   DB.set(d=>{ const x=(d.dccpSchedule||[])[ri]; if(!x||normPlat(x.police)!==normPlat(r.police)||!(x.addRit>0)) return;
     const cur=((x.trips&&x.trips.length)?x.trips:(x.schedTime?[x.schedTime]:[])).slice().sort((p,q)=>ccTimeToTs(p,0)-ccTimeToTs(q,0)); if(cur.length<2) return; cur.pop(); x.trips=cur;
-    const t=(x.planTrip||(cur.length+1)); x.planTrip=Math.max(1,t-1); x.planUnit=Math.max(0,(x.planUnit||t*6)-6); x.addRit=x.addRit-1; });
+    const t=(x.planTrip||(cur.length+1)), up=rowUnitPer(x,d); x.planTrip=Math.max(1,t-1); x.planUnit=Math.max(0,(x.planUnit||t*up)-up); x.addRit=x.addRit-1; });
   render();
 }
 function dccpSaveEdit(){
@@ -9517,6 +9610,8 @@ function dccpSaveEdit(){
     return;
   }
   editExecIdx(idx, rec);
+  { const ae=document.getElementById("dfArmada"); if(ae && canKeluarkanCC()){ const v=ae.value, k=normPlat(rec.police), cur=((DB.get().armada||{})[k]||{}).t||"";
+      if(k && v!==cur) DB.set(d=>{ d.armada=(d.armada&&typeof d.armada==="object")?d.armada:{}; if(v) d.armada[k]={t:v, ts:Date.now(), by:(currentUser&&currentUser.name)||""}; else delete d.armada[k]; }); } }
   dccpEditIdx=null; render();
   if(idx===-1){ const r=spotAbsenNow(rec.police, rec.lp); if(r && !r.dup && !r.offline && !r.far) alert("Spot Order "+rec.police+" tersimpan.\n\nCC ini sudah di dekat yard, langsung "+(r.stall?"masuk STALL "+ccLbl(r.stall)+". HP driver berbunyi (perintah masuk).":r.hold?"tercatat di Parkir Luar sampai jam "+holdHm(r.due)+".":"masuk waiting list no. "+r.queue+". HP driver mendapat kabar.")); }
 }
@@ -9670,7 +9765,7 @@ function gantiExec(P){
     const ri=d.dccpSchedule.findIndex(x=>normPlat(x.police)===normPlat(P.old)); const old=d.dccpSchedule[ri]; if(!old){ err="CC "+P.old+" tidak ada di jadwal (jadwal berubah)."; return; }
     const trips=dccpTripList(old), n=chosen.length;
     const pt=(old.planTrip!=null?Number(old.planTrip):trips.length)||trips.length||1;
-    const pu=old.planUnit!=null?Number(old.planUnit):pt*6;
+    const pu=old.planUnit!=null?Number(old.planUnit):pt*rowUnitPer(old);
     const per=pt>0?pu/pt:6;
     const rest=trips.filter(t=>!chosen.includes(t));
     old.trips=rest; old.schedTime=rest[0]||"";
@@ -9687,7 +9782,7 @@ function gantiExec(P){
     const note=`pengganti ${old.police} (rit ${chosen.join(", ")})`+(why?" - "+why:"");
     if(tgt){
       const all=[...new Set([...dccpTripList(tgt), ...chosen])].sort((a,b)=>ccTimeToTs(a,0)-ccTimeToTs(b,0));
-      const tpt=(tgt.planTrip!=null?Number(tgt.planTrip):dccpTripList(tgt).length)||0, tpu=tgt.planUnit!=null?Number(tgt.planUnit):tpt*6;
+      const tpt=(tgt.planTrip!=null?Number(tgt.planTrip):dccpTripList(tgt).length)||0, tpu=tgt.planUnit!=null?Number(tgt.planUnit):tpt*rowUnitPer(tgt);
       tgt.trips=all; tgt.schedTime=all[0]||tgt.schedTime||""; tgt.planTrip=tpt+n; tgt.planUnit=Math.round(tpu+n*per);
       tgt.gantiDari=old.police; tgt.note=((tgt.note?tgt.note+"; ":"")+note);
       if(drv) tgt.driver=drv; if(code) tgt.drvCode=code;
@@ -9880,12 +9975,13 @@ function dccpEditForm(data){
       <label>Plat CC<input id="dfPolice" value="${r.police}" placeholder="B 1234 ABC" ${idx!==-1?'readonly style="background:#F1F3F6;color:#555;"':""}>${idx!==-1?'<span style="display:block;font-size:11px;color:var(--text-dim);font-weight:500;margin-top:2px;">Ganti plat lewat 🔁 CC Pengganti</span>':""}</label>
       <label>LP<input id="dfLP" list="dfLPlist" value="${r.lp}"><datalist id="dfLPlist">${lpOpts}</datalist></label>
       <label>Model<input id="dfModel" value="${r.model||""}"></label>
+      ${(canKeluarkanCC()&&!isViewer())?(()=>{ const m=((DB.get().armada||{})[normPlat(r.police)]||{}).t||""; return `<label>Jenis armada<select id="dfArmada"><option value="" ${!m?"selected":""}>Ikuti DCCP (kolom CC Model)</option><option value="CC" ${m==="CC"?"selected":""}>Car Carrier (maks. 6 unit)</option><option value="SC" ${m==="SC"?"selected":""}>Single Carrier (1 unit)</option><option value="TOW" ${m==="TOW"?"selected":""}>Towing (1 unit)</option></select><span style="display:block;font-size:11px;color:var(--text-dim);font-weight:500;margin-top:2px;">Disimpan per plat, berlaku juga di jadwal berikutnya.</span></label>`; })():""}
       <label>Nama Driver<input id="dfDriver" value="${r.driver||""}"></label>
       ${canSetDrvCode()?`<label>Kode Driver (untuk TLS)<input id="dfDrvCode" value="${r.drvCode||""}" placeholder="KMDCCDRV302" style="text-transform:uppercase;"></label>`:""}
       <label>Jadwal (jam)<input id="dfTime" type="time" value="${r.schedTime||""}"></label>
       <label>Tujuan<input id="dfDest" value="${r.dest||""}"></label>
       <label>Plan ritase<input id="dfTrip" type="number" min="0" value="${r.planTrip!=null?r.planTrip:(idx===-1?1:((r.trips||[]).length||1))}"></label>
-      <label>Plan unit<input id="dfUnit" type="number" min="0" value="${r.planUnit!=null?r.planUnit:(idx===-1?6:(((r.trips||[]).length||1)*6))}"></label>
+      <label>Plan unit<input id="dfUnit" type="number" min="0" value="${r.planUnit!=null?r.planUnit:(idx===-1?6:(((r.trips||[]).length||1)*rowUnitPer(r)))}"></label>
     </div>
     <label style="display:block;margin-top:10px;">Catatan (mis. "pengganti B 9959 KEH — unit bermasalah")<input id="dfNote" value="${r.note||""}"></label>
     <div id="dccpEditMsg" style="margin-top:8px;"></div>
@@ -10404,7 +10500,7 @@ function ccplanCompute(data){
     const times = allT.filter(inShift);
     const filtered = times.length!==allT.length;
     let planTrip = r.planTrip!=null ? Number(r.planTrip) : (allT.length || 1);
-    let planUnit = r.planUnit!=null ? Number(r.planUnit) : planTrip*6;
+    let planUnit = r.planUnit!=null ? Number(r.planUnit) : planTrip*rowUnitPer(r, data);
     if(filtered){ const per = planTrip? planUnit/planTrip : 6; planTrip = times.length; planUnit = Math.round(times.length*per); }
     const dueNow = ldrPeriod==="yesterday" ? planTrip : (times.length ? times.filter(t=>ccTimeToTs(t,dayStart)<=now).length : planTrip);
     const nextT = times.find(t=>ccTimeToTs(t,dayStart)>now) || "";
@@ -13944,7 +14040,7 @@ function ppbjDelHtml(data){
 }
 function ppbjPick(g){
   const d=DB.get(), R=ppbjParked(d);
-  const L=R.ready.filter(z=>(g==="OFF"?isOffKey(z.k):(!isOffKey(z.k) && groupOf(z.k)===g)) && !dfBlockOf(d,z.u.frame)).map(z=>z.k).slice(0,CONFIG.MAX_LOAD_PER_CC);
+  const L=R.ready.filter(z=>(g==="OFF"?isOffKey(z.k):(!isOffKey(z.k) && groupOf(z.k)===g)) && !dfBlockOf(d,z.u.frame)).map(z=>z.k).slice(0,selCap());
   if(!L.length){ alert("Tidak ada unit yang bisa dipilih."); return; }
   deliverySelUnits=L; try{ dlUnitOpen[g]=true; }catch(e){}
   render();
@@ -17895,7 +17991,7 @@ function ccBayRowHtml(data){
     if(!isOpen){
       html += `<div class="ccbay closed" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status" style="color:var(--text-dim);">TUTUP</div></div>`;
     }else if(occ){
-      html += `<div class="ccbay filled" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div></div>`;
+      html += `<div class="ccbay filled" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div>${ccIsSC(data,occ.plat)?`<div class="lp" style="color:#5B3FA8;font-weight:800;">${armadaOf(data,occ.plat)==="TOW"?"TOWING":"SINGLE"} · 1 unit</div>`:""}</div>`;
     }else{
       html += `<div class="ccbay empty" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status">KOSONG</div></div>`;
     }
@@ -17988,7 +18084,7 @@ function rsBuildRows(data, sh, w, ilsShift){
   /* 1. CC terjadwal DCCP */
   (data.dccpSchedule||[]).forEach(r=>{ if(!r || r.extra) return; const k=normPlat(r.police); if(byK.has(k)) return;
     const T=dccpTripList(r), done=dccpDoneCount(r,data), dueN=T.filter(t=>ccTimeToTs(t,dd)<=now).length;
-    const pt=(r.planTrip!=null?Number(r.planTrip):T.length)||T.length, pu=r.planUnit!=null?Number(r.planUnit):pt*6;
+    const pt=(r.planTrip!=null?Number(r.planTrip):T.length)||T.length, pu=r.planUnit!=null?Number(r.planUnit):pt*rowUnitPer(r);
     const x=mk(k,{plat:platFmt(r.police), lp:r.lp||"", driver:r.driver||"", done, tot:T.length, dueN, late: done<dueN && !csRowPaused(data, r.police), r, planU:pu}); });
   /* 2. Spot Order */
   (data.dccpSchedule||[]).forEach(r=>{ if(!r || !r.extra) return; const k=normPlat(r.police), T=dccpTripList(r); let x=byK.get(k);
@@ -18182,7 +18278,6 @@ function renderDisplay(){
       </div>
 
       ${offUnitEntries(data).length?`<div class="y-off">${offListHtml(data,false)}</div>`:""}
-      ${ccLockCardHtml(data)}
       ${csCardHtml(data)}
       ${earlyCardHtml(data)}
       ${holdCardHtml(data,false)}
@@ -18193,7 +18288,7 @@ function renderDisplay(){
         ccQueueAutoBar(data)+data.queue.map((q,i)=>`
           <div style="padding:10px 0; border-bottom:1px solid var(--border);">
             <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><div><b>#${i+1} · ${q.plat}</b> <span style="font-size:11px; color:var(--text-dim);">${qDrv(data,q.plat)} · ${new Date(q.ts).toLocaleTimeString('id-ID')}</span></div>${ccQueueCtl(data,i,q)}</div>
-            ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}${ccLockFlagHtml(data,q.plat,q)}
+            ${q.absenDistKm!=null ? `<div style="font-size:11px; color:var(--green); margin-top:4px;">${q.manual?"✍ Absen manual · ":"📍 Absen "}${q.absenDistKm.toFixed(1)} km dari yard</div>` : (q.manual ? `<div style="font-size:11px; color:var(--gold); margin-top:4px;">✍ Absen manual</div>` : "")}${armadaTag(data,q.plat)}
           </div>
         `).join("")}
         ${ccHoldRowsHtml(data)}
@@ -18248,7 +18343,7 @@ let _lastRaw = null, _lastMinute = -1;
 try{ if(loginShift) setLoginShift(loginShift); }catch(e){}
 fbStart();
 /* tiap pengecekan berdiri sendiri: satu error tidak boleh menghentikan yang lain (mis. popup giliran / dikeluarkan di HP driver) */
-const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>holdRelease(), ()=>ccQueueResort(), ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>ccQueueAdvance(), ()=>ccForceOutCheck(), ()=>ccLastOutCheck(), ()=>ccLastOutBackstop(), ()=>spdAutoPrune(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck(), ()=>koSeatCheck(), ()=>ritNSync(), ()=>lpRepairTick()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
+const _tick3=[()=>checkDraftAlerts(), ()=>checkKoordAlerts(), ()=>spdCheckIncoming(), ()=>{ if(autoLeader()) holdRelease(); }, ()=>{ if(autoLeader()) ccQueueResort(); }, ()=>{ if(autoLeader()) ccLostRepair(); }, ()=>ccPurgeStaleCheck(), ()=>ccQueueFarPurge(), ()=>schedReqCheck(), ()=>tlsLogoutWatch(), ()=>{ if(autoLeader()) ccQueueAdvance(); }, ()=>ccForceOutCheck(), ()=>ccLastOutCheck(), ()=>ccLastOutBackstop(), ()=>spdAutoPrune(), ()=>whyCheck(), ()=>chgCheck(), ()=>naikStallCheck(), ()=>ccWatchSync(), ()=>ccCallCheck(), ()=>ccEvCheck(), ()=>koSeatCheck(), ()=>ritNSync(), ()=>lpRepairTick()];   // popup driver terakhir: membaca hasil pelepasan Parkir Luar / antrean di putaran yang sama
 setInterval(()=>{ if(_koBlk || _dvBlk){ try{ koSeatCheck(); }catch(e){} try{ devSeatCheck(); }catch(e){} return; }
   if(FBS.enabled && !fbFresh()){ try{ devSeatCheck(); }catch(e){} return; }   /* 25 Nov: data HP belum pasti terbaru (baru dibuka / baru kembali dari latar / sinyal putus): otomasi & popup ditunda, tidak bekerja dari data lama */
   _tick3.forEach(f=>{ try{ f(); }catch(e){} }); try{ devSeatCheck(); }catch(e){} }, 3000);   /* Koordinator dijeda: tidak ada pengecekan lain */
