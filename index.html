@@ -1794,7 +1794,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="26 Nov 2026 20.05";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="26 Nov 2026 21.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -7966,6 +7966,7 @@ function regApprove(id){
     ok=true;
   });
   if(!ok) alert("Gagal menyetujui: data berubah di perangkat lain. Coba lagi.");
+  else if(r.role==="delivery"){ try{ (FBS.enabled?sigsEnsure():Promise.resolve()).then(()=>{ sigsAutoMap(); }); }catch(e){} }   /* 26 Nov: akun Delivery baru langsung dapat TTD dari Master kalau namanya cocok */
 }
 function regReject(id){
   const r=regPending().find(x=>x.id===id); if(!r) return;
@@ -8336,6 +8337,22 @@ function esjImport(P){
   });
   render(); alert("Paket TTD e-SJKB terpasang: "+P.people.length+" TTD, Line Head, Group Head Red & White, stempel."+(mapped?"\n"+mapped+" user Delivery otomatis dicocokkan dengan TTD-nya.":"")+"\n\nCek pencocokan PIC Delivery di bawah.");
 }
+/* 26 Nov 21.50: akun Delivery yang dibuat SESUDAH paket TTD diimport (mis. daftar sendiri) dulu tidak pernah dicocokkan dengan Master TTD
+   ("Toto R." = "Toto Riyanto"). Sekarang dicocokkan otomatis tiap menu TTD dibuka & tiap akun Delivery disetujui.
+   Hanya kalau cocoknya SATU nama (dua "Agus" di master → tidak dipasang, pilih manual). */
+function sigsAutoMap(){
+  try{
+    if(!currentUser || !["admin","delivery"].includes(currentUser.role)) return 0;
+    const cand=[{name:sigName("gh_white"),sig:sigGet("gh","white")},{name:sigName("gh_red"),sig:sigGet("gh","red")},{name:sigName("line_main"),sig:sigGet("line","main")}].concat(esjLib().map(x=>({name:x.name,sig:x.sig}))).filter(c=>c.sig && c.name);
+    const todo=[]; esjPicUsers().forEach(u=>{ if(sigGet("mp",u.username)) return;
+      const M=cand.filter(c=>esjSameName(c.name,u.name)||esjSameName(c.name,u.username)); const sig=[...new Set(M.map(c=>c.sig))];
+      if(sig.length===1) todo.push({u, m:M[0]}); });
+    if(!todo.length) return 0;
+    DB.set(d=>{ d.sigs=d.sigs||{}; d.sigs.mp=d.sigs.mp||{}; d.sigs.names=d.sigs.names||{};
+      todo.forEach(({u,m})=>{ const k=sigKey(u.username); if(!d.sigs.mp[k]){ d.sigs.mp[k]=m.sig; d.sigs.names["mp_"+k]=m.name; } }); });
+    return todo.length;
+  }catch(e){ return 0; }
+}
 function esjMapMp(username, libKey){
   const L=esjLib().find(x=>x.k===libKey);
   DB.set(d=>{ d.sigs=d.sigs||{}; d.sigs.mp=d.sigs.mp||{}; d.sigs.names=d.sigs.names||{}; const k=sigKey(username);
@@ -8351,7 +8368,7 @@ function esjSaveCfg(){
 }
 let _sigsUiT=0;
 function renderAdminEsj(){
-  if(FBS.enabled && Date.now()-_sigsUiT>60000){ _sigsUiT=Date.now(); sigsEnsure().then(()=>{ try{ if(activeTab==="admin") render(); }catch(e){} }); }   /* menu TTD: ambil TTD terbaru sekali */
+  if(!FBS.enabled || Date.now()-_sigsUiT>60000){ _sigsUiT=Date.now(); (FBS.enabled?sigsEnsure():Promise.resolve()).then(()=>{ try{ const n=sigsAutoMap(); if(activeTab==="admin" || n) render(); }catch(e){} }); }   /* menu TTD: ambil TTD terbaru sekali + cocokkan akun Delivery baru dengan Master TTD */
   const data=DB.get(), s=data.sigs||{}, lib=esjLib(), cfg=esjCfg(), mps=esjPicUsers();
   return `<div class="card"><h3>🧾 Master e-SJKB</h3>
     <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;">Dipakai untuk membuat e-SJKB (format E-SJKB Converter) dari PDF surat jalan TLS. Pasang sekali dengan <b>paket TTD</b> (.json), lalu cocokkan PIC Delivery dengan user Delivery.</div>
