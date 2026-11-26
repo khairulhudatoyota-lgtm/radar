@@ -1794,7 +1794,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="26 Nov 2026 13.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="26 Nov 2026 14.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -8814,7 +8814,13 @@ function ccCallOk(id){
    dan panggilan stall yang CC-nya sudah dibuatkan ILS tidak dibunyikan / dimunculkan lagi (Delivery maupun HP driver). */
 function seenSet(key, max){ let S; try{ S=new Set(JSON.parse(localStorage.getItem(key)||"[]")); }catch(e){ S=new Set(); }
   return { has:k=>S.has(k), add:k=>{ if(S.has(k)) return; S.add(k); try{ localStorage.setItem(key, JSON.stringify([...S].slice(-(max||200)))); }catch(e){} } }; }
-function ccCallDone(d, x){ const k=normPlat(x.plat); return (d.ils||[]).some(b=>b && normPlat(b.ccPlat)===k && (+b.ts||0)>=(+x.ts||0)-60000); }   /* CC panggilan ini sudah dibuatkan ILS = sudah di stall */
+function ccCallIlsMade(d, x){ const k=normPlat(x.plat); return (d.ils||[]).some(b=>b && normPlat(b.ccPlat)===k && (+b.ts||0)>=(+x.ts||0)-60000); }   /* pengingat "Buat ILS" untuk Delivery: ILS sudah dibuat */
+/* 26 Nov 14.45: popup "perintah masuk" di HP driver. Dulu (25 Nov) popup DIBATALKAN / langsung DITUTUP begitu ada ILS untuk plat itu —
+   padahal Dispatcher biasanya membuat ILS begitu CC dapat stall, SEBELUM driver masuk → driver tidak pernah melihat popup.
+   Sekarang popup baru dianggap selesai kalau ILS untuk STALL INI sudah berjalan lebih dari 10 menit (driver pasti sudah di stall),
+   atau driver menekan OK, atau CC sudah tidak di stall itu. */
+function ccCallDone(d, x){ const k=normPlat(x.plat), now=Date.now();
+  return (d.ils||[]).some(b=>b && normPlat(b.ccPlat)===k && b.status==="open" && !b.outTs && String(b.ccNum)===String(x.stall) && now-(+b.ts||0)>10*60000); }
 const _vwCallSeen=seenSet("radar_vwcallseen", 200);
 const _naikSeen=seenSet("radar_naikseen", 200);
 function naikStallCheck(){
@@ -8824,7 +8830,7 @@ function naikStallCheck(){
     ccCallsList(d).forEach(x=>{
       if(!x || x.src==="absen" || now-x.ts>10*60000 || _naikSeen.has(x.id)) return;
       const cur=d.cc[x.stall]; if(!cur || normPlat(cur.plat)!==normPlat(x.plat)) return;
-      if(ccCallDone(d, x)){ _naikSeen.add(x.id); return; }   /* ILS sudah dibuat: tidak perlu diingatkan */
+      if(ccCallIlsMade(d, x)){ _naikSeen.add(x.id); return; }   /* ILS sudah dibuat: tidak perlu diingatkan */
       _naikSeen.add(x.id);
       const txt=`CC ${x.plat}${cur.lp?" (LP "+cur.lp+")":""} dapat giliran masuk Stall CC ${ccLbl(x.stall)}. Siapkan unit dan buat ILS.`;
       soundEv('naikstall', txt); if(navigator.vibrate) navigator.vibrate([300,150,300]);
