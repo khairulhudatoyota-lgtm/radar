@@ -1554,7 +1554,7 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["armada","unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueMoveLog","reabsenMax","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
+const FB_KEYS_ALL=["armada","unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueLockMin","queueMoveLog","reabsenMax","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
 const FB_LITE={
   cc:         { skip:["autoLead","online","errDev","manifest","unitOutLog","unitScrap","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
   dispatcher: { skip:["autoLead","funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
@@ -1794,7 +1794,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="26 Nov 2026 09.00";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="26 Nov 2026 09.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4553,16 +4553,41 @@ function keluarkanNoDccp(){
     ks.forEach(k=>ccDropPlat(d,k)); d.ccOutLog=capLog(d.ccOutLog,200); });
   render();
 }
+function ccQueueLockMin(d){ const x=(d||DB.get()).queueLockMin, v=Number(x); return (x!=null && x!=="" && isFinite(v) && v>=0) ? v : 15; }
+function ccQin(q){ return typeof q.qin==="number" ? q.qin : (+q.ts||0); }   /* jam masuk waiting list (data lama: jam absen) */
 function ccQueueSort(d){
-  /* Rit pertama: jam efektif (jadwal DCCP, toleransi telat). Rit ke-2 dst: jam jadwal hanya perkiraan, jadi berdasarkan KEDATANGAN;
-     kalau dua CC tiba berdekatan (< 5 menit), yang rit-nya lebih sedikit didahulukan. */
-  const rit=q=>ccRitDone(d,q.plat);
-  const _part=ilsOwnOnly(), _me=_part?myCcPlatKey():"";   /* HP Driver: jam efektif CC lain memakai nilai yang sudah dihitung HP berdata lengkap */
-  /* Rit pertama: urutan Jadwal DCCP (jam jadwal, lalu urutan baris di DCCP), tidak peduli siapa yang lebih dulu tiba. */
-  (d.queue||[]).forEach(q=>{ if(_part && normPlat(q.plat)!==_me && typeof q.due==="number") return; const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; } if(rit(q)>=1){ q.due=(q.ts||0); return; } const du=ccNextDue(d,q.plat); q.due = du!=null ? du : (q.ts||0); });
+  /* 26 Nov 2026 (Khairul): URUTAN WAITING LIST
+     1. Change Shift & urutan manual Delivery (📌) paling atas; "taruh belakang" paling bawah (seperti sebelumnya)
+     2. rit selesai LEBIH SEDIKIT didahulukan
+     3. rit sama → jam jadwal DCCP rit berikutnya lebih awal (paling tertinggal) didahulukan; rit pertama jam sama → urutan baris DCCP
+     4. sama → yang absen duluan
+     5. PERLINDUNGAN: CC hanya bisa disalip CC yang masuk waiting list < ccQueueLockMin() menit (bawaan 15) sesudahnya.
+        Yang sudah menunggu selama itu tidak bisa disalip siapa pun.
+     Dihitung ulang dari awal tiap kali: CC dimasukkan satu per satu menurut jam masuk waiting list, lalu boleh maju melewati CC di
+     depannya selama CC itu belum terlindungi dan aturan 2–4 memihaknya. Hasilnya tetap sama selama rit/jadwal tidak berubah. */
+  const Q=d.queue; if(!Array.isArray(Q) || !Q.length) return;
+  const _part=ilsOwnOnly(), _me=_part?myCcPlatKey():"";   /* HP Driver (data ILS sebagian): rit & jadwal CC lain memakai nilai dari HP berdata lengkap */
+  Q.forEach(q=>{ if(!q) return;
+    if(_part && normPlat(q.plat)!==_me && typeof q.rit==="number" && typeof q.due==="number") return;
+    q.rit=ccRitDone(d,q.plat)||0;
+    const cs=csActive(d,q.plat); if(cs){ q.due=cs.ts-1e13; return; }
+    const du=ccNextDue(d,q.plat); q.due = du!=null ? du : (+q.ts||0); });
   const dIdx=q=>{ const i=(d.dccpSchedule||[]).findIndex(r=>normPlat(r.police)===normPlat(q.plat)); return i<0?9e6:i; };
-  /* BATCH: CC dengan jam jadwal yang sama = satu batch. Batch lebih awal masuk dulu, lalu batch berikutnya. Dalam satu batch: rit lebih sedikit dulu, lalu yang lebih dulu tiba. */
-  d.queue.sort((a,b)=>{ if(a.mo!=null||b.mo!=null){ if(a.mo!=null&&b.mo!=null&&a.mo!==b.mo) return a.mo-b.mo; if(a.mo==null) return 1; if(b.mo==null) return -1; } if(!!a.bk!==!!b.bk) return a.bk?1:-1; if(a.bk&&b.bk&&a.bk!==b.bk) return a.bk-b.bk; const da=a.due||0, db=b.due||0; if(da>-1e12 && db>-1e12){ if(Math.abs(da-db)<2*60000){ const ra=rit(a), rb=rit(b); if(ra!==rb) return ra-rb; if(ra===0){ const ia=dIdx(a), ib=dIdx(b); if(ia!==ib) return ia-ib; } if(da===db) return (a.ts||0)-(b.ts||0); } } return da-db || ((a.ts||0)-(b.ts||0)); });
+  const LOCK=ccQueueLockMin(d)*60000;
+  const better=(e,a)=>{   /* e berhak di depan a? */
+    const ec=(e.due||0)<=-1e12, ac=(a.due||0)<=-1e12; if(ec!==ac) return ec; if(ec) return (e.due||0)<(a.due||0);   /* Change Shift */
+    const re=e.rit||0, ra=a.rit||0; if(re!==ra) return re<ra;
+    const de=e.due||0, da=a.due||0; if(Math.abs(de-da)>=2*60000) return de<da;   /* jam jadwal sama (selisih < 2 menit) = satu batch */
+    if(re===0){ const ie=dIdx(e), ia=dIdx(a); if(ie!==ia) return ie<ia; }
+    return (+e.ts||0)<(+a.ts||0);
+  };
+  const L=Q.filter(Boolean);
+  const mo=L.filter(q=>q.mo!=null).sort((a,b)=>a.mo-b.mo);
+  const bk=L.filter(q=>q.mo==null && q.bk).sort((a,b)=>((a.bk||0)-(b.bk||0)) || ((+a.ts||0)-(+b.ts||0)));
+  const rest=L.filter(q=>q.mo==null && !q.bk).sort((a,b)=>(ccQin(a)-ccQin(b)) || ((+a.ts||0)-(+b.ts||0)));
+  const res=[];
+  rest.forEach(e=>{ let p=res.length; while(p>0){ const a=res[p-1]; if(ccQin(e)-ccQin(a)>=LOCK) break; if(!better(e,a)) break; p--; } res.splice(p,0,e); });
+  Q.splice(0, Q.length, ...mo, ...res, ...bk);
 }
 /* Stall kosong + ada CC di waiting list yang sudah dekat → panggil. Dipanggil berkala (CC yang tadinya jauh dan sekarang sudah dekat). */
 /* Susun ulang waiting list menurut aturan DCCP kalau urutannya belum sesuai (mis. CC yang absen sebelum aturan berubah). Hanya perangkat Delivery/Admin; tidak menyentuh urutan manual (📌). */
@@ -4624,7 +4649,7 @@ function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut ja
       else if(dec && !d.cc[dec]) assigned=dec;
       else if(dec===0 || (dec && d.cc[dec])) assigned=null; } }
   if(assigned){ d.cc[assigned]={plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:Date.now(), absenTs:item.ts||Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual}; return {stall:assigned}; }
-  d.queue.push({plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:item.ts||Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual});
+  d.queue.push({plat:item.plat, lp:item.lp, drvCode:item.drvCode||"", ts:item.ts||Date.now(), qin:(item.back && item.ts) ? +item.ts : Date.now(), absenDistKm:item.absenDistKm, auto:!!item.auto, manual:!!item.manual});   /* qin: dipulihkan (hilang) = jam absen awal, supaya kembali ke tempatnya */
   ccQueueSort(d);
   const pos=d.queue.findIndex(q=>normPlat(q.plat)===normPlat(item.plat));
   return {queue:pos+1};
@@ -4862,7 +4887,7 @@ function ccMyPosHtml(data){
   try{
     if(!currentUser || (currentUser.role!=="cc" && !vaOn())) return "";
     const k=myCcPlatKey(); if(!k) return "";
-    const rule=`<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Urutan masuk mengikuti <b>jadwal DCCP</b>. Kecepatan dan jarak <b>tidak</b> mempengaruhi urutan, jadi tidak perlu mengebut atau menyalip.</div>`;
+    const rule=`<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Urutan: <b>rit lebih sedikit</b> dulu, lalu <b>jadwal DCCP</b> paling awal, lalu yang absen duluan. Yang sudah menunggu ${ccQueueLockMin(data)} menit tidak bisa disalip. Kecepatan dan jarak <b>tidak</b> mempengaruhi urutan, jadi tidak perlu mengebut atau menyalip.</div>`;
     const box=(col,bg,t,sub)=>`<div class="card" style="border:2px solid ${col};background:${bg};"><div style="font-size:12px;color:var(--text-dim);">Urutan kamu</div><div style="font-size:22px;font-weight:900;line-height:1.2;">${t}</div>${sub?`<div style="font-size:13px;margin-top:2px;">${sub}</div>`:""}${rule}</div>`;
     const st=Object.keys(data.cc||{}).find(n=>data.cc[n] && normPlat(data.cc[n].plat)===k);
     if(st) return box("#1E9E5A","#E7F6EC",`✅ Kamu di Stall ${ccLbl(st)}`,"Silakan loading. Jangan jalan sebelum Delout.");
@@ -8950,6 +8975,7 @@ function keluarkanWL(n, toBack){
     ccDropPlat(d, cur.plat);
     if((d.queue||[]).length){ const next=ccQueueTake(d); if(next){ d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d, next, n); } }
     const it={plat:cur.plat, lp:cur.lp||"", drvCode:cur.drvCode||"", ts:+cur.absenTs||+cur.ts||Date.now(), auto:!!cur.auto, manual:!!cur.manual, wlBy:(currentUser&&currentUser.name)||"", wlTs:Date.now()};
+    it.qin=it.ts;   /* 26 Nov: "tetap" = kembali ke tempatnya (terlindungi seperti sebelum dipanggil) */
     if(toBack) it.bk=Date.now();
     d.queue=(d.queue||[]).concat([it]); ccQueueSort(d);
   });
@@ -14773,7 +14799,7 @@ function renderAdmin(){
         <div id="yardLocMsg"></div>
         ${blk("yard","Titik absensi",yp)}
         <div class="field"><label>Radius absen (km)</label><input id="yardRadius" type="text" value="${y.radiusKm ?? 5}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Semakin kecil semakin ketat. Pilih radius yang <b>tidak mencakup NVDC / jalan luar</b> (mis. 1–2 km), supaya CC yang masih di luar tidak terabsen.</div></div>
-        <div class="field"><label>Batas tunggu absen ulang sesudah Delout / dikeluarkan (menit)</label><input id="reabsenMax" type="text" value="${ccReabsenMin(data)}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Sesudah Delout / dikeluarkan, CC absen lagi otomatis begitu terlihat keluar radius lalu kembali. Kalau tidak terlihat keluar (GPS mati, parkir dekat yard), absen dibuka paling lambat sesudah sekian menit. Bawaan 60.</div></div>
+        <div class="field"><label>Batas tunggu absen ulang sesudah Delout / dikeluarkan (menit)</label><input id="reabsenMax" type="text" value="${ccReabsenMin(data)}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Sesudah Delout / dikeluarkan, CC absen lagi otomatis begitu terlihat keluar radius lalu kembali. Kalau tidak terlihat keluar (GPS mati, parkir dekat yard), absen dibuka paling lambat sesudah sekian menit. Bawaan 60.</div><label style="margin-top:10px;">Perlindungan antrean (menit)</label><input id="queueLockMin" type="text" value="${ccQueueLockMin(data)}"><div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Waiting list: rit lebih sedikit dulu, lalu jadwal DCCP paling awal, lalu yang absen duluan. CC yang sudah menunggu sekian menit tidak bisa disalip lagi. Bawaan 15.</div></div>
         <div class="field" style="border:1px solid var(--border);border-radius:10px;padding:10px;"><label>🔒 Aturan absen ketat</label>
           <div style="font-size:11px;color:var(--text-dim);margin:4px 0 8px;">Kunci absen otomatis sampai tiba di NVDC sesudah Delout (✍ Absenkan oleh Delivery/Admin tetap bisa), absen mati kalau ritase habis, satu driver satu truk, dan penjaga yang mengeluarkan plat otomatis. Nyalakan hanya kalau GPS semua driver sudah terpantau sampai NVDC.</div>
           <button type="button" class="btn ${ccStrict(data)?'btn-primary':'btn-outline'} btn-sm" onclick="ccStrictToggle()">${ccStrict(data)?'● NYALA — tekan untuk mematikan':'○ MATI — tekan untuk menyalakan'}</button></div>
@@ -17620,8 +17646,8 @@ function saveYardLocation(){
   const radius = parseFloat(document.getElementById("yardRadius").value);
   const msgEl = document.getElementById("yardLocMsg");
   if(!p){ msgEl.innerHTML = `<div class="msg err">Titik absensi belum valid. Format: -6.xxxxx, 107.xxxxx</div>`; return; }
-  const rb=parseFloat((document.getElementById("reabsenMax")||{}).value);
-  DB.set(d=>{ d.yardLocation = {lat:p.lat, lng:p.lng, radiusKm: (isNaN(radius)||radius<=0)?5:radius}; if(isFinite(rb)&&rb>=10) d.reabsenMax=rb; });
+  const rb=parseFloat((document.getElementById("reabsenMax")||{}).value), qlm=parseFloat((document.getElementById("queueLockMin")||{}).value);
+  DB.set(d=>{ d.yardLocation = {lat:p.lat, lng:p.lng, radiusKm: (isNaN(radius)||radius<=0)?5:radius}; if(isFinite(rb)&&rb>=10) d.reabsenMax=rb; if(isFinite(qlm)&&qlm>=0&&qlm<=240) d.queueLockMin=qlm; });
   alert("Lokasi absensi tersimpan.");
 }
 /* ---- Kalibrasi area stall: Admin berjalan keliling, aplikasi merekam jejak GPS ---- */
