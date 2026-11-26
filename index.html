@@ -1166,7 +1166,7 @@ function normalizeData(raw){
   });
   const toObj = v=>{ if(Array.isArray(v)){ const o={}; v.forEach((x,i)=>{ if(x!==null && x!==undefined) o[i]=x; }); return o; } return v || {}; };
   d.cc = toObj(d.cc); for(let i=1;i<=CONFIG.CC_TOTAL;i++){ if(d.cc[i]===undefined) d.cc[i] = null; }
-  d.ccOpen = toObj(d.ccOpen);
+  d.ccOpen = toObj(d.ccOpen); d.ccOff = toObj(d.ccOff);
   d.units = d.units || {};
   for(const k of Object.keys(seed.units)){ if(d.units[k]===undefined) d.units[k] = null; }
   (d.ils||[]).forEach(b=>{ if(b && !Array.isArray(b.units)) b.units = b.units ? Object.values(b.units) : []; if(b && arrGappy(b.units)) b.units=b.units.filter(Boolean); if(b && Array.isArray(b.loadSnap) && arrGappy(b.loadSnap)) b.loadSnap=b.loadSnap.filter(Boolean); });
@@ -1554,7 +1554,7 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["armada","unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueLockMin","queueMoveLog","reabsenMax","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
+const FB_KEYS_ALL=["armada","unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueLockMin","ccOff","stallLog","queueMoveLog","reabsenMax","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
 const FB_LITE={
   cc:         { skip:["autoLead","online","errDev","manifest","unitOutLog","unitScrap","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
   dispatcher: { skip:["autoLead","funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
@@ -1794,7 +1794,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="26 Nov 2026 09.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="26 Nov 2026 10.20";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4258,14 +4258,14 @@ function ccCardsHtml(data){
   let html = "";
   for(let i=1;i<=CONFIG.CC_TOTAL;i++){
     const isEmergency = CONFIG.CC_EMERGENCY.includes(i);
-    const isOpen = !isEmergency || data.ccOpen[i];
+    const isOpen = ccStallOpen(data, i);
     const occ = data.cc[i];
-    if(!isOpen){
-      html += `<div class="cccard closed"><div class="num">STALL ${ccLbl(i)}</div><div class="status" style="color:var(--text-dim);">DITUTUP</div><div class="lp">Cadangan/darurat</div></div>`;
+    if(!isOpen && !occ){
+      html += `<div class="cccard closed"><div class="num">STALL ${ccLbl(i)}</div><div class="status" style="color:var(--text-dim);">${isEmergency?"DITUTUP":"MATI"}</div><div class="lp">${isEmergency?"Cadangan/darurat":"Tidak dipakai"}</div>${stallBtn(data,i)}</div>`;
     }else if(occ){
-      html += `<div class="cccard filled"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div>${ccIsSC(data,occ.plat)?`<div class="lp" style="color:#5B3FA8;font-weight:800;">${armadaOf(data,occ.plat)==="TOW"?"TOWING":"SINGLE"} · 1 unit</div>`:""}</div>`;
+      html += `<div class="cccard filled"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div>${!isOpen?`<div class="lp" style="color:var(--red);font-weight:800;">⏻ mati sesudah Delout</div>`:""}<div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div>${ccIsSC(data,occ.plat)?`<div class="lp" style="color:#5B3FA8;font-weight:800;">${armadaOf(data,occ.plat)==="TOW"?"TOWING":"SINGLE"} · 1 unit</div>`:""}${stallBtn(data,i)}</div>`;
     }else{
-      html += `<div class="cccard empty"><div class="num">STALL ${ccLbl(i)}</div><div class="status">KOSONG</div><div class="lp">TERSEDIA</div></div>`;
+      html += `<div class="cccard empty"><div class="num">STALL ${ccLbl(i)}</div><div class="status">KOSONG</div><div class="lp">TERSEDIA</div>${stallBtn(data,i)}</div>`;
     }
   }
   return html;
@@ -4464,7 +4464,30 @@ function ccFirstBatch(d, plat){
     return dccpDoneCount(m.r, d)===0;
   }catch(e){ return false; }
 }
-function ccFreeStalls(d){ const order=[...CONFIG.CC_ACTIVE_DEFAULT]; CONFIG.CC_EMERGENCY.forEach(n=>{ if(d.ccOpen&&d.ccOpen[n]) order.push(n); }); return order.filter(n=>!(d.cc||{})[n]).length; }
+/* 26 Nov 2026: tombol ON/OFF untuk SEMUA stall (dulu hanya stall darurat).
+   Stall biasa (CC_ACTIVE_DEFAULT) menyala kecuali d.ccOff[n]; stall darurat (CC_EMERGENCY) menyala kalau d.ccOpen[n].
+   Mematikan stall yang sedang terisi TIDAK mengeluarkan CC-nya: CC tetap loading sampai Delout, sesudah itu stall dibiarkan kosong. */
+function ccStallOpen(d, n){ n=+n; return CONFIG.CC_EMERGENCY.includes(n) ? !!((d&&d.ccOpen)||{})[n] : !((d&&d.ccOff)||{})[n]; }
+function ccOpenStalls(d){ return [...CONFIG.CC_ACTIVE_DEFAULT.filter(n=>ccStallOpen(d,n)), ...CONFIG.CC_EMERGENCY.filter(n=>ccStallOpen(d,n))]; }
+function canStallToggle(){ return !!(currentUser && ["admin","delivery","koordinator"].includes(currentUser.role) && !isViewer()); }
+function toggleStall(n){
+  if(!canStallToggle()) return; n=+n;
+  const d0=DB.get(), on=ccStallOpen(d0,n), occ=(d0.cc||{})[n], lbl=ccLbl(n);
+  if(on){
+    if(!confirm("Matikan STALL "+lbl+"?"+(occ?"\n\n"+occ.plat+" yang ada di stall ini TETAP loading sampai Delout. Sesudah itu stall dibiarkan kosong (tidak dipanggil CC baru).":"\n\nCC di waiting list tidak akan dipanggil ke stall ini."))) return;
+  }
+  DB.set(d=>{
+    const em=CONFIG.CC_EMERGENCY.includes(n);
+    if(em){ d.ccOpen=(d.ccOpen&&typeof d.ccOpen==="object")?d.ccOpen:{}; d.ccOpen[n]=!on; }
+    else { d.ccOff=(d.ccOff&&typeof d.ccOff==="object")?d.ccOff:{}; if(on) d.ccOff[n]=true; else delete d.ccOff[n]; }
+    d.stallLog=capLog((Array.isArray(d.stallLog)?d.stallLog:[]).concat([{ts:Date.now(), n, lbl, on:!on, plat:(d.cc||{})[n]?d.cc[n].plat:"", by:(currentUser&&currentUser.name)||""}]),60);
+    if(!on && !(d.cc||{})[n] && (d.queue||[]).length){ const nx=ccQueueTake(d); if(nx){ d.cc[n]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now(), absenTs:nx.ts||Date.now()}; pushCcCall(d, nx, n); } }   /* dinyalakan: langsung panggil CC berikutnya */
+  });
+  render();
+}
+function toggleEmergency(num){ toggleStall(num); }
+function stallBtn(data, n){ return canStallToggle() ? `<button type="button" onclick="event.stopPropagation();toggleStall(${n})" style="margin-top:6px;border:1px solid ${ccStallOpen(data,n)?"var(--red)":"#1E9E5A"};color:${ccStallOpen(data,n)?"var(--red)":"#1E9E5A"};background:#fff;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:800;">⏻ ${ccStallOpen(data,n)?"Matikan":"Nyalakan"}</button>` : ""; }
+function ccFreeStalls(d){ return ccOpenStalls(d).filter(n=>!(d.cc||{})[n]).length; }
 function ccFirstBatchIn(d, plat){ return !(d.queue||[]).length && ccFreeStalls(d)>0 && dccpCurrentOk(d) && ccFirstBatch(d, plat); }
 function ccHoldDue(d, plat){   // ts jadwal bila CC ini masih harus menunggu di luar, selain itu null
   if(csActive(d,plat)) return null;   // Change Shift: prioritas, tanpa menunggu jadwal
@@ -4512,7 +4535,7 @@ function ccQueueTake0(d){
   q.splice(q.indexOf(pick),1); return pick;
 }
 function ccRitDone(d, plat){ const r=(d.dccpSchedule||[]).find(x=>normPlat(x.police)===normPlat(plat)); return r ? dccpDoneCount(r,d) : 0; }
-function ccActiveStalls(d){ return CONFIG.CC_ACTIVE_DEFAULT.length + CONFIG.CC_EMERGENCY.filter(n=>d.ccOpen&&d.ccOpen[n]).length; }
+function ccActiveStalls(d){ return ccOpenStalls(d).length; }
 const CC_ETA_KMH=30;   // kecepatan rata-rata CC menuju yard untuk perkiraan tiba
 function ccEtaSkipMin(d){ const v=Number((d||DB.get()).etaSkipMin); return isFinite(v)&&v>=0 ? v : 5; }   // CC yang perkiraan tibanya lebih dari ini tidak ditunggu kalau ada yang sudah dekat
 function ccLoadMin(d){ const v=Number((d||DB.get()).loadMin); return isFinite(v)&&v>=5 ? v : 15; }   // rata-rata waktu loading per CC
@@ -4628,11 +4651,11 @@ function ccQueueAdvance(){
   try{
     if(!trkLive() || ilsOwnOnly()) return;   /* hanya HP yang menerima posisi CC realtime (Delivery/Koordinator/Display atau Driver yang membuka peta) */
     const d0=DB.get(); if(!(d0.queue||[]).length) return;
-    const order=[...CONFIG.CC_ACTIVE_DEFAULT]; CONFIG.CC_EMERGENCY.forEach(n=>{ if(d0.ccOpen&&d0.ccOpen[n]) order.push(n); });
+    const order=ccOpenStalls(d0);
     if(!order.some(n=>!d0.cc[n])) return;
     if(!d0.queue.some(q=>!ccFarNow(d0,q.plat))) return;
     DB.set(d=>{
-      for(const n of order){ if(d.cc[n]) continue; const nx=ccQueueTake(d); if(!nx) break;
+      for(const n of ccOpenStalls(d)){ if(d.cc[n]) continue; const nx=ccQueueTake(d); if(!nx) break;
         d.cc[n]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now(), absenTs:nx.ts||Date.now()}; pushCcCall(d, nx, n); }
     });
   }catch(e){}
@@ -4640,8 +4663,7 @@ function ccQueueAdvance(){
 function placeCC(d, item){   // taruh ke stall kosong atau waiting list (urut jadwal). Return {stall:n}|{queue:n}
   { const k=normPlat(item.plat);   /* pintu terakhir: satu plat hanya sekali (sudah di stall/antrian/ILS aktif, atau sudah Delout tapi belum tiba di NVDC → tidak dimasukkan) */
     if(Object.values(d.cc||{}).some(c=>c && normPlat(c.plat)===k) || (d.queue||[]).some(q=>q && normPlat(q.plat)===k) || (d.ils||[]).some(x=>x && x.status==="open" && !x.outTs && normPlat(x.ccPlat)===k)) return {dup:true}; }
-  let order=[...CONFIG.CC_ACTIVE_DEFAULT];
-  CONFIG.CC_EMERGENCY.forEach(n=>{ if(d.ccOpen[n]) order.push(n); });
+  let order=ccOpenStalls(d);
   let assigned=null; if(!ccNoDccp(d, item)) for(const n of order){ if(!d.cc[n]){ assigned=n; break; } }   /* 26 Nov: tidak ada di DCCP → waiting list (tanda merah), tidak dipanggil */
   { const M=_mutMemo, pk=normPlat(item.plat);   /* 25 Nov: tempat yang dipilih pertama kali (stall n / waiting list) dipakai lagi saat dihitung ulang */
     if(M && M.place){ const dec=M.place[pk];
@@ -6443,17 +6465,17 @@ function renderKoordinator(){
   let cards = "";
   for(let i=1;i<=CONFIG.CC_TOTAL;i++){
     const isEmergency = CONFIG.CC_EMERGENCY.includes(i);
-    const isOpen = !isEmergency || data.ccOpen[i];
+    const isOpen = ccStallOpen(data, i);
     const occ = data.cc[i];
     cards += `<div class="card" style="margin-bottom:10px;">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <div>
           <b>Stall CC ${ccLbl(i)}</b> ${isEmergency?'<span class="badge gold">Darurat</span>':''}<br>
           <span style="font-size:12px; color:var(--text-dim);">
-            ${!isOpen ? 'Ditutup oleh Admin' : (occ ? `${occ.plat} · ${occ.lp}` : 'Kosong / Tersedia')}
+            ${occ ? `${occ.plat} · ${occ.lp}${!isOpen?' · ⏻ mati sesudah Delout':''}` : (!isOpen ? (isEmergency?'Ditutup (darurat)':'Dimatikan') : 'Kosong / Tersedia')}
           </span>
         </div>
-        ${occ ? (lpMine(occ.lp) ? `<button class="btn btn-danger btn-sm" onclick="kosongkanCC(${i})">Kosongkan</button>` : `<span style="font-size:11px;color:var(--text-dim);">LP lain</span>`) : ''}
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">${occ ? (lpMine(occ.lp) ? `<button class="btn btn-danger btn-sm" onclick="kosongkanCC(${i})">Kosongkan</button>` : `<span style="font-size:11px;color:var(--text-dim);">LP lain</span>`) : ''}${stallBtn(data,i)}</div>
       </div>
     </div>`;
   }
@@ -6567,7 +6589,7 @@ function delout(id){
     ccDropPlat(d, x.ccPlat);   /* sisa antrian / Parkir Luar plat yang sama (dobel) ikut dihapus: tidak boleh naik lagi ke stall yang baru ditinggalkan */
     if(c && normPlat(c.plat)===normPlat(x.ccPlat)){
       snap.cc=c; ccMarkLeft(d,c); d.cc[x.ccNum]=null;
-      if(d.queue.length){ const nx=ccQueueTake(d); if(nx){ snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now(), absenTs:nx.ts||Date.now()}; pushCcCall(d, nx, x.ccNum); } }
+      if(d.queue.length && ccStallOpen(d, x.ccNum)){ const nx=ccQueueTake(d); if(nx){ snap.promoted=nx; d.cc[x.ccNum]={plat:nx.plat, lp:nx.lp, drvCode:nx.drvCode||"", ts:Date.now(), absenTs:nx.ts||Date.now()}; pushCcCall(d, nx, x.ccNum); } }
     }
     d.manifest=d.manifest||[];
     if(!d.manifest.some(m=>m.id===x.id)) d.manifest.push(mfRecord(d,x));
@@ -8857,7 +8879,7 @@ function ccEvPending(d, k){
   return L.sort((a,b)=>b.ts-a.ts);
 }
 function ccStallFill(d){   // stall aktif yang sedang terisi CC
-  const N=[...CONFIG.CC_ACTIVE_DEFAULT, ...CONFIG.CC_EMERGENCY.filter(n=>d.ccOpen&&d.ccOpen[n])];
+  const N=ccOpenStalls(d);
   return {used:N.filter(n=>d.cc&&d.cc[n]).length, tot:N.length};
 }
 function ccNoEnterHtml(d, w){   // peringatan untuk CC di waiting list
@@ -8973,7 +8995,7 @@ function keluarkanWL(n, toBack){
     d.ccOutLog=capLog(d.ccOutLog,200);
     d.cc[n]=null;
     ccDropPlat(d, cur.plat);
-    if((d.queue||[]).length){ const next=ccQueueTake(d); if(next){ d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d, next, n); } }
+    if((d.queue||[]).length && ccStallOpen(d, n)){ const next=ccQueueTake(d); if(next){ d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d, next, n); } }
     const it={plat:cur.plat, lp:cur.lp||"", drvCode:cur.drvCode||"", ts:+cur.absenTs||+cur.ts||Date.now(), auto:!!cur.auto, manual:!!cur.manual, wlBy:(currentUser&&currentUser.name)||"", wlTs:Date.now()};
     it.qin=it.ts;   /* 26 Nov: "tetap" = kembali ke tempatnya (terlindungi seperti sebelum dipanggil) */
     if(toBack) it.bk=Date.now();
@@ -9003,7 +9025,7 @@ function keluarkanCC1(n){
     d.ccOutLog=d.ccOutLog||[]; d.ccOutLog.push({ts:Date.now(), plat:cur.plat, lp:cur.lp||"", ccNum:n, why:String(why).trim(), by:(currentUser&&currentUser.name)||"", ilsId});
     d.ccOutLog=capLog(d.ccOutLog,200);
     ccMarkLeft(d,cur); d.cc[n]=null; ccDropPlat(d, cur.plat);
-    if(d.queue.length>0){ const next=ccQueueTake(d); if(next){ d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d, next, n); } }
+    if(d.queue.length>0 && ccStallOpen(d, n)){ const next=ccQueueTake(d); if(next){ d.cc[n]={plat:next.plat, lp:next.lp, drvCode:next.drvCode||"", ts:Date.now(), absenTs:next.ts||Date.now()}; pushCcCall(d, next, n); } }
   });
   if(ils){ try{ if(sjCanStore()) FBS.db.ref(SJ_PATH+"/"+ils.id).remove(); }catch(e){} }
   render();
@@ -9020,14 +9042,11 @@ function kosongkanCC(num){
     ccMarkLeft(d, d.cc[num]);
     if(d.cc[num]) ccDropPlat(d, d.cc[num].plat);
     d.cc[num] = null;
-    if(d.queue.length>0){
+    if(d.queue.length>0 && ccStallOpen(d, num)){
       const next = ccQueueTake(d);
       if(next){ d.cc[num] = {plat: next.plat, lp: next.lp, drvCode: next.drvCode||"", ts: Date.now(), absenTs: next.ts||Date.now()}; pushCcCall(d, next, num); }
     }
   });
-}
-function toggleEmergency(num){
-  DB.set(d=>{ d.ccOpen[num] = !d.ccOpen[num]; if(!d.ccOpen[num]){ ccOutLogAdd(d, d.cc[num], num, "Stall darurat ditutup", {kosong:true}); ccMarkLeft(d, d.cc[num]); d.cc[num]=null; } });
 }
 
 /* ======================================================================
@@ -14849,23 +14868,23 @@ function renderAdmin(){
   }
 
   if(adminTab==="ccstall"){
-    const rows = CONFIG.CC_EMERGENCY.map(n=>`
+    const rows = Array.from({length:CONFIG.CC_TOTAL},(_,k)=>k+1).sort((x,y)=>ccLbl(x)-ccLbl(y)).map(n=>{ const on=ccStallOpen(data,n), em=CONFIG.CC_EMERGENCY.includes(n), occ=data.cc[n]; return `
       <div class="card" style="margin-bottom:10px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <b>Stall CC ${ccLbl(n)}</b> <span class="badge gold">Darurat</span><br>
-            <span style="font-size:12px; color:var(--text-dim);">${data.ccOpen[n] ? 'Sedang dibuka untuk umum' : 'Ditutup, hanya darurat'}</span>
+            <b>Stall CC ${ccLbl(n)}</b> ${em?'<span class="badge gold">Darurat</span>':''}<br>
+            <span style="font-size:12px; color:var(--text-dim);">${on ? (occ?'Menyala · terisi '+escH(occ.plat):'Menyala') : (occ?'Mati sesudah Delout '+escH(occ.plat):'Mati — CC tidak dipanggil ke stall ini')}</span>
           </div>
-          <div class="toggle" onclick="toggleEmergency(${n})">
-            <span style="font-size:11px;">${data.ccOpen[n]?'Buka':'Tutup'}</span>
-            <div class="switch ${data.ccOpen[n]?'on':''}"><div class="dot"></div></div>
+          <div class="toggle" onclick="toggleStall(${n})">
+            <span style="font-size:11px;">${on?'Nyala':'Mati'}</span>
+            <div class="switch ${on?'on':''}"><div class="dot"></div></div>
           </div>
         </div>
-      </div>`).join("");
+      </div>`; }).join("");
     return `${tabsHtml}
       <div class="card">
-        <h3>🚦 Kelola Stall CC Darurat</h3>
-        <p style="font-size:12px; color:var(--text-dim);">Stall ${Array.from({length:CONFIG.CC_TOTAL},(_,k)=>k+1).filter(n=>!CONFIG.CC_EMERGENCY.includes(n)).map(ccLbl).sort((a,b)=>a-b).join(", ")} selalu aktif. Stall darurat (${CONFIG.CC_EMERGENCY.map(ccLbl).sort((a,b)=>a-b).join(", ")}) cuma bisa dibuka/ditutup dari sini oleh Admin — Koordinator tidak bisa mengubah ini.</p>
+        <h3>🚦 Nyala / Mati Stall CC</h3>
+        <p style="font-size:12px; color:var(--text-dim);">Stall yang dimatikan tidak dipanggil CC baru. CC yang sedang di dalamnya tetap loading sampai Delout. Bisa juga dari tombol ⏻ di kartu stall (Delivery / Koordinator / Admin).</p>
       </div>
       ${rows}
       <div class="card">
@@ -18065,12 +18084,12 @@ function ccBayRowHtml(data){
   let html = "";
   for(let i=1;i<=CONFIG.CC_TOTAL;i++){
     const isEmergency = CONFIG.CC_EMERGENCY.includes(i);
-    const isOpen = !isEmergency || data.ccOpen[i];
+    const isOpen = ccStallOpen(data, i);
     const occ = data.cc[i];
-    if(!isOpen){
-      html += `<div class="ccbay closed" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status" style="color:var(--text-dim);">TUTUP</div></div>`;
+    if(!isOpen && !occ){
+      html += `<div class="ccbay closed" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status" style="color:var(--text-dim);">${isEmergency?"TUTUP":"MATI"}</div></div>`;
     }else if(occ){
-      html += `<div class="ccbay filled" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div><div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div>${ccIsSC(data,occ.plat)?`<div class="lp" style="color:#5B3FA8;font-weight:800;">${armadaOf(data,occ.plat)==="TOW"?"TOWING":"SINGLE"} · 1 unit</div>`:""}</div>`;
+      html += `<div class="ccbay filled" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status">TERISI</div>${!isOpen?`<div class="lp" style="color:var(--red);font-weight:800;">⏻ mati sesudah Delout</div>`:""}<div class="plat">${occ.plat}</div><div class="lp">${occ.lp||''}</div>${ccIsSC(data,occ.plat)?`<div class="lp" style="color:#5B3FA8;font-weight:800;">${armadaOf(data,occ.plat)==="TOW"?"TOWING":"SINGLE"} · 1 unit</div>`:""}</div>`;
     }else{
       html += `<div class="ccbay empty" onclick="openCCDetail(${i})"><div class="num">STALL ${ccLbl(i)}</div><div class="status">KOSONG</div></div>`;
     }
@@ -18082,10 +18101,10 @@ function openCCDetail(num){
   const data = DB.get();
   const occ = data.cc[num];
   const isEmergency = CONFIG.CC_EMERGENCY.includes(num);
-  const isOpen = !isEmergency || data.ccOpen[num];
+  const isOpen = ccStallOpen(data, num);
   let body;
-  if(!isOpen){
-    body = `<div class="emptystate">Stall CC ${ccLbl(num)} sedang ditutup (slot cadangan/darurat).</div>`;
+  if(!isOpen && !occ){
+    body = `<div class="emptystate">Stall CC ${ccLbl(num)} sedang ${isEmergency?"ditutup (slot cadangan/darurat)":"dimatikan"}. CC di waiting list tidak dipanggil ke stall ini.</div>`;
   }else if(occ){
     body = `
       <div class="field"><label>Nomor Polisi</label><div class="mono" style="font-size:15px; font-weight:700;">${occ.plat}</div></div>
@@ -18095,6 +18114,8 @@ function openCCDetail(num){
   }else{
     body = `<div class="emptystate">Stall CC ${ccLbl(num)} kosong, tersedia untuk truk berikutnya.</div>`;
   }
+  if(occ && !isOpen) body+=`<div class="msg info" style="margin-top:8px;">⏻ Stall ini dimatikan: ${escH(occ.plat)} tetap loading sampai Delout, sesudah itu stall dibiarkan kosong.</div>`;
+  if(canStallToggle()) body+=`<div style="margin-top:12px;"><button type="button" class="btn ${isOpen?"btn-outline":""}" style="width:100%;${isOpen?"border-color:var(--red);color:var(--red);":""}" onclick="closeModal();toggleStall(${num})">⏻ ${isOpen?"Matikan":"Nyalakan"} Stall ${ccLbl(num)}</button></div>`;
   showModal(`<h3>🚚 Detail Stall CC ${ccLbl(num)}</h3>${body}`);
 }
 
