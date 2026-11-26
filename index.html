@@ -1794,7 +1794,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="26 Nov 2026 14.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="26 Nov 2026 20.05";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -10581,6 +10581,7 @@ function ldrDppHtml(data){
     const dt=new Date(ekyBaseOf(key)).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});
     return `<div class="card ldr-dpp"><h3>🏭 DPP vs Input · ${escH(dt)}</h3>${has?"":`<div style="background:#FEF3C7;color:#92400E;border-radius:10px;padding:8px 10px;font-size:12px;margin-bottom:10px;">DPP bulan ini belum diupload (Admin › Plan), jadi plan DPP kosong.</div>`}
       <div class="ldr-2col">${day}${night}</div>
+      ${(()=>{ const A=R.A||{}, p1=+A.p1||0, p2=+A.p2||0; return (p1+p2)?`<div style="margin:8px 0 6px;padding:8px 10px;border-radius:10px;background:#FFFBEB;border:1px solid #F5D88A;font-size:13px;color:#92400E;">⭐ <b>Unit prioritas diterima: ${p1+p2}</b> <span style="color:var(--text-dim);">(Day ${p1} · Night ${p2})</span></div>`:""; })()}
       <div style="font-size:11.5px;color:var(--text-dim);">Input = unit masuk EKY (input Dispatcher${R.A&&R.A._ach?", dilengkapi Achievement PDI":""}). Ikut pilihan "Hari produksi ini / kemarin" di atas.</div></div>`;
   }catch(e){ return ""; }
 }
@@ -11365,7 +11366,7 @@ function pdmCardHtml(data){
 ====================================================================== */
 const EKY_MODELS_DEF=["AGYA","CALYA","RAIZE","AVANZA"];
 const MDP_BATAM_DEF=["AGUNG AUTOMALL (BATAM)","AGUNG TOYOTA BATAM","AGUNG TOYOTA BATAM CENTER","AGUNG TOYOTA BATU AMPAR","AGUNG TOYOTA SEKUPANG"];
-const EKY_MAPS=["s1","s2","m1","m2","mb1","mb2","o1","o2","ob1","ob2"], EKY_NUMS=["b1","b2","c1","c2"];
+const EKY_MAPS=["s1","s2","m1","m2","mb1","mb2","o1","o2","ob1","ob2","mp1","mp2","op1","op2"], EKY_NUMS=["b1","b2","c1","c2","p1","p2"];   /* 26 Nov: + p/mp/op = unit PRIORITAS diterima / per model / dikirim */
 function mdpBatamList(){ const c=(DB.get().mdpCfg||{}).batam; return (Array.isArray(c)&&c.length)?c:MDP_BATAM_DEF; }
 function ekyNorm(s){ return String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,""); }
 function mdpIsBatam(branch, list){ const b=ekyNorm(branch); if(!b) return false; return (list||MDP_BATAM_DEF).some(k=>{ const n=ekyNorm(k); return n && b.indexOf(n)>=0; }); }
@@ -11380,20 +11381,20 @@ function ekyAdd(o,k,n){ o[k]=(o[k]||0)+(n==null?1:n); }
 /* ---------- unit yang diinput Dispatcher (stall + ILS + log HP), satu kali per unit ---------- */
 function ekyRecvRecs(data){
   const seen=new Set(), out=[];
-  const add=(f,ts,line,m,b)=>{ if(!ts) return; const k=String(f||"").toUpperCase()+"|"+ts; if(seen.has(k)) return; seen.add(k); out.push({ts:+ts, line:line||"", m:ekyMKey(m), b:!!b}); };
-  Object.values(data.units||{}).forEach(u=>{ if(u) add(u.frame,u.ts,u.line,u.model,u.batam); });
-  (data.ils||[]).forEach(x=>{ if(x) (x.units||[]).forEach(u=>{ if(u && u.ts) add(u.frame,u.ts,u.line,u.model,u.batam||x.batam); }); });
-  (data.unitLog||[]).forEach(e=>{ if(e && e.parkedTs!=null && e.status!=="removed") add(e.frame,e.parkedTs,e.line,e.model,e.batam); });
+  const add=(f,ts,line,m,b,p)=>{ if(!ts) return; const k=String(f||"").toUpperCase()+"|"+ts; if(seen.has(k)) return; seen.add(k); out.push({ts:+ts, line:line||"", m:ekyMKey(m), b:!!b, p:!!p}); };
+  Object.values(data.units||{}).forEach(u=>{ if(u) add(u.frame,u.ts,u.line,u.model,u.batam,u.prio); });
+  (data.ils||[]).forEach(x=>{ if(x) (x.units||[]).forEach(u=>{ if(u && u.ts) add(u.frame,u.ts,u.line,u.model,u.batam||x.batam,u.prio); }); });
+  (data.unitLog||[]).forEach(e=>{ if(e && e.parkedTs!=null && e.status!=="removed") add(e.frame,e.parkedTs,e.line,e.model,e.batam,e.prio); });
   return out;
 }
 /* hitungan satu hari produksi (base = jam 07:00) dari data yang masih ada di RADAR */
 function ekyDay(data, base, recs){
   recs=recs||ekyRecvRecs(data);
-  const o={s1:{},s2:{},m1:{},m2:{},mb1:{},mb2:{},o1:{},o2:{},ob1:{},ob2:{},b1:0,b2:0,c1:0,c2:0};
+  const o={s1:{},s2:{},m1:{},m2:{},mb1:{},mb2:{},o1:{},o2:{},ob1:{},ob2:{},mp1:{},mp2:{},op1:{},op2:{},b1:0,b2:0,c1:0,c2:0,p1:0,p2:0};
   ["1","2"].forEach(w=>{ const [a,b]=shiftWindow(base,w);
-    recs.forEach(r=>{ if(r.ts>=a && r.ts<b){ ekyAdd(o["s"+w], PROD_LINES.includes(r.line)?r.line:"_"); ekyAdd(o["m"+w], r.m); if(r.b){ o["b"+w]++; ekyAdd(o["mb"+w], r.m); } } });
+    recs.forEach(r=>{ if(r.ts>=a && r.ts<b){ ekyAdd(o["s"+w], PROD_LINES.includes(r.line)?r.line:"_"); ekyAdd(o["m"+w], r.m); if(r.b){ o["b"+w]++; ekyAdd(o["mb"+w], r.m); } if(r.p){ o["p"+w]++; ekyAdd(o["mp"+w], r.m); } } });
     (data.ils||[]).forEach(x=>{ if(!x || x.status!=="done") return; const t=x.outTs||x.doneTs; if(!(t>=a && t<b)) return; o["c"+w]++;
-      (x.units||[]).forEach(u=>{ const m=ekyMKey(u.model); ekyAdd(o["o"+w], m); if(u.batam||x.batam) ekyAdd(o["ob"+w], m); }); });
+      (x.units||[]).forEach(u=>{ const m=ekyMKey(u.model); ekyAdd(o["o"+w], m); if(u.batam||x.batam) ekyAdd(o["ob"+w], m); if(u.prio) ekyAdd(o["op"+w], m); }); });
   });
   return o;
 }
@@ -14195,6 +14196,40 @@ setInterval(ppbjTick, 5000);
 
 function renderBatamPage(){ return renderCatPage("batam"); }
 function renderPrioPage(){ return renderCatPage("prio"); }
+/* 26 Nov 2026 (Khairul: "hari ini aku sudah nerima berapa unit prioritas"): unit prioritas yang DITERIMA (masuk/parkir di yard)
+   pada hari produksi ini (07.00–07.00), per shift & model, yang sudah dikirim (Delout), dan daftar unitnya. Angka ikut tersimpan di
+   riwayat harian (prodAct p1/p2) supaya tidak berkurang walau ILS-nya sudah dihapus. */
+let _prioDay="today";
+function prioTodayHtml(data){
+  try{
+    const key=_prioDay==="yesterday"?ekyAddDays(prodDateKey(),-1):prodDateKey(), base=ekyBaseOf(key), D=ekyDayData(data, key)||{};
+    const p1=+D.p1||0, p2=+D.p2||0, tot=p1+p2, out=ekySum(D.op1)+ekySum(D.op2);
+    const mod={}; ["mp1","mp2"].forEach(k=>Object.keys(D[k]||{}).forEach(m=>{ mod[m]=(mod[m]||0)+(+D[k][m]||0); }));
+    const end=base+24*3600000, hm=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+    /* daftar unit: di stall / luar stall, di ILS (belum / sudah Delout), riwayat parkir HP ini */
+    const seen=new Set(), L=[];
+    const push=(f,m,ts,st)=>{ const k=normVin(f); if(!k || seen.has(k) || !(ts>=base && ts<end)) return; seen.add(k); L.push({f, m:m||"", ts, st}); };
+    Object.keys(data.units||{}).forEach(k=>{ const u=data.units[k]; if(u && u.prio) push(u.frame, u.model, +u.ts||0, isOffKey(k)?"Luar stall":("Stall "+k)); });
+    (data.ils||[]).forEach(x=>{ if(!x) return; (x.units||[]).forEach(u=>{ if(u && u.prio) push(u.frame, u.model, +u.ts||0, x.outTs?("Dikirim "+hm(x.outTs)+" · "+(x.ccPlat||"")):("ILS #"+x.id+" · "+(x.ccPlat||""))); }); });
+    (data.unitLog||[]).forEach(e=>{ if(e && e.prio && e.status!=="removed") push(e.frame, e.model, +e.parkedTs||0, e.status==="sent"?"Dikirim":"Diterima"); });
+    L.sort((a,b)=>b.ts-a.ts);
+    const box=(t,v,c,sub)=>`<div style="flex:1;min-width:96px;background:#FFFBEB;border:1px solid #F5D88A;border-radius:12px;padding:10px;"><div style="font-size:11px;color:#92400E;font-weight:700;">${t}</div><div style="font-size:28px;font-weight:900;color:${c};line-height:1.1;">${v}</div>${sub?`<div style="font-size:11px;color:var(--text-dim);">${sub}</div>`:""}</div>`;
+    const dt=new Date(base).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">⭐ Unit Prioritas Diterima · ${escH(dt)}</h3>
+        <div style="display:flex;gap:6px;"><button type="button" class="btn btn-sm ${_prioDay==="today"?"btn-primary":"btn-outline"}" onclick="_prioDay='today';render()">Hari ini</button><button type="button" class="btn btn-sm ${_prioDay==="yesterday"?"btn-primary":"btn-outline"}" onclick="_prioDay='yesterday';render()">Kemarin</button></div></div>
+      <div style="font-size:12px;color:var(--text-dim);margin:6px 0 10px;">Unit prioritas yang masuk / diparkir di yard pada hari produksi ini (07.00 s.d. 07.00 besok).</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">${box("DITERIMA",tot,"#B45309")}${box("☀ DAY",p1,"#EA580C","07.00–20.00")}${box("🌙 NIGHT",p2,"#4338CA","20.00–07.00")}${box("SUDAH DIKIRIM",out,"#1E9E5A","Delout")}</div>
+      ${Object.keys(mod).length?`<div style="font-size:12px;margin-top:10px;">Per model: ${Object.keys(mod).sort((a,b)=>mod[b]-mod[a]).map(m=>`<b>${escH(m)}</b> ${mod[m]}`).join(" · ")}</div>`:""}
+      ${L.length?`<details style="margin-top:10px;"><summary style="cursor:pointer;font-weight:700;font-size:13px;">Daftar unit (${L.length})</summary>
+        <div style="overflow-x:auto;max-height:260px;overflow-y:auto;margin-top:6px;"><table style="font-size:12px;width:100%;border-collapse:collapse;">
+        <tr style="background:#FFF7E0;"><th style="text-align:left;padding:4px 6px;">Jam</th><th style="text-align:left;padding:4px 6px;">No. Rangka</th><th style="text-align:left;padding:4px 6px;">Model</th><th style="text-align:left;padding:4px 6px;">Posisi</th></tr>
+        ${L.slice(0,200).map(r=>`<tr style="border-top:1px solid var(--border);"><td style="padding:4px 6px;">${hm(r.ts)}</td><td style="padding:4px 6px;font-family:monospace;">${escH(r.f)}</td><td style="padding:4px 6px;">${escH(r.m)}</td><td style="padding:4px 6px;">${escH(r.st)}</td></tr>`).join("")}
+        </table></div></details>`:(tot?"":`<div style="font-size:12px;color:var(--text-dim);margin-top:8px;">Belum ada unit prioritas yang diterima${_prioDay==="today"?" hari ini":""}.</div>`)}
+      ${tot>L.length && L.length?`<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Sebagian unit sudah tidak tersimpan rinciannya (ILS lama terhapus); angkanya tetap dari riwayat harian.</div>`:""}
+    </div>`;
+  }catch(e){ return ""; }
+}
 function renderCatPage(kind){
   const data = DB.get();
   const isB = kind==="batam";
@@ -14209,6 +14244,7 @@ function renderCatPage(kind){
   const ico = isB ? "🟠" : "⭐";
   const col = isB ? "#E8833A" : "#C99700";
   return `
+  ${isB ? "" : prioTodayHtml(data)}
   ${isB ? batamAlertHtml(data) : ""}
   ${isB ? ppbjCardHtml(data) : ""}
   ${isB ? inputXlCardHtml(data,'batam') : ""}
