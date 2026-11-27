@@ -1554,7 +1554,7 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["armada","unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueLockMin","ccOff","stallLog","queueMoveLog","reabsenMax","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
+const FB_KEYS_ALL=["armada","unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueLockMin","dccpFmt","ccOff","stallLog","queueMoveLog","reabsenMax","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
 const FB_LITE={
   cc:         { skip:["autoLead","online","errDev","manifest","unitOutLog","unitScrap","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
   dispatcher: { skip:["autoLead","funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
@@ -1794,7 +1794,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="27 Nov 2026 06.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="27 Nov 2026 17.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -9528,9 +9528,13 @@ function handleDccpFile(evt, slot){
       const wb = XLSX.read(new Uint8Array(e.target.result), {type:"array"});
       const ws = wb.Sheets["DCCP"] || wb.Sheets[wb.SheetNames[0]];
       const grid = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
-      const rows = parseDccpGrid(grid);
+      const known = dccpKnownLp(DB.get());
+      let R = dccpParse(grid, {known}), fmt = ((DB.get().dccpFmt)||{})[dccpFmtKey(R.sig)], fmtUsed=false;
+      if(fmt && fmt.c){ const R2 = dccpParse(grid, {known, ov:fmt.c}); if(R2.rows.length){ R=R2; fmtUsed=true; } }   /* 27 Nov: format kolom yang pernah dibetulkan manual */
+      const rows = R.rows;
       if(!rows.length){ msg.innerHTML = `<div class="msg err">Bagian "EAST KARAWANG PLANT OPERATION" tidak ditemukan / tidak ada truk.</div>`; return; }
-      dccpParsedPreview = {slot:slot||"", fileName:f.name, rows, shift:dccpDetectShift(grid, f.name), shiftFile:dccpDetectShift([], f.name), gapMin:dccpGapFrom(rows)};
+      dccpParsedPreview = {slot:slot||"", fileName:f.name, rows, shift:dccpDetectShift(grid, f.name), shiftFile:dccpDetectShift([], f.name), gapMin:dccpGapFrom(rows),
+        grid, hr:R.hr, cols:R.cols, maxCol:R.maxCol, sig:R.sig, ov:fmtUsed?Object.assign({},fmt.c):{}, fmtUsed, known:[...known]};
       render();
     }catch(err){ msg.innerHTML = `<div class="msg err">Gagal membaca file: ${err.message}</div>`; }
   };
@@ -9569,60 +9573,128 @@ function dccpGapMin(r){   // {gap, own}
   const m=(DB.get().dccpMeta||{}).gapMin; return {gap:(m>=20&&m<=300?m:130), own:false};
 }
 function dccpShiftLabel(sh){ return sh==="night"?"NIGHT SHIFT (20:00–07:00)":sh==="day"?"DAY SHIFT (07:00–20:00)":"shift tidak terbaca"; }
-function parseDccpGrid(grid){
-  const txt = v=> v==null ? "" : String(v).trim();
-  let start = -1;
-  for(let r=0;r<grid.length;r++){
-    if((grid[r]||[]).some(c=>/EAST\s*KARAWANG/i.test(txt(c)))){ start=r; break; }
-  }
-  if(start<0) return [];
+/* ===== PEMBACA DCCP TAHAN FORMAT (27 Nov 2026) =====
+   DCCP dibuat 2 orang (Day & Night) dengan susunan kolom yang bisa berbeda. Kolom dikenali dari ISINYA, bukan posisinya:
+   • Plat  : judul "Police No / Nopol / Plat", kalau tidak ada → kolom yang paling banyak berisi pola nomor polisi
+   • LP    : kolom yang paling banyak berisi kode LP yang dikenal (Master LP + LP di DCCP sebelumnya + KMD/TOP/PAM/KPLM/PNJ/ANG/ACT);
+             kalau tidak ada → judul LP/Transporter/Vendor; kalau tidak ada → kolom berhuruf di kiri plat (bukan kolom "No")
+   • Baris KOORDINATOR / TOTAL / kosong dilewati. Kode driver/asisten (mis. KMD014-…) dipakai untuk cek silang LP.
+   • Kalau tebakan salah, kolom bisa dipilih manual di pratinjau dan diingat untuk file dengan susunan judul yang sama (d.dccpFmt). */
+const DCCP_LP_DEF=["KMD","KMDI","TOP","PAM","PNJ","KPL","KPLM","ANG","ACT"];
+const DCCP_NOT_LP=/^(koordinator|koord\b|coordinator|korlap|sub\s*total|total|jumlah|grand\s*total)/i;
+function dccpIsPlat(v){ const t=String(v==null?"":v).trim().toUpperCase(); return /^[A-Z]{1,2}\s*-?\s*\d{1,4}\s*-?\s*[A-Z]{0,3}$/.test(t); }
+function dccpKnownLp(d){
+  const S=new Set(DCCP_LP_DEF), add=x=>{ const t=String(x==null?"":x).trim().toUpperCase(); if(t && /[A-Z]/.test(t) && t.length<=12 && !DCCP_NOT_LP.test(t)) S.add(t); };
+  try{ (d.lpList||[]).forEach(add); (d.dccpSchedule||[]).forEach(r=>r&&add(r.lp)); Object.values(d.dccpStore||{}).forEach(st=>((st&&st.rows)||[]).forEach(r=>r&&add(r.lp))); }catch(e){}
+  return S;
+}
+function dccpColName(c){ let s=""; c=+c; do{ s=String.fromCharCode(65+c%26)+s; c=Math.floor(c/26)-1; }while(c>=0); return s; }
+function dccpFmtKey(sig){ let h=5381; for(let i=0;i<sig.length;i++) h=((h*33)^sig.charCodeAt(i))>>>0; return "f"+h.toString(36); }
+function dccpLpHint(row){ for(const v of (row||[])){ const m=String(v==null?"":v).trim().toUpperCase().match(/^([A-Z]{2,6})\d{2,4}\s*-/); if(m) return m[1]; } return ""; }
+function dccpParse(grid, opt){
+  opt=opt||{}; const ov=opt.ov||{}, known=opt.known||new Set(DCCP_LP_DEF);
+  const txt=v=>v==null?"":String(v).trim(), res={rows:[], cols:{}, hr:-1, H:[], sig:"", maxCol:0};
+  let start=-1;
+  for(let r=0;r<grid.length;r++){ if((grid[r]||[]).some(c=>/EAST\s*KARAWANG/i.test(txt(c)))){ start=r; break; } }
+  if(start<0) return res;
+  let endR=grid.length; for(let r=start+1;r<grid.length;r++){ if((grid[r]||[]).some(c=>/TOTAL\s*DELIVERY/i.test(txt(c)))){ endR=r; break; } }
+  const polHdr=/^(police\s*no|no\.?\s*pol(isi)?\b|nopol\b|plat\b|nomor\s*polisi)/i;
   let hr=-1, cPol=-1;
-  for(let r=start;r<Math.min(start+8,grid.length);r++){
-    const c = (grid[r]||[]).findIndex(x=>/^police\s*no/i.test(txt(x)));
-    if(c>=0){ hr=r; cPol=c; break; }
-  }
-  if(hr<0) return [];
-  const H = grid[hr];
-  const cModel = H.findIndex(x=>/cc\.?\s*model/i.test(txt(x)));
-  const cDriver = H.findIndex(x=>/^driver/i.test(txt(x)) && !/kode|code/i.test(txt(x)));
-  const cDrvCode = H.findIndex(x=>/(kode|code).*(driver|drv)|(driver|drv).*(kode|code)/i.test(txt(x)));
-  const cLoad = H.findIndex(x=>/^loading/i.test(txt(x)));
-  const cTrip = H.findIndex(x=>/^trip$/i.test(txt(x)));
-  /* 17 Nov 2026: kolom LP dicari, tidak lagi selalu kolom B. File DCCP hari ini berisi angka (nomor urut) di kolom B sehingga LP terbaca "3".
-     Urutan: judul kolom LP/Transporter/Vendor/Ekspedisi (baris judul atau 1 baris di atasnya); kalau tidak ada, kolom di kiri Police No
-     yang paling banyak berisi tulisan berhuruf (bukan angka). */
+  for(let r=start;r<Math.min(start+8,endR);r++){ const c=(grid[r]||[]).findIndex(x=>polHdr.test(txt(x))); if(c>=0){ hr=r; cPol=c; break; } }
+  if(cPol<0){ let best=-1, bn=0, fr=-1;   /* judul plat tidak ada: kolom dengan pola nomor polisi terbanyak */
+    for(let c=0;c<60;c++){ let n=0, f=-1; for(let r=start+1;r<endR;r++){ if(dccpIsPlat((grid[r]||[])[c])){ n++; if(f<0) f=r; } } if(n>bn){ bn=n; best=c; fr=f; } }
+    if(best>=0){ cPol=best; hr=Math.max(start, fr-1); } }
+  if(ov.pol!=null && ov.pol!=="") cPol=+ov.pol;
+  if(hr<0 || cPol<0) return res;
+  const H=grid[hr]||[];
+  let cModel=H.findIndex(x=>/^(cc\.?\s*)?model|tipe\s*cc|jenis\s*cc/i.test(txt(x)));
+  let cDriver=H.findIndex(x=>/^(nama\s*)?(driver|pengemudi|supir|sopir)/i.test(txt(x)) && !/kode|code|asst|assist|kenek|helper/i.test(txt(x)));
+  const cDrvCode=H.findIndex(x=>/(kode|code).*(driver|drv)|(driver|drv).*(kode|code)/i.test(txt(x)));
+  const cLoad=H.findIndex(x=>/^loading/i.test(txt(x)));
+  const cTrip=H.findIndex(x=>/^(trip|rit|ritase)$/i.test(txt(x)));
+  if(ov.model!=null && ov.model!=="") cModel=+ov.model;
+  if(ov.drv!=null && ov.drv!=="") cDriver=+ov.drv;
+  const timeCols=[]; for(let c=Math.max(cLoad+1,0);c<H.length;c++){ const t=dccpTimeStr(H[c]); if(t) timeCols.push({c,t}); }
+  const firstTime=timeCols.length?timeCols[0].c:Math.max(H.length, cPol+8);
   const lpHdr=/^(lp|l\.p\.?|logistic|logistik|transporter|transport|vendor|ekspedisi|expedisi|mitra|partner|lsp)\b/i;
-  let cLp = H.findIndex(x=>lpHdr.test(txt(x)));
-  if(cLp<0 && hr>0) cLp = (grid[hr-1]||[]).findIndex(x=>lpHdr.test(txt(x)));
-  if(cLp<0){ let best=-1, bestN=0;
-    for(let c=0;c<cPol;c++){ if(c===cModel || c===cDriver || c===cDrvCode) continue; let n=0;
-      for(let r=hr+1;r<Math.min(grid.length,hr+200);r++){ const v=txt((grid[r]||[])[c]); if(v && /[A-Za-z]/.test(v) && v.length<=30 && !/TOTAL/i.test(v)) n++; }
-      if(n>bestN){ bestN=n; best=c; } }
-    cLp = best>=0 ? best : 1; }
-  const lpOf = v=>{ const t=txt(v); return (t && /[A-Za-z]/.test(t)) ? t : ""; };   /* angka saja (nomor urut) bukan nama LP */
-  const timeCols = [];
-  for(let c=Math.max(cLoad+1,0);c<H.length;c++){ const t=dccpTimeStr(H[c]); if(t) timeCols.push({c,t}); }
-  const out = []; let lp = "";
-  for(let r=hr+1;r<grid.length;r++){
-    const row = grid[r]||[];
-    if(row.some(c=>/TOTAL\s*DELIVERY/i.test(txt(c)))) break;
-    if(lpOf(row[cLp])) lp = lpOf(row[cLp]);
-    const police = txt(row[cPol]);
-    if(!police) continue;
-    let sched="", dest=""; const trips=[];
-    for(const tc of timeCols){
-      const cell = row[tc.c];
-      const filled = (typeof cell==="string" && cell.trim()!=="") || (typeof cell==="number" && cell>0 && !(cell<1)) ;
-      if(filled){ trips.push(tc.t); if(!sched){ sched=tc.t; dest=typeof cell==="string"?cell.trim():""; } }
-    }
-    const nTrip = cTrip>=0 ? Number(row[cTrip]) : NaN;
-    const nUnit = cLoad>=0 ? Number(row[cLoad]) : NaN;
-    const planTrip = nTrip>0 ? nTrip : (trips.length||1);
-    const planUnit = nUnit>0 ? nUnit : planTrip*unitPerOf(police, cModel>=0?txt(row[cModel]):"");   /* Single Carrier / towing: 1 unit per rit */
-    const _dc = cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"";
-    out.push({lp: lp || lpFromDrvCode(_dc), police: platFmt(police), model: cModel>=0?txt(row[cModel]):"", driver: cDriver>=0?txt(row[cDriver]):"", drvCode: cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"", schedTime:sched, dest, trips, planTrip, planUnit});
+  let cLp=-1;
+  if(ov.lp!=null && ov.lp!==""){ cLp=+ov.lp; }
+  else {
+    let best=-1, bn=0;   /* 1. kode LP yang dikenal */
+    for(let c=0;c<firstTime;c++){ if(c===cPol) continue; let n=0; for(let r=hr+1;r<endR;r++){ if(known.has(txt((grid[r]||[])[c]).toUpperCase())) n++; } if(n>bn){ bn=n; best=c; } }
+    if(bn>=1) cLp=best;
+    if(cLp<0){ cLp=H.findIndex(x=>lpHdr.test(txt(x))); if(cLp<0 && hr>0) cLp=(grid[hr-1]||[]).findIndex(x=>lpHdr.test(txt(x))); }   /* 2. judul */
+    if(cLp<0){ let b2=-1, n2=0;   /* 3. kolom berhuruf di kiri plat (bukan kolom No) */
+      for(let c=0;c<cPol;c++){ if(c===cModel || c===cDriver || c===cDrvCode || /^no\.?$/i.test(txt(H[c]))) continue; let n=0;
+        for(let r=hr+1;r<endR;r++){ const v=txt((grid[r]||[])[c]); if(v && /[A-Za-z]/.test(v) && v.length<=30 && !DCCP_NOT_LP.test(v)) n++; }
+        if(n>n2){ n2=n; b2=c; } }
+      cLp=b2>=0?b2:1; }
   }
+  if(cDriver<0){ let b3=-1, n3=0;   /* judul driver tidak ada: kolom nama (huruf & spasi) terbanyak, bukan LP/plat/model */
+    for(let c=0;c<firstTime;c++){ if([cPol,cLp,cModel,cDrvCode].includes(c)) continue; let n=0;
+      for(let r=hr+1;r<endR;r++){ const v=txt((grid[r]||[])[c]); if(v && /^[A-Za-z][A-Za-z .,'-]{3,}$/.test(v) && !known.has(v.toUpperCase()) && !DCCP_NOT_LP.test(v) && !/^(ok|ng|semi trailer|trailer|ekyn?|nkrw\d*)$/i.test(v)) n++; }
+      if(n>n3){ n3=n; b3=c; } }
+    if(n3>=2) cDriver=b3; }
+  const lpOf=v=>{ const t=txt(v); return (t && /[A-Za-z]/.test(t) && !DCCP_NOT_LP.test(t)) ? t : ""; };
+  let lp="";
+  for(let r=hr+1;r<endR;r++){
+    const row=grid[r]||[];
+    if(lpOf(row[cLp])) lp=lpOf(row[cLp]);
+    const police=txt(row[cPol]);
+    if(!police || DCCP_NOT_LP.test(police)) continue;
+    let sched="", dest=""; const trips=[];
+    for(const tc of timeCols){ const cell=row[tc.c];
+      const filled=(typeof cell==="string" && cell.trim()!=="") || (typeof cell==="number" && cell>0 && !(cell<1));
+      if(filled){ trips.push(tc.t); if(!sched){ sched=tc.t; dest=typeof cell==="string"?cell.trim():""; } } }
+    const nTrip=cTrip>=0?Number(row[cTrip]):NaN, nUnit=cLoad>=0?Number(row[cLoad]):NaN;
+    const planTrip=nTrip>0?nTrip:(trips.length||1);
+    const planUnit=nUnit>0?nUnit:planTrip*unitPerOf(police, cModel>=0?txt(row[cModel]):"");   /* Single Carrier / towing: 1 unit per rit */
+    const _dc=cDrvCode>=0?txt(row[cDrvCode]).toUpperCase():"", hint=dccpLpHint(row);
+    res.rows.push({lp: lp || lpFromDrvCode(_dc) || hint, police: platFmt(police), model: cModel>=0?txt(row[cModel]):"", driver: cDriver>=0?txt(row[cDriver]):"", drvCode:_dc, schedTime:sched, dest, trips, planTrip, planUnit}); if(hint) res.rows[res.rows.length-1].lpHint=hint;
+  }
+  res.hr=hr; res.H=H; res.cols={lp:cLp, pol:cPol, model:cModel, drv:cDriver}; res.maxCol=firstTime;
+  res.sig=(H.slice(0,firstTime).map(x=>txt(x).toLowerCase()).filter(Boolean).join("|"))+"#"+((grid[hr-1]||[]).slice(0,firstTime).map(x=>txt(x).toLowerCase()).filter(Boolean).length);
+  return res;
+}
+function parseDccpGrid(grid){ return dccpParse(grid, {known:dccpKnownLp(DB.get())}).rows; }
+/* tanda merah per baris di pratinjau */
+function dccpRowWarn(r, known){
+  const w=[], L=String(r.lp||"").trim().toUpperCase(), h=String(r.lpHint||"").toUpperCase();
+  if(!L) w.push("LP kosong"); else if(known && !known.has(L)) w.push("LP tidak dikenal");
+  if(L && h && L!==h && !L.startsWith(h) && !h.startsWith(L)) w.push("LP beda dengan kode driver ("+h+")");
+  if(!dccpIsPlat(r.police)) w.push("plat tidak sesuai pola");
+  if(!(r.trips&&r.trips.length)) w.push("jam rit kosong");
+  if(!String(r.driver||"").trim()) w.push("driver kosong");
+  return w;
+}
+function dccpPvWarnAll(pv){ const K=new Set(pv.known||DCCP_LP_DEF); return pv.rows.map(r=>dccpRowWarn(r,K)); }
+function dccpPvSummary(pv, sh){
+  const W=dccpPvWarnAll(pv), bad=W.filter(w=>w.length).length, out=[];
+  if(bad) out.push(`${bad} dari ${pv.rows.length} truk bertanda merah — cek kolom & isinya sebelum disimpan.`);
+  try{ const prev=(((DB.get().dccpStore||{})[sh]||{}).rows||[]).length; if(prev>=4 && Math.abs(pv.rows.length-prev)/prev>0.5) out.push(`Jumlah truk ${pv.rows.length}, jauh beda dari DCCP ${sh==="day"?"Day":"Night"} sebelumnya (${prev} truk).`); }catch(e){}
   return out;
+}
+function dccpColOpts(pv, key){
+  const g=pv.grid||[], H=(g[pv.hr]||[]), cur=pv.cols[key];
+  const sample=c=>{ const s=[]; for(let r=pv.hr+1;r<g.length && s.length<3;r++){ const v=String(((g[r]||[])[c])==null?"":(g[r]||[])[c]).trim(); if(v && !DCCP_NOT_LP.test(v) && !s.includes(v)) s.push(v.slice(0,14)); if(/TOTAL\s*DELIVERY/i.test(String((g[r]||[]).join(" ")))) break; } return s.join(", "); };
+  let o=`<option value="">(otomatis)</option>`;
+  for(let c=0;c<Math.min(pv.maxCol||20,40);c++){ const h=String(H[c]==null?"":H[c]).trim(); o+=`<option value="${c}" ${c===cur?"selected":""}>${dccpColName(c)}${h?" · "+escH(h.slice(0,18)):""}${sample(c)?" — "+escH(sample(c)):""}</option>`; }
+  return o;
+}
+function dccpSetCol(key, v){
+  const pv=dccpParsedPreview; if(!pv || !pv.grid) return;
+  pv.ov=pv.ov||{}; if(v==="") delete pv.ov[key]; else pv.ov[key]=+v; pv.ovChanged=true;
+  const r=dccpParse(pv.grid, {known:new Set(pv.known||DCCP_LP_DEF), ov:pv.ov});
+  pv.rows=r.rows; pv.cols=r.cols; pv.hr=r.hr; pv.maxCol=r.maxCol; pv.gapMin=dccpGapFrom(r.rows); render();
+}
+function dccpColsHtml(pv){
+  if(!pv.grid) return "";
+  const lbl={lp:"LP", pol:"Plat", model:"Model", drv:"Driver"}, C=pv.cols||{};
+  const line=Object.keys(lbl).map(k=>`${lbl[k]} = <b>${C[k]>=0?dccpColName(C[k]):"—"}</b>`).join(" · ");
+  return `<details style="margin:6px 0 8px;" ${pv.ovChanged?"open":""}><summary style="cursor:pointer;font-size:12px;">🧭 Kolom terbaca: ${line}${pv.fmtUsed?` <span style="color:#1E9E5A;font-weight:700;">· memakai format tersimpan</span>`:""} — <u>ubah kalau salah</u></summary>
+    <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 8px;align-items:center;margin-top:8px;font-size:12px;">
+    ${Object.keys(lbl).map(k=>`<label>${lbl[k]}</label><select onchange="dccpSetCol('${k}',this.value)" style="font-size:12px;padding:4px;width:100%;max-width:100%;min-width:0;">${dccpColOpts(pv,k)}</select>`).join("")}
+    </div><div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Pilihan kolom diingat untuk file DCCP dengan susunan judul yang sama (berlaku di semua HP setelah disimpan).</div></details>`;
 }
 /* Jadwal DCCP disimpan terpisah: dccpStore.day dan dccpStore.night. Yang "aktif" (dccpSchedule + dccpMeta) dipakai seluruh aplikasi; ganti shift => jadwal shift itu otomatis diaktifkan. */
 function dccpShiftNow(){ if(_srvOffOk) return wibShiftAt(srvNow()); return currentShift()==="1" ? "day" : "night"; }   /* 25 Nov: jam server (WIB) kalau sudah diketahui */
@@ -9638,7 +9710,11 @@ function dccpActivate(d, sh){
 function saveDccpSchedule(){
   if(!dccpParsedPreview) return;
   const p = dccpParsedPreview, sh = p.slot || p.shift || dccpShiftNow();
+  { const S=dccpPvSummary(p, sh); if(S.length && !confirm("Periksa dulu:\n\n• "+S.join("\n• ")+"\n\nTetap simpan jadwal ini?")) return; }   /* 27 Nov */
+  const saveFmt = p.ovChanged && p.sig && p.ov && Object.keys(p.ov).length;
   DB.set(d=>{
+    if(saveFmt){ d.dccpFmt=(d.dccpFmt&&typeof d.dccpFmt==="object")?d.dccpFmt:{}; d.dccpFmt[dccpFmtKey(p.sig)]={c:Object.assign({},p.ov), ts:Date.now(), by:(currentUser&&currentUser.name)||"", f:String(p.fileName||"").slice(0,80)};
+      const ks=Object.keys(d.dccpFmt).sort((a,b)=>(d.dccpFmt[b].ts||0)-(d.dccpFmt[a].ts||0)); ks.slice(30).forEach(k=>delete d.dccpFmt[k]); }   /* format kolom diingat (maks. 30) */
     d.dccpStore = d.dccpStore||{};
     const meta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||"", shift:sh, dateTs:dccpFileDate(p.fileName)||null, gapMin:p.gapMin||52};
     const act = (d.dccpMeta&&d.dccpMeta.shift)||"";
@@ -10174,12 +10250,15 @@ function dccpUpCard(sh, data, pv, meta){
     <div id="dccpMsg_${sh}" style="margin-top:8px;"></div>
     ${mine?`<h4 style="margin:12px 0 6px;">Pratinjau — ${pv.fileName} (${pv.rows.length} truk)</h4>
       <div class="msg ${(pv.shift&&pv.shift!==sh)?"err":"info"}" style="margin-bottom:8px;"><b>Akan disimpan sebagai: ${dccpShiftLabel(sh)}</b>${(pv.shift&&pv.shift!==sh)?`<br><span style="font-size:12px;">⚠ Isi/nama file terbaca <b>${dccpShiftLabel(pv.shift)}</b>, tapi kamu upload di kotak ${sh==="day"?"Day":"Night"}. Pastikan file yang benar.</span>`:""}</div>
-      ${dccpPreviewTbl(pv.rows)}
+      ${dccpColsHtml(pv)}
+      ${(()=>{ const S=dccpPvSummary(pv, sh); return S.length?`<div class="msg err" style="margin-bottom:8px;font-size:12px;">⚠ ${S.join("<br>⚠ ")}</div>`:`<div class="msg ok" style="margin-bottom:8px;font-size:12px;">✔ Semua truk terbaca lengkap (LP, plat, driver, jam rit).</div>`; })()}
+      ${dccpPreviewTbl(pv.rows, pv)}
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn" onclick="saveDccpSchedule()">✔ Simpan Jadwal ${sh==="day"?"Day":"Night"}</button><button class="btn btn-sm" onclick="clearDccpPreview()">Batal</button></div>`:""}
   </div>`;
 }
-function dccpPreviewTbl(rows){
-  return `<div style="overflow-x:auto;"><table><tr><th>LP</th><th>Plat</th><th>Model</th><th>Driver</th><th>Jam Ritase</th><th>Tujuan</th></tr>${dccpSortedIdx(rows).map(([r])=>`<tr><td>${r.lp}</td><td><b>${platFmt(r.police)}</b></td><td>${r.model}</td><td>${r.driver}</td><td>${r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-")}${(r.planTrip&&r.trips&&r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td></tr>`).join("")}</table></div>`;
+function dccpPreviewTbl(rows, pv){
+  const K=new Set((pv&&pv.known)||DCCP_LP_DEF);
+  return `<div style="overflow-x:auto;"><table><tr><th>LP</th><th>Plat</th><th>Model</th><th>Driver</th><th>Jam Ritase</th><th>Tujuan</th></tr>${dccpSortedIdx(rows).map(([r])=>{ const W=pv?dccpRowWarn(r,K):[]; return `<tr${W.length?` style="background:#FDECEC;"`:""}><td>${r.lp||"—"}${W.length?`<div style="color:#B91C1C;font-size:10.5px;font-weight:700;line-height:1.2;">⚠ ${W.join(", ")}</div>`:""}</td><td><b>${platFmt(r.police)}</b></td><td>${r.model}</td><td>${r.driver}</td><td>${r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-")}${(r.planTrip&&r.trips&&r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td></tr>`; }).join("")}</table></div>`;
 }
 function renderDccpUpload(){
   const data = DB.get();
