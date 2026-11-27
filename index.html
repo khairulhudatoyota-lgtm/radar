@@ -1794,7 +1794,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="26 Nov 2026 21.50";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="27 Nov 2026 06.45";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4482,7 +4482,7 @@ function ccFirstBatch(d, plat){
    Mematikan stall yang sedang terisi TIDAK mengeluarkan CC-nya: CC tetap loading sampai Delout, sesudah itu stall dibiarkan kosong. */
 function ccStallOpen(d, n){ n=+n; return CONFIG.CC_EMERGENCY.includes(n) ? !!((d&&d.ccOpen)||{})[n] : !((d&&d.ccOff)||{})[n]; }
 function ccOpenStalls(d){ return [...CONFIG.CC_ACTIVE_DEFAULT.filter(n=>ccStallOpen(d,n)), ...CONFIG.CC_EMERGENCY.filter(n=>ccStallOpen(d,n))]; }
-function canStallToggle(){ return !!(currentUser && ["admin","delivery","koordinator"].includes(currentUser.role) && !isViewer()); }
+function canStallToggle(){ return !!(currentUser && ["admin","delivery"].includes(currentUser.role) && !isViewer()); }   /* 27 Nov: Koordinator tidak boleh */
 function toggleStall(n){
   if(!canStallToggle()) return; n=+n;
   const d0=DB.get(), on=ccStallOpen(d0,n), occ=(d0.cc||{})[n], lbl=ccLbl(n);
@@ -5276,7 +5276,8 @@ function renderDelivery(){
   /* Dikelompokkan per stall (bisa dibuka/ditutup) supaya tidak memanjang */
   const _grp={};
   filledSlots.forEach(e=>{ const k=isOffKey(e[0])?"OFF":groupOf(e[0]); (_grp[k]=_grp[k]||[]).push(e); });
-  const _gkeys=Object.keys(_grp).sort((a,b)=>{ if(a==="OFF") return 1; if(b==="OFF") return -1; const na=parseInt(a), nb=parseInt(b); return na!==nb ? na-nb : a.slice(-1).localeCompare(b.slice(-1)); });
+  const _np=k=>_grp[k].filter(e=>e[1].prio).length;   /* 27 Nov: stall berisi unit PRIORITAS paling atas */
+  const _gkeys=Object.keys(_grp).sort((a,b)=>{ if(a==="OFF") return 1; if(b==="OFF") return -1; const pa=_np(a)>0?0:1, pb=_np(b)>0?0:1; if(pa!==pb) return pa-pb; const na=parseInt(a), nb=parseInt(b); return na!==nb ? na-nb : a.slice(-1).localeCompare(b.slice(-1)); });
   try{ window._dlOrder=[].concat(..._gkeys.map(k=>_grp[k].map(e=>e[0]))); }catch(e){}   /* urutan tampil, dipakai Salin No. Rangka */
   const unitRows = _gkeys.map(k=>{
     const L=_grp[k], nSel=L.filter(e=>deliverySelUnits.includes(e[0])).length, nPrio=L.filter(e=>e[1].prio).length;
@@ -5742,7 +5743,7 @@ function stallStats(data){
   return Object.entries(g).map(([st,arr])=>{
     arr.sort((a,b)=>a[0].localeCompare(b[0]));
     const b = arr.filter(([k,u])=>u.batam).length, ts = arr.map(a=>a[1].ts||0);
-    return {stall:st, units:arr.map(a=>a[0]), n:arr.length, firstTs:Math.min(...ts), fullTs:Math.max(...ts), batam:b, reg:arr.length-b, mixed:b>0 && b<arr.length};
+    return {stall:st, units:arr.map(a=>a[0]), n:arr.length, firstTs:Math.min(...ts), fullTs:Math.max(...ts), batam:b, reg:arr.length-b, mixed:b>0 && b<arr.length, prio:arr.filter(([k,u])=>u.prio).length};
   });
 }
 let draftStall = {};            // {ccNum: nomor stall} pilihan manual MP
@@ -5771,8 +5772,9 @@ function ccProposals(data){
     let pick = manual[n] || null;
     if(!pick){
       const cand = stats.filter(x=>!used.has(x.stall) && okFor(x,wantB));
-      const full = cand.filter(x=>x.n>=CONFIG.SLOTS_PER_STALL).sort((a,b)=>(oRank(a)-oRank(b))||a.fullTs-b.fullTs)[0];
-      pick = full || cand.slice().sort((a,b)=>(oRank(a)-oRank(b))||b.n-a.n||a.firstTs-b.firstTs)[0] || null;
+      const pR = x=>x.prio>0?0:1;   /* 27 Nov: stall berisi unit PRIORITAS dikirim duluan (sesudah order NVDC) */
+      const full = cand.filter(x=>x.n>=CONFIG.SLOTS_PER_STALL).sort((a,b)=>(oRank(a)-oRank(b))||(pR(a)-pR(b))||(b.prio-a.prio)||a.fullTs-b.fullTs)[0];
+      pick = full || cand.slice().sort((a,b)=>(oRank(a)-oRank(b))||(pR(a)-pR(b))||b.n-a.n||a.firstTs-b.firstTs)[0] || null;
       if(pick){ used.add(pick.stall); usedBy[pick.stall]=n; }
     }
     if(pick && pick.n>=CONFIG.SLOTS_PER_STALL) out.push({...base, ready:true, stall:pick.stall, units:pick.units.slice(0,CONFIG.MAX_LOAD_PER_CC), have:pick.n});
@@ -5787,8 +5789,9 @@ function ccProposals(data){
   scQ.forEach(({n, base, wantB, man})=>{
     const scan = pool=>{ let best=null;
       pool.forEach(st=>{ (st.units||[]).forEach(k=>{ const u=data.units[k]; if(!u || scTaken.has(k) || !!u.batam!==!!wantB) return;
-        const key=[oRank(st), uTs(k), k];
-        if(!best || key[0]<best.key[0] || (key[0]===best.key[0] && (key[1]<best.key[1] || (key[1]===best.key[1] && String(key[2])<String(best.key[2]))))) best={k, st, key}; }); });
+        const key=[oRank(st), u.prio?0:1, uTs(k), k];   /* 27 Nov: unit prioritas dulu */
+        const lt=(A,B)=>{ for(let i=0;i<3;i++){ if(A[i]<B[i]) return true; if(A[i]>B[i]) return false; } return String(A[3])<String(B[3]); };
+        if(!best || lt(key, best.key)) best={k, st, key}; }); });
       return best; };
     const best = man ? scan([man]) : (scan(stats.filter(x=>!used.has(x.stall))) || scan(stats.filter(x=>used.has(x.stall) && !readyStall.has(String(x.stall)))));
     if(best){ scTaken.add(best.k); out.push({...base, ready:true, stall:best.st.stall, units:[best.k], have:1}); }
@@ -12809,7 +12812,8 @@ function nvoEval(d){
 /* stall (lokasi unit order sekarang) → order yang menunggu, paling dulu di depan */
 function nvoActiveStalls(d){
   const M=new Map();
-  try{ nvoEval(d).filter(o=>o.status==="menunggu").sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(o=>o.stalls.forEach(s=>{ if(s.wait>0) s.at.forEach(g=>{ if(!M.has(g)) M.set(g,{id:o.id, ts:o.ts, by:o.by||"", note:o.note||""}); }); })); }catch(e){}
+  const bt=g=>{ for(let i=1;i<=CONFIG.SLOTS_PER_STALL;i++){ const u=(d.units||{})[g+i]; if(u && !u.ilsId && u.batam) return true; } return false; };   /* 27 Nov: unit Batam tidak boleh di-order NVDC */
+  try{ nvoEval(d).filter(o=>o.status==="menunggu").sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(o=>o.stalls.forEach(s=>{ if(s.wait>0) s.at.forEach(g=>{ if(!M.has(g) && !bt(g)) M.set(g,{id:o.id, ts:o.ts, by:o.by||"", note:o.note||""}); }); })); }catch(e){}
   return M;
 }
 function nvoNotify(){
@@ -12838,7 +12842,7 @@ function nvoStallInfo(d){
 function nvoPick(g){ const d=DB.get(), s=nvoStallInfo(d).find(x=>x.g===g); if(!s) return;
   if(!s.free.length){ miniToast("Stall "+g+" tidak punya unit siap (kosong / sudah masuk ILS)."); return; }
   if(s.ord && !NVO.sel[g]){ miniToast("Stall "+g+" sudah di-order dan masih menunggu CC."); return; }
-  if(s.mixed && !NVO.sel[g]){ miniToast("Stall "+g+" berisi unit Batam + reguler tercampur, belum bisa dibuat ILS. Pilih stall lain."); return; }
+  if(s.batam){ delete NVO.sel[g]; miniToast("Stall "+g+" berisi unit BATAM. Unit Batam tidak bisa di-order NVDC — pilih stall reguler.", 6000); render(); return; }   /* 27 Nov */
   NVO.sel[g]=!NVO.sel[g]; if(!NVO.sel[g]) delete NVO.sel[g]; render(); }
 function nvoPickModel(m){ NVO.mdl[m]=!NVO.mdl[m]; if(!NVO.mdl[m]) delete NVO.mdl[m]; render(); }
 function nvoPesan(){
@@ -12847,8 +12851,9 @@ function nvoPesan(){
   if(!G.length){ alert("Contreng dulu stall yang mau di-order."); return; }
   if(!FBS.enabled || !FBS.db || !FBS.authed){ alert("Belum tersambung ke server. Coba lagi sebentar."); return; }
   const info=nvoStallInfo(d), st={};
-  G.forEach(g=>{ const s=info.find(x=>x.g===g); if(!s || !s.free.length) return; st[g]={f:s.free.map(u=>u.frame), m:Object.entries(s.m)}; });
-  if(!Object.keys(st).length){ alert("Stall yang dipilih sudah tidak punya unit siap (sudah masuk ILS / kosong)."); return; }
+  const skipB=[]; G.forEach(g=>{ const s=info.find(x=>x.g===g); if(!s || !s.free.length) return; if(s.batam){ skipB.push(g); return; } st[g]={f:s.free.map(u=>u.frame), m:Object.entries(s.m)}; });   /* 27 Nov: stall Batam dilewati */
+  if(skipB.length) alert("Stall "+skipB.join(", ")+" berisi unit BATAM dan tidak ikut di-order (unit Batam tidak bisa di-order NVDC).");
+  if(!Object.keys(st).length){ alert("Stall yang dipilih sudah tidak punya unit reguler yang siap (sudah masuk ILS / kosong / unit Batam)."); return; }
   const note=String((document.getElementById("nvoNote")||{}).value||"").trim().slice(0,200);
   const txt=Object.entries(st).map(([g,x])=>`• Stall ${g}: ${nvoMdlTxt(x.m)}`).join("\n");
   if(!confirm(`Order unit ke EKY?\n\n${txt}${note?`\n\nCatatan: ${note}`:""}\n\nDelivery EKY otomatis mendahulukan stall ini saat membuat ILS (berikutnya). Setelah unitnya terangkut, stall kembali normal.`)) return;
@@ -12892,22 +12897,22 @@ function nvoDeliveryHtml(d){
 function rciOrderHtml(d){
   nvoListen();
   const info=nvoStallInfo(d), selM=Object.keys(NVO.mdl).filter(m=>NVO.mdl[m]);
-  const allM={}; info.forEach(s=>Object.entries(s.m).forEach(([m,n])=>{ allM[m]=(allM[m]||0)+n; }));
+  const allM={}; info.forEach(s=>{ if(!s.batam) Object.entries(s.m).forEach(([m,n])=>{ allM[m]=(allM[m]||0)+n; }); });   /* model Batam tidak ditawarkan */
   const mdlChips=Object.entries(allM).sort((a,b)=>b[1]-a[1]).map(([m,n])=>{ const c=getModelColor(m,d)||"#64748B"; return `<button class="nvo-mchip ${NVO.mdl[m]?"on":""}" style="--mc:${c};--mfg:${slotFg(c)};" onclick="nvoPickModel('${escH(m).replace(/'/g,"\\'")}')"><i></i>${escH(m)} <b>${n}</b></button>`; }).join("");
   const hit=s=>selM.length?s.free.filter(u=>NVO.mdl[u.model]).length:0;
-  const ord=info.filter(s=>s.free.length || s.ils.length).slice().sort((a,b)=>((!a.free.length||a.mixed)-(!b.free.length||b.mixed)) || (selM.length?(hit(b)-hit(a))||(b.free.length-a.free.length):0));
+  const ord=info.filter(s=>s.free.length || s.ils.length).slice().sort((a,b)=>((!a.free.length||a.batam)-(!b.free.length||b.batam)) || (selM.length?(hit(b)-hit(a))||(b.free.length-a.free.length):0));
   const short=m=>String(m||"").split(/\s+/)[0].slice(0,7);
-  const card=s=>{ const on=!!NVO.sel[s.g], h=hit(s), dis=!s.free.length || s.mixed || (!!s.ord && !on);
+  const card=s=>{ const on=!!NVO.sel[s.g]&&!s.batam, h=s.batam?0:hit(s), dis=!s.free.length || s.batam || (!!s.ord && !on);
     const cells=s.cells.map(u=>{ if(!u) return `<span class="nvo-c e"></span>`; const c=getModelColor(u.model,d)||"#64748B"; return `<span class="nvo-c ${u.ilsId?"ils":""} ${selM.length&&!NVO.mdl[u.model]?"dim":""}" style="--mc:${c};color:${slotFg(c)};">${escH(short(u.model))}</span>`; }).join("");
     const mc=Object.entries(s.m).sort((a,b)=>b[1]-a[1]).map(([m,n])=>`<span class="${NVO.mdl[m]?"hit":""}">${escH(m)} ×${n}</span>`).join("");
     const st=[]; s.ils.forEach(b=>st.push(`<span class="nvo-tg ils">${b.loadTs?"🚚 Siap Delout":"🔄 Loading"} · ${escH(b.ccPlat||"")}</span>`)); if(s.ord) st.push(`<span class="nvo-tg ord">📦 Sudah di-order ${new Date(s.ord.ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</span>`); if(s.df) st.push(`<span class="nvo-tg df">⚠ ${s.df} defect</span>`); if(s.mixed) st.push(`<span class="nvo-tg df">Batam + reguler tercampur — dipisah dulu oleh EKY</span>`);
     return `<div class="nvo-st ${on?"on":""} ${dis?"dis":""}" onclick="nvoPick('${s.g}')">
-      <div class="nvo-sh"><span class="nvo-ck">${on?"✔":""}</span><b>${escH(s.g)}</b><span class="nvo-n">${s.free.length} unit siap</span>${s.batam?`<i class="nvo-bt">BATAM</i>`:""}${h?`<span class="nvo-hit">🎯 ${h}</span>`:""}</div>
+      <div class="nvo-sh"><span class="nvo-ck">${on?"✔":""}</span><b>${escH(s.g)}</b><span class="nvo-n">${s.free.length} unit siap</span>${s.batam?`<i class="nvo-bt">BATAM · tidak bisa di-order</i>`:""}${h?`<span class="nvo-hit">🎯 ${h}</span>`:""}</div>
       <div class="nvo-cells">${cells}</div><div class="nvo-mc">${mc||`<span style="opacity:.6;">tidak ada unit siap</span>`}</div>${st.length?`<div class="nvo-tgs">${st.join("")}</div>`:""}</div>`; };
   const G=Object.keys(NVO.sel).filter(g=>NVO.sel[g]), tot={}; G.forEach(g=>{ const s=info.find(x=>x.g===g); if(s) Object.entries(s.m).forEach(([m,n])=>{ tot[m]=(tot[m]||0)+n; }); });
   const nU=Object.values(tot).reduce((a,b)=>a+b,0);
   const body=`<div class="nvo-ok">
-    <div class="card nvo-how"><b>📦 Order unit model tertentu dari EKY</b><div>1. Pilih model yang dibutuhkan (boleh lebih dari satu) — stall paling banyak model itu tampil paling atas.<br>2. Contreng stall yang mau diambil.<br>3. Tekan <b>Order</b>. Delivery EKY langsung mendapat notifikasi dan stall itu didahulukan saat membuat ILS. Setelah unitnya terangkut, urutan kembali FIFO normal.</div></div>
+    <div class="card nvo-how"><b>📦 Order unit model tertentu dari EKY</b><div>1. Pilih model yang dibutuhkan (boleh lebih dari satu) — stall paling banyak model itu tampil paling atas.<br>2. Contreng stall yang mau diambil. Stall berisi unit <b>Batam tidak bisa di-order</b>.<br>3. Tekan <b>Order</b>. Delivery EKY langsung mendapat notifikasi dan stall itu didahulukan saat membuat ILS. Setelah unitnya terangkut, urutan kembali FIFO normal.</div></div>
     ${nvoCanOrder()?"":`<div class="msg info" style="margin-bottom:10px;">👁 <b>Mode Pengamat</b> — ini tampilan yang dipakai RCI NVDC untuk order unit ke EKY. Stall boleh dicoba dicontreng, tapi order hanya bisa dikirim dari akun RCI NVDC.</div>`}
     ${NVO.state==="denied"?`<div class="msg err">Server menolak akses data order (rule radar_foto). Hubungi Admin.</div>`:""}
     <div class="card"><h3 style="margin:0 0 8px;">🎯 Model yang dibutuhkan</h3><div class="nvo-mdls">${mdlChips||`<span style="color:var(--text-dim);font-size:13px;">Belum ada unit siap di stall.</span>`}</div></div>
@@ -14057,7 +14062,9 @@ function clearCatList(kind){
     Object.keys(m).forEach(k=>{ m[k][kind]=false; if(!m[k].batam && !m[k].prio) delete m[k]; });
   });
 }
+function canBatamStall(){ return !!(currentUser && ["admin","delivery"].includes(currentUser.role) && !isViewer()); }   /* 27 Nov: Koordinator tidak boleh */
 function toggleBatamStall(g, on){
+  if(!canBatamStall()){ alert("Stall khusus Batam hanya bisa diubah Delivery atau Admin."); render(); return; }
   DB.set(d=>{ const s=new Set(d.batamStalls||[]); if(on) s.add(g); else s.delete(g); d.batamStalls = PARK_ORDER.filter(x=>s.has(x)); });
 }
 function batamQuickCheck(v){
@@ -14302,10 +14309,10 @@ function renderCatPage(kind){
     <h3>🅿️ Stall Khusus Batam</h3>
     <p style="font-size:12px;color:var(--text-dim);margin:6px 0 10px;">Stall yang dicentang hanya boleh diisi unit Batam; stall lain hanya untuk unit reguler. Kosongkan semua = pemisahan tidak dipaksa (hanya peringatan jika tercampur dalam satu stall).</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      ${PARK_ORDER.map(g=>`<label style="display:flex;align-items:center;gap:6px;border:1.5px solid ${bs.includes(g)?"#E8833A":"var(--border)"};background:${bs.includes(g)?"#FFF1E4":"var(--panel)"};border-radius:10px;padding:10px 14px;font-weight:700;${isAdmin?"":"opacity:.7;"}">
-        <input type="checkbox" ${bs.includes(g)?"checked":""} ${isAdmin?"":"disabled"} onchange="toggleBatamStall('${g}', this.checked)"> ${g}</label>`).join("")}
+      ${PARK_ORDER.map(g=>`<label style="display:flex;align-items:center;gap:6px;border:1.5px solid ${bs.includes(g)?"#E8833A":"var(--border)"};background:${bs.includes(g)?"#FFF1E4":"var(--panel)"};border-radius:10px;padding:10px 14px;font-weight:700;${canBatamStall()?"":"opacity:.7;"}">
+        <input type="checkbox" ${bs.includes(g)?"checked":""} ${canBatamStall()?"":"disabled"} onchange="toggleBatamStall('${g}', this.checked)"> ${g}</label>`).join("")}
     </div>
-    ${isAdmin?"":`<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Pengaturan stall hanya bisa diubah Admin.</div>`}
+    ${canBatamStall()?"":`<div style="font-size:11px;color:var(--text-dim);margin-top:6px;">Stall khusus Batam hanya bisa diubah Delivery atau Admin.</div>`}
     ${bs.length?`<div style="font-size:12px;margin-top:8px;">Stall Batam: <b>${bs.join(", ")}</b> (${bs.length*CONFIG.SLOTS_PER_STALL} slot)</div>`:""}
   </div>`:`
   <div class="card"><h3>Perlakuan Unit Prioritas</h3>
@@ -14974,7 +14981,7 @@ function renderAdmin(){
     return `${tabsHtml}
       <div class="card">
         <h3>🚦 Nyala / Mati Stall CC</h3>
-        <p style="font-size:12px; color:var(--text-dim);">Stall yang dimatikan tidak dipanggil CC baru. CC yang sedang di dalamnya tetap loading sampai Delout. Bisa juga dari tombol ⏻ di kartu stall (Delivery / Koordinator / Admin).</p>
+        <p style="font-size:12px; color:var(--text-dim);">Stall yang dimatikan tidak dipanggil CC baru. CC yang sedang di dalamnya tetap loading sampai Delout. Bisa juga dari tombol ⏻ di kartu stall (Delivery / Admin).</p>
       </div>
       ${rows}
       <div class="card">
