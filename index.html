@@ -1263,6 +1263,10 @@ document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState=
      dari data simpanan lama di HP. */
 let _srvOff=0, _srvOffOk=false, _fbConnTs=0, _fbVisTs=0, _fbHidTs=0;
 function srvNow(){ return Date.now()+(_srvOffOk?_srvOff-_clkFix:0); }   /* _srvOff = selisih jam server terhadap jam ASLI HP; Date.now() sudah memuat koreksi _clkFix */
+/* 27 Nov 2026 (DCCP mental Day↔Night): offset dari SDK Firebase = jam server − jam ASLI HP (SDK memakai new Date(), BUKAN Date.now yang
+   sudah dikoreksi). Versi 26 Nov menambahkan _clkFix lagi, sehingga setiap kali RADAR tersambung ulang (buka dari latar, sinyal putus)
+   selisihnya bertambah: HP yang jamnya meleset 1,5 menit, setelah 20× sambung ulang menganggap jam meleset 30 menit → ganti shift lebih awal. */
+function srvOffSet(v){ v=+v; if(!isFinite(v)) return; _srvOff=v; _srvOffOk=true; _clkFix=Math.abs(v)>20000 ? v : 0; }
 document.addEventListener("visibilitychange", ()=>{ try{ if(document.visibilityState==="hidden") _fbHidTs=Date.now(); else { if(_fbHidTs && Date.now()-_fbHidTs>30000) _fbVisTs=Date.now(); _fbHidTs=0; } }catch(e){} });
 function fbFresh(){ if(!FBS.enabled) return true; if(fbCurrentState()!=="online") return false; const n=Date.now(); return n-_fbConnTs>=3000 && n-_fbVisTs>=3500; }
 function fbStart(){
@@ -1272,8 +1276,7 @@ function fbStart(){
     try{ fbMeterBoot(); }catch(e){}
     FBS.db = firebase.database(); FBS.enabled = true; fbState("connecting");
     FBS.db.ref(".info/connected").on("value", s=>{ const _wc=FBS.conn; FBS.conn = !!s.val(); if(FBS.conn && !_wc) _fbConnTs=Date.now(); if(FBS.conn) _fbDownSince=0; else if(!_fbDownSince) _fbDownSince=Date.now(); fbState(fbCurrentState()); try{ fbDownBar(); }catch(e){} try{ if(FBS.conn) presenceOn(true); }catch(e){} });
-    try{ FBS.db.ref(".info/serverTimeOffset").on("value", s=>{ const v=+s.val(); if(isFinite(v)){ const tot=_clkFix+v;   /* SDK mengukur terhadap Date.now yang sudah dikoreksi */
-        _srvOff=tot; _srvOffOk=true; _clkFix=Math.abs(tot)>20000 ? tot : 0; } }); }catch(e){}
+    try{ FBS.db.ref(".info/serverTimeOffset").on("value", s=>{ const x=s.val(); if(x!=null && isFinite(+x)) srvOffSet(+x); }); }catch(e){}
     firebase.auth().signInAnonymously().then(()=>{ FBS.authed = true; fbState(fbCurrentState()); fbAttach(); trackAttach(); try{ presenceOn(true); }catch(e){} })
       .catch(e=>{ console.warn("login anonim gagal", e); fbState("offline"); });
     /* Sesi Firebase hilang di tengah jalan (mis. penyimpanan WebView terhapus saat Logout penuh TLS): login ulang otomatis lalu pasang ulang semua listener */
@@ -1794,7 +1797,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="27 Nov 2026 17.40";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="27 Nov 2026 19.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -5071,8 +5074,13 @@ function ccDriverBusy(d, plat, lp){
 /* ===== DCCP DIJALANKAN (▶ Jalankan sekarang) — 17 Nov 2026, permintaan Khairul =====
    DCCP yang dijalankan manual langsung berlaku jam berapa pun (walau shift-nya belum mulai) sampai shift itu selesai.
    Ritase jadwal itu dihitung sejak tombol ditekan; 3 CC batch pertama yang sudah absen langsung diperintah masuk. */
-function dccpWinEnd(m){ m=m||{}; const h=3600000; if(m.dateTs) return m.shift==="night" ? m.dateTs+(24+SHIFT_START_H)*h : m.dateTs+SHIFT2_START_H*h; return (+m.playTs||+m.uploadedAt||0)+14*h; }
-function dccpPlayedLive(m){ m=m||{}; const t=+m.playTs||0, now=Date.now(); return !!t && now>=t-60000 && now<dccpWinEnd(m); }
+function wibNextAt(ts, hr){ const t=ts+7*3600000; let e=Math.floor(t/86400000)*86400000+hr*3600000; if(e<=t) e+=86400000; return e-7*3600000; }   /* jam hr:00 WIB berikutnya sesudah ts */
+/* 27 Nov: jadwal yang dijalankan manual berlaku sampai akhir shift itu (Night → 07:00 berikutnya, Day → 20:00 berikutnya) menurut jam server,
+   tidak lagi dari tanggal di nama file — tanggal file lama/keliru dulu membuat "Jalankan" langsung kedaluwarsa lalu dikembalikan otomatis. */
+function dccpWinEnd(m){ m=m||{}; const h=3600000, p=+m.playTs||0;
+  if(p) return wibNextAt(p, m.shift==="night"?SHIFT_START_H:SHIFT2_START_H);   /* dijalankan manual: sampai akhir shift itu */
+  return m.dateTs ? (m.shift==="night" ? m.dateTs+(24+SHIFT_START_H)*h : m.dateTs+SHIFT2_START_H*h) : ((+m.uploadedAt||0)+14*h); }
+function dccpPlayedLive(m){ m=m||{}; const t=+m.playTs||0, now=srvNow(); return !!t && now>=t-5*60000 && now<dccpWinEnd(m); }   /* jam server; toleransi 5 menit beda jam HP */
 function dccpPlayFrom(d){ const m=((d||DB.get()).dccpMeta)||{}; return dccpPlayedLive(m) ? +m.playTs : 0; }
 function dccpCurrentOk(d){
   d=d||DB.get(); if(!(d.dccpSchedule||[]).length) return false;
@@ -9703,7 +9711,9 @@ function dccpActivate(d, sh){
   const act = (d.dccpMeta&&d.dccpMeta.shift)||"";
   if(act && act!==sh && (d.dccpSchedule||[]).length) d.dccpStore[act] = {rows:cloneJ(d.dccpSchedule), meta:cloneJ(d.dccpMeta)};   // simpan dulu perubahan (edit/tukar/rit tambahan) jadwal yang sedang aktif
   const st = d.dccpStore[sh]; if(!st||!st.rows) return;
+  const prevLog = (d.dccpMeta && Array.isArray(d.dccpMeta.swLog)) ? d.dccpMeta.swLog : null;
   d.dccpSchedule = cloneJ(st.rows); d.dccpMeta = cloneJ(st.meta);
+  if(prevLog && d.dccpMeta) d.dccpMeta.swLog = cloneJ(prevLog).slice(-15);   /* 27 Nov: riwayat ganti Day/Night ikut pindah (tidak terpecah di 2 jadwal) */
   d.swapLog = [];
   try{ ccQueueSort(d); }catch(e){}
 }
@@ -9717,9 +9727,12 @@ function saveDccpSchedule(){
       const ks=Object.keys(d.dccpFmt).sort((a,b)=>(d.dccpFmt[b].ts||0)-(d.dccpFmt[a].ts||0)); ks.slice(30).forEach(k=>delete d.dccpFmt[k]); }   /* format kolom diingat (maks. 30) */
     d.dccpStore = d.dccpStore||{};
     const meta = {fileName:p.fileName, uploadedAt:Date.now(), uploadedBy:(currentUser&&currentUser.name)||"", shift:sh, dateTs:dccpFileDate(p.fileName)||null, gapMin:p.gapMin||52};
-    const act = (d.dccpMeta&&d.dccpMeta.shift)||"";
+    const act = (d.dccpMeta&&d.dccpMeta.shift)||"", old = d.dccpMeta||{};
+    /* 27 Nov: upload ulang jadwal yang sedang aktif → status "Jalankan sekarang", nomor urut & riwayat ganti tetap (dulu hilang → dikembalikan otomatis ke shift lain) */
+    if(act===sh) ["playTs","playBy","swIdx","swLog","autoTs","autoFrom","autoBy"].forEach(k=>{ if(old[k]!=null) meta[k]=cloneJ(old[k]); });
     d.dccpStore[sh] = {rows:p.rows, meta};
-    if(sh===dccpShiftNow() || act===sh || !(d.dccpSchedule||[]).length) dccpActivate(d, sh);
+    const otherPlayed = act && act!==sh && (d.dccpSchedule||[]).length && dccpPlayedLive(old);   /* shift lain sedang dijalankan manual: jangan diambil alih */
+    if(act===sh || !(d.dccpSchedule||[]).length || (sh===dccpShiftNow() && !otherPlayed)){ dccpActivate(d, sh); if(act!==sh) dccpSwNote(d, act, sh, "upload"); }
   });
   dccpParsedPreview = null;
   render();
@@ -9727,11 +9740,12 @@ function saveDccpSchedule(){
 function dccpActivateNow(sh){
   if(!(currentUser&&["delivery","admin","koordinator"].includes(currentUser.role))) return;
   if(!confirm("Jalankan jadwal "+dccpShiftLabel(sh)+" SEKARANG?\n\n• DCCP langsung aktif walau belum jam shift-nya\n• 3 CC batch pertama yang sudah absen langsung diperintah masuk\n• Jadwal yang sedang aktif disimpan dulu (perubahannya tidak hilang)")) return;
-  const now=Date.now(), by=(currentUser&&currentUser.name)||"";
+  const now=srvNow(), by=(currentUser&&currentUser.name)||"";   /* 27 Nov: jam server */
   DB.set(d=>{ const act=((d.dccpMeta||{}).shift||"");
     if(act!==sh || !(d.dccpSchedule||[]).length) dccpActivate(d, sh);   /* jadwal ini sudah aktif: baris (beserta editannya) tidak dimuat ulang */
     if(((d.dccpMeta||{}).shift||"")!==sh) return;
     d.dccpMeta.playTs=now; d.dccpMeta.playBy=by;
+    dccpSwNote(d, act, sh, "play");
     d.dccpStore=d.dccpStore||{}; if(d.dccpStore[sh] && d.dccpStore[sh].meta){ d.dccpStore[sh].meta.playTs=now; d.dccpStore[sh].meta.playBy=by; }
     try{ ccQueueSort(d); }catch(e){} });
   try{ holdRelease(); }catch(e){}
@@ -9746,29 +9760,48 @@ function dccpActivateNow(sh){
    • setiap pindah otomatis dicatat di dccpMeta.swLog (jam server, jam HP, akun) supaya kalau terjadi lagi kelihatan HP mana penyebabnya. */
 function wibShiftAt(ts){ const h=new Date(ts+7*3600000).getUTCHours(); return (h>=SHIFT_START_H && h<SHIFT2_START_H) ? "day" : "night"; }
 function wibProdMidnight(ts){ const t=ts+7*3600000; let day=Math.floor(t/86400000); if(new Date(t).getUTCHours()<SHIFT_START_H) day-=1; return day*86400000-7*3600000; }
+/* 27 Nov 2026 (DCCP mental Day↔Night lagi): penyebab utama = jam server di HP Delivery/Koordinator melenceng makin jauh tiap sambung ulang
+   (lihat srvOffSet). Pengaman tambahan supaya tidak bisa bolak-balik lagi walau ada HP yang jamnya salah:
+   • ganti otomatis hanya MAJU: setiap ganti jadwal mencatat nomor urut shift (swIdx). HP yang menganggap masih shift lama tidak bisa mengembalikan;
+   • 10 menit sesudah "▶ Jalankan sekarang" tidak ada ganti otomatis;
+   • semua ganti (otomatis / Jalankan / upload) dicatat di dccpMeta.swLog dan tampil di menu DCCP → "Riwayat ganti Day/Night". */
+function wibShiftIdx(ts){ const t=ts+7*3600000, h=new Date(t).getUTCHours(), day=Math.floor(t/86400000); return h<SHIFT_START_H ? 2*day-1 : (h<SHIFT2_START_H ? 2*day : 2*day+1); }   /* Day tgl D = 2D, Night tgl D (20:00 D–07:00 D+1) = 2D+1 */
+function dccpIdxFor(sh, ts){ const i=wibShiftIdx(ts); return wibShiftAt(ts)===sh ? i : i+1; }   /* shift sh yang sedang berjalan, atau yang berikutnya */
+function dccpSwNote(d, from, to, how){ try{ const m=d.dccpMeta; if(!m || !to) return; const t=srvNow();
+  m.swIdx=dccpIdxFor(to, t);
+  const by=currentUser?((currentUser.name||currentUser.username||"")+" ("+currentUser.role+")"):"";
+  m.swLog=(Array.isArray(m.swLog)?m.swLog:[]).slice(-14).concat([{ts:t, hp:_rawNow(), off:Math.round((_srvOffOk?_srvOff:0)/1000), from:from||"", to, by, how:how||"auto", b:RADAR_BUILD}]); }catch(e){} }
+function dccpAutoBlock(m, cur, now){
+  m=m||{}; const idx=wibShiftIdx(now);
+  if(m.swIdx!=null && isFinite(+m.swIdx)){ if(+m.swIdx>=idx) return "jadwal sudah diganti untuk shift ini"; }   /* hanya maju */
+  else if(m.autoFrom===cur && Math.abs(now-(+m.autoTs||0)) < 2*3600000) return "baru dipindah dari "+cur;   /* data lama (belum ada swIdx) */
+  const p=+m.playTs||0; if(p && Math.abs(now-p) < 10*60000) return "baru saja dijalankan manual";
+  return "";
+}
 let _dccpPpWarn=0;
 function dccpAutoSwitch(){
   try{
     if(!currentUser || !["delivery","admin","koordinator"].includes(currentUser.role)) return;
-    if(FBS.enabled && (!fbFresh() || !_srvOffOk && Date.now()-_fbConnTs<20000)) return;   /* tunggu jam server (maks. 20 detik sesudah tersambung, lalu pakai jam HP) */
+    if(FBS.enabled && (!fbFresh() || !_srvOffOk)) return;   /* 27 Nov: hanya HP yang sudah tahu jam server (tidak lagi memakai jam HP sesudah 20 detik) */
     const now=srvNow(), d0 = DB.get(), cur = wibShiftAt(now), st = (d0.dccpStore||{})[cur];
     if(!st || !st.rows || !st.rows.length) return;
     const m0=d0.dccpMeta||{};
     if((m0.shift||"")===cur) return;
     if(dccpPlayedLive(m0)) return;
-    if(m0.autoFrom===cur && now-(+m0.autoTs||0) < 2*3600000){   /* HP lain baru saja memindah jadwal DARI shift ini: jam HP ini kemungkinan salah */
-      if(Date.now()-_dccpPpWarn>10*60000){ _dccpPpWarn=Date.now(); try{ errReport("dccp", "tolak pindah balik ke "+cur+" (jam HP "+new Date().toLocaleTimeString('id-ID')+", selisih server "+Math.round(_srvOff/1000)+" dtk)"); }catch(e){} }
+    const blk=dccpAutoBlock(m0, cur, now);
+    if(blk){   /* HP ini menganggap harus pindah, tapi jadwal baru saja diganti: kemungkinan jam HP ini salah */
+      if(Date.now()-_dccpPpWarn>10*60000){ _dccpPpWarn=Date.now(); try{ errReport("dccp", "tolak pindah ke "+cur+": "+blk+" (jam HP "+new Date(_rawNow()).toLocaleTimeString('id-ID')+", selisih server "+Math.round(_srvOff/1000)+" dtk)"); }catch(e){} }
       return; }
     const dt = st.meta && st.meta.dateTs, pm = wibProdMidnight(now);
     if(dt && Math.abs(dt-pm) > 12*3600000) return;
     const by=(currentUser.name||currentUser.username||"")+" ("+currentUser.role+")";
     DB.set(d=>{ const m=d.dccpMeta||{}, t=srvNow();
-      if((m.shift||"")===cur || dccpPlayedLive(m) || (m.autoFrom===cur && t-(+m.autoTs||0)<2*3600000)) return;
-      const from=m.shift||"", log=(Array.isArray(m.swLog)?m.swLog:[]).slice(-7);
+      if((m.shift||"")===cur || dccpPlayedLive(m) || dccpAutoBlock(m, cur, t)) return;
+      const from=m.shift||"";
       dccpActivate(d, cur);
       if(!d.dccpMeta || (d.dccpMeta.shift||"")!==cur) return;
       d.dccpMeta.autoTs=t; d.dccpMeta.autoFrom=from; d.dccpMeta.autoBy=by;
-      d.dccpMeta.swLog=log.concat([{ts:t, hp:_rawNow(), off:Math.round((_srvOffOk?_srvOff:0)/1000), from, to:cur, by}]); });
+      dccpSwNote(d, from, cur, "auto"); });
   }catch(e){}
 }
 setInterval(dccpAutoSwitch, 15000); setTimeout(dccpAutoSwitch, 6000);
@@ -10256,6 +10289,15 @@ function dccpUpCard(sh, data, pv, meta){
       <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn" onclick="saveDccpSchedule()">✔ Simpan Jadwal ${sh==="day"?"Day":"Night"}</button><button class="btn btn-sm" onclick="clearDccpPreview()">Batal</button></div>`:""}
   </div>`;
 }
+/* 27 Nov: riwayat ganti jadwal Day/Night — siapa (HP/akun), kapan (jam server), cara (otomatis / ▶ Jalankan / upload), dan selisih jam HP-nya */
+function dccpSwLogHtml(meta){
+  const L=((meta||{}).swLog||[]).filter(x=>x&&x.ts).slice(-12).reverse(); if(!L.length) return "";
+  const lb=x=>x==="day"?"Day":x==="night"?"Night":"—", how={auto:"Otomatis (jam shift)", play:"▶ Jalankan sekarang", upload:"Upload"};
+  const hrs=+L[0].ts-3600000, flips=L.filter(x=>+x.ts>=hrs).length;
+  return `<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;">🔁 Riwayat ganti Day/Night (${L.length})${flips>=3?` <b style="color:#C0392B;">· ${flips}× dalam 1 jam terakhir</b>`:""}</summary>
+    <div style="font-size:12px;margin-top:6px;">${L.map(x=>{ const off=Math.round((+x.off||0)/60), ck=Math.abs(off)>=1?` · <span style="color:#C0392B;">jam HP ${off>0?"lambat":"cepat"} ${Math.abs(off)} mnt</span>`:"";
+      return `<div style="padding:4px 0;border-bottom:1px solid var(--border);"><b>${new Date(+x.ts).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</b> · ${lb(x.from)} → <b>${lb(x.to)}</b> · ${how[x.how]||how.auto}<br><span style="color:var(--text-dim);">${xlEsc(x.by||"-")}${x.b?" · build "+xlEsc(String(x.b).replace(/^\d+ \w+ \d{4} /,"")):""}</span>${ck}</div>`; }).join("")}</div></details>`;
+}
 function dccpPreviewTbl(rows, pv){
   const K=new Set((pv&&pv.known)||DCCP_LP_DEF);
   return `<div style="overflow-x:auto;"><table><tr><th>LP</th><th>Plat</th><th>Model</th><th>Driver</th><th>Jam Ritase</th><th>Tujuan</th></tr>${dccpSortedIdx(rows).map(([r])=>{ const W=pv?dccpRowWarn(r,K):[]; return `<tr${W.length?` style="background:#FDECEC;"`:""}><td>${r.lp||"—"}${W.length?`<div style="color:#B91C1C;font-size:10.5px;font-weight:700;line-height:1.2;">⚠ ${W.join(", ")}</div>`:""}</td><td><b>${platFmt(r.police)}</b></td><td>${r.model}</td><td>${r.driver}</td><td>${r.trips&&r.trips.length?r.trips.join(", "):(r.schedTime||"-")}${(r.planTrip&&r.trips&&r.trips.length!==r.planTrip)?` <span style="color:#D64545;font-size:11px;font-weight:700;">⚠ terbaca ${r.trips.length} dari ${r.planTrip} ritase</span>`:""}</td><td>${r.dest||"-"}</td></tr>`; }).join("")}</table></div>`;
@@ -10282,6 +10324,7 @@ function renderDccpUpload(){
       <h3>📋 Upload Jadwal DCCP</h3>
       <p style="font-size:13px;color:var(--text-dim);margin:6px 0 12px;">Upload <b>Day</b> dan <b>Night</b> terpisah, jadi tidak saling menimpa. Hanya bagian <b>B. EAST KARAWANG PLANT OPERATION</b> yang dibaca. Jadwal shift berikutnya otomatis aktif saat shift mulai (Day 07:00 · Night 20:00).</p>
       ${["day","night"].map(sh=>dccpUpCard(sh,data,pv,meta)).join("")}
+      ${dccpSwLogHtml(meta)}
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">Jadwal Aktif (${data.dccpSchedule.length} truk)</h3><span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-sm" onclick="dccpOpenEdit(-1)">➕ Tambah CC / Spot Order</button>${(data.dccpSchedule.length&&currentUser&&(currentUser.role==="delivery"||currentUser.role==="admin"))?`<button class="btn-danger btn btn-sm" onclick="dccpClearAll()">🗑 Hapus Semua</button>`:""}</span></div>
