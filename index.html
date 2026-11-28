@@ -1557,7 +1557,7 @@ const fbDenied = e => /permission/i.test(String((e&&(e.code||e.message))||e));
    • daftar ILS hanya ILS_WIN terbaru (±2 hari) — cukup untuk ILS aktif, pengaman absen & surat jalan terbaru;
    • bagian kantor tidak diunduh sama sekali (manifest, riwayat unit dikeluarkan, PPBJ, log koreksi/tukar/pindah antrean, TTD, riwayat hapus data).
    HP mode hemat juga TIDAK pernah menulis bagian yang tidak ia unduh (dijaga di fbPushSmart). */
-const FB_KEYS_ALL=["armada","unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueLockMin","dccpFmt","ccOff","stallLog","queueMoveLog","reabsenMax","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
+const FB_KEYS_ALL=["armada","unitScrap","absenLog","appMin","verKick","batamStalls","cc","ccAutoOutH","ccAway","ccCalls","ccDoneMk","ccGone","ccLastOutM","ccLeft","ccNvdc","ccNvOut","ccOpen","ccOutLog","ccShiftPlat","chgReq","csList","dailyRemark","dccpFix","dccpMeta","dccpSchedule","dccpStore","defectParts","defectTypes","defects","dpp","dppCfg","drvByPlat","drvByPlatName","earlyAll","earlyOk","esjCfg","forceOut","gsCfg","hold","holdRel","ils","ilsFixLog","ilsSeats","koSeats","logClearTs","lpList","manifest","mapPoints","mdp","mdpCfg","mfSent","models","pdiCfg","pdiOpen","pdiShared","ppbj","prodAct","prodPlan","pwSharedReset","queue","queueLockMin","dccpFmt","ccOff","stallLog","queueMoveLog","reabsenMax","reabsenMin","regs","ritAdj","ritN","schedReq","sigs","sigsVer","sjPdfClean","speedAlerts","speedCfg","stallArea","strictAbsen","swapLog","takeLog","takeReq","tlsCfg","tlsInAppOn","tlsLogoutAt","trkKill","unitCat","unitOutLog","units","users","whyReq","wipeLog","xlCfg","yardLocation","ysBdp","ysCfg","viewOn","watchSim","devSeats","devLimit","funVideo"];
 const FB_LITE={
   cc:         { skip:["autoLead","online","errDev","manifest","unitOutLog","unitScrap","ppbj","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","mdp","dpp","prodPlan","ysBdp","ilsSeats","koSeats"], win:{ils:60} },
   dispatcher: { skip:["autoLead","funVideo","online","errDev","manifest","ilsFixLog","swapLog","queueMoveLog","wipeLog","sigs","mfSent","ilsSeats","koSeats","ritN"], win:{ils:60} },
@@ -1797,7 +1797,7 @@ function fbRender(){
   _autoRender = true; try{ render(); } finally { _autoRender = false; }
 }
 /* ===== ROLE PENGAMAT: lihat semua, tidak bisa mengubah apa pun ===== */
-const RADAR_BUILD="27 Nov 2026 19.55";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
+const RADAR_BUILD="28 Nov 2026 17.25";   /* tanda versi: cek di layar login & menu Nada supaya ketahuan HP sudah memuat versi terbaru */
 document.addEventListener("DOMContentLoaded",()=>{ try{ document.querySelectorAll(".radarBuild").forEach(e=>e.textContent=RADAR_BUILD); }catch(e){} });
 /* ===== Cek versi baru di server =====
    Tiap 5 menit dan setiap aplikasi dibuka lagi. Ringan: browser hanya bertanya ke server (ETag/304); file diunduh penuh hanya kalau berubah.
@@ -4099,7 +4099,9 @@ function onAutoPos(pos){
   if(!k){ autoAbsen.hits=0; updateAutoStatus(); return; }
   /* tanda "sudah keluar radius" / "tiba NVDC" sesudah Delout / dikeluarkan (membuka jeda absen berikutnya) */
   if(acc<=500){ try{ const lo=ccOutTs(d, pl); if(lo && dist>=ccAwayKm(d)) ccAwayMark(pl, lo);
-    const lo1=ccLastDelout(d, pl), nv=(d.mapPoints||{}).nvdc; if(lo1 && nv && typeof nv.lat==="number" && haversineKm(lat,lng,nv.lat,nv.lng)<=1 && !((((d.ccNvdc||{})[k])||0)>=lo1)) DB.set(x=>{ x.ccNvdc=x.ccNvdc||{}; if(!((x.ccNvdc[k]||0)>=lo1)) x.ccNvdc[k]=lo1; }); }catch(e){} }
+    const lo1=ccLastDelout(d, pl), nv=(d.mapPoints||{}).nvdc; if(lo1 && nv && typeof nv.lat==="number"){ const dNv=haversineKm(lat,lng,nv.lat,nv.lng);
+      if(dNv<=1 && !((((d.ccNvdc||{})[k])||0)>=lo1)) DB.set(x=>{ x.ccNvdc=x.ccNvdc||{}; if(!((x.ccNvdc[k]||0)>=lo1)) x.ccNvdc[k]=lo1; });
+      else if(dNv>1.5) ccNvOutMark(d, pl, lo1, srvNow()); } }catch(e){} }
   if(FBS.enabled && (!fbFresh() || !_srvOffOk)){ autoAbsen.hits=0; if(inR) autoAbsen.warn=_srvOffOk?"Menunggu data terbaru dari server…":"Menunggu jam server (absen hanya dicatat dengan jam server)…"; updateAutoStatus(); return; }   /* baru dibuka / baru kembali dari latar: jangan menilai dari data lama */
   { const w=ccWhereNow(d, k);   /* sudah tercatat: cukup tampilkan */
     if(w){ autoAbsen.hits=0; if(autoAbsen.state!=="done"){ autoAbsen.state="done"; autoAbsen.doneTs=Date.now(); } if(!autoAbsen.msg) autoAbsen.msg=`✔ ${pl} sudah tercatat — ${w}.`; updateAutoStatus(); return; }
@@ -13118,6 +13120,13 @@ function nvoCss(){
    Sumber: stall/antrian/waiting list/ILS, Delout (ILS / CC dikeluarkan "sudah berangkat"), tanda tiba NVDC (d.ccNvdc),
    posisi GPS radar_track (≤ 15 menit), dan ritase selesai vs jadwal (sama dengan Ringkasan / jadwal DCCP).
 ====================================================================== */
+/* 28 Nov 2026 (Khairul): jam KELUAR NVDC = awal "Arah balik EKY". Dicatat sekali per Delout: posisi GPS > 1,5 km dari titik NVDC
+   sesudah CC tercatat tiba di NVDC (d.ccNvdc). Ditulis HP driver (GPS sendiri) atau HP/TV yang memantau peta. d.ccNvOut[plat]={lo:Delout, ts:jam} */
+function ccNvOutMark(d, plat, lo, ts){ try{ const k=normPlat(plat); if(!k || !lo || !ts || ts<=lo) return;
+  const o=(d.ccNvOut||{})[k]; if(o && +o.lo>=lo) return; if(!((((d.ccNvdc||{})[k])||0)>=lo)) return;
+  DB.set(x=>{ x.ccNvOut=(x.ccNvOut&&typeof x.ccNvOut==="object")?x.ccNvOut:{}; const p=x.ccNvOut[k]; if(p && +p.lo>=lo) return; x.ccNvOut[k]={lo, ts:Math.round(ts)}; }); }catch(e){} }
+function ccNvOutTs(d, plat, lo){ const o=((d||{}).ccNvOut||{})[normPlat(plat)]; return (o && lo && +o.lo===+lo) ? (+o.ts||0) : 0; }
+function hmId(ts){ try{ return new Date(+ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Jakarta"}); }catch(e){ return new Date(+ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"}); } }   /* jam WIB, mis. 14.32 */
 function ccShiftPlats(d, w){
   const M=new Map(), now=Date.now(), seen=new Set();
   const add=(k,o)=>{ if(!k) return; const x=M.get(k); if(x){ x.tot+=o.tot||0; x.done+=o.done||0; if(!x.lp && o.lp) x.lp=o.lp; return; } M.set(k, Object.assign({k, plat:"", lp:"", done:0, tot:0}, o)); };
@@ -13151,7 +13160,7 @@ function ccProgress(d){
     let c=null; if(fresh){ try{ c=trkCompute(r, mp); }catch(e){} }
     const dN=(fresh && nv && typeof nv.lat==="number") ? haversineKm(r.lat,r.lng,nv.lat,nv.lng) : null;
     const dY=(fresh && y.lat!=null) ? haversineKm(r.lat,r.lng,y.lat,y.lng) : null;
-    Object.assign(it, {lo, t:c&&typeof c.t==="number"?c.t:null, dA:c?c.dA:null, dB:c?c.dB:dN, dN, dY, gps:fresh});
+    Object.assign(it, {lo, nvo:ccNvOutTs(d, o.plat, lo), t:c&&typeof c.t==="number"?c.t:null, dA:c?c.dA:null, dB:c?c.dB:dN, dN, dY, gps:fresh});
     let arrived=!!lo && (((d.ccNvdc||{})[k])||0)>=lo; const inYard=dY!=null && dY<=rad;
     if(!arrived && lo && !fresh && now-lo>3*3600000){ arrived=true; it.est=true; }   /* tanpa GPS > 3 jam sejak Delout: dianggap sudah tiba NVDC (perkiraan) */
     let seenBack=false; try{ seenBack=!!(c && (_trkDirMem[k]||{}).dir==="back"); }catch(e){}
@@ -13178,9 +13187,10 @@ function ccProgressHtml(d, dark, opt){
   const rit=it=>it.tot?` · rit ${it.done}/${it.tot}`:"";
   const sub=(it,kind)=>{
     if(kind==="eky") return (it.sub||"di EKY")+rit(it);
-    if(kind==="otw") return (it.dB!=null?`${it.dB.toFixed(1)} km lagi`:`Delout ${ago(Date.now()-it.lo)} lalu${it.gps?"":" · tanpa GPS"}`)+(it.sub?" · "+it.sub:"");
+    const lo=it=>it.lo?` · Delout ${hmId(it.lo)}`:"";   /* 28 Nov (Khairul): Arah NVDC = jam Delout EKY · Arah balik = jam keluar NVDC · di NVDC / di EKY tanpa jam */
+    if(kind==="otw") return (it.dB!=null?`${it.dB.toFixed(1)} km lagi${lo(it)}`:`Delout ${hmId(it.lo)} (${ago(Date.now()-it.lo)} lalu)${it.gps?"":" · tanpa GPS"}`)+(it.sub?" · "+it.sub:"");
     if(kind==="nvdc") return "di NVDC"+rit(it)+(it.fin?" · rit terakhir":"");
-    if(kind==="back") return (it.est?"perkiraan sudah tiba NVDC (tanpa GPS)":it.dA!=null?`${it.dA.toFixed(1)} km ke EKY`:`tanpa GPS · Delout ${ago(Date.now()-it.lo)} lalu`)+rit(it);
+    if(kind==="back") return (it.est?"perkiraan sudah tiba NVDC (tanpa GPS)":it.dA!=null?`${it.dA.toFixed(1)} km ke EKY`:"tanpa GPS")+(it.nvo?` · keluar NVDC ${hmId(it.nvo)}`:"")+rit(it);
     if(kind==="done") return (it.tot?`rit ${it.done}/${it.tot} selesai`:"selesai")+(it.mk?` · ditandai ${it.mk.by||"Delivery"}`:"")+(it.est?" · perkiraan (tanpa GPS)":"");
     return it.dY!=null?`${it.dY.toFixed(1)} km ke EKY`:"belum absen";
   };
@@ -16607,7 +16617,9 @@ function mapAbsenTick(){
       const km=haversineKm(r.lat,r.lng,y.lat,y.lng);
       try{ const lo=ccOutTs(d, r.plat); if(lo && ft>lo && km>=ccAwayKm(d)) ccAwayMark(r.plat, lo); }catch(e){}   /* terlihat keluar radius sesudah Delout / dikeluarkan → jeda absen berikutnya dibuka */
       try{ const nv=(d.mapPoints||{}).nvdc, lo0=ccLastDelout(d,r.plat);
-        if(nv && lo0 && ft>lo0 && haversineKm(r.lat,r.lng,nv.lat,nv.lng)<=1 && !(((d.ccNvdc||{})[k]||0)>=lo0)) DB.set(x=>{ x.ccNvdc=x.ccNvdc||{}; if(!((x.ccNvdc[k]||0)>=lo0)) x.ccNvdc[k]=lo0; }); }catch(e){}
+        if(nv && lo0 && ft>lo0){ const dNv=haversineKm(r.lat,r.lng,nv.lat,nv.lng);
+          if(dNv<=1 && !(((d.ccNvdc||{})[k]||0)>=lo0)) DB.set(x=>{ x.ccNvdc=x.ccNvdc||{}; if(!((x.ccNvdc[k]||0)>=lo0)) x.ccNvdc[k]=lo0; });
+          else if(dNv>1.5) ccNvOutMark(d, r.plat, lo0, ft); } }catch(e){}
       if(!ccPlatRegistered(r.plat) || km>rad || nearNvdc(r.lat, r.lng, d) || absenGate(DB.get(), r.plat, {dist:km})){ delete MAPABS.hits[k]; return; }
       if(MAPABS.ts[k]===(r.ts||0)) return;   /* butuh 2 kiriman BERBEDA di dalam radius, bukan titik yang sama dibaca dua kali */
       MAPABS.ts[k]=(r.ts||0);
@@ -18398,7 +18410,7 @@ function rsBuildRows(data, sh, w, ilsShift){
   const now=Date.now(), mt=data.dccpMeta||{}, dd=mt.dateTs||dccpFileDate(mt.fileName)||prodMidnight(), rows=[], byK=new Map();
   const other=rsShiftName(sh==="1"?"2":"1");
   let P=null; try{ P=ccProgress(data); }catch(e){}
-  const road={}; if(P){ ["eky","otw","nvdc","back","done","belum"].forEach(b=>(P[b]||[]).forEach(x=>{ road[x.k]={b, sub:x.sub||""}; })); }
+  const road={}; if(P){ ["eky","otw","nvdc","back","done","belum"].forEach(b=>(P[b]||[]).forEach(x=>{ road[x.k]={b, sub:x.sub||"", lo:+x.lo||0, nvo:+x.nvo||0}; })); }
   const mk=(k,o)=>{ const x=Object.assign({k, plat:"", lp:"", driver:"", done:0, tot:0, dueN:0, late:false, kind:"dccp", csDone:0, tags:[], planU:0}, o); rows.push(x); byK.set(k,x); return x; };
   /* 1. CC terjadwal DCCP */
   (data.dccpSchedule||[]).forEach(r=>{ if(!r || r.extra) return; const k=normPlat(r.police); if(byK.has(k)) return;
@@ -18437,7 +18449,7 @@ function rsBuildRows(data, sh, w, ilsShift){
     try{ const mk=(data.ccDoneMk||{})[x.k]; if(mk && (+mk.ts||0)>=w[0]) x.tags.push({c:"fx", t:"SELESAI RITASE", s:`ditandai ${mk.by||"Delivery"} ${new Date(mk.ts).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}`}); }catch(e){}
     const a=findActualArrival(x.plat, data);
     const rd=road[x.k]||{};
-    x.pos = a ? (a.stall?{c:"in", t:`📍 Stall ${ccLbl(a.stall)}`}:{c:"q", t:"⏳ Antri"}) : (rd.b==="otw"?{c:"otw", t:"🚚 Arah NVDC"}:rd.b==="nvdc"?{c:"nv", t:"🏁 di NVDC"}:rd.b==="back"?{c:"bk", t:"↩️ Arah balik EKY"}:rd.b==="done"?{c:"dn", t:"✅ Selesai ritase"}:rd.b==="eky"?{c:"ey", t:`📍 ${rd.sub||"di EKY"}`}:rd.b==="belum"?{c:"bl", t:"⏳ Belum datang"}:null);
+    x.pos = a ? (a.stall?{c:"in", t:`📍 Stall ${ccLbl(a.stall)}`}:{c:"q", t:"⏳ Antri"}) : (rd.b==="otw"?{c:"otw", t:"🚚 Arah NVDC", tm:rd.lo, tl:"Delout"}:rd.b==="nvdc"?{c:"nv", t:"🏁 di NVDC"}:rd.b==="back"?{c:"bk", t:"↩️ Arah balik EKY", tm:rd.nvo, tl:"keluar NVDC"}:rd.b==="done"?{c:"dn", t:"✅ Selesai ritase"}:rd.b==="eky"?{c:"ey", t:`📍 ${rd.sub||"di EKY"}`}:rd.b==="belum"?{c:"bl", t:"⏳ Belum datang"}:null);
   });
   const cat={dccp:0, spot:0, cs:0, luar:0};
   rows.forEach(x=>{ cat.cs+=x.csDone||0; if(x.kind==="dccp") cat.dccp+=x.done; else if(x.kind==="spot") cat.spot+=x.done; else if(x.kind==="cs") cat.cs+=x.done; else if(x.kind==="luar") cat.luar+=x.done; });
@@ -18499,6 +18511,7 @@ function rsCss(){
   .rs-fx{color:#475569;} .rs-tag.rs-fx b{color:#475569;}
   .rs-luar{color:#C2410C;} .rs-tag.rs-luar{background:rgba(249,115,22,.09);} .rs-tag.rs-luar b{color:#C2410C;}
   .rs-pos{display:inline-block;font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;margin-top:3px;background:rgba(148,163,184,.16);}
+  .rs-pos .rs-lo{font-weight:600;opacity:.85;white-space:nowrap;}
   .rs-pos.rs-p-in{background:rgba(34,197,94,.14);color:#15803D;} .rs-pos.rs-p-q{background:rgba(245,158,11,.15);color:#B45309;}
   .rs-pos.rs-p-ey{background:rgba(99,102,241,.13);color:#4338CA;} .rs-pos.rs-p-dn{background:rgba(100,116,139,.15);color:#334155;} .rs-pos.rs-p-bl{background:rgba(148,163,184,.15);color:#64748B;}
   body.disp-tv .rs-pos.rs-p-ey{color:#A5B4FC;} body.disp-tv .rs-pos.rs-p-dn{color:#CBD5E1;} body.disp-tv .rs-pos.rs-p-bl{color:#94A3B8;}
@@ -18588,7 +18601,7 @@ function renderDisplay(){
         ${rsLegendHtml(_rows)}
         ${_rows.length?`<table style="margin-top:10px;"><tr><th>Plat CC</th><th>Ritase</th><th></th></tr>${_rows.map(x=>{ const w=whyMap(data)[x.k]; const askBtn=(x.late&&whyAskRoleOk()&&!(w&&w.status==="ask"&&Date.now()-w.ts<10*60000))?` <button type="button" onclick="whyAsk('${x.plat}')" style="border:1.5px solid #E60012;background:#fff;color:#E60012;border-radius:8px;padding:3px 8px;font-weight:800;font-size:11px;">❓ Tanya KR</button>`:"";
           const st=w&&w.status==="ask"&&Date.now()-w.ts<6*3600000?`<div style="font-size:11px;color:#B4570E;">⏳ menunggu jawaban Koordinator (tanya ${whyHm(w.ts)})</div>`:(w&&w.status==="done"&&Date.now()-(w.ansTs||0)<12*3600000?`<div style="font-size:11px;color:#17803d;">💬 ${escH(w.reason)} <span style="color:var(--text-dim);">— ${escH(w.ansBy||"KR")} ${whyHm(w.ansTs)}</span></div>`:"");
-          return `<tr><td>${escH(x.plat)}${x.lp?` <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)}</span>`:""}${x.driver?`<div style="font-size:11px;color:var(--text-dim);">👤 ${escH(x.driver)}</div>`:""}${x.pos?`<span class="rs-pos rs-p-${x.pos.c}">${x.pos.t}</span>`:""}${rsTagsHtml(x)}${st}</td><td style="white-space:nowrap;"><b style="${x.late?"color:#D64545;":""}">${x.done}</b>${x.tot?`<span style="font-size:11px;color:var(--text-dim);"> /${x.tot}</span>`:""}${x.late?`<div style="font-size:10px;color:#D64545;">jadwal ${x.dueN}</div>`:""}</td><td>${askBtn}</td></tr>`; }).join("")}</table>`:""}
+          return `<tr><td>${escH(x.plat)}${x.lp?` <span style="font-size:11px;color:var(--text-dim);">${escH(x.lp)}</span>`:""}${x.driver?`<div style="font-size:11px;color:var(--text-dim);">👤 ${escH(x.driver)}</div>`:""}${x.pos?`<span class="rs-pos rs-p-${x.pos.c}">${x.pos.t}${x.pos.tm?`<span class="rs-lo"> · ${x.pos.tl} ${hmId(x.pos.tm)}</span>`:""}</span>`:""}${rsTagsHtml(x)}${st}</td><td style="white-space:nowrap;"><b style="${x.late?"color:#D64545;":""}">${x.done}</b>${x.tot?`<span style="font-size:11px;color:var(--text-dim);"> /${x.tot}</span>`:""}${x.late?`<div style="font-size:10px;color:#D64545;">jadwal ${x.dueN}</div>`:""}</td><td>${askBtn}</td></tr>`; }).join("")}</table>`:""}
       </div>
       <div class="card y-cc">
         <div class="stalltitle"><h3>🚚 Stall Car Carrier</h3><span class="cnt" id="dispClock"></span></div>
